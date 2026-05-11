@@ -53,6 +53,13 @@ function listFiles(dir) {
   })
 }
 
+function stripStringLiterals(line) {
+  return line
+    .replace(/'(?:\\.|[^'\\])*'/gu, "''")
+    .replace(/"(?:\\.|[^"\\])*"/gu, '""')
+    .replace(/`(?:\\.|[^`\\])*`/gu, '``')
+}
+
 for (const sourceRoot of sourceRoots) {
   for (const file of listFiles(sourceRoot)) {
     const isTestFile = /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)
@@ -92,10 +99,11 @@ for (const file of listTypeScriptFiles(coreRoot)) {
       trimmed.startsWith('export type ') ||
       trimmed.startsWith('type ') ||
       trimmed.startsWith('interface ')
+    const searchableLine = stripStringLiterals(trimmed)
     const hasTopLevelDomReference =
       braceDepth === 0 &&
       !isDeclarationOnly &&
-      /\b(?:window|document|HTMLElement)\b/u.test(trimmed)
+      /\b(?:window|document|HTMLElement)\b/u.test(searchableLine)
 
     if (hasTopLevelDomReference) {
       failures.push(`${file}:${index + 1}: possible top-level DOM access '${trimmed}'`)
