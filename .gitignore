@@ -1,0 +1,15 @@
+.codex
+.claude
+.omc
+.logs
+openspec
+2026-05-11-jword-v0.1-mvp
+2026-05-10-jword-design
+node_modules
+.playwright-mcp
+dist
+coverage
+playwright-report
+test-results
+logs
+packages/*/dist

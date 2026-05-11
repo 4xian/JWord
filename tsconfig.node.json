@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "eslint.config.js",
+    "rollup.config.mjs",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "tools/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "coverage", "playwright-report"]
+}

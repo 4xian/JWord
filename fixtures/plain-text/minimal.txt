@@ -1,0 +1,3 @@
+JWord Gate 0 Minimal Fixture
+
+This fixture proves plain text loading paths can read a tiny document.

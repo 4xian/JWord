@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vitest/globals", "@playwright/test"]
+  },
+  "include": [
+    "eslint.config.js",
+    "rollup.config.mjs",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "tools/**/*.ts",
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "tests/**/*.ts",
+    "examples/*/src/**/*.ts",
+    "examples/*/tests/**/*.ts",
+    "benchmarks/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "coverage", "playwright-report"]
+}

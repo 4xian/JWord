@@ -1,0 +1,37 @@
+JWord Gate 0 Long Placeholder Fixture
+
+Section 001
+This paragraph is deterministic fixture text for early smoke benchmarks. It is not a product document and it does not encode editing behavior.
+
+Section 002
+The benchmark reads this file, counts stable text metrics, and reports JSON so future gates can replace the placeholder with real layout and render measurements.
+
+Section 003
+Line length stays moderate so review diffs remain readable. The content is intentionally plain ASCII to avoid hiding encoding behavior in Gate 0.
+
+Section 004
+Future Gate 2 fixtures may add mixed scripts, emoji, page breaks, and visual baselines. This file remains the simple long-text baseline.
+
+Section 005
+Repeated paragraphs make the file large enough for a deterministic benchmark without creating a noisy generated artifact.
+
+Section 006
+This paragraph is deterministic fixture text for early smoke benchmarks. It is not a product document and it does not encode editing behavior.
+
+Section 007
+The benchmark reads this file, counts stable text metrics, and reports JSON so future gates can replace the placeholder with real layout and render measurements.
+
+Section 008
+Line length stays moderate so review diffs remain readable. The content is intentionally plain ASCII to avoid hiding encoding behavior in Gate 0.
+
+Section 009
+Future Gate 2 fixtures may add mixed scripts, emoji, page breaks, and visual baselines. This file remains the simple long-text baseline.
+
+Section 010
+Repeated paragraphs make the file large enough for a deterministic benchmark without creating a noisy generated artifact.
+
+Section 011
+This paragraph is deterministic fixture text for early smoke benchmarks. It is not a product document and it does not encode editing behavior.
+
+Section 012
+The benchmark reads this file, counts stable text metrics, and reports JSON so future gates can replace the placeholder with real layout and render measurements.
