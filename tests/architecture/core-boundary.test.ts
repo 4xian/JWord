@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = new URL('../..', import.meta.url)
 const CORE_PACKAGE_JSON = new URL('../../packages/core/package.json', import.meta.url)
@@ -65,7 +66,7 @@ function listTypeScriptFiles(directory: URL): string[] {
       return listTypeScriptFiles(child)
     }
 
-    return entry.isFile() && entry.name.endsWith('.ts') ? [child.pathname] : []
+    return entry.isFile() && entry.name.endsWith('.ts') ? [fileURLToPath(child)] : []
   })
 }
 
@@ -106,7 +107,7 @@ describe('core architecture boundary', () => {
   it('does not import UI, interop, collab provider, or demo modules from core src', () => {
     const bannedImports = listTypeScriptFiles(CORE_SRC).flatMap((file) => {
       const source = readFileSync(file, 'utf8')
-      const relativePath = relative(REPO_ROOT.pathname, file)
+      const relativePath = relative(fileURLToPath(REPO_ROOT), file)
 
       return extractModuleSpecifiers(source)
         .filter((specifier) => BANNED_IMPORT_PATTERNS.some((pattern) => pattern.test(specifier)))

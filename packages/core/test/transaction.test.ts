@@ -22,40 +22,31 @@ import {
 } from '../src/document-store'
 import type { BlockId, DocumentId, RunId, SectionId } from '../src/position'
 import { createTransactionPipeline } from '../src/transaction'
-import type { Operation } from '../src/transaction'
-import { createAnchorRef, createGraphemeIndex, createRangeRef } from '../src/position'
+import type { Operation, TextPosition } from '../src/transaction'
 
-function createTestAnchor(graphemeIndex = 0) {
-  return createAnchorRef({
-    documentId: 'document-1' as DocumentId,
-    sectionId: 'section-1' as SectionId,
-    blockId: 'paragraph-1' as BlockId,
-    runId: 'run-1' as RunId,
-    graphemeIndex: createGraphemeIndex(graphemeIndex)
-  })
+function createTestPosition(graphemeIndex = 0): TextPosition {
+  return {
+    sectionId: 'section-1',
+    blockId: 'paragraph-1',
+    runId: 'run-1',
+    graphemeIndex
+  }
 }
 
 describe('createTransactionPipeline', () => {
   it('accepts the first Gate 1.4 operation schemas as serializable operations', () => {
-    const documentId = 'document-1' as DocumentId
     const sectionId = 'section-1' as SectionId
     const blockId = 'paragraph-1' as BlockId
     const nextBlockId = 'paragraph-2' as BlockId
     const runId = 'run-1' as RunId
-    const anchor = createAnchorRef({
-      documentId,
-      sectionId,
-      blockId,
-      runId,
-      graphemeIndex: createGraphemeIndex(0)
-    })
-    const range = createRangeRef(anchor, anchor)
+    const anchor = createTestPosition(0)
+    const range = { anchor, focus: anchor }
     const operations: readonly Operation[] = [
       { kind: 'insertText', at: anchor, text: '你好' },
       { kind: 'deleteRange', range },
       { kind: 'setRunProperties', runId, properties: { bold: true } },
       { kind: 'setParagraphProperties', paragraphId: blockId, properties: { alignment: 'center' } },
-      { kind: 'splitBlock', at: anchor, newBlockId: nextBlockId },
+      { kind: 'splitBlock', at: anchor, newBlockId: nextBlockId, newRunId: 'run-2' },
       { kind: 'mergeBlock', targetBlockId: blockId, sourceBlockId: nextBlockId },
       {
         kind: 'insertBlock',
@@ -98,7 +89,7 @@ describe('createTransactionPipeline', () => {
     const pipeline = createTransactionPipeline(store.doc)
     const observedOrigins: string[] = []
     const observedEvents: Array<[string, boolean]> = []
-    const anchor = createTestAnchor(2)
+    const position = createTestPosition(2)
 
     store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-1' as DocumentId)
     store.sections.push([section])
@@ -115,7 +106,7 @@ describe('createTransactionPipeline', () => {
     const result = pipeline.run(
       {
         name: 'insertText',
-        operations: [{ kind: 'insertText', at: anchor, text: '，JWord' }]
+        operations: [{ kind: 'insertText', at: position, text: '，JWord' }]
       },
       { origin: 'local-user', label: '输入文字' }
     )
@@ -126,7 +117,7 @@ describe('createTransactionPipeline', () => {
     expect(result.operationKinds).toEqual(['insertText'])
     expect(result.dirty).toBe(true)
     expect(result.operations).toEqual([
-      { kind: 'insertText', at: anchor, text: '，JWord' }
+      { kind: 'insertText', at: position, text: '，JWord' }
     ])
     expect(getRunText(run).toString()).toBe('你好，JWord')
     expect(result.projection.document.sections[0]?.blocks[0]?.kind).toBe('paragraph')

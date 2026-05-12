@@ -20,6 +20,7 @@ import {
   getTableRowCells,
   getTableRows
 } from './document-store'
+import { createJWordError } from './errors'
 import type {
   BlockContainer,
   BlockRecord,
@@ -38,9 +39,13 @@ import type {
   TableRowRecordValue
 } from './document-store'
 import type { Block, Paragraph, Run, Table, TableCell, TableRow, TextInline } from './model'
-import type { BlockInsertPlacement, Operation } from './transaction'
-import { resolveAnchorRef } from './position'
-import type { AnchorRef, AnchorRefSnapshot, BlockId, CommentId, RevisionId, RunId, SectionId } from './position'
+import type { BlockInsertPlacement, Operation, TextPosition } from './transaction'
+import {
+  migrateTextAnchorsAfterSplit,
+  migrateTextAnchorsToText
+} from './position'
+import type { BlockId, CommentId, GraphemeIndex, RevisionId, RunId, SectionId } from './position'
+import { createGraphemeIndex } from './position'
 
 /**
  * Operation 到 Y.Doc 的最小 adapter。
@@ -88,13 +93,13 @@ export function applyOperation(store: DocumentStore, operation: Operation): void
       deleteRange(store, operation.range.anchor, operation.range.focus)
       break
     case 'setRunProperties':
-      setProperties(findRunLocation(store, operation.runId).run, DOCUMENT_STORE_FIELDS.run.properties, operation.properties)
+      setProperties(findRunLocation(store, operation.runId as RunId).run, DOCUMENT_STORE_FIELDS.run.properties, operation.properties)
       break
     case 'setParagraphProperties':
-      setProperties(findBlockLocation(store, operation.paragraphId).block, DOCUMENT_STORE_FIELDS.block.properties, operation.properties)
+      setProperties(findBlockLocation(store, operation.paragraphId as BlockId).block, DOCUMENT_STORE_FIELDS.block.properties, operation.properties)
       break
     case 'splitBlock':
-      splitBlock(store, operation.at, operation.newBlockId)
+      splitBlock(store, operation.at, operation.newBlockId, operation.newRunId)
       break
     case 'mergeBlock':
       mergeBlock(store, operation.targetBlockId, operation.sourceBlockId)
@@ -108,28 +113,29 @@ export function applyOperation(store: DocumentStore, operation: Operation): void
   }
 }
 
-function insertText(store: DocumentStore, anchor: AnchorRef, text: string): void {
-  const snapshot = resolveOperationAnchor(store, anchor)
-  const run = findRunLocation(store, snapshot.runId).run
-  const sharedText = getRunText(run)
-  const index = readTextIndex(Number(snapshot.graphemeIndex), sharedText)
+function insertText(store: DocumentStore, position: TextPosition, text: string): void {
+  const location = resolveOperationPosition(store, position)
+  const sharedText = getRunText(location.runLocation.run)
 
-  sharedText.insert(index, text)
+  sharedText.insert(Number(location.graphemeIndex), text)
 }
 
 function deleteRange(
   store: DocumentStore,
-  anchor: AnchorRef,
-  focus: AnchorRef
+  anchor: TextPosition,
+  focus: TextPosition
 ): void {
-  const anchorSnapshot = resolveOperationAnchor(store, anchor)
-  const focusSnapshot = resolveOperationAnchor(store, focus)
+  const anchorSnapshot = resolveOperationPosition(store, anchor)
+  const focusSnapshot = resolveOperationPosition(store, focus)
 
   if (anchorSnapshot.runId !== focusSnapshot.runId) {
-    throw new Error('deleteRange 暂只支持同一 run')
+    throw createJWordError('OPERATION_DELETE_RANGE_CROSS_RUN', 'deleteRange 暂只支持同一 run', {
+      anchorRunId: String(anchorSnapshot.runId),
+      focusRunId: String(focusSnapshot.runId)
+    })
   }
 
-  const run = findRunLocation(store, anchorSnapshot.runId).run
+  const run = anchorSnapshot.runLocation.run
   const sharedText = getRunText(run)
   const start = readTextIndex(Number(anchorSnapshot.graphemeIndex), sharedText)
   const end = readTextIndex(Number(focusSnapshot.graphemeIndex), sharedText)
@@ -143,21 +149,39 @@ function deleteRange(
 
 function splitBlock(
   store: DocumentStore,
-  anchor: AnchorRef,
-  newBlockId: BlockId
+  position: TextPosition,
+  newBlockId: string,
+  newRunId: string
 ): void {
-  const snapshot = resolveOperationAnchor(store, anchor)
+  const snapshot = resolveOperationPosition(store, position)
   const location = findBlockLocation(store, snapshot.blockId)
 
   assertBlockKind(location.block, 'paragraph')
+  assertRunIdUnused(store, newRunId as RunId)
 
   const runs = getParagraphRuns(location.block)
-  const runLocation = findRunLocationInBlock(location.block, snapshot.runId)
+  const runLocation = snapshot.runLocation
   const sharedText = getRunText(runLocation.run)
   const index = readTextIndex(Number(snapshot.graphemeIndex), sharedText)
   const tailText = sharedText.toString().slice(index)
   const nextRuns = runs.toArray().slice(runLocation.index + 1).map(cloneRunRecord)
-  const newParagraph = createParagraphRecord(newBlockId)
+  const newParagraph = createParagraphRecord(newBlockId as BlockId)
+
+  location.container.insert(location.index + 1, [newParagraph])
+  copyProperties(location.block, newParagraph, DOCUMENT_STORE_FIELDS.block.properties)
+
+  const newParagraphRuns = getParagraphRuns(newParagraph)
+
+  const splitRunId = newRunId as RunId
+  const splitRun = createSplitRunRecord(splitRunId, tailText, runLocation.run)
+
+  newParagraphRuns.push([splitRun, ...nextRuns])
+  migrateTextAnchorsAfterSplit(sharedText, store.doc, index, {
+    sectionId: snapshot.sectionId,
+    blockId: newBlockId as BlockId,
+    runId: splitRunId,
+    text: getRunText(splitRun)
+  })
 
   if (tailText.length > 0) {
     sharedText.delete(index, tailText.length)
@@ -166,40 +190,50 @@ function splitBlock(
   if (runs.length > runLocation.index + 1) {
     runs.delete(runLocation.index + 1, runs.length - runLocation.index - 1)
   }
-
-  location.container.insert(location.index + 1, [newParagraph])
-  copyProperties(location.block, newParagraph, DOCUMENT_STORE_FIELDS.block.properties)
-
-  const newParagraphRuns = getParagraphRuns(newParagraph)
-
-  newParagraphRuns.push([
-    createRunRecord(`${String(snapshot.runId)}:split` as RunId, tailText),
-    ...nextRuns
-  ])
 }
 
-function mergeBlock(store: DocumentStore, targetBlockId: BlockId, sourceBlockId: BlockId): void {
-  const target = findBlockLocation(store, targetBlockId)
-  const source = findBlockLocation(store, sourceBlockId)
+function mergeBlock(store: DocumentStore, targetBlockId: string, sourceBlockId: string): void {
+  const target = findBlockLocation(store, targetBlockId as BlockId)
+  const source = findBlockLocation(store, sourceBlockId as BlockId)
 
   assertBlockKind(target.block, 'paragraph')
   assertBlockKind(source.block, 'paragraph')
 
   if (target.container !== source.container || source.index !== target.index + 1) {
-    throw new Error('mergeBlock 暂只支持同一容器中的相邻段落')
+    throw createJWordError('OPERATION_MERGE_BLOCK_NOT_ADJACENT', 'mergeBlock 暂只支持同一容器中的相邻段落', {
+      targetBlockId: String(targetBlockId),
+      sourceBlockId: String(sourceBlockId)
+    })
   }
 
-  getParagraphRuns(target.block).push(getParagraphRuns(source.block).toArray().map(cloneRunRecord))
+  const sourceRuns = getParagraphRuns(source.block).toArray()
+  const clonedRuns = sourceRuns.map(cloneRunRecord)
+
+  getParagraphRuns(target.block).push(clonedRuns)
+  for (let index = 0; index < sourceRuns.length; index += 1) {
+    const sourceRun = sourceRuns[index]
+    const clonedRun = clonedRuns[index]
+
+    if (sourceRun === undefined || clonedRun === undefined) {
+      continue
+    }
+
+    migrateTextAnchorsToText(getRunText(sourceRun), store.doc, {
+      blockId: targetBlockId as BlockId,
+      runId: readRequiredString(clonedRun, DOCUMENT_STORE_FIELDS.run.id) as RunId,
+      text: getRunText(clonedRun)
+    })
+  }
   source.container.delete(source.index, 1)
 }
 
 function insertBlock(
   store: DocumentStore,
-  sectionId: SectionId,
+  sectionId: string,
   placement: BlockInsertPlacement,
   block: Block
 ): void {
-  const section = findSection(store, sectionId)
+  const section = findSection(store, sectionId as SectionId)
   const blocks = getSectionBlocks(section)
   const blockRecord = createBlockRecordFromModel(block)
 
@@ -213,26 +247,40 @@ function insertBlock(
   )
 
   if (index < 0) {
-    throw new Error('insertBlock 找不到参照块')
+    throw createJWordError('OPERATION_INSERT_BLOCK_REFERENCE_NOT_FOUND', 'insertBlock 找不到参照块', {
+      blockId: String(placement.blockId)
+    })
   }
 
   blocks.insert(placement.kind === 'before' ? index : index + 1, [blockRecord])
 }
 
-function deleteBlock(store: DocumentStore, blockId: BlockId): void {
-  const location = findBlockLocation(store, blockId)
+function deleteBlock(store: DocumentStore, blockId: string): void {
+  const location = findBlockLocation(store, blockId as BlockId)
 
   location.container.delete(location.index, 1)
 }
 
-function resolveOperationAnchor(store: DocumentStore, anchor: AnchorRef): AnchorRefSnapshot {
-  const snapshot = resolveAnchorRef(anchor, store.doc)
+interface ResolvedTextPosition {
+  readonly sectionId: SectionId
+  readonly blockId: BlockId
+  readonly runId: RunId
+  readonly graphemeIndex: GraphemeIndex
+  readonly runLocation: RunLocation
+}
 
-  if (snapshot === undefined) {
-    throw new Error('锚点无法解析')
+function resolveOperationPosition(store: DocumentStore, position: TextPosition): ResolvedTextPosition {
+  const runLocation = findRunLocationByPosition(store, position)
+  const sharedText = getRunText(runLocation.run)
+  const index = readTextIndex(position.graphemeIndex, sharedText)
+
+  return {
+    sectionId: position.sectionId as SectionId,
+    blockId: position.blockId as BlockId,
+    runId: position.runId as RunId,
+    graphemeIndex: createGraphemeIndex(index),
+    runLocation
   }
-
-  return snapshot
 }
 
 interface BlockLocation {
@@ -253,7 +301,9 @@ function findSection(store: DocumentStore, sectionId: SectionId): SectionRecord 
   )
 
   if (section === undefined) {
-    throw new Error('找不到节')
+    throw createJWordError('OPERATION_SECTION_NOT_FOUND', '找不到节', {
+      sectionId: String(sectionId)
+    })
   }
 
   return section
@@ -268,7 +318,9 @@ function findBlockLocation(store: DocumentStore, blockId: BlockId): BlockLocatio
     }
   }
 
-  throw new Error('找不到块')
+  throw createJWordError('OPERATION_BLOCK_NOT_FOUND', '找不到块', {
+    blockId: String(blockId)
+  })
 }
 
 function findBlockLocationInContainer(container: BlockContainer, blockId: BlockId): BlockLocation | undefined {
@@ -310,13 +362,30 @@ function findRunLocation(store: DocumentStore, runId: RunId): RunLocation {
     }
   }
 
-  throw new Error('找不到 run')
+  throw createJWordError('OPERATION_RUN_NOT_FOUND', '找不到 run', {
+    runId: String(runId)
+  })
+}
+
+function findRunLocationByPosition(store: DocumentStore, position: TextPosition): RunLocation {
+  const section = findSection(store, position.sectionId as SectionId)
+  const blockLocation = findBlockLocationInContainer(getSectionBlocks(section), position.blockId as BlockId)
+
+  if (blockLocation === undefined) {
+    throw createJWordError('OPERATION_BLOCK_NOT_FOUND', '找不到块', {
+      blockId: position.blockId
+    })
+  }
+
+  assertBlockKind(blockLocation.block, 'paragraph')
+
+  return findRunLocationInBlock(blockLocation.block, position.runId as RunId)
 }
 
 function findRunLocationInBlocks(blocks: BlockContainer, runId: RunId): RunLocation | undefined {
   for (const block of blocks.toArray()) {
     if (block.get(DOCUMENT_STORE_FIELDS.block.kind) === 'paragraph') {
-      const run = findRunLocationInBlock(block, runId)
+      const run = findRunLocationInParagraph(block, runId)
 
       if (run !== undefined) {
         return run
@@ -339,7 +408,39 @@ function findRunLocationInBlocks(blocks: BlockContainer, runId: RunId): RunLocat
   return undefined
 }
 
+function assertRunIdUnused(store: DocumentStore, runId: RunId): void {
+  if (findRunLocationInStore(store, runId) !== undefined) {
+    throw createJWordError('OPERATION_RUN_ID_DUPLICATE', 'run ID 已存在', {
+      runId: String(runId)
+    })
+  }
+}
+
+function findRunLocationInStore(store: DocumentStore, runId: RunId): RunLocation | undefined {
+  for (const section of store.sections.toArray()) {
+    const run = findRunLocationInBlocks(getSectionBlocks(section), runId)
+
+    if (run !== undefined) {
+      return run
+    }
+  }
+
+  return undefined
+}
+
 function findRunLocationInBlock(block: BlockRecord, runId: RunId): RunLocation {
+  const run = findRunLocationInParagraph(block, runId)
+
+  if (run !== undefined) {
+    return run
+  }
+
+  throw createJWordError('OPERATION_RUN_NOT_IN_BLOCK', '段落中找不到 run', {
+    runId: String(runId)
+  })
+}
+
+function findRunLocationInParagraph(block: BlockRecord, runId: RunId): RunLocation | undefined {
   const runs = getParagraphRuns(block)
   const runRecords = runs.toArray()
 
@@ -351,7 +452,7 @@ function findRunLocationInBlock(block: BlockRecord, runId: RunId): RunLocation {
     }
   }
 
-  throw new Error('段落中找不到 run')
+  return undefined
 }
 
 function createBlockRecordFromModel(block: Block): BlockRecord {
@@ -441,13 +542,19 @@ function createTableCellRecordFromModel(cell: TableCell): TableCellRecord {
 
 function cloneRunRecord(run: RunRecord): RunRecord {
   const id = readRequiredString(run, DOCUMENT_STORE_FIELDS.run.id) as RunId
+  const text = getRunText(run).toString()
+
+  return createSplitRunRecord(id, text, run)
+}
+
+function createSplitRunRecord(runId: RunId, textValue: string, source: RunRecord): RunRecord {
   const clone = new Y.Map<RunRecordValue>() as RunRecord
-  const properties = clonePropertyMap(readPropertyMap(run, DOCUMENT_STORE_FIELDS.run.properties))
+  const properties = clonePropertyMap(readPropertyMap(source, DOCUMENT_STORE_FIELDS.run.properties))
   const text = new Y.Text()
 
-  text.insert(0, getRunText(run).toString())
+  text.insert(0, textValue)
   clone.set(DOCUMENT_STORE_FIELDS.run.kind, 'run')
-  clone.set(DOCUMENT_STORE_FIELDS.run.id, id)
+  clone.set(DOCUMENT_STORE_FIELDS.run.id, runId)
   clone.set(DOCUMENT_STORE_FIELDS.run.properties, properties)
   clone.set(DOCUMENT_STORE_FIELDS.run.text, text)
   clone.set(DOCUMENT_STORE_FIELDS.run.resourceIds, new Y.Array<ResourceId>())
@@ -513,7 +620,7 @@ function readPropertyMap(record: SharedMapReader, fieldName: string): Y.Map<Docu
     return value as Y.Map<DocumentStoreJson>
   }
 
-  throw new Error('属性容器缺失')
+  throw createJWordError('OPERATION_PROPERTY_CONTAINER_MISSING', '属性容器缺失')
 }
 
 function readRequiredString(record: SharedMapReader, fieldName: string): string {
@@ -523,18 +630,25 @@ function readRequiredString(record: SharedMapReader, fieldName: string): string 
     return value
   }
 
-  throw new Error('字符串字段缺失')
+  throw createJWordError('OPERATION_STRING_FIELD_MISSING', '字符串字段缺失', {
+    fieldName
+  })
 }
 
 function assertBlockKind(block: BlockRecord, kind: 'paragraph' | 'table'): void {
   if (block.get(DOCUMENT_STORE_FIELDS.block.kind) !== kind) {
-    throw new Error(`块类型不是 ${kind}`)
+    throw createJWordError('OPERATION_BLOCK_KIND_MISMATCH', `块类型不是 ${kind}`, {
+      expectedKind: kind
+    })
   }
 }
 
 function readTextIndex(index: number, text: Y.Text): number {
   if (!Number.isInteger(index) || index < 0 || index > text.length) {
-    throw new Error('文本位置越界')
+    throw createJWordError('OPERATION_TEXT_INDEX_OUT_OF_BOUNDS', '文本位置越界', {
+      index,
+      length: text.length
+    })
   }
 
   return index
@@ -563,5 +677,5 @@ function toDocumentStoreJson(value: unknown): DocumentStoreJson {
     )
   }
 
-  throw new Error('属性值必须是 JSON 兼容数据')
+  throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', '属性值必须是 JSON 兼容数据')
 }

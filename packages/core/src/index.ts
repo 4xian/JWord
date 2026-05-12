@@ -17,12 +17,20 @@ export type {
   EditorTextAnchorInput
 } from './editor'
 export { createEditor } from './editor'
+export { JWordError } from './errors'
+export type { JWordErrorCode, JWordErrorDetails } from './errors'
+export type {
+  HistoryEntryMetadata,
+  HistoryOperationResult
+} from './history'
 export type { Document, Paragraph, Run, Section } from './model'
 export type { AnchorRef, RangeRef } from './position'
 export type { DocumentProjection } from './projection'
 export type {
   Command,
   Operation,
+  TextPosition,
+  TextRange,
   TransactionEvent,
   TransactionMetadata,
   TransactionResult

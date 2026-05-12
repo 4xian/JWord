@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "name": "gate1-minimal-edit",
+  "initialDocument": {
+    "documentId": "document-1",
+    "sectionId": "section-1",
+    "text": "Title\n\nBody draft"
+  },
+  "steps": [
+    {
+      "name": "insert-title-prefix",
+      "origin": "fixture-replay",
+      "label": "插入标题前缀",
+      "operations": [
+        {
+          "kind": "insertText",
+          "at": {
+            "sectionId": "section-1",
+            "blockId": "paragraph-1",
+            "runId": "run-1",
+            "graphemeIndex": 0
+          },
+          "text": "JWord "
+        }
+      ]
+    },
+    {
+      "name": "style-title",
+      "origin": "fixture-replay",
+      "operations": [
+        {
+          "kind": "setRunProperties",
+          "runId": "run-1",
+          "properties": {
+            "bold": true
+          }
+        },
+        {
+          "kind": "setParagraphProperties",
+          "paragraphId": "paragraph-1",
+          "properties": {
+            "alignment": "center"
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete-body-tail",
+      "origin": "fixture-replay",
+      "operations": [
+        {
+          "kind": "deleteRange",
+          "range": {
+            "anchor": {
+              "sectionId": "section-1",
+              "blockId": "paragraph-2",
+              "runId": "run-2",
+              "graphemeIndex": 4
+            },
+            "focus": {
+              "sectionId": "section-1",
+              "blockId": "paragraph-2",
+              "runId": "run-2",
+              "graphemeIndex": 10
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "insert-summary-block",
+      "origin": "fixture-replay",
+      "operations": [
+        {
+          "kind": "insertBlock",
+          "sectionId": "section-1",
+          "placement": {
+            "kind": "after",
+            "blockId": "paragraph-2"
+          },
+          "block": {
+            "kind": "paragraph",
+            "id": "paragraph-summary",
+            "runs": [
+              {
+                "kind": "run",
+                "id": "run-summary",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "text": "Fixture replay complete"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "insert-temp-block",
+      "origin": "fixture-replay",
+      "operations": [
+        {
+          "kind": "insertBlock",
+          "sectionId": "section-1",
+          "placement": {
+            "kind": "after",
+            "blockId": "paragraph-summary"
+          },
+          "block": {
+            "kind": "paragraph",
+            "id": "paragraph-temp",
+            "runs": [
+              {
+                "kind": "run",
+                "id": "run-temp",
+                "inlines": [
+                  {
+                    "kind": "text",
+                    "text": "temporary block"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "split-temp-block",
+      "origin": "fixture-replay",
+      "operations": [
+        {
+          "kind": "splitBlock",
+          "at": {
+            "sectionId": "section-1",
+            "blockId": "paragraph-temp",
+            "runId": "run-temp",
+            "graphemeIndex": 9
+          },
+          "newBlockId": "paragraph-temp-tail",
+          "newRunId": "run-temp-tail"
+        }
+      ]
+    },
+    {
+      "name": "merge-temp-block",
+      "origin": "fixture-replay",
+      "operations": [
+        {
+          "kind": "mergeBlock",
+          "targetBlockId": "paragraph-temp",
+          "sourceBlockId": "paragraph-temp-tail"
+        }
+      ]
+    },
+    {
+      "name": "delete-temp-block",
+      "origin": "fixture-replay",
+      "operations": [
+        {
+          "kind": "deleteBlock",
+          "blockId": "paragraph-temp"
+        }
+      ]
+    }
+  ],
+  "expectedProjection": {
+    "document": {
+      "kind": "document",
+      "id": "document-1",
+      "sections": [
+        {
+          "kind": "section",
+          "id": "section-1",
+          "blocks": [
+            {
+              "kind": "paragraph",
+              "id": "paragraph-1",
+              "properties": {
+                "alignment": "center"
+              },
+              "runs": [
+                {
+                  "kind": "run",
+                  "id": "run-1",
+                  "properties": {
+                    "bold": true
+                  },
+                  "inlines": [
+                    {
+                      "kind": "text",
+                      "text": "JWord Title"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "paragraph",
+              "id": "paragraph-2",
+              "runs": [
+                {
+                  "kind": "run",
+                  "id": "run-2",
+                  "inlines": [
+                    {
+                      "kind": "text",
+                      "text": "Body"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "paragraph",
+              "id": "paragraph-summary",
+              "runs": [
+                {
+                  "kind": "run",
+                  "id": "run-summary",
+                  "inlines": [
+                    {
+                      "kind": "text",
+                      "text": "Fixture replay complete"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

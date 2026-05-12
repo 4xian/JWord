@@ -8,6 +8,7 @@
 
 import * as Y from 'yjs'
 
+import { createJWordError } from './errors'
 import {
   DOCUMENT_STORE_FIELDS,
   createDocumentStore,
@@ -90,7 +91,9 @@ function projectBlock(block: BlockRecord): Block {
     return projectTable(block)
   }
 
-  throw new Error('未知块类型')
+  throw createJWordError('PROJECTION_INVALID_DOCUMENT', '未知块类型', {
+    kind: String(kind)
+  })
 }
 
 function projectParagraph(block: BlockRecord): Paragraph {
@@ -166,7 +169,9 @@ function readString(value: unknown, label: string): string {
     return value
   }
 
-  throw new Error(`${label} 缺少字符串 ID`)
+  throw createJWordError('PROJECTION_INVALID_DOCUMENT', `${label} 缺少字符串 ID`, {
+    label
+  })
 }
 
 function readOptionalNumber(value: unknown): number | undefined {

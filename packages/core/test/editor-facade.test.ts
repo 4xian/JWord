@@ -53,7 +53,7 @@ describe('Editor facade', () => {
     const result = editor.executeCommand(
       {
         name: 'insertText',
-        operations: [{ kind: 'insertText', at: anchor, text: 'J' }]
+        operations: [{ kind: 'insertText', at: editor.resolveTextPosition(anchor), text: 'J' }]
       },
       { origin: 'local-user', label: '输入首字母' }
     )

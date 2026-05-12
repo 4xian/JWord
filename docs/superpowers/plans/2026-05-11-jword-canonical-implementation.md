@@ -135,18 +135,18 @@
 - [x] Step 1.9：实现 `SelectionState`，支持 anchor/focus、direction、affinity、selection restore。
 - [x] Step 1.10：实现 History metadata，接入 Y.UndoManager，默认 tracked origin 只包含本地用户操作。
 - [x] Step 1.11：实现 Editor Facade 第一版：创建文档、加载 fixture、执行 command、监听事件、销毁实例。
-- [ ] Step 1.12：建立 operation fixture，可序列化、可回放、可用于后续 docx/collab/auto-inserter 集成测试。
-- [ ] Step 1.13：建立属性测试，覆盖随机插入、删除、拆分、合并、undo/redo 后 projection 与 Y.Doc 一致。
-- [ ] Step 1.14：补齐错误码体系，确保非法 operation 返回可诊断错误，不静默失败。
+- [x] Step 1.12：建立 operation fixture，可序列化、可回放、可用于后续 docx/collab/auto-inserter 集成测试。
+- [x] Step 1.13：建立属性测试，覆盖随机插入、删除、拆分、合并、undo/redo 后 projection 与 Y.Doc 一致。
+- [x] Step 1.14：补齐错误码体系，确保非法 operation 返回可诊断错误，不静默失败。
 
 ### 验收
 
-- [ ] 本地单人模式能在 Y.Doc 中完成文本增删、段落拆分合并、run 样式变更。
-- [ ] Projection 可稳定派生段落和 run。
-- [ ] Anchor 在前方插入、删除、段落拆分、段落合并后不漂移。
-- [ ] Operation fixture 可序列化、可回放。
-- [ ] undo/redo 不丢样式，不破坏 selection restore。
-- [ ] 所有编辑路径都必须经过 transaction pipeline。
+- [x] 本地单人模式能在 Y.Doc 中完成文本增删、段落拆分合并、run 样式变更。
+- [x] Projection 可稳定派生段落和 run。
+- [x] Anchor 在前方插入、删除、段落拆分、段落合并后不漂移。
+- [x] Operation fixture 可序列化、可回放。
+- [x] undo/redo 不丢样式，不破坏 selection restore。
+- [x] 所有编辑路径都必须经过 transaction pipeline。
 
 ### 禁止事项
 
@@ -476,6 +476,8 @@
 ## 风险控制与复核点
 
 - [ ] 复核点 A：Gate 1 完成后，确认 Y.Doc schema、Projection、Operation、AnchorRef 是否足以承载 docx、协同、自动插入；若不足，在进入 Gate 2 前修正。
+  - 已修：Operation/TextPosition/TextRange 已是 JSON 可序列化契约，`splitBlock.newRunId` 改为显式字段，operation fixture 可跨实例回放。
+  - 未过：raw Yjs remote update 不会触发本地 AnchorRef split/merge 迁移；进入 Gate 2 前需要补 Gate 1.x 的跨实例 anchor 迁移语义，或明确收口到 provider 层 operation replay。
 - [ ] 复核点 B：Gate 2 完成后，确认 LayoutBox 是否能支撑 PDF、页眉页脚、表格、图片和 hit-test；若不足，在进入 Gate 3 前修正。
 - [ ] 复核点 C：Gate 3 完成后，确认输入系统、IME、selection、history 没有绕开 transaction pipeline；若绕开，不进入 Alpha。
 - [ ] 复核点 D：Gate 5 完成后，确认 OOXML mapping 的 warning、fixture diff、worker cancel/progress 可用；若不可用，不进入 Beta。

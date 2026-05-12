@@ -8,6 +8,7 @@
 
 import * as Y from 'yjs'
 
+import { createJWordError } from './errors'
 import type { BlockId, CommentId, DocumentId, RevisionId, RunId, SectionId } from './position'
 
 declare const documentStoreIdBrand: unique symbol
@@ -464,7 +465,7 @@ export function getRunText(run: RunRecord): Y.Text {
     return value
   }
 
-  throw new Error('run 缺少共享文本容器')
+  throw createJWordError('DOCUMENT_STORE_TEXT_CONTAINER_MISSING', 'run 缺少共享文本容器')
 }
 
 /**
@@ -508,5 +509,7 @@ function readSharedArray<Item>(record: SharedMapReader, fieldName: string, label
     return value as Y.Array<Item>
   }
 
-  throw new Error(`${label} 缺失`)
+  throw createJWordError('DOCUMENT_STORE_ARRAY_CONTAINER_MISSING', `${label} 缺失`, {
+    label
+  })
 }

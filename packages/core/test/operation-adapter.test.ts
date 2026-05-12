@@ -23,13 +23,8 @@ import {
 } from '../src/document-store'
 import type { BlockRecord, DocumentStore, RunRecord, SectionRecord } from '../src/document-store'
 import { createOperationAdapter } from '../src/operation-adapter'
-import {
-  createAnchorRef,
-  createGraphemeIndex,
-  createRangeRef,
-  createTextAnchorRef
-} from '../src/position'
-import type { BlockId, DocumentId, RunId, SectionId } from '../src/position'
+import type { BlockId, RunId, SectionId } from '../src/position'
+import type { TextPosition } from '../src/transaction'
 
 describe('createOperationAdapter', () => {
   it('applies insertText deleteRange and property operations to Y.Doc records', () => {
@@ -38,15 +33,15 @@ describe('createOperationAdapter', () => {
 
     adapter.apply({
       kind: 'insertText',
-      at: createAnchor(paragraphId, runId, 2),
+      at: createPosition(paragraphId, runId, 2),
       text: '，'
     })
     adapter.apply({
       kind: 'deleteRange',
-      range: createRangeRef(
-        createAnchor(paragraphId, runId, 2),
-        createAnchor(paragraphId, runId, 3)
-      )
+      range: {
+        anchor: createPosition(paragraphId, runId, 2),
+        focus: createPosition(paragraphId, runId, 3)
+      }
     })
     adapter.apply({
       kind: 'setRunProperties',
@@ -67,23 +62,15 @@ describe('createOperationAdapter', () => {
     expect(readProperty(paragraph, DOCUMENT_STORE_FIELDS.block.properties, 'alignment')).toBe('center')
   })
 
-  it('resolves text anchors through relative positions when text shifts', () => {
+  it('applies serializable text positions after text shifts', () => {
     const { store, paragraphId, runId, run } = createTextFixture('abc')
     const adapter = createOperationAdapter(store)
-    const anchor = createTextAnchorRef({
-      documentId: 'document-1' as DocumentId,
-      sectionId: 'section-1' as SectionId,
-      blockId: paragraphId,
-      runId,
-      graphemeIndex: createGraphemeIndex(1),
-      text: getRunText(run)
-    })
 
     getRunText(run).insert(0, 'x')
 
     adapter.apply({
       kind: 'insertText',
-      at: anchor,
+      at: createPosition(paragraphId, runId, 2),
       text: 'Z'
     })
 
@@ -97,8 +84,9 @@ describe('createOperationAdapter', () => {
 
     adapter.apply({
       kind: 'splitBlock',
-      at: createAnchor(paragraphId, runId, 2),
-      newBlockId: 'paragraph-2' as BlockId
+      at: createPosition(paragraphId, runId, 2),
+      newBlockId: 'paragraph-2' as BlockId,
+      newRunId: 'run-2' as RunId
     })
 
     const splitBlocks = sectionBlocks.toArray()
@@ -192,14 +180,13 @@ function createTextFixture(text: string) {
   }
 }
 
-function createAnchor(blockId: BlockId, runId: RunId, graphemeIndex: number) {
-  return createAnchorRef({
-    documentId: 'document-1' as DocumentId,
-    sectionId: 'section-1' as SectionId,
-    blockId,
-    runId,
-    graphemeIndex: createGraphemeIndex(graphemeIndex)
-  })
+function createPosition(blockId: BlockId, runId: RunId, graphemeIndex: number): TextPosition {
+  return {
+    sectionId: 'section-1',
+    blockId: String(blockId),
+    runId: String(runId),
+    graphemeIndex
+  }
 }
 
 interface SharedMapReader {

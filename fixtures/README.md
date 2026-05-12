@@ -6,6 +6,7 @@ Current Gate 0 files:
 
 - `plain-text/minimal.txt`: smallest plain text document with a title and one paragraph.
 - `plain-text/long-placeholder.txt`: deterministic long-document placeholder for smoke benchmarks.
+- `operation-fixtures/gate1-minimal-edit.json`: Gate 1.12 serialized operation replay fixture.
 
 Rules:
 

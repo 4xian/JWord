@@ -23,14 +23,16 @@ import {
   getTableRows
 } from './document-store'
 import type { BlockRecord, DocumentStore, DocumentStoreJson, ResourceId, StyleId } from './document-store'
+import { createJWordError } from './errors'
 import { DEFAULT_HISTORY_ORIGIN, createHistoryManager } from './history'
-import { createTextAnchorRef } from './position'
+import type { HistoryOperationResult } from './history'
+import { createTextAnchorRef, resolveAnchorRef } from './position'
 import type { AnchorRef, BlockId, CommentId, DocumentId, RevisionId, RunId, SectionId } from './position'
 import { createGraphemeIndex } from './position'
 import { createDocumentProjection } from './projection'
 import type { DocumentProjection } from './projection'
 import { createTransactionPipeline } from './transaction'
-import type { Command, TransactionEvent, TransactionMetadata, TransactionResult } from './transaction'
+import type { Command, TextPosition, TransactionEvent, TransactionMetadata, TransactionResult } from './transaction'
 
 const DEFAULT_EDITOR_LABEL = 'JWord editor'
 const DEFAULT_DOCUMENT_ID = 'document-1'
@@ -215,6 +217,14 @@ export interface Editor {
   createTextAnchor(input: EditorTextAnchorInput): AnchorRef
 
   /**
+   * 把运行时 AnchorRef 解析成可序列化文本位置。
+   *
+   * @param anchor 已创建的稳定锚点。
+   * @returns 可放入 Operation 的 JSON 兼容位置。
+   */
+  resolveTextPosition(anchor: AnchorRef): TextPosition
+
+  /**
    * 执行编辑命令。
    *
    * @param command Command 语义和最小 Operation 列表。
@@ -228,11 +238,43 @@ export interface Editor {
    * ```ts
    * editor.executeCommand({
    *   name: 'insertText',
-   *   operations: [{ kind: 'insertText', at: anchor, text: '你好' }]
+   *   operations: [{ kind: 'insertText', at: editor.resolveTextPosition(anchor), text: '你好' }]
    * });
    * ```
    */
   executeCommand(command: Command, options?: EditorCommandOptions): TransactionResult
+
+  /**
+   * 撤销最近一次本地用户历史操作。
+   *
+   * @returns history manager 的 undo 结果。
+   * @remarks
+   * 副作用：通过 Y.UndoManager 回滚 Y.Doc；远端或自动插入 origin 默认不进入用户 undo 栈。
+   */
+  undo(): HistoryOperationResult
+
+  /**
+   * 重做最近一次撤销的本地用户历史操作。
+   *
+   * @returns history manager 的 redo 结果。
+   * @remarks
+   * 副作用：通过 Y.UndoManager 恢复 Y.Doc。
+   */
+  redo(): HistoryOperationResult
+
+  /**
+   * 判断当前是否存在可撤销的用户历史项。
+   *
+   * @returns 是否可撤销。
+   */
+  canUndo(): boolean
+
+  /**
+   * 判断当前是否存在可重做的用户历史项。
+   *
+   * @returns 是否可重做。
+   */
+  canRedo(): boolean
 
   /**
    * 监听 facade 事件。
@@ -336,7 +378,10 @@ class JWordEditor implements Editor {
     const text = findRunText(this.store, input)
 
     if (!Number.isInteger(input.graphemeIndex) || input.graphemeIndex < 0 || input.graphemeIndex > text.length) {
-      throw new Error('文本锚点位置越界')
+      throw createJWordError('OPERATION_TEXT_INDEX_OUT_OF_BOUNDS', '文本锚点位置越界', {
+        index: input.graphemeIndex,
+        length: text.length
+      })
     }
 
     return createTextAnchorRef({
@@ -350,6 +395,23 @@ class JWordEditor implements Editor {
     })
   }
 
+  resolveTextPosition(anchor: AnchorRef): TextPosition {
+    this.assertActive()
+
+    const snapshot = resolveAnchorRef(anchor, this.store.doc)
+
+    if (snapshot === undefined) {
+      throw createJWordError('OPERATION_ANCHOR_UNRESOLVED', '锚点无法解析')
+    }
+
+    return {
+      sectionId: String(snapshot.sectionId),
+      blockId: String(snapshot.blockId),
+      runId: String(snapshot.runId),
+      graphemeIndex: Number(snapshot.graphemeIndex)
+    }
+  }
+
   executeCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
     this.assertActive()
 
@@ -358,6 +420,7 @@ class JWordEditor implements Editor {
     const shouldTrackHistory = this.history.trackedOrigins.has(origin) && command.operations.length > 0
 
     if (shouldTrackHistory) {
+      this.history.stopCapturing()
       this.history.captureNextTransaction({
         commandName: command.name,
         origin,
@@ -376,6 +439,30 @@ class JWordEditor implements Editor {
     }
   }
 
+  undo(): HistoryOperationResult {
+    this.assertActive()
+
+    return this.history.undo()
+  }
+
+  redo(): HistoryOperationResult {
+    this.assertActive()
+
+    return this.history.redo()
+  }
+
+  canUndo(): boolean {
+    this.assertActive()
+
+    return this.history.canUndo()
+  }
+
+  canRedo(): boolean {
+    this.assertActive()
+
+    return this.history.canRedo()
+  }
+
   subscribe(listener: EditorEventListener): () => void {
     this.assertActive()
     this.listeners.add(listener)
@@ -389,7 +476,7 @@ class JWordEditor implements Editor {
     this.assertActive()
 
     if (this.mountedDom !== undefined) {
-      throw new Error('JWord editor is already mounted.')
+      throw createJWordError('EDITOR_ALREADY_MOUNTED', 'JWord editor is already mounted.')
     }
 
     const ownerDocument = host.ownerDocument
@@ -441,7 +528,7 @@ class JWordEditor implements Editor {
 
   private assertActive(): void {
     if (this.isDestroyed) {
-      throw new Error('JWord editor has been destroyed.')
+      throw createJWordError('EDITOR_DESTROYED', 'JWord editor has been destroyed.')
     }
   }
 }
@@ -550,7 +637,7 @@ function readCurrentDocumentId(store: DocumentStore): DocumentId {
   const documentId = store.document.get(DOCUMENT_STORE_FIELDS.document.id)
 
   if (typeof documentId !== 'string') {
-    throw new Error('当前文档缺少 ID')
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', '当前文档缺少 ID')
   }
 
   return documentId as DocumentId
@@ -569,7 +656,11 @@ function findRunText(store: DocumentStore, input: EditorTextAnchorInput): Y.Text
     }
   }
 
-  throw new Error('找不到文本锚点目标 run')
+  throw createJWordError('EDITOR_ANCHOR_TARGET_NOT_FOUND', '找不到文本锚点目标 run', {
+    sectionId: input.sectionId,
+    blockId: input.blockId,
+    runId: input.runId
+  })
 }
 
 function findRunTextInBlocks(

@@ -9,6 +9,7 @@
 import * as Y from 'yjs'
 
 declare const opaqueBrand: unique symbol
+const anchorStateSymbol = Symbol('jword.anchor.state')
 
 type Opaque<Value, Name extends string> = Value & {
   readonly [opaqueBrand]: Name
@@ -69,6 +70,31 @@ export interface AnchorRefSnapshot extends AnchorRefInput {
   readonly relativePosition?: Y.RelativePosition
 }
 
+interface AnchorRefState {
+  kind: 'block' | 'text'
+  documentId: DocumentId
+  sectionId: SectionId
+  blockId: BlockId
+  runId: RunId
+  graphemeIndex: GraphemeIndex
+  text: Y.Text | undefined
+  assoc: number
+  relativePosition: Y.RelativePosition | undefined
+}
+
+interface AnchorRefRuntime {
+  readonly [anchorStateSymbol]: AnchorRefState
+}
+
+export interface TextAnchorMigrationTarget {
+  readonly sectionId?: SectionId
+  readonly blockId: BlockId
+  readonly runId: RunId
+  readonly text: Y.Text
+}
+
+const textAnchorRegistry = new WeakMap<Y.Text, Set<AnchorRefState>>()
+
 /** 稳定锚点引用；外部不能依赖其内部结构。 */
 export type AnchorRef = Readonly<{
   readonly [opaqueBrand]: 'AnchorRef'
@@ -108,10 +134,17 @@ export function createGraphemeIndex(value: number): GraphemeIndex {
  * @returns 不暴露可变内部结构的 AnchorRef。
  */
 export function createAnchorRef(input: AnchorRefInput): AnchorRef {
-  return Object.freeze({
+  return createAnchorRefFromState({
     kind: 'block',
-    ...input
-  }) as unknown as AnchorRef
+    documentId: input.documentId,
+    sectionId: input.sectionId,
+    blockId: input.blockId,
+    runId: input.runId,
+    graphemeIndex: input.graphemeIndex,
+    text: undefined,
+    assoc: 0,
+    relativePosition: undefined
+  })
 }
 
 /**
@@ -121,19 +154,25 @@ export function createAnchorRef(input: AnchorRefInput): AnchorRef {
  * @returns 不暴露可变内部结构的 AnchorRef。
  */
 export function createTextAnchorRef(input: TextAnchorRefInput): AnchorRef {
-  return Object.freeze({
+  const state: AnchorRefState = {
     kind: 'text',
     documentId: input.documentId,
     sectionId: input.sectionId,
     blockId: input.blockId,
     runId: input.runId,
     graphemeIndex: input.graphemeIndex,
+    text: input.text,
+    assoc: input.assoc ?? 0,
     relativePosition: Y.createRelativePositionFromTypeIndex(
       input.text,
       Number(input.graphemeIndex),
       input.assoc ?? 0
     )
-  }) as unknown as AnchorRef
+  }
+
+  registerTextAnchorState(state)
+
+  return createAnchorRefFromState(state)
 }
 
 /**
@@ -160,7 +199,7 @@ export function createRangeRef(anchor: AnchorRef, focus: AnchorRef): RangeRef {
  * @returns 锚点创建时的不可变边界信息。
  */
 export function readAnchorRefSnapshot(anchor: AnchorRef): AnchorRefSnapshot {
-  return anchor as unknown as AnchorRefSnapshot
+  return createSnapshotFromState(readAnchorRefState(anchor))
 }
 
 /**
@@ -171,7 +210,8 @@ export function readAnchorRefSnapshot(anchor: AnchorRef): AnchorRefSnapshot {
  * @returns 解析后的快照；若相对位置已失效则返回 undefined。
  */
 export function resolveAnchorRef(anchor: AnchorRef, doc: Y.Doc): AnchorRefSnapshot | undefined {
-  const snapshot = readAnchorRefSnapshot(anchor)
+  const state = readAnchorRefState(anchor)
+  const snapshot = createSnapshotFromState(state)
 
   if (snapshot.relativePosition === undefined) {
     return snapshot
@@ -183,8 +223,105 @@ export function resolveAnchorRef(anchor: AnchorRef, doc: Y.Doc): AnchorRefSnapsh
     return undefined
   }
 
+  state.graphemeIndex = createGraphemeIndex(absolute.index)
+
+  return createSnapshotFromState(state)
+}
+
+export function migrateTextAnchorsAfterSplit(
+  sourceText: Y.Text,
+  doc: Y.Doc,
+  boundaryIndex: number,
+  target: TextAnchorMigrationTarget
+): void {
+  migrateTextAnchors(sourceText, doc, target, (index, state) =>
+    index > boundaryIndex || (index === boundaryIndex && state.assoc > 0)
+      ? index - boundaryIndex
+      : undefined
+  )
+}
+
+export function migrateTextAnchorsToText(
+  sourceText: Y.Text,
+  doc: Y.Doc,
+  target: TextAnchorMigrationTarget
+): void {
+  migrateTextAnchors(sourceText, doc, target, (index) => index)
+}
+
+function createAnchorRefFromState(state: AnchorRefState): AnchorRef {
+  return Object.freeze({
+    [anchorStateSymbol]: state
+  }) as unknown as AnchorRef
+}
+
+function readAnchorRefState(anchor: AnchorRef): AnchorRefState {
+  return (anchor as unknown as AnchorRefRuntime)[anchorStateSymbol]
+}
+
+function createSnapshotFromState(state: AnchorRefState): AnchorRefSnapshot {
   return {
-    ...snapshot,
-    graphemeIndex: createGraphemeIndex(absolute.index)
+    kind: state.kind,
+    documentId: state.documentId,
+    sectionId: state.sectionId,
+    blockId: state.blockId,
+    runId: state.runId,
+    graphemeIndex: state.graphemeIndex,
+    ...(state.relativePosition === undefined ? {} : { relativePosition: state.relativePosition })
+  }
+}
+
+function registerTextAnchorState(state: AnchorRefState): void {
+  if (state.text === undefined) {
+    return
+  }
+
+  const states = textAnchorRegistry.get(state.text) ?? new Set<AnchorRefState>()
+
+  states.add(state)
+  textAnchorRegistry.set(state.text, states)
+}
+
+function unregisterTextAnchorState(state: AnchorRefState): void {
+  if (state.text === undefined) {
+    return
+  }
+
+  textAnchorRegistry.get(state.text)?.delete(state)
+}
+
+function migrateTextAnchors(
+  sourceText: Y.Text,
+  doc: Y.Doc,
+  target: TextAnchorMigrationTarget,
+  mapIndex: (index: number, state: AnchorRefState) => number | undefined
+): void {
+  const states = [...(textAnchorRegistry.get(sourceText) ?? [])]
+
+  for (const state of states) {
+    if (state.relativePosition === undefined) {
+      continue
+    }
+
+    const absolute = Y.createAbsolutePositionFromRelativePosition(state.relativePosition, doc)
+
+    if (absolute === null || absolute.type !== sourceText) {
+      continue
+    }
+
+    const targetIndex = mapIndex(absolute.index, state)
+
+    if (targetIndex === undefined) {
+      continue
+    }
+
+    unregisterTextAnchorState(state)
+    state.sectionId = target.sectionId ?? state.sectionId
+    state.blockId = target.blockId
+    state.runId = target.runId
+    state.graphemeIndex = createGraphemeIndex(targetIndex)
+    state.text = target.text
+    state.relativePosition = Y.createRelativePositionFromTypeIndex(target.text, targetIndex, state.assoc)
+    registerTextAnchorState(state)
   }
 }

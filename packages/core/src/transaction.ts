@@ -11,7 +11,7 @@ import * as Y from 'yjs'
 import type { Block, ModelProperties } from './model'
 import { createDocumentProjection } from './projection'
 import { createOperationAdapter } from './operation-adapter'
-import type { AnchorRef, BlockId, RangeRef, RunId, SectionId } from './position'
+import { createJWordError } from './errors'
 import type { DocumentProjection } from './projection'
 
 /**
@@ -44,15 +44,35 @@ const OPERATION_KINDS = new Set<OperationKind>([
 export type BlockInsertPlacement =
   | {
       readonly kind: 'before'
-      readonly blockId: BlockId
+      readonly blockId: string
     }
   | {
       readonly kind: 'after'
-      readonly blockId: BlockId
+      readonly blockId: string
     }
   | {
       readonly kind: 'append'
     }
+
+/**
+ * 可序列化文本位置。
+ *
+ * @remarks
+ * Operation 只能携带 JSON 兼容位置；运行时 AnchorRef 需要先由 Editor facade 解析成该形状。
+ */
+export interface TextPosition {
+  readonly sectionId: string
+  readonly blockId: string
+  readonly runId: string
+  readonly graphemeIndex: number
+  readonly assoc?: number
+}
+
+/** 可序列化文本范围。 */
+export interface TextRange {
+  readonly anchor: TextPosition
+  readonly focus: TextPosition
+}
 
 interface OperationBase<Kind extends OperationKind> {
   readonly kind: Kind
@@ -60,49 +80,50 @@ interface OperationBase<Kind extends OperationKind> {
 
 /** 在稳定锚点处插入文本。 */
 export interface InsertTextOperation extends OperationBase<'insertText'> {
-  readonly at: AnchorRef
+  readonly at: TextPosition
   readonly text: string
 }
 
 /** 删除稳定范围内的内容。 */
 export interface DeleteRangeOperation extends OperationBase<'deleteRange'> {
-  readonly range: RangeRef
+  readonly range: TextRange
 }
 
 /** 设置 run 级属性。 */
 export interface SetRunPropertiesOperation extends OperationBase<'setRunProperties'> {
-  readonly runId: RunId
+  readonly runId: string
   readonly properties: ModelProperties
 }
 
 /** 设置段落级属性。 */
 export interface SetParagraphPropertiesOperation extends OperationBase<'setParagraphProperties'> {
-  readonly paragraphId: BlockId
+  readonly paragraphId: string
   readonly properties: ModelProperties
 }
 
 /** 在锚点处分裂块。 */
 export interface SplitBlockOperation extends OperationBase<'splitBlock'> {
-  readonly at: AnchorRef
-  readonly newBlockId: BlockId
+  readonly at: TextPosition
+  readonly newBlockId: string
+  readonly newRunId: string
 }
 
 /** 合并两个相邻块。 */
 export interface MergeBlockOperation extends OperationBase<'mergeBlock'> {
-  readonly targetBlockId: BlockId
-  readonly sourceBlockId: BlockId
+  readonly targetBlockId: string
+  readonly sourceBlockId: string
 }
 
 /** 插入一个块级模型节点。 */
 export interface InsertBlockOperation extends OperationBase<'insertBlock'> {
-  readonly sectionId: SectionId
+  readonly sectionId: string
   readonly placement: BlockInsertPlacement
   readonly block: Block
 }
 
 /** 删除一个块级模型节点。 */
 export interface DeleteBlockOperation extends OperationBase<'deleteBlock'> {
-  readonly blockId: BlockId
+  readonly blockId: string
 }
 
 /**
@@ -198,7 +219,7 @@ export interface TransactionPipeline {
  * ```ts
  * const pipeline = createTransactionPipeline()
  * pipeline.run(
- *   { name: 'insertText', operations: [{ kind: 'insertText', at: anchor, text: '你好' }] },
+ *   { name: 'insertText', operations: [{ kind: 'insertText', at: position, text: '你好' }] },
  *   { origin: 'local-user' }
  * )
  * ```
@@ -272,18 +293,20 @@ function validateTransactionInput(command: Command, metadata: TransactionMetadat
 
   for (const operation of command.operations) {
     if (!OPERATION_KINDS.has(operation.kind)) {
-      throw new Error('未知 operation kind')
+      throw createJWordError('OPERATION_KIND_UNKNOWN', '未知 operation kind', {
+        kind: operation.kind
+      })
     }
   }
 }
 
 function validateTransactionName(commandName: string, metadata: TransactionMetadata): void {
   if (commandName.trim().length === 0) {
-    throw new Error('事务命令名不能为空')
+    throw createJWordError('TRANSACTION_COMMAND_EMPTY', '事务命令名不能为空')
   }
 
   if (metadata.origin.trim().length === 0) {
-    throw new Error('事务 origin 不能为空')
+    throw createJWordError('TRANSACTION_ORIGIN_EMPTY', '事务 origin 不能为空')
   }
 }
 

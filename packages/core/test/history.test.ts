@@ -25,6 +25,7 @@ import { createSelectionRestoreSnapshot, createSelectionState } from '../src/sel
 import { createAnchorRef, createGraphemeIndex } from '../src/position'
 import type { BlockId, DocumentId, RunId, SectionId } from '../src/position'
 import { createTransactionPipeline } from '../src/transaction'
+import type { TextPosition } from '../src/transaction'
 
 describe('createHistoryManager', () => {
   it('tracks local origin and restores undo redo with metadata', () => {
@@ -35,6 +36,7 @@ describe('createHistoryManager', () => {
     const pipeline = createTransactionPipeline(store.doc)
     const history = createHistoryManager(store)
     const anchor = createAnchor('paragraph-1' as BlockId, 'run-1' as RunId, 2)
+    const position = createPosition('paragraph-1' as BlockId, 'run-1' as RunId, 2)
     const selection = createSelectionState(anchor, anchor)
     const selectionSnapshot = createSelectionRestoreSnapshot(selection)
 
@@ -57,7 +59,7 @@ describe('createHistoryManager', () => {
         operations: [
           {
             kind: 'insertText',
-            at: anchor,
+            at: position,
             text: '，JWord'
           }
         ]
@@ -89,7 +91,12 @@ describe('createHistoryManager', () => {
     const run = createRunRecord('run-remote' as RunId, '远端')
     const pipeline = createTransactionPipeline(store.doc)
     const history = createHistoryManager(store)
-    const anchor = createAnchor('paragraph-remote' as BlockId, 'run-remote' as RunId, 2)
+    const position = createPosition(
+      'paragraph-remote' as BlockId,
+      'run-remote' as RunId,
+      2,
+      'section-remote' as SectionId
+    )
 
     store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-remote' as DocumentId)
     store.sections.push([section])
@@ -102,7 +109,7 @@ describe('createHistoryManager', () => {
         operations: [
           {
             kind: 'insertText',
-            at: anchor,
+            at: position,
             text: 'X'
           }
         ]
@@ -129,4 +136,18 @@ function createAnchor(
     runId,
     graphemeIndex: createGraphemeIndex(graphemeIndex)
   })
+}
+
+function createPosition(
+  blockId: BlockId = 'paragraph-1' as BlockId,
+  runId: RunId = 'run-1' as RunId,
+  graphemeIndex: number = 0,
+  sectionId: SectionId = 'section-1' as SectionId
+): TextPosition {
+  return {
+    sectionId: String(sectionId),
+    blockId: String(blockId),
+    runId: String(runId),
+    graphemeIndex
+  }
 }
