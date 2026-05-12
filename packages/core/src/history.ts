@@ -102,10 +102,18 @@ export function createHistoryManager(
       pendingMetadata.pop()
     },
     undo() {
-      return createHistoryOperationResult(undoManager.undo())
+      const stackItem = undoManager.undo()
+
+      copyMetadataToLatestStackItem(stackItem, undoManager.redoStack)
+
+      return createHistoryOperationResult(stackItem)
     },
     redo() {
-      return createHistoryOperationResult(undoManager.redo())
+      const stackItem = undoManager.redo()
+
+      copyMetadataToLatestStackItem(stackItem, undoManager.undoStack)
+
+      return createHistoryOperationResult(stackItem)
     },
     canUndo() {
       return undoManager.canUndo()
@@ -123,6 +131,22 @@ export function createHistoryManager(
     readMetadata(stackItem) {
       return readHistoryMetadata(stackItem)
     }
+  }
+}
+
+function copyMetadataToLatestStackItem(
+  source: HistoryStackItem | null,
+  targetStack: readonly HistoryStackItem[]
+): void {
+  if (source === null || targetStack.length === 0) {
+    return
+  }
+
+  const metadata = readHistoryMetadata(source)
+  const target = targetStack[targetStack.length - 1]
+
+  if (metadata !== undefined && target !== undefined) {
+    target.meta.set(HISTORY_STACK_METADATA_KEY, metadata)
   }
 }
 

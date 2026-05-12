@@ -23,7 +23,12 @@ import {
 } from '../src/document-store'
 import type { BlockRecord, DocumentStore, RunRecord, SectionRecord } from '../src/document-store'
 import { createOperationAdapter } from '../src/operation-adapter'
-import type { BlockId, RunId, SectionId } from '../src/position'
+import {
+  createGraphemeIndex,
+  createTextAnchorRef,
+  resolveAnchorRef
+} from '../src/position'
+import type { BlockId, DocumentId, RunId, SectionId } from '../src/position'
 import type { TextPosition } from '../src/transaction'
 
 describe('createOperationAdapter', () => {
@@ -75,6 +80,106 @@ describe('createOperationAdapter', () => {
     })
 
     expect(getRunText(run).toString()).toBe('xaZbc')
+  })
+
+  it('applies text operations at grapheme boundaries without splitting UTF-16 pairs', () => {
+    const { store, paragraphId, runId, run } = createTextFixture('a😊e\u0301中')
+    const adapter = createOperationAdapter(store)
+
+    adapter.apply({
+      kind: 'insertText',
+      at: createPosition(paragraphId, runId, 2),
+      text: 'X'
+    })
+    adapter.apply({
+      kind: 'deleteRange',
+      range: {
+        anchor: createPosition(paragraphId, runId, 1),
+        focus: createPosition(paragraphId, runId, 2)
+      }
+    })
+
+    expect(getRunText(run).toString()).toBe('aXe\u0301中')
+  })
+
+  it('splits blocks at grapheme boundaries and migrates tail anchors by grapheme index', () => {
+    const { store, paragraphId, runId, run } = createTextFixture('a😊e\u0301中')
+    const adapter = createOperationAdapter(store)
+    const anchor = createTextAnchorRef({
+      documentId: 'document-1' as DocumentId,
+      sectionId: 'section-1' as SectionId,
+      blockId: paragraphId,
+      runId,
+      graphemeIndex: createGraphemeIndex(3),
+      text: getRunText(run)
+    })
+
+    adapter.apply({
+      kind: 'splitBlock',
+      at: createPosition(paragraphId, runId, 2),
+      newBlockId: 'paragraph-2' as BlockId,
+      newRunId: 'run-2' as RunId
+    })
+
+    const sectionBlocks = getSectionBlocks(store.sections.get(0) as SectionRecord)
+    const firstRuns = getParagraphRuns(sectionBlocks.get(0) as BlockRecord)
+    const secondRuns = getParagraphRuns(sectionBlocks.get(1) as BlockRecord)
+    const snapshot = resolveAnchorRef(anchor, store.doc)
+
+    expect(getRunText(firstRuns.get(0)).toString()).toBe('a😊')
+    expect(getRunText(secondRuns.get(0)).toString()).toBe('e\u0301中')
+    expect(snapshot?.blockId).toBe('paragraph-2')
+    expect(snapshot?.runId).toBe('run-2')
+    expect(snapshot?.graphemeIndex).toBe(createGraphemeIndex(1))
+  })
+
+  it('migrates anchors in following runs only when split is replayed through the operation adapter', () => {
+    const { store, paragraphId, firstRunId, secondRunId, secondRun } = createTwoRunTextFixture('你好', '世界')
+    const adapter = createOperationAdapter(store)
+    const anchor = createTextAnchorRef({
+      documentId: 'document-1' as DocumentId,
+      sectionId: 'section-1' as SectionId,
+      blockId: paragraphId,
+      runId: secondRunId,
+      graphemeIndex: createGraphemeIndex(1),
+      text: getRunText(secondRun)
+    })
+
+    adapter.apply({
+      kind: 'splitBlock',
+      at: createPosition(paragraphId, firstRunId, 1),
+      newBlockId: 'paragraph-2' as BlockId,
+      newRunId: 'run-split' as RunId
+    })
+
+    const snapshot = resolveAnchorRef(anchor, store.doc)
+
+    expect(snapshot?.blockId).toBe('paragraph-2')
+    expect(snapshot?.runId).toBe(secondRunId)
+    expect(snapshot?.graphemeIndex).toBe(createGraphemeIndex(1))
+  })
+
+  it('does not promise anchor migration for raw Yjs structural changes outside the adapter', () => {
+    const { store, secondRunId, secondRun } = createTwoRunTextFixture('你好', '世界')
+    const sectionBlocks = getSectionBlocks(store.sections.get(0) as SectionRecord)
+    const firstParagraphRuns = getParagraphRuns(sectionBlocks.get(0) as BlockRecord)
+    const anchor = createTextAnchorRef({
+      documentId: 'document-1' as DocumentId,
+      sectionId: 'section-1' as SectionId,
+      blockId: 'paragraph-1' as BlockId,
+      runId: secondRunId,
+      graphemeIndex: createGraphemeIndex(1),
+      text: getRunText(secondRun)
+    })
+    const rawParagraph = createParagraphRecord('paragraph-raw' as BlockId)
+
+    sectionBlocks.insert(1, [rawParagraph])
+    getParagraphRuns(rawParagraph).push([createRunRecord(secondRunId, getRunText(secondRun).toString())])
+    firstParagraphRuns.delete(1, 1)
+
+    const snapshot = resolveAnchorRef(anchor, store.doc)
+
+    expect(snapshot?.blockId).not.toBe('paragraph-raw')
   })
 
   it('splits and merges adjacent paragraph blocks', () => {
@@ -177,6 +282,36 @@ function createTextFixture(text: string) {
     readonly paragraphId: BlockId
     readonly runId: RunId
     readonly run: RunRecord
+  }
+}
+
+function createTwoRunTextFixture(firstText: string, secondText: string) {
+  const store = createDocumentStore()
+  const sectionId = 'section-1' as SectionId
+  const paragraphId = 'paragraph-1' as BlockId
+  const firstRunId = 'run-1' as RunId
+  const secondRunId = 'run-2' as RunId
+  const section = createSectionRecord(sectionId)
+  const paragraph = createParagraphRecord(paragraphId)
+  const firstRun = createRunRecord(firstRunId, firstText)
+  const secondRun = createRunRecord(secondRunId, secondText)
+
+  store.sections.push([section])
+  getSectionBlocks(section).push([paragraph])
+  getParagraphRuns(paragraph).push([firstRun, secondRun])
+
+  return {
+    store,
+    paragraphId,
+    firstRunId,
+    secondRunId,
+    secondRun
+  } satisfies {
+    readonly store: DocumentStore
+    readonly paragraphId: BlockId
+    readonly firstRunId: RunId
+    readonly secondRunId: RunId
+    readonly secondRun: RunRecord
   }
 }
 

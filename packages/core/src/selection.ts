@@ -41,7 +41,7 @@ export interface SelectionState {
  * 用于 history 或异常恢复的选择区快照。
  */
 export interface SelectionRestoreSnapshot {
-  readonly selection: SelectionState
+  readonly selection: SelectionState | null
 }
 
 /**
@@ -99,7 +99,9 @@ export function isSelectionCollapsed(selection: SelectionState): boolean {
  * @param selection 当前选择区。
  * @returns 冻结后的恢复快照。
  */
-export function createSelectionRestoreSnapshot(selection: SelectionState): SelectionRestoreSnapshot {
+export function createSelectionRestoreSnapshot(
+  selection: SelectionState | null
+): SelectionRestoreSnapshot {
   return Object.freeze({
     selection
   })
@@ -111,7 +113,7 @@ export function createSelectionRestoreSnapshot(selection: SelectionState): Selec
  * @param snapshot 历史或错误恢复保存的快照。
  * @returns 快照中的选择区状态。
  */
-export function restoreSelection(snapshot: SelectionRestoreSnapshot): SelectionState {
+export function restoreSelection(snapshot: SelectionRestoreSnapshot): SelectionState | null {
   return snapshot.selection
 }
 

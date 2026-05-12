@@ -31,6 +31,8 @@ import type { AnchorRef, BlockId, CommentId, DocumentId, RevisionId, RunId, Sect
 import { createGraphemeIndex } from './position'
 import { createDocumentProjection } from './projection'
 import type { DocumentProjection } from './projection'
+import { createSelectionRestoreSnapshot, restoreSelection } from './selection'
+import type { SelectionState } from './selection'
 import { createTransactionPipeline } from './transaction'
 import type { Command, TextPosition, TransactionEvent, TransactionMetadata, TransactionResult } from './transaction'
 
@@ -126,6 +128,13 @@ export interface EditorCommandOptions {
   readonly origin?: string
   /** 事务标签，会进入 transaction metadata。 */
   readonly label?: string
+  /**
+   * 命令成功后要落到 facade runtime 的选择区。
+   *
+   * @remarks
+   * 该值不写入文档模型，只进入 history restore metadata。
+   */
+  readonly selectionAfter?: SelectionState | null
 }
 
 /**
@@ -223,6 +232,24 @@ export interface Editor {
    * @returns 可放入 Operation 的 JSON 兼容位置。
    */
   resolveTextPosition(anchor: AnchorRef): TextPosition
+
+  /**
+   * 读取当前 facade runtime 选择区。
+   *
+   * @returns 当前选择区；没有光标或选区时返回 null。
+   * @remarks
+   * 无副作用，不读取 DOM，不暴露可写文档模型。
+   */
+  getSelection(): SelectionState | null
+
+  /**
+   * 设置当前 facade runtime 选择区。
+   *
+   * @param selection 当前选择区；传入 null 表示清空选择区。
+   * @remarks
+   * 只更新 facade 运行时状态，不写入 Y.Doc，不创建第二套文档模型。
+   */
+  setSelection(selection: SelectionState | null): void
 
   /**
    * 执行编辑命令。
@@ -337,6 +364,7 @@ class JWordEditor implements Editor {
   private readonly listeners = new Set<EditorEventListener>()
   private readonly unsubscribePipeline: () => void
   private mountedDom: MountedEditorDom | undefined
+  private currentSelection: SelectionState | null = null
   private isDestroyed = false
 
   constructor(options?: EditorOptions) {
@@ -377,13 +405,6 @@ class JWordEditor implements Editor {
 
     const text = findRunText(this.store, input)
 
-    if (!Number.isInteger(input.graphemeIndex) || input.graphemeIndex < 0 || input.graphemeIndex > text.length) {
-      throw createJWordError('OPERATION_TEXT_INDEX_OUT_OF_BOUNDS', '文本锚点位置越界', {
-        index: input.graphemeIndex,
-        length: text.length
-      })
-    }
-
     return createTextAnchorRef({
       documentId: readCurrentDocumentId(this.store),
       sectionId: input.sectionId as SectionId,
@@ -412,24 +433,47 @@ class JWordEditor implements Editor {
     }
   }
 
+  getSelection(): SelectionState | null {
+    this.assertActive()
+
+    return this.currentSelection
+  }
+
+  setSelection(selection: SelectionState | null): void {
+    this.assertActive()
+
+    this.currentSelection = selection
+  }
+
   executeCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
     this.assertActive()
 
     const origin = options.origin ?? DEFAULT_HISTORY_ORIGIN
     const metadata = createTransactionMetadata(origin, options.label)
     const shouldTrackHistory = this.history.trackedOrigins.has(origin) && command.operations.length > 0
+    const selectionBefore = this.currentSelection
+    const hasSelectionAfter = 'selectionAfter' in options
+    const selectionAfter = hasSelectionAfter ? options.selectionAfter ?? null : this.currentSelection
 
     if (shouldTrackHistory) {
       this.history.stopCapturing()
       this.history.captureNextTransaction({
         commandName: command.name,
         origin,
-        ...(options.label === undefined ? {} : { description: options.label })
+        ...(options.label === undefined ? {} : { description: options.label }),
+        selectionBefore: createSelectionRestoreSnapshot(selectionBefore),
+        selectionAfter: createSelectionRestoreSnapshot(selectionAfter)
       })
     }
 
     try {
-      return this.pipeline.run(command, metadata)
+      const result = this.pipeline.run(command, metadata)
+
+      if (hasSelectionAfter) {
+        this.currentSelection = options.selectionAfter ?? null
+      }
+
+      return result
     } catch (error) {
       if (shouldTrackHistory) {
         this.history.discardNextTransactionMetadata()
@@ -442,13 +486,25 @@ class JWordEditor implements Editor {
   undo(): HistoryOperationResult {
     this.assertActive()
 
-    return this.history.undo()
+    const result = this.history.undo()
+
+    if (result.metadata?.selectionBefore !== undefined) {
+      this.currentSelection = restoreSelection(result.metadata.selectionBefore)
+    }
+
+    return result
   }
 
   redo(): HistoryOperationResult {
     this.assertActive()
 
-    return this.history.redo()
+    const result = this.history.redo()
+
+    if (result.metadata?.selectionAfter !== undefined) {
+      this.currentSelection = restoreSelection(result.metadata.selectionAfter)
+    }
+
+    return result
   }
 
   canUndo(): boolean {
@@ -515,9 +571,13 @@ class JWordEditor implements Editor {
     commandName: string,
     origin: string
   ): DocumentProjection {
-    return this.pipeline.runMutation(commandName, { origin }, () => {
+    const result = this.pipeline.runMutation(commandName, { origin }, () => {
       replaceStoreDocument(this.store, input)
-    }).projection
+    })
+
+    this.currentSelection = null
+
+    return result.projection
   }
 
   private emit(event: EditorEvent): void {

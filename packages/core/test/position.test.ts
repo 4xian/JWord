@@ -8,8 +8,6 @@
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
  */
 
-import { readFileSync } from 'node:fs'
-
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
 
@@ -173,10 +171,63 @@ describe('Gate 1 position skeleton', () => {
     expect(readAnchorRefSnapshot(anchor).relativePosition).toBeInstanceOf(Y.RelativePosition)
   })
 
-  it('documents that Yjs index, UTF-16, and grapheme conversion are not implemented here', () => {
-    const source = readFileSync(new URL('../src/position.ts', import.meta.url), 'utf8')
+  it('stores text anchors at Yjs UTF-16 indexes while exposing grapheme indexes', () => {
+    const doc = new Y.Doc()
+    const text = doc.getText('run-1')
+    const documentId = 'document-1' as DocumentId
+    const sectionId = 'section-1' as SectionId
+    const blockId = 'block-1' as BlockId
+    const runId = 'run-1' as RunId
 
-    expect(source).toContain('Yjs index、UTF-16、grapheme 转换与锚点解析 helper 分开处理')
-    expect(source).toContain('Y.RelativePosition')
+    text.insert(0, 'a😊e\u0301中')
+
+    const anchor = createTextAnchorRef({
+      documentId,
+      sectionId,
+      blockId,
+      runId,
+      graphemeIndex: createGraphemeIndex(2),
+      text
+    })
+    const absolute = Y.createAbsolutePositionFromRelativePosition(
+      readAnchorRefSnapshot(anchor).relativePosition as Y.RelativePosition,
+      doc
+    )
+
+    expect(absolute?.index).toBe(3)
+
+    text.insert(0, '界')
+
+    expect(resolveAnchorRef(anchor, doc)?.graphemeIndex).toBe(createGraphemeIndex(3))
+  })
+
+  it('rejects text anchors outside grapheme boundaries', () => {
+    const doc = new Y.Doc()
+    const text = doc.getText('run-1')
+    const documentId = 'document-1' as DocumentId
+    const sectionId = 'section-1' as SectionId
+    const blockId = 'block-1' as BlockId
+    const runId = 'run-1' as RunId
+
+    text.insert(0, 'a😊')
+
+    let error: unknown
+
+    try {
+      createTextAnchorRef({
+        documentId,
+        sectionId,
+        blockId,
+        runId,
+        graphemeIndex: createGraphemeIndex(3),
+        text
+      })
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(error).toMatchObject({
+      code: 'OPERATION_TEXT_INDEX_OUT_OF_BOUNDS'
+    })
   })
 })

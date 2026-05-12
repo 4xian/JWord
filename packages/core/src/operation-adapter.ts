@@ -21,6 +21,7 @@ import {
   getTableRows
 } from './document-store'
 import { createJWordError } from './errors'
+import { graphemeIndexToUtf16Index } from './grapheme'
 import type {
   BlockContainer,
   BlockRecord,
@@ -117,7 +118,7 @@ function insertText(store: DocumentStore, position: TextPosition, text: string):
   const location = resolveOperationPosition(store, position)
   const sharedText = getRunText(location.runLocation.run)
 
-  sharedText.insert(Number(location.graphemeIndex), text)
+  sharedText.insert(location.utf16Index, text)
 }
 
 function deleteRange(
@@ -137,8 +138,8 @@ function deleteRange(
 
   const run = anchorSnapshot.runLocation.run
   const sharedText = getRunText(run)
-  const start = readTextIndex(Number(anchorSnapshot.graphemeIndex), sharedText)
-  const end = readTextIndex(Number(focusSnapshot.graphemeIndex), sharedText)
+  const start = anchorSnapshot.utf16Index
+  const end = focusSnapshot.utf16Index
   const from = Math.min(start, end)
   const length = Math.abs(end - start)
 
@@ -162,9 +163,10 @@ function splitBlock(
   const runs = getParagraphRuns(location.block)
   const runLocation = snapshot.runLocation
   const sharedText = getRunText(runLocation.run)
-  const index = readTextIndex(Number(snapshot.graphemeIndex), sharedText)
+  const index = snapshot.utf16Index
   const tailText = sharedText.toString().slice(index)
-  const nextRuns = runs.toArray().slice(runLocation.index + 1).map(cloneRunRecord)
+  const followingRuns = runs.toArray().slice(runLocation.index + 1)
+  const nextRuns = followingRuns.map(cloneRunRecord)
   const newParagraph = createParagraphRecord(newBlockId as BlockId)
 
   location.container.insert(location.index + 1, [newParagraph])
@@ -182,6 +184,21 @@ function splitBlock(
     runId: splitRunId,
     text: getRunText(splitRun)
   })
+  for (let nextRunIndex = 0; nextRunIndex < followingRuns.length; nextRunIndex += 1) {
+    const sourceRun = followingRuns[nextRunIndex]
+    const clonedRun = nextRuns[nextRunIndex]
+
+    if (sourceRun === undefined || clonedRun === undefined) {
+      continue
+    }
+
+    migrateTextAnchorsToText(getRunText(sourceRun), store.doc, {
+      sectionId: snapshot.sectionId,
+      blockId: newBlockId as BlockId,
+      runId: readRequiredString(clonedRun, DOCUMENT_STORE_FIELDS.run.id) as RunId,
+      text: getRunText(clonedRun)
+    })
+  }
 
   if (tailText.length > 0) {
     sharedText.delete(index, tailText.length)
@@ -266,19 +283,21 @@ interface ResolvedTextPosition {
   readonly blockId: BlockId
   readonly runId: RunId
   readonly graphemeIndex: GraphemeIndex
+  readonly utf16Index: number
   readonly runLocation: RunLocation
 }
 
 function resolveOperationPosition(store: DocumentStore, position: TextPosition): ResolvedTextPosition {
   const runLocation = findRunLocationByPosition(store, position)
   const sharedText = getRunText(runLocation.run)
-  const index = readTextIndex(position.graphemeIndex, sharedText)
+  const index = graphemeIndexToUtf16Index(sharedText.toString(), position.graphemeIndex)
 
   return {
     sectionId: position.sectionId as SectionId,
     blockId: position.blockId as BlockId,
     runId: position.runId as RunId,
-    graphemeIndex: createGraphemeIndex(index),
+    graphemeIndex: createGraphemeIndex(position.graphemeIndex),
+    utf16Index: index,
     runLocation
   }
 }
@@ -641,17 +660,6 @@ function assertBlockKind(block: BlockRecord, kind: 'paragraph' | 'table'): void 
       expectedKind: kind
     })
   }
-}
-
-function readTextIndex(index: number, text: Y.Text): number {
-  if (!Number.isInteger(index) || index < 0 || index > text.length) {
-    throw createJWordError('OPERATION_TEXT_INDEX_OUT_OF_BOUNDS', '文本位置越界', {
-      index,
-      length: text.length
-    })
-  }
-
-  return index
 }
 
 function toDocumentStoreJson(value: unknown): DocumentStoreJson {

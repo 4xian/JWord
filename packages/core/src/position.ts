@@ -8,6 +8,11 @@
 
 import * as Y from 'yjs'
 
+import {
+  graphemeIndexToUtf16Index,
+  utf16IndexToGraphemeIndex
+} from './grapheme'
+
 declare const opaqueBrand: unique symbol
 const anchorStateSymbol = Symbol('jword.anchor.state')
 
@@ -150,10 +155,15 @@ export function createAnchorRef(input: AnchorRefInput): AnchorRef {
 /**
  * 创建携带 Y.RelativePosition 的 text 锚点。
  *
+ * @remarks
+ * Gate 1 只保证经 Operation adapter/replay 执行的结构性 split/merge 会迁移 AnchorRef；
+ * 直接应用 raw Yjs 结构更新不会自动改写 AnchorRef 的 block/run 边界。
+ *
  * @param input 文档、节、块、run、grapheme 边界和对应 Y.Text。
  * @returns 不暴露可变内部结构的 AnchorRef。
  */
 export function createTextAnchorRef(input: TextAnchorRefInput): AnchorRef {
+  const utf16Index = graphemeIndexToUtf16Index(input.text.toString(), Number(input.graphemeIndex))
   const state: AnchorRefState = {
     kind: 'text',
     documentId: input.documentId,
@@ -165,7 +175,7 @@ export function createTextAnchorRef(input: TextAnchorRefInput): AnchorRef {
     assoc: input.assoc ?? 0,
     relativePosition: Y.createRelativePositionFromTypeIndex(
       input.text,
-      Number(input.graphemeIndex),
+      utf16Index,
       input.assoc ?? 0
     )
   }
@@ -223,24 +233,36 @@ export function resolveAnchorRef(anchor: AnchorRef, doc: Y.Doc): AnchorRefSnapsh
     return undefined
   }
 
-  state.graphemeIndex = createGraphemeIndex(absolute.index)
+  state.graphemeIndex = createGraphemeIndex(utf16IndexToGraphemeIndex(state.text?.toString() ?? '', absolute.index))
 
   return createSnapshotFromState(state)
 }
 
+/**
+ * splitBlock 后迁移被移动到新 run 的 text anchors。
+ *
+ * @remarks
+ * 该 helper 是 Operation adapter/replay 的内部边界，不是 raw Yjs update observer。
+ */
 export function migrateTextAnchorsAfterSplit(
   sourceText: Y.Text,
   doc: Y.Doc,
-  boundaryIndex: number,
+  boundaryUtf16Index: number,
   target: TextAnchorMigrationTarget
 ): void {
-  migrateTextAnchors(sourceText, doc, target, (index, state) =>
-    index > boundaryIndex || (index === boundaryIndex && state.assoc > 0)
-      ? index - boundaryIndex
+  migrateTextAnchors(sourceText, doc, target, (utf16Index, state) =>
+    utf16Index > boundaryUtf16Index || (utf16Index === boundaryUtf16Index && state.assoc > 0)
+      ? utf16Index - boundaryUtf16Index
       : undefined
   )
 }
 
+/**
+ * 把 source Y.Text 上的 text anchors 迁到另一个 Y.Text。
+ *
+ * @remarks
+ * Gate 1 的结构迁移必须由 Operation adapter/replay 显式调用；协同 provider 后续只能复用该路径。
+ */
 export function migrateTextAnchorsToText(
   sourceText: Y.Text,
   doc: Y.Doc,
@@ -294,7 +316,7 @@ function migrateTextAnchors(
   sourceText: Y.Text,
   doc: Y.Doc,
   target: TextAnchorMigrationTarget,
-  mapIndex: (index: number, state: AnchorRefState) => number | undefined
+  mapIndex: (utf16Index: number, state: AnchorRefState) => number | undefined
 ): void {
   const states = [...(textAnchorRegistry.get(sourceText) ?? [])]
 
@@ -319,7 +341,7 @@ function migrateTextAnchors(
     state.sectionId = target.sectionId ?? state.sectionId
     state.blockId = target.blockId
     state.runId = target.runId
-    state.graphemeIndex = createGraphemeIndex(targetIndex)
+    state.graphemeIndex = createGraphemeIndex(utf16IndexToGraphemeIndex(target.text.toString(), targetIndex))
     state.text = target.text
     state.relativePosition = Y.createRelativePositionFromTypeIndex(target.text, targetIndex, state.assoc)
     registerTextAnchorState(state)

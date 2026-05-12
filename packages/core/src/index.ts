@@ -26,6 +26,7 @@ export type {
 export type { Document, Paragraph, Run, Section } from './model'
 export type { AnchorRef, RangeRef } from './position'
 export type { DocumentProjection } from './projection'
+export type { SelectionState } from './selection'
 export type {
   Command,
   Operation,

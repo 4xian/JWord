@@ -38,12 +38,12 @@
 
 ### 0.3 全局硬约束
 
-- [ ] 每个 `.ts` 文件必须有文件头注释，说明职责、边界、协作模块、性能/安全约束、关联 specs。
+- [x] 每个 `.ts` 文件必须有文件头注释，说明职责、边界、协作模块、性能/安全约束、关联 specs。
 - [ ] 公开 API 必须有 TSDoc、类型测试、示例用法。
-- [ ] Core 禁止依赖 React/Vue/docx/PDF/collab provider/demo。
-- [ ] Core 禁止 top-level 访问 `window`、`document`、`HTMLElement` 实例。
+- [x] Core 禁止依赖 React/Vue/docx/PDF/collab provider/demo。
+- [x] Core 禁止 top-level 访问 `window`、`document`、`HTMLElement` 实例。
 - [ ] 所有状态变更必须走同一 transaction pipeline。
-- [ ] 所有 transaction 必须带 origin。
+- [x] 所有 transaction 必须带 origin。
 - [ ] Selection、Comment、Revision、Auto Inserter、Remote Cursor 必须复用 `AnchorRef` / `RangeRef`。
 - [ ] Layout/Render 只能读 `DocumentProjection` 或 `LayoutBox`，不能直接读写 Y.Doc。
 - [ ] import/export 必须在 worker 中执行，支持 progress、warning、cancel。
@@ -61,7 +61,7 @@
 - [ ] `packages/devtools`：`@4xian/jword-devtools`，operation log、layout overlay、diagnostics panel。
 - [ ] `packages/react`：`@4xian/jword-react`，React 生命周期 wrapper。
 - [ ] `packages/vue`：`@4xian/jword-vue`，Vue 3 生命周期 wrapper。
-- [ ] `examples/vanilla`：基础集成示例，所有 gate 的第一验证目标。
+- [x] `examples/vanilla`：基础集成示例，所有 gate 的第一验证目标。
 - [ ] `examples/react`：React wrapper 集成示例。
 - [ ] `examples/vue`：Vue wrapper 集成示例。
 - [ ] `examples/collab`：hocuspocus 示例服务和双窗口协同验证。
@@ -107,10 +107,10 @@
 
 ### 禁止事项
 
-- [ ] 不引入 Bun 作为主工具链。
-- [ ] 不写无法验证的空包。
-- [ ] 不用宽松 TS 配置换速度。
-- [ ] 不自动 commit、tag、publish。
+- [x] 不引入 Bun 作为主工具链。
+- [x] 不写无法验证的空包。
+- [x] 不用宽松 TS 配置换速度。
+- [x] 不自动 commit、tag、publish。
 
 ## Gate 1 - 权威状态模型与事务
 
@@ -126,6 +126,7 @@
 
 - [x] Step 1.1：定义最小 OOXML 对齐 schema：Document、Section、Paragraph、Run、Inline、Table、Comment、Revision metadata 的类型边界。
 - [x] Step 1.2：定义 ID、twip、grapheme、opaque `AnchorRef` / `RangeRef` 等基础类型，集中处理 Yjs index、UTF-16、grapheme 的转换边界。
+  - 完成 2026-05-12：grapheme 边界已集中到 `packages/core/src/grapheme.ts`，并由 position 与 operation-adapter 测试覆盖。
 - [x] Step 1.3：设计 Y.Doc 内部结构，明确每类节点如何存储、如何排序、如何关联资源表、样式表、评论表和修订表。
 - [x] Step 1.4：定义 Operation schema 第一批能力：insertText、deleteRange、setRunProperties、setParagraphProperties、splitBlock、mergeBlock、insertBlock、deleteBlock。
 - [x] Step 1.5：实现 Operation 到 Y.Doc 的 adapter，每个 adapter 只做最小状态变更，不触发布局和 UI 副作用。
@@ -146,6 +147,7 @@
 - [x] Anchor 在前方插入、删除、段落拆分、段落合并后不漂移。
 - [x] Operation fixture 可序列化、可回放。
 - [x] undo/redo 不丢样式，不破坏 selection restore。
+  - 完成 2026-05-12：Editor facade selection restore 已补齐，覆盖 null selection、文档替换清空 selection、多 code-unit grapheme 场景。
 - [x] 所有编辑路径都必须经过 transaction pipeline。
 
 ### 禁止事项
@@ -433,19 +435,21 @@
 
 ### 每次变更
 
-- [ ] `pnpm lint`
-- [ ] `pnpm typecheck`
-- [ ] `pnpm test`
-- [ ] 相关 package 的 focused tests
+- [x] `pnpm lint`
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] 相关 package 的 focused tests
 
 ### 每个 Gate
 
-- [ ] `pnpm build`
+- [x] `pnpm build`
 - [ ] `pnpm test:e2e`
+  - 审查 2026-05-12：命令 dry-run 通过，但当前没有实际 `.e2e.ts` 用例覆盖编辑行为。
 - [ ] `pnpm test:visual`
-- [ ] `pnpm bench`
-- [ ] bundle size 检查
-- [ ] architecture boundary 检查
+  - 审查 2026-05-12：命令可运行并输出 skipped；当前没有 `.visual.ts` 基线，不能视为视觉验收完成。
+- [x] `pnpm bench`
+- [x] bundle size 检查
+- [x] architecture boundary 检查
 - [ ] 文档同步检查
 
 ### Alpha 完成
@@ -475,9 +479,9 @@
 
 ## 风险控制与复核点
 
-- [ ] 复核点 A：Gate 1 完成后，确认 Y.Doc schema、Projection、Operation、AnchorRef 是否足以承载 docx、协同、自动插入；若不足，在进入 Gate 2 前修正。
+- [x] 复核点 A：Gate 1 完成后，确认 Y.Doc schema、Projection、Operation、AnchorRef 是否足以承载 docx、协同、自动插入；若不足，在进入 Gate 2 前修正。
   - 已修：Operation/TextPosition/TextRange 已是 JSON 可序列化契约，`splitBlock.newRunId` 改为显式字段，operation fixture 可跨实例回放。
-  - 未过：raw Yjs remote update 不会触发本地 AnchorRef split/merge 迁移；进入 Gate 2 前需要补 Gate 1.x 的跨实例 anchor 迁移语义，或明确收口到 provider 层 operation replay。
+  - 完成 2026-05-12：边界已收口为 Operation adapter/replay 路径，raw Yjs structural update 非 Gate 1 保证；实现说明见 `docs/superpowers/implementation-notes/2026-05-12-gate-1-anchor-replay-boundary.md`。
 - [ ] 复核点 B：Gate 2 完成后，确认 LayoutBox 是否能支撑 PDF、页眉页脚、表格、图片和 hit-test；若不足，在进入 Gate 3 前修正。
 - [ ] 复核点 C：Gate 3 完成后，确认输入系统、IME、selection、history 没有绕开 transaction pipeline；若绕开，不进入 Alpha。
 - [ ] 复核点 D：Gate 5 完成后，确认 OOXML mapping 的 warning、fixture diff、worker cancel/progress 可用；若不可用，不进入 Beta。
