@@ -1,0 +1,15 @@
+{
+  "gate": "Gate 2",
+  "fixture": "fixtures/plain-text/gate2-50-pages.txt",
+  "case": "50 页纯文本，每页独立 canvas 的可复查基线",
+  "pageCount": 50,
+  "lineCount": 50,
+  "fragmentCount": 4600,
+  "renderedPageCount": 50,
+  "drawCallCount": 18550,
+  "drawCallHash": "2d1c747543c0669a518eeafb7c164c2ad9b9e301c5a516c589d1ca60ac06042a",
+  "notes": [
+    "每一行对应一个确定性页面样本",
+    "用于复查 viewport virtualization 不应保留全部大 canvas"
+  ]
+}

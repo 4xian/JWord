@@ -333,4 +333,35 @@ describe('Editor facade', () => {
 
     editor.destroy()
   })
+
+  it('bridges Gate 2 hit-test and rect mapping through AnchorRef and RangeRef', () => {
+    const editor = createEditor({ initialText: 'abcd' })
+    const layout = editor.getLayout()
+    const fragment = layout.pages[0]?.lines[0]?.fragments[0]
+
+    expect(fragment).toBeDefined()
+
+    const anchor = editor.hitTest({
+      pageIndex: 0,
+      x: (fragment?.x ?? 0) + (fragment?.advanceTwips[1] ?? 0) + 1,
+      y: (fragment?.y ?? 0) + 1
+    })
+
+    expect(anchor).toBeDefined()
+
+    const focus = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 3
+    })
+    const caret = editor.getCaretRect(anchor!)
+    const selection = createSelectionState(anchor!, focus)
+    const rects = editor.getSelectionRects(selection.range)
+
+    expect(caret?.width).toBe(0)
+    expect(rects.length).toBeGreaterThan(0)
+
+    editor.destroy()
+  })
 })

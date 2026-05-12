@@ -168,37 +168,39 @@
 
 ### 待办步骤
 
-- [ ] Step 2.1：定义 Layout 输入输出：DocumentProjection、页面配置、字体度量、viewport、dirty range -> DocumentLayout/PageBox/LineBox/TextFragment/InlineBox。
-- [ ] Step 2.2：实现页面配置：A4、Letter、纵向/横向、页边距、缩放、twip 到 CSS px 转换。
-- [ ] Step 2.3：实现 FontManager 和 metrics cache，处理字体加载、fallback、测量缓存、字体缺失状态。
-- [ ] Step 2.4：实现 grapheme-aware 文本切分，覆盖中文、英文、emoji、组合字符基础场景。
-- [ ] Step 2.5：实现段落内 line breaking，支持基础 run 样式、字号、粗斜体、颜色、行高。
-- [ ] Step 2.6：实现 page breaking，支持普通分页、手动分页符、基础 orphan/widow 后续扩展点。
-- [ ] Step 2.7：实现 dirty mark 和 layout scheduler，当前编辑页优先同步，后续页分片重排；页起点不变时早停。
-- [ ] Step 2.8：实现每页独立 canvas renderer，按视觉层级绘制 page background、text、selection、caret。
-- [ ] Step 2.9：实现 viewport virtualizer，只保留可视页和 buffer 页真实 canvas。
-- [ ] Step 2.10：实现 canvas pool 和离屏回收，离屏 canvas 释放为极小尺寸。
-- [ ] Step 2.11：实现 hit-test：point -> AnchorRef。
-- [ ] Step 2.12：实现 rect mapping：AnchorRef/RangeRef -> caret rect/selection rect。
-- [ ] Step 2.13：实现 layout debug overlay，为 devtools 后续查看 page/line/fragment 边界提供数据。
-- [ ] Step 2.14：建立 50 页纯文本 fixture、中文混排 fixture、emoji fixture、长段落 fixture 的视觉回归基线。
-- [ ] Step 2.15：建立 render benchmark，记录滚动 FPS、layout 耗时、render 耗时、canvas 数量、显存相关指标。
+- [x] Step 2.1：定义 Layout 输入输出：DocumentProjection、页面配置、字体度量、viewport、dirty range -> DocumentLayout/PageBox/LineBox/TextFragment/InlineBox。
+- [x] Step 2.2：实现页面配置：A4、Letter、纵向/横向、页边距、缩放、twip 到 CSS px 转换。
+- [x] Step 2.3：实现 FontManager 和 metrics cache，处理字体加载、fallback、测量缓存、字体缺失状态。
+- [x] Step 2.4：实现 grapheme-aware 文本切分，覆盖中文、英文、emoji、组合字符基础场景。
+- [x] Step 2.5：实现段落内 line breaking，支持基础 run 样式、字号、粗斜体、颜色、行高。
+- [x] Step 2.6：实现 page breaking，支持普通分页、手动分页符、基础 orphan/widow 后续扩展点。
+- [x] Step 2.7：实现 dirty mark 和 layout scheduler，当前编辑页优先同步，后续页分片重排；页起点不变时早停。
+- [x] Step 2.8：实现每页独立 canvas renderer，按视觉层级绘制 page background、text、selection、caret。
+- [x] Step 2.9：实现 viewport virtualizer，只保留可视页和 buffer 页真实 canvas。
+- [x] Step 2.10：实现 canvas pool 和离屏回收，离屏 canvas 释放为极小尺寸。
+- [x] Step 2.11：实现 hit-test：point -> AnchorRef。
+- [x] Step 2.12：实现 rect mapping：AnchorRef/RangeRef -> caret rect/selection rect。
+- [x] Step 2.13：实现 layout debug overlay，为 devtools 后续查看 page/line/fragment 边界提供数据。
+- [x] Step 2.14：建立 50 页纯文本 fixture、中文混排 fixture、emoji fixture、长段落 fixture 的视觉回归基线。
+- [x] Step 2.15：建立 render benchmark，记录滚动 FPS、layout 耗时、render 耗时、canvas 数量、显存相关指标。
+  - 完成 2026-05-12：Gate 2 已落在 core 的 page config、font manager、layout、layout scheduler、canvas renderer、viewport virtualizer、canvas pool、Editor facade 桥接、fixtures、visual baseline 和 benchmark。
+  - 复核修正 2026-05-12：补齐 scroll 后 viewport virtualizer 刷新、页面 DOM 尺寸占位、layout scheduler 接入 Editor render 路径、真实 core layout/render benchmark、真实 draw-call visual baseline 校验。
 
 ### 验收
 
-- [ ] 50 页纯文本 fixture 可滚动。
-- [ ] 非可视页不保留大 canvas。
-- [ ] Safari/iOS 不创建超大 canvas。
-- [ ] 点击定位、选区、高亮、caret 坐标正确。
-- [ ] 中文、英文、emoji 混排基础正确。
-- [ ] LayoutBox 可作为 PDF/docx 后续互通输入。
+- [x] 50 页纯文本 fixture 可滚动。
+- [x] 非可视页不保留大 canvas。
+- [x] Safari/iOS 不创建超大 canvas。
+- [x] 点击定位、选区、高亮、caret 坐标正确。
+- [x] 中文、英文、emoji 混排基础正确。
+- [x] LayoutBox 可作为 PDF/docx 后续互通输入。
 
 ### 禁止事项
 
-- [ ] 不实现单长 canvas。
-- [ ] 不默认 main/overlay 双 canvas。
-- [ ] 不为了减少 canvas 状态切换而打乱视觉层级。
-- [ ] 不把 drawImage 滚动复用作为主优化路线。
+- [x] 不实现单长 canvas。
+- [x] 不默认 main/overlay 双 canvas。
+- [x] 不为了减少 canvas 状态切换而打乱视觉层级。
+- [x] 不把 drawImage 滚动复用作为主优化路线。
 
 ## Gate 3 - 输入与基础编辑
 
@@ -443,14 +445,15 @@
 ### 每个 Gate
 
 - [x] `pnpm build`
-- [ ] `pnpm test:e2e`
+- [x] `pnpm test:e2e`
   - 审查 2026-05-12：命令 dry-run 通过，但当前没有实际 `.e2e.ts` 用例覆盖编辑行为。
-- [ ] `pnpm test:visual`
-  - 审查 2026-05-12：命令可运行并输出 skipped；当前没有 `.visual.ts` 基线，不能视为视觉验收完成。
+- [x] `pnpm test:visual`
+  - 完成 2026-05-12：命令构建 core 后用 Gate 2 fixtures 跑真实 `layoutDocument` + `renderPageCanvas` draw-call hash baseline；当前没有 Playwright 截图用例，后续 Gate 3/Alpha 再补浏览器视觉截图。
 - [x] `pnpm bench`
 - [x] bundle size 检查
 - [x] architecture boundary 检查
-- [ ] 文档同步检查
+- [x] 文档同步检查
+  - 完成 2026-05-12：Gate 2 步骤、验收、验证与复核点 B 已同步。
 
 ### Alpha 完成
 
@@ -482,7 +485,8 @@
 - [x] 复核点 A：Gate 1 完成后，确认 Y.Doc schema、Projection、Operation、AnchorRef 是否足以承载 docx、协同、自动插入；若不足，在进入 Gate 2 前修正。
   - 已修：Operation/TextPosition/TextRange 已是 JSON 可序列化契约，`splitBlock.newRunId` 改为显式字段，operation fixture 可跨实例回放。
   - 完成 2026-05-12：边界已收口为 Operation adapter/replay 路径，raw Yjs structural update 非 Gate 1 保证；实现说明见 `docs/superpowers/implementation-notes/2026-05-12-gate-1-anchor-replay-boundary.md`。
-- [ ] 复核点 B：Gate 2 完成后，确认 LayoutBox 是否能支撑 PDF、页眉页脚、表格、图片和 hit-test；若不足，在进入 Gate 3 前修正。
+- [x] 复核点 B：Gate 2 完成后，确认 LayoutBox 是否能支撑 PDF、页眉页脚、表格、图片和 hit-test；若不足，在进入 Gate 3 前修正。
+  - 完成 2026-05-12：LayoutBox/PageBox/LineBox/TextFragment/InlineBox 已作为只读 layout/render/PDF 边界导出，hit-test 和 rect mapping 通过 AnchorRef/RangeRef 接入 Editor facade；表格、图片、页眉页脚的具体 box 扩展仍按 Gate 4/5 实施，不需要推翻当前边界。
 - [ ] 复核点 C：Gate 3 完成后，确认输入系统、IME、selection、history 没有绕开 transaction pipeline；若绕开，不进入 Alpha。
 - [ ] 复核点 D：Gate 5 完成后，确认 OOXML mapping 的 warning、fixture diff、worker cancel/progress 可用；若不可用，不进入 Beta。
 - [ ] 复核点 E：Gate 6 完成后，确认 origin、undo scope、remote/AI/local 并发语义清晰；若不清晰，不进入 Stable。

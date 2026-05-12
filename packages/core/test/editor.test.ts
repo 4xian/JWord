@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createEditor } from '../src/index'
+import { twipsToCssPx } from '../src/page-config'
 
 describe('createEditor', () => {
   it('creates an editor without touching host DOM', () => {
@@ -37,6 +38,55 @@ describe('Editor mount/destroy lifecycle', () => {
     expect(shell?.getAttribute('aria-label')).toBe('Test document')
     expect(canvasContainer).toBeInstanceOf(HTMLElement)
     expect(shell?.contains(canvasContainer)).toBe(true)
+  })
+
+  it('mounts paginated canvas pages from the current projection', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: '第一页文本\n\n第二段文本' })
+
+    editor.mount(host)
+
+    const page = host.querySelector('[data-jword-page="0"]')
+    const canvas = page?.querySelector('canvas')
+
+    expect(page).toBeInstanceOf(HTMLElement)
+    expect(canvas).toBeInstanceOf(HTMLCanvasElement)
+
+    editor.destroy()
+  })
+
+  it('updates retained page canvases when the canvas container scrolls', () => {
+    const host = document.createElement('div')
+    const text = Array.from({ length: 160 }, (_, index) => `第 ${index + 1} 段滚动分页文本`).join('\n\n')
+    const editor = createEditor({ initialText: text })
+
+    editor.mount(host)
+
+    const layout = editor.getLayout()
+    const page = layout.pages[2]
+    const canvasContainer = host.querySelector('[data-jword-canvas-container]') as HTMLElement | null
+    const firstPageCanvas = host.querySelector('[data-jword-page="0"] canvas') as HTMLCanvasElement | null
+
+    expect(page).toBeDefined()
+    expect(canvasContainer).toBeInstanceOf(HTMLElement)
+    expect(firstPageCanvas).toBeInstanceOf(HTMLCanvasElement)
+    expect(canvasContainer?.style.overflow).toBe('auto')
+
+    canvasContainer!.scrollTop = twipsToCssPx(page!.y)
+    canvasContainer!.dispatchEvent(new Event('scroll'))
+
+    const scrolledPage = host.querySelector('[data-jword-page="2"]') as HTMLElement | null
+    const scrolledPageCanvas = host.querySelector('[data-jword-page="2"] canvas')
+
+    expect(scrolledPage?.style.width).toBe(`${twipsToCssPx(page!.width)}px`)
+    expect(scrolledPage?.style.height).toBe(`${twipsToCssPx(page!.height)}px`)
+    expect(scrolledPageCanvas).toBeInstanceOf(HTMLCanvasElement)
+    expect(host.querySelector('[data-jword-page="0"] canvas')).toBeNull()
+
+    expect(canvasContainer?.getAttribute('data-jword-layout-immediate-pages')).toBe('0')
+    expect(canvasContainer?.getAttribute('data-jword-layout-deferred-chunks')).not.toBeNull()
+
+    editor.destroy()
   })
 
   it('rejects mounting an already mounted editor', () => {

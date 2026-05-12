@@ -11,6 +11,41 @@ import { createJWordError } from './errors'
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 /**
+ * 单个 grapheme cluster 片段。
+ */
+export interface GraphemeSegment {
+  readonly graphemeIndex: number
+  readonly utf16StartIndex: number
+  readonly utf16EndIndex: number
+  readonly segment: string
+}
+
+/**
+ * 按 grapheme cluster 切分字符串。
+ *
+ * @param text UTF-16 字符串。
+ * @returns 带 UTF-16 边界的 grapheme 片段。
+ */
+export function segmentGraphemes(text: string): readonly GraphemeSegment[] {
+  return [...segmenter.segment(text)].map((segment, index) => ({
+    graphemeIndex: index,
+    utf16StartIndex: segment.index,
+    utf16EndIndex: segment.index + segment.segment.length,
+    segment: segment.segment
+  }))
+}
+
+/**
+ * 按 grapheme cluster 返回文本片段。
+ *
+ * @param text UTF-16 字符串。
+ * @returns grapheme 字符串数组。
+ */
+export function splitGraphemes(text: string): readonly string[] {
+  return segmentGraphemes(text).map((segment) => segment.segment)
+}
+
+/**
  * 读取字符串的 grapheme 数量。
  *
  * @param text UTF-16 字符串。
@@ -62,11 +97,11 @@ export function utf16IndexToGraphemeIndex(text: string, utf16Index: number): num
   return graphemeIndex
 }
 
-function collectGraphemeBoundaries(text: string): readonly number[] {
+export function collectGraphemeBoundaries(text: string): readonly number[] {
   const boundaries = [0]
 
-  for (const segment of segmenter.segment(text)) {
-    boundaries.push(segment.index + segment.segment.length)
+  for (const segment of segmentGraphemes(text)) {
+    boundaries.push(segment.utf16EndIndex)
   }
 
   return boundaries

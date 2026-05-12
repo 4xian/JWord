@@ -10,8 +10,14 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { JWordError, createEditor } from '../src/index'
-import type { Editor, HistoryOperationResult, JWordErrorCode } from '../src/index'
+import {
+  JWordError,
+  createEditor,
+  createFontManager,
+  createPageConfig,
+  layoutDocument
+} from '../src/index'
+import type { DocumentLayout, Editor, HistoryOperationResult, JWordErrorCode } from '../src/index'
 
 describe('core public API', () => {
   it('exports the Gate 1 editor facade and diagnostic error contract from the root entry', () => {
@@ -32,6 +38,19 @@ describe('core public API', () => {
     const result: HistoryOperationResult = editor.undo()
 
     expect(result.stackItem).toBeNull()
+
+    editor.destroy()
+  })
+
+  it('exports Gate 2 布局, page config and font manager entry points', () => {
+    const editor = createEditor({ initialText: '分页' })
+    const layout: DocumentLayout = layoutDocument({
+      projection: editor.getProjection(),
+      pageConfig: createPageConfig(),
+      fontManager: createFontManager()
+    })
+
+    expect(layout.pages[0]?.kind).toBe('page')
 
     editor.destroy()
   })

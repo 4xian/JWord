@@ -1,0 +1,4 @@
+Gate 2 中文 English mixed fixture.
+第一段包含中文、English words、数字 2026，以及基础标点，用来复查中英文混排的 line 和 fragment 记录。
+Second paragraph keeps ASCII words next to 中文词组 so the renderer baseline can record mixed fragments without a browser canvas.
+最后一段保留短句：JWord 分页 Canvas 渲染必须每页独立，不使用单长 canvas。

@@ -1,0 +1,15 @@
+{
+  "gate": "Gate 2",
+  "fixture": "fixtures/plain-text/gate2-long-paragraph.txt",
+  "case": "长段落 line breaking 和 page breaking 后续复查基线",
+  "pageCount": 1,
+  "lineCount": 3,
+  "fragmentCount": 601,
+  "renderedPageCount": 1,
+  "drawCallCount": 2407,
+  "drawCallHash": "b2bd4139a5cbc0b5dd008578c2dc167fb7b142143796cef4f966d33ae1fab1ea",
+  "notes": [
+    "记录长段落视觉输入基线",
+    "真实分页和断行数量由 Gate 2 layout 单元测试覆盖"
+  ]
+}

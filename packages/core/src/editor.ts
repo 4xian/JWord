@@ -8,6 +8,9 @@
 
 import * as Y from 'yjs'
 
+import { createCanvasPool } from './canvas-pool'
+import type { CanvasLike } from './canvas-pool'
+import { syncPageCanvases } from './canvas-renderer'
 import {
   DOCUMENT_STORE_FIELDS,
   DOCUMENT_STORE_SCHEMA_VERSION,
@@ -24,10 +27,20 @@ import {
 } from './document-store'
 import type { BlockRecord, DocumentStore, DocumentStoreJson, ResourceId, StyleId } from './document-store'
 import { createJWordError } from './errors'
+import { createFontManager } from './font-manager'
 import { DEFAULT_HISTORY_ORIGIN, createHistoryManager } from './history'
 import type { HistoryOperationResult } from './history'
+import {
+  getCaretRect as getLayoutCaretRect,
+  getSelectionRects as getLayoutSelectionRects,
+  hitTestDocumentLayout,
+  layoutDocument
+} from './layout'
+import type { DocumentLayout, LayoutBox, LayoutRect, PageBox } from './layout'
+import { createLayoutSchedule } from './layout-scheduler'
+import { createPageConfig, twipsToCssPx } from './page-config'
 import { createTextAnchorRef, resolveAnchorRef } from './position'
-import type { AnchorRef, BlockId, CommentId, DocumentId, RevisionId, RunId, SectionId } from './position'
+import type { AnchorRef, BlockId, CommentId, DocumentId, RangeRef, RevisionId, RunId, SectionId } from './position'
 import { createGraphemeIndex } from './position'
 import { createDocumentProjection } from './projection'
 import type { DocumentProjection } from './projection'
@@ -35,6 +48,7 @@ import { createSelectionRestoreSnapshot, restoreSelection } from './selection'
 import type { SelectionState } from './selection'
 import { createTransactionPipeline } from './transaction'
 import type { Command, TextPosition, TransactionEvent, TransactionMetadata, TransactionResult } from './transaction'
+import { computeViewportPages } from './viewport-virtualizer'
 
 const DEFAULT_EDITOR_LABEL = 'JWord editor'
 const DEFAULT_DOCUMENT_ID = 'document-1'
@@ -114,6 +128,18 @@ export interface EditorTextAnchorInput {
   readonly graphemeIndex: number
   /** Y.RelativePosition 的关联方向。 */
   readonly assoc?: number
+}
+
+/**
+ * Gate 2 hit-test 使用的页面内 twip 坐标。
+ */
+export interface EditorHitTestPoint {
+  /** 目标页下标。 */
+  readonly pageIndex: number
+  /** 页面内 x 坐标，单位 twip。 */
+  readonly x: number
+  /** 页面内 y 坐标，单位 twip。 */
+  readonly y: number
 }
 
 /**
@@ -232,6 +258,39 @@ export interface Editor {
    * @returns 可放入 Operation 的 JSON 兼容位置。
    */
   resolveTextPosition(anchor: AnchorRef): TextPosition
+
+  /**
+   * 读取当前分页布局。
+   *
+   * @returns 由当前只读 projection 派生的 DocumentLayout。
+   * @remarks
+   * 无副作用，不读取 DOM，不暴露可写 Yjs 容器；调用方可用它调试 page/line/fragment 边界。
+   */
+  getLayout(): DocumentLayout
+
+  /**
+   * 把页面坐标映射为稳定 AnchorRef。
+   *
+   * @param point 页面下标和页面内 twip 坐标。
+   * @returns 命中的 AnchorRef；未命中文本时返回 undefined。
+   */
+  hitTest(point: EditorHitTestPoint): AnchorRef | undefined
+
+  /**
+   * 把 AnchorRef 映射为 caret rect。
+   *
+   * @param anchor 稳定锚点。
+   * @returns caret rect；锚点无法映射到当前布局时返回 undefined。
+   */
+  getCaretRect(anchor: AnchorRef): LayoutRect | undefined
+
+  /**
+   * 把 RangeRef 映射为 selection rects。
+   *
+   * @param range 稳定范围。
+   * @returns 每行一个选区矩形。
+   */
+  getSelectionRects(range: RangeRef): readonly LayoutRect[]
 
   /**
    * 读取当前 facade runtime 选择区。
@@ -354,6 +413,10 @@ export interface Editor {
 
 interface MountedEditorDom {
   readonly shell: HTMLElement
+  readonly canvasContainer: HTMLElement
+  readonly handleScroll: () => void
+  readonly pool: ReturnType<typeof createCanvasPool>
+  canvases: Map<number, CanvasLike>
 }
 
 class JWordEditor implements Editor {
@@ -361,8 +424,12 @@ class JWordEditor implements Editor {
   private readonly store: DocumentStore
   private readonly pipeline: ReturnType<typeof createTransactionPipeline>
   private readonly history: ReturnType<typeof createHistoryManager>
+  private readonly pageConfig = createPageConfig()
+  private readonly fontManager = createFontManager()
   private readonly listeners = new Set<EditorEventListener>()
   private readonly unsubscribePipeline: () => void
+  private pageStartKeys: readonly string[] = []
+  private dirtyPageIndex = 0
   private mountedDom: MountedEditorDom | undefined
   private currentSelection: SelectionState | null = null
   private isDestroyed = false
@@ -373,6 +440,7 @@ class JWordEditor implements Editor {
     this.pipeline = createTransactionPipeline(this.store.doc)
     this.history = createHistoryManager(this.store)
     this.unsubscribePipeline = this.pipeline.subscribe((event) => {
+      this.renderMountedLayout()
       this.emit({ kind: 'transaction', transaction: event })
     })
     this.replaceDocument(
@@ -433,6 +501,44 @@ class JWordEditor implements Editor {
     }
   }
 
+  getLayout(): DocumentLayout {
+    this.assertActive()
+
+    return this.createCurrentLayout()
+  }
+
+  hitTest(point: EditorHitTestPoint): AnchorRef | undefined {
+    this.assertActive()
+
+    const position = hitTestDocumentLayout(this.createCurrentLayout(), point)
+
+    if (position === undefined) {
+      return undefined
+    }
+
+    return this.createTextAnchor({
+      sectionId: position.sectionId,
+      blockId: position.blockId,
+      runId: position.runId,
+      graphemeIndex: position.graphemeIndex
+    })
+  }
+
+  getCaretRect(anchor: AnchorRef): LayoutRect | undefined {
+    this.assertActive()
+
+    return getLayoutCaretRect(this.createCurrentLayout(), this.resolveTextPosition(anchor))
+  }
+
+  getSelectionRects(range: RangeRef): readonly LayoutRect[] {
+    this.assertActive()
+
+    return getLayoutSelectionRects(this.createCurrentLayout(), {
+      anchor: this.resolveTextPosition(range.anchor),
+      focus: this.resolveTextPosition(range.focus)
+    })
+  }
+
   getSelection(): SelectionState | null {
     this.assertActive()
 
@@ -454,6 +560,7 @@ class JWordEditor implements Editor {
     const selectionBefore = this.currentSelection
     const hasSelectionAfter = 'selectionAfter' in options
     const selectionAfter = hasSelectionAfter ? options.selectionAfter ?? null : this.currentSelection
+    this.dirtyPageIndex = this.resolveCurrentSelectionPageIndex() ?? 0
 
     if (shouldTrackHistory) {
       this.history.stopCapturing()
@@ -545,11 +652,31 @@ class JWordEditor implements Editor {
     const canvasContainer = ownerDocument.createElement('div')
     canvasContainer.className = 'jw-editor__canvas-container'
     canvasContainer.setAttribute('data-jword-canvas-container', '')
+    shell.style.width = '100%'
+    shell.style.height = '100%'
+    canvasContainer.style.width = '100%'
+    canvasContainer.style.height = '100%'
+    canvasContainer.style.overflow = 'auto'
+    canvasContainer.style.position = 'relative'
 
+    const handleScroll = () => {
+      this.renderMountedLayout()
+    }
+
+    canvasContainer.addEventListener('scroll', handleScroll)
     shell.append(canvasContainer)
     host.append(shell)
 
-    this.mountedDom = { shell }
+    this.mountedDom = {
+      shell,
+      canvasContainer,
+      handleScroll,
+      pool: createCanvasPool({
+        createCanvas: () => createCanvasElement(ownerDocument)
+      }),
+      canvases: new Map()
+    }
+    this.renderMountedLayout()
   }
 
   destroy(): void {
@@ -557,7 +684,16 @@ class JWordEditor implements Editor {
       return
     }
 
-    this.mountedDom?.shell.remove()
+    if (this.mountedDom !== undefined) {
+      this.mountedDom.canvasContainer.removeEventListener('scroll', this.mountedDom.handleScroll)
+
+      for (const canvas of this.mountedDom.canvases.values()) {
+        this.mountedDom.pool.release(canvas)
+      }
+
+      this.mountedDom.shell.remove()
+    }
+
     this.mountedDom = undefined
     this.history.clear()
     this.unsubscribePipeline()
@@ -580,6 +716,80 @@ class JWordEditor implements Editor {
     return result.projection
   }
 
+  private renderMountedLayout(): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined) {
+      return
+    }
+
+    const layout = this.createCurrentLayout()
+    const nextPageStartKeys = createPageStartKeys(layout)
+    const schedule = createLayoutSchedule({
+      pageCount: layout.pages.length,
+      dirtyPageIndex: this.dirtyPageIndex,
+      previousPageStartKeys: this.pageStartKeys,
+      nextPageStartKeys,
+      chunkSize: 4
+    })
+    const viewport = computeViewportPages({
+      pages: layout.pages.map((page) => ({
+        pageIndex: page.pageIndex,
+        top: twipsToCssPx(page.y, this.pageConfig.scale),
+        height: twipsToCssPx(page.height, this.pageConfig.scale)
+      })),
+      scrollTop: mountedDom.canvasContainer.scrollTop,
+      viewportHeight: mountedDom.canvasContainer.clientHeight || this.pageConfig.heightCssPx,
+      bufferPages: 1
+    })
+
+    mountedDom.canvases = syncPageCanvases({
+      pages: layout.pages,
+      retainedPageIndexes: viewport.retainedPageIndexes,
+      canvases: mountedDom.canvases,
+      pool: mountedDom.pool,
+      scale: this.pageConfig.scale
+    })
+
+    mountedDom.canvasContainer.replaceChildren(
+      ...layout.pages.map((page) => createPageElement(mountedDom, page, this.pageConfig.scale))
+    )
+    mountedDom.canvasContainer.setAttribute('data-jword-page-count', String(layout.pages.length))
+    mountedDom.canvasContainer.setAttribute('data-jword-layout-immediate-pages', schedule.immediatePageIndexes.join(','))
+    mountedDom.canvasContainer.setAttribute(
+      'data-jword-layout-deferred-chunks',
+      schedule.deferredChunks.map((chunk) => chunk.join(',')).join(';')
+    )
+
+    if (schedule.stoppedAtPageIndex === undefined) {
+      mountedDom.canvasContainer.removeAttribute('data-jword-layout-stopped-at')
+    } else {
+      mountedDom.canvasContainer.setAttribute('data-jword-layout-stopped-at', String(schedule.stoppedAtPageIndex))
+    }
+
+    this.pageStartKeys = nextPageStartKeys
+  }
+
+  private createCurrentLayout(): DocumentLayout {
+    return layoutDocument({
+      projection: createDocumentProjection(this.store),
+      pageConfig: this.pageConfig,
+      fontManager: this.fontManager
+    })
+  }
+
+  private resolveCurrentSelectionPageIndex(): number | undefined {
+    if (this.currentSelection === null) {
+      return undefined
+    }
+
+    try {
+      return getLayoutCaretRect(this.createCurrentLayout(), this.resolveTextPosition(this.currentSelection.anchor))?.pageIndex
+    } catch {
+      return undefined
+    }
+  }
+
   private emit(event: EditorEvent): void {
     for (const listener of this.listeners) {
       listener(event)
@@ -591,6 +801,61 @@ class JWordEditor implements Editor {
       throw createJWordError('EDITOR_DESTROYED', 'JWord editor has been destroyed.')
     }
   }
+}
+
+function createPageElement(mountedDom: MountedEditorDom, layoutPage: LayoutBox, scale: number) {
+  const page = mountedDom.canvasContainer.ownerDocument.createElement('div')
+  const canvas = mountedDom.canvases.get(layoutPage.pageIndex)
+
+  page.className = 'jw-editor__page'
+  page.setAttribute('data-jword-page', String(layoutPage.pageIndex))
+  page.style.position = 'relative'
+  page.style.width = `${twipsToCssPx(layoutPage.width, scale)}px`
+  page.style.height = `${twipsToCssPx(layoutPage.height, scale)}px`
+  page.style.margin = '0 auto 48px'
+  page.style.background = '#ffffff'
+
+  if (canvas !== undefined) {
+    const styledCanvas = canvas as CanvasLike & { className?: string }
+
+    styledCanvas.className = 'jw-editor__page-canvas'
+    page.append(canvas as unknown as Node)
+  }
+
+  return page
+}
+
+function createPageStartKeys(layout: DocumentLayout): readonly string[] {
+  return Object.freeze(layout.pages.map(createPageStartKey))
+}
+
+function createPageStartKey(page: PageBox): string {
+  for (const line of page.lines) {
+    const fragment = line.fragments[0]
+
+    if (fragment !== undefined) {
+      return [
+        fragment.sectionId,
+        fragment.blockId,
+        fragment.runId,
+        fragment.start.graphemeIndex
+      ].join(':')
+    }
+  }
+
+  return `${page.pageIndex}:empty`
+}
+
+function createCanvasElement(ownerDocument: Document): HTMLCanvasElement {
+  const canvas = ownerDocument.createElement('canvas')
+
+  if (ownerDocument.defaultView?.navigator.userAgent.includes('jsdom') === true) {
+    Object.defineProperty(canvas, 'getContext', {
+      value: () => null
+    })
+  }
+
+  return canvas
 }
 
 /**

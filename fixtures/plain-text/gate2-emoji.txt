@@ -1,0 +1,4 @@
+Gate 2 emoji fixture.
+Emoji line: hello 😀😃😄 with text after emoji.
+Family line: family 👨‍👩‍👧‍👦 should remain a reviewable grapheme case.
+Accent line: café and résumé keep combining mark coverage for later layout checks.
