@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 const roots = ['packages', 'examples']
 const visualBaselineRoot = join('fixtures', 'visual-baselines')
+const packageManager = resolvePackageManager()
 const core = await loadBuiltCore()
 
 function hasVisualTests(dir) {
@@ -23,27 +24,55 @@ function hasVisualTests(dir) {
 validateVisualBaselines()
 
 if (roots.some(hasVisualTests)) {
-  const result = spawnSync(
-    'pnpm',
-    ['exec', 'playwright', 'test', '--project=visual-chromium', '--pass-with-no-tests'],
-    { stdio: 'inherit' }
-  )
+  const result = runPackageManager(['exec', 'playwright', 'test', '--project=visual-chromium', '--pass-with-no-tests'])
 
-  process.exit(result.status ?? 1)
+  exitFromChild(result, 'visual Playwright')
+  console.log('Visual baselines and Playwright visual tests checked.')
+  process.exit(0)
 }
 
 console.log('Visual baselines checked against core layout/render; no Playwright visual tests yet.')
 
 async function loadBuiltCore() {
-  const build = spawnSync('pnpm', ['build'], {
-    stdio: 'inherit'
-  })
+  const build = runPackageManager(['build'])
 
-  if (build.status !== 0) {
-    process.exit(build.status ?? 1)
-  }
+  exitFromChild(build, 'core build')
 
   return import(new URL('../../packages/core/dist/index.js', import.meta.url))
+}
+
+function resolvePackageManager() {
+  if (process.env.npm_execpath) {
+    return {
+      command: process.execPath,
+      shell: false,
+      prefixArgs: [process.env.npm_execpath]
+    }
+  }
+
+  return {
+    command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+    shell: process.platform === 'win32',
+    prefixArgs: []
+  }
+}
+
+function runPackageManager(args) {
+  return spawnSync(packageManager.command, [...packageManager.prefixArgs, ...args], {
+    stdio: 'inherit',
+    shell: packageManager.shell
+  })
+}
+
+function exitFromChild(result, label) {
+  if (result.error) {
+    console.error(`${label} failed to start: ${result.error.message}`)
+    process.exit(1)
+  }
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
 }
 
 function validateVisualBaselines() {
@@ -81,7 +110,7 @@ function validateVisualBaselines() {
 
 function renderBaseline(fixture) {
   const fixtureText = readFileSync(fixture, 'utf8')
-  const lines = fixtureText.trim().split('\n').filter((line) => line.length > 0)
+  const lines = createBaselineLines(fixture, fixtureText)
   const layout = core.layoutDocument({
     projection: createProjection(fixture, lines),
     pageConfig: createBaselinePageConfig(fixture),
@@ -114,17 +143,7 @@ function renderBaseline(fixture) {
 
 function createBaselinePageConfig(fixture) {
   if (fixture.includes('gate2-50-pages')) {
-    return core.createPageConfig({
-      orientation: 'landscape',
-      widthTwips: core.cssPxToTwips(1800),
-      heightTwips: 400,
-      marginTwips: {
-        top: 40,
-        right: core.cssPxToTwips(72),
-        bottom: 40,
-        left: core.cssPxToTwips(72)
-      }
-    })
+    return core.createPageConfig()
   }
 
   return core.createPageConfig({
@@ -138,6 +157,17 @@ function createBaselinePageConfig(fixture) {
       left: core.cssPxToTwips(72)
     }
   })
+}
+
+function createBaselineLines(fixture, fixtureText) {
+  const lines = fixtureText.trim().split('\n').filter((line) => line.length > 0)
+
+  if (!fixture.includes('gate2-50-pages')) {
+    return lines
+  }
+
+  return Array.from({ length: 32 }, (_, roundIndex) => roundIndex + 1)
+    .flatMap((round) => lines.map((line) => `${line} Repeat ${String(round).padStart(2, '0')}.`))
 }
 
 function createProjection(fixture, lines) {

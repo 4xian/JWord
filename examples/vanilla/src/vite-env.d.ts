@@ -6,3 +6,22 @@
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md。
  */
 /// <reference types="vite/client" />
+
+import type { Editor, SelectionState } from '@4xian/jword-core'
+
+export interface JWordDemoSelectionInput {
+  readonly sectionId: string
+  readonly blockId: string
+  readonly runId: string
+  readonly anchorGraphemeIndex: number
+  readonly focusGraphemeIndex: number
+}
+
+declare global {
+  interface Window {
+    __jwordDemo?: Readonly<{
+      readonly editor: Editor
+      readonly selectTextRange: (input: JWordDemoSelectionInput) => SelectionState
+    }>
+  }
+}

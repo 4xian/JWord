@@ -24,6 +24,7 @@ export interface RenderPageInput {
 export interface SyncPageCanvasesInput {
   readonly pages: readonly LayoutBox[]
   readonly retainedPageIndexes: readonly number[]
+  readonly rerenderPageIndexes?: readonly number[]
   readonly canvases: ReadonlyMap<number, CanvasLike>
   readonly pool: CanvasPool
   readonly selectionRects?: readonly LayoutRect[]
@@ -90,6 +91,7 @@ export function renderPageCanvas(input: RenderPageInput): void {
 
 export function syncPageCanvases(input: SyncPageCanvasesInput): Map<number, CanvasLike> {
   const retained = new Set(input.retainedPageIndexes)
+  const rerendered = input.rerenderPageIndexes === undefined ? undefined : new Set(input.rerenderPageIndexes)
   const next = new Map<number, CanvasLike>()
 
   for (const [pageIndex, canvas] of input.canvases) {
@@ -104,20 +106,25 @@ export function syncPageCanvases(input: SyncPageCanvasesInput): Map<number, Canv
     }
 
     const renderScale = resolveRenderScale(page, input.scale ?? 1)
-    const canvas = input.canvases.get(page.pageIndex) ?? input.pool.acquire(
+    const existingCanvas = input.canvases.get(page.pageIndex)
+    const canvas = existingCanvas ?? input.pool.acquire(
       Math.max(1, Math.round(twipsToCssPx(page.width, renderScale))),
       Math.max(1, Math.round(twipsToCssPx(page.height, renderScale)))
     )
+    const shouldRender = existingCanvas === undefined || rerendered === undefined || rerendered.has(page.pageIndex)
 
-    const renderInput: RenderPageInput = {
-      canvas,
-      page,
-      ...(input.selectionRects === undefined ? {} : { selectionRects: input.selectionRects }),
-      ...(input.caretRect === undefined ? {} : { caretRect: input.caretRect }),
-      ...(input.scale === undefined ? {} : { scale: input.scale })
+    if (shouldRender) {
+      const renderInput: RenderPageInput = {
+        canvas,
+        page,
+        ...(input.selectionRects === undefined ? {} : { selectionRects: input.selectionRects }),
+        ...(input.caretRect === undefined ? {} : { caretRect: input.caretRect }),
+        ...(input.scale === undefined ? {} : { scale: input.scale })
+      }
+
+      renderPageCanvas(renderInput)
     }
 
-    renderPageCanvas(renderInput)
     next.set(page.pageIndex, canvas)
   }
 

@@ -17,6 +17,7 @@ import {
   hitTestDocumentLayout,
   layoutDocument
 } from '../src/layout'
+import type { Inline } from '../src/model'
 import { createPageConfig } from '../src/page-config'
 import type { DocumentProjection } from '../src/projection'
 
@@ -70,9 +71,82 @@ describe('Gate 2 命中测试 and 矩形映射', () => {
     expect(rects[0]?.width).toBeGreaterThan(0)
     expect(rects[0]?.x).toBe(caret?.x)
   })
+
+  it('maps page-local points on later pages to the correct TextPosition', () => {
+    const layout = layoutDocument({
+      projection: createProjection('第一页', '第二页'),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 2400,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const secondPageFragment = layout.pages[1]?.lines[0]?.fragments[0]
+
+    expect(secondPageFragment).toBeDefined()
+
+    const position = hitTestDocumentLayout(layout, {
+      pageIndex: 1,
+      x: (secondPageFragment?.x ?? 0) - (layout.pages[1]?.x ?? 0) + (secondPageFragment?.advanceTwips[1] ?? 0) + 1,
+      y: (secondPageFragment?.y ?? 0) - (layout.pages[1]?.y ?? 0) + 1
+    })
+
+    expect(position).toEqual({
+      sectionId: 'section-hit',
+      blockId: 'paragraph-hit',
+      runId: 'run-hit',
+      graphemeIndex: 4
+    })
+  })
 })
 
 function createSingleLineLayout() {
+  return layoutDocument({
+    projection: createProjection('abcd'),
+    pageConfig: createPageConfig({
+      widthTwips: 6000,
+      heightTwips: 4000,
+      marginTwips: {
+        top: 120,
+        right: 120,
+        bottom: 120,
+        left: 120
+      }
+    }),
+    fontManager: createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+  })
+}
+
+function createProjection(text: string, secondPageText?: string): DocumentProjection {
+  const inlines: readonly Inline[] = secondPageText === undefined
+    ? [{ kind: 'text', text }]
+    : [
+        {
+          kind: 'text',
+          text
+        },
+        {
+          kind: 'break',
+          breakType: 'page'
+        },
+        {
+          kind: 'text',
+          text: secondPageText
+        }
+      ]
+
   const projection: DocumentProjection = {
     document: {
       kind: 'document',
@@ -92,12 +166,7 @@ function createSingleLineLayout() {
                   properties: {
                     fontSizePx: 16
                   },
-                  inlines: [
-                    {
-                      kind: 'text',
-                      text: 'abcd'
-                    }
-                  ]
+                  inlines
                 }
               ]
             }
@@ -107,21 +176,5 @@ function createSingleLineLayout() {
     }
   }
 
-  return layoutDocument({
-    projection,
-    pageConfig: createPageConfig({
-      widthTwips: 6000,
-      heightTwips: 4000,
-      marginTwips: {
-        top: 120,
-        right: 120,
-        bottom: 120,
-        left: 120
-      }
-    }),
-    fontManager: createFontManager({
-      fallbackFontFamily: 'Arial',
-      availableFontFamilies: ['Arial']
-    })
-  })
+  return projection
 }

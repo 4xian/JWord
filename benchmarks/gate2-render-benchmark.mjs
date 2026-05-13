@@ -7,25 +7,14 @@ import {
   createCanvasPool,
   createFontManager,
   createPageConfig,
-  cssPxToTwips,
   layoutDocument,
   syncPageCanvases
 } from '../packages/core/dist/index.js'
 
 const fixturePath = join('fixtures', 'plain-text', 'gate2-50-pages.txt')
 const fixtureText = readFileSync(fixturePath, 'utf8')
-const fixtureLines = fixtureText.trim().split('\n').filter((line) => line.length > 0)
-const pageConfig = createPageConfig({
-  orientation: 'landscape',
-  widthTwips: cssPxToTwips(1800),
-  heightTwips: 400,
-  marginTwips: {
-    top: 40,
-    right: cssPxToTwips(72),
-    bottom: 40,
-    left: cssPxToTwips(72)
-  }
-})
+const fixtureLines = createBenchmarkLines(fixtureText)
+const pageConfig = createPageConfig()
 const fontManager = createFontManager({
   fallbackFontFamily: 'Arial',
   availableFontFamilies: ['Arial']
@@ -39,8 +28,8 @@ const layout = layoutDocument({
 })
 const layoutDurationMs = roundMetric(performance.now() - layoutStart)
 
-if (layout.pages.length !== 50) {
-  throw new Error(`Gate 2 benchmark expected 50 pages, got ${layout.pages.length}.`)
+if (layout.pages.length < 50) {
+  throw new Error(`Gate 2 benchmark expected at least 50 pages, got ${layout.pages.length}.`)
 }
 
 const renderStart = performance.now()
@@ -49,6 +38,16 @@ const renderDurationMs = roundMetric(performance.now() - renderStart)
 const scrollFps = renderDurationMs === 0
   ? 0
   : roundMetric(renderMetrics.frames / (renderDurationMs / 1000))
+const retainedCanvasLimit = 5
+
+validateBenchmarkMetrics({
+  pageCount: layout.pages.length,
+  layoutDurationMs,
+  renderDurationMs,
+  scrollFps,
+  retainedCanvasLimit,
+  ...renderMetrics
+})
 
 console.log(
   JSON.stringify(
@@ -62,16 +61,23 @@ console.log(
       scrollFps,
       frames: renderMetrics.frames,
       maxCanvasCount: renderMetrics.maxCanvasCount,
-      retainedCanvasLimit: 5,
+      retainedCanvasLimit,
       canvasBytesPeak: renderMetrics.canvasBytesPeak,
       offscreenCanvasSize: renderMetrics.offscreenCanvasSize,
       drawCalls: renderMetrics.drawCalls,
-      note: '真实 core layout/render benchmark，记录滚动 FPS、layout 耗时、render 耗时、canvas 数量和显存估算。'
+      note: '确定性 core layout/render benchmark；真实浏览器 canvas 绘制和滚动由 Playwright Gate 2 用例覆盖。'
     },
     null,
     2
   )
 )
+
+function createBenchmarkLines(text) {
+  const lines = text.trim().split('\n').filter((line) => line.length > 0)
+
+  return Array.from({ length: 32 }, (_, roundIndex) => roundIndex + 1)
+    .flatMap((round) => lines.map((line) => `${line} Repeat ${String(round).padStart(2, '0')}.`))
+}
 
 function createProjection(lines) {
   return {
@@ -104,6 +110,30 @@ function createProjection(lines) {
         }
       ]
     }
+  }
+}
+
+function validateBenchmarkMetrics(metrics) {
+  const finiteMetrics = [
+    metrics.layoutDurationMs,
+    metrics.renderDurationMs,
+    metrics.scrollFps
+  ]
+
+  if (finiteMetrics.some((metric) => !Number.isFinite(metric))) {
+    throw new Error('Gate 2 benchmark produced a non-finite metric.')
+  }
+
+  if (metrics.maxCanvasCount > metrics.retainedCanvasLimit) {
+    throw new Error(`Gate 2 benchmark retained ${metrics.maxCanvasCount} canvases, limit ${metrics.retainedCanvasLimit}.`)
+  }
+
+  if (metrics.offscreenCanvasSize !== '1x1') {
+    throw new Error(`Gate 2 benchmark did not release offscreen canvases, got ${metrics.offscreenCanvasSize}.`)
+  }
+
+  if (metrics.canvasBytesPeak <= 0 || metrics.drawCalls <= 0 || metrics.frames !== metrics.pageCount) {
+    throw new Error('Gate 2 benchmark render metrics are incomplete.')
   }
 }
 

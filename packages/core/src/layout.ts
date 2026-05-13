@@ -61,6 +61,7 @@ export interface ParagraphBox extends LayoutRect {
   readonly kind: 'paragraph'
   readonly sectionId: string
   readonly paragraphId: string
+  readonly pageBreakPolicy: ParagraphPageBreakPolicy
   readonly lines: readonly LineBox[]
 }
 
@@ -100,6 +101,12 @@ export interface LayoutDebugOverlay {
   readonly boxes: readonly LayoutDebugBox[]
 }
 
+export interface ParagraphPageBreakPolicy {
+  readonly widowControl: boolean
+  readonly orphanLines: number
+  readonly widowLines: number
+}
+
 export interface LayoutDebugBox extends LayoutRect {
   readonly kind: 'page' | 'line' | 'fragment'
   readonly id: string
@@ -127,6 +134,7 @@ interface MutableParagraphBox {
   width: number
   height: number
   lines: LineBox[]
+  pageBreakPolicy: ParagraphPageBreakPolicy
 }
 
 interface MutableLineBox {
@@ -210,12 +218,20 @@ export function hitTestDocumentLayout(
     return undefined
   }
 
+  const absolutePoint = {
+    x: page.x + point.x,
+    y: page.y + point.y
+  }
   const line = page.lines.find((candidate) =>
-    point.y >= candidate.y && point.y <= candidate.y + candidate.height
+    absolutePoint.y >= candidate.y && absolutePoint.y <= candidate.y + candidate.height
   )
 
-  if (line === undefined || line.fragments.length === 0) {
+  if (line === undefined) {
     return undefined
+  }
+
+  if (line.fragments.length === 0) {
+    return line.inlines[0]?.at
   }
 
   const firstFragment = line.fragments[0]
@@ -225,13 +241,13 @@ export function hitTestDocumentLayout(
     return undefined
   }
 
-  if (point.x <= firstFragment.x) {
+  if (absolutePoint.x <= firstFragment.x) {
     return firstFragment.start
   }
 
   for (const fragment of line.fragments) {
-    if (point.x <= fragment.x + fragment.width) {
-      return positionInFragment(fragment, point.x)
+    if (absolutePoint.x <= fragment.x + fragment.width) {
+      return positionInFragment(fragment, absolutePoint.x)
     }
   }
 
@@ -252,11 +268,15 @@ export function getCaretRect(layout: DocumentLayout, position: TextPosition): La
     return undefined
   }
 
-  const x = offsetInFragment(located.fragment, position)
+  const target = located.fragment ?? located.inline
+
+  if (target === undefined) {
+    return undefined
+  }
 
   return {
-    pageIndex: located.fragment.pageIndex,
-    x,
+    pageIndex: target.pageIndex,
+    x: located.fragment === undefined ? target.x : offsetInFragment(located.fragment, position),
     y: located.line.y,
     width: 0,
     height: located.line.height
@@ -303,7 +323,7 @@ function layoutBlock(
     return
   }
 
-  startParagraph(cursor, sectionId, block.id, input.pageConfig)
+  startParagraph(cursor, sectionId, block, input.pageConfig)
 
   for (const run of block.runs) {
     layoutRun(run, sectionId, block, input, cursor, pages)
@@ -332,7 +352,7 @@ function layoutRun(
         const height = cssPxToTwips(measurement.heightCssPx)
         const baseline = cssPxToTwips(measurement.baselineCssPx)
 
-        ensureLineFits(width, height, cursor, pages, input.pageConfig, sectionId, paragraph.id)
+        ensureLineFits(width, height, cursor, pages, input.pageConfig, sectionId, paragraph)
         appendTextFragment({
           cursor,
           sectionId,
@@ -349,7 +369,7 @@ function layoutRun(
         runGraphemeIndex += 1
       }
     } else {
-      layoutInlineBreak(inline, sectionId, paragraph.id, run.id, runGraphemeIndex, cursor, pages, input.pageConfig)
+      layoutInlineBreak(inline, sectionId, paragraph, run.id, runGraphemeIndex, cursor, pages, input.pageConfig)
     }
   }
 }
@@ -357,7 +377,7 @@ function layoutRun(
 function layoutInlineBreak(
   inline: Inline,
   sectionId: string,
-  paragraphId: string,
+  paragraph: Paragraph,
   runId: string,
   graphemeIndex: number,
   cursor: LayoutCursor,
@@ -377,16 +397,16 @@ function layoutInlineBreak(
     return
   }
 
-  const line = ensureLine(cursor, sectionId, paragraphId, pageConfig)
+  const line = ensureLine(cursor, sectionId, paragraph, pageConfig)
   const pageBreak: PageBreakBox = {
     kind: 'pageBreak',
     pageIndex: cursor.page.pageIndex,
     sectionId,
-    blockId: paragraphId,
+    blockId: paragraph.id,
     runId,
     at: {
       sectionId,
-      blockId: paragraphId,
+      blockId: paragraph.id,
       runId,
       graphemeIndex
     },
@@ -399,35 +419,36 @@ function layoutInlineBreak(
   line.inlines.push(Object.freeze(pageBreak))
   flushLine(cursor)
   startNewPage(cursor, pages, pageConfig)
-  startParagraph(cursor, sectionId, paragraphId, pageConfig)
+  startParagraph(cursor, sectionId, paragraph, pageConfig)
 }
 
 function startParagraph(
   cursor: LayoutCursor,
   sectionId: string,
-  paragraphId: string,
+  paragraph: Paragraph,
   pageConfig: PageConfig
 ): void {
-  if (cursor.paragraph?.paragraphId === paragraphId && cursor.paragraph.pageIndex === cursor.page.pageIndex) {
+  if (cursor.paragraph?.paragraphId === paragraph.id && cursor.paragraph.pageIndex === cursor.page.pageIndex) {
     return
   }
 
   const x = pageConfig.marginTwips.left
   const y = cursor.y
-  const paragraph: MutableParagraphBox = {
+  const paragraphBox: MutableParagraphBox = {
     kind: 'paragraph',
     pageIndex: cursor.page.pageIndex,
     sectionId,
-    paragraphId,
+    paragraphId: paragraph.id,
     x,
     y,
     width: 0,
     height: 0,
-    lines: []
+    lines: [],
+    pageBreakPolicy: resolveParagraphPageBreakPolicy(paragraph)
   }
 
-  cursor.page.paragraphs.push(paragraph)
-  cursor.paragraph = paragraph
+  cursor.page.paragraphs.push(paragraphBox)
+  cursor.paragraph = paragraphBox
 }
 
 function ensureLineFits(
@@ -437,7 +458,7 @@ function ensureLineFits(
   pages: MutablePageBox[],
   pageConfig: PageConfig,
   sectionId: string,
-  paragraphId: string
+  paragraph: Paragraph
 ): void {
   const contentRight = pageConfig.marginTwips.left + pageConfig.contentWidthTwips
 
@@ -447,29 +468,29 @@ function ensureLineFits(
 
   if (cursor.y + nextHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
     startNewPage(cursor, pages, pageConfig)
-    startParagraph(cursor, sectionId, paragraphId, pageConfig)
+    startParagraph(cursor, sectionId, paragraph, pageConfig)
   }
 
-  ensureLine(cursor, sectionId, paragraphId, pageConfig)
+  ensureLine(cursor, sectionId, paragraph, pageConfig)
 }
 
 function ensureLine(
   cursor: LayoutCursor,
   sectionId: string,
-  paragraphId: string,
+  paragraph: Paragraph,
   pageConfig: PageConfig
 ): MutableLineBox {
   if (cursor.line !== undefined) {
     return cursor.line
   }
 
-  startParagraph(cursor, sectionId, paragraphId, pageConfig)
+  startParagraph(cursor, sectionId, paragraph, pageConfig)
 
   const line: MutableLineBox = {
     kind: 'line',
     pageIndex: cursor.page.pageIndex,
     sectionId,
-    paragraphId,
+    paragraphId: paragraph.id,
     x: pageConfig.marginTwips.left,
     y: cursor.y,
     width: 0,
@@ -608,7 +629,8 @@ function freezePage(page: MutablePageBox): PageBox {
     lines: Object.freeze(page.lines),
     paragraphs: Object.freeze(page.paragraphs.map((paragraph) => Object.freeze({
       ...paragraph,
-      lines: Object.freeze(paragraph.lines)
+      lines: Object.freeze(paragraph.lines),
+      pageBreakPolicy: Object.freeze(paragraph.pageBreakPolicy)
     }))),
     contentRect: Object.freeze(page.contentRect)
   })
@@ -678,7 +700,8 @@ function locatePosition(
   position: TextPosition
 ): Readonly<{
   line: LineBox
-  fragment: TextFragment
+  fragment?: TextFragment
+  inline?: InlineBox
 }> | undefined {
   for (const page of layout.pages) {
     for (const line of page.lines) {
@@ -687,6 +710,20 @@ function locatePosition(
           return {
             line,
             fragment
+          }
+        }
+      }
+
+      for (const inline of line.inlines) {
+        if (
+          inline.at.sectionId === position.sectionId &&
+          inline.at.blockId === position.blockId &&
+          inline.at.runId === position.runId &&
+          inline.at.graphemeIndex === position.graphemeIndex
+        ) {
+          return {
+            line,
+            inline
           }
         }
       }
@@ -717,6 +754,18 @@ function offsetInFragment(fragment: TextFragment, position: TextPosition): numbe
   const advance = fragment.advanceTwips[index] ?? fragment.width
 
   return fragment.x + advance
+}
+
+function resolveParagraphPageBreakPolicy(paragraph: Paragraph): ParagraphPageBreakPolicy {
+  const widowControl = readBooleanProperty(paragraph.properties, 'widowControl') ?? true
+  const orphanLines = readNumberProperty(paragraph.properties, 'orphanLines') ?? 2
+  const widowLines = readNumberProperty(paragraph.properties, 'widowLines') ?? 2
+
+  return Object.freeze({
+    widowControl,
+    orphanLines,
+    widowLines
+  })
 }
 
 function getLineSelectionRect(

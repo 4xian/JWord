@@ -14,6 +14,7 @@ import { createFontManager } from '../src/font-manager'
 import { layoutDocument } from '../src/layout'
 import { createPageConfig } from '../src/page-config'
 import type { DocumentProjection } from '../src/projection'
+import type { LayoutInput, DocumentLayout } from '../src/layout'
 
 describe('Gate 2 布局', () => {
   it('creates paged layout boxes from DocumentProjection without reading writable state', () => {
@@ -131,6 +132,104 @@ describe('Gate 2 布局', () => {
     expect(layout.debugOverlay.boxes.map((box) => box.kind)).toContain('line')
     expect(layout.debugOverlay.boxes.map((box) => box.kind)).toContain('fragment')
   })
+
+  it('reuses unchanged suffix pages once later page starts are stable', () => {
+    const pageConfig = createPageConfig({
+      widthTwips: 6000,
+      heightTwips: 560,
+      marginTwips: {
+        top: 120,
+        right: 120,
+        bottom: 120,
+        left: 120
+      }
+    })
+    const fontManager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+    const previousLayout = layoutDocument({
+      projection: createThreePageBreakProjection('Alpha', 'Bravo', 'Charlie'),
+      pageConfig,
+      fontManager
+    })
+    const nextInput: LayoutInput & {
+      readonly previousLayout: DocumentLayout
+    } = {
+      projection: createThreePageBreakProjection('Alpha updated', 'Bravo', 'Charlie'),
+      pageConfig,
+      fontManager,
+      dirtyRange: {
+        anchor: {
+          sectionId: 'section-layout-break-reuse',
+          blockId: 'paragraph-layout-break-reuse-1',
+          runId: 'run-layout-break-reuse-1',
+          graphemeIndex: 0
+        },
+        focus: {
+          sectionId: 'section-layout-break-reuse',
+          blockId: 'paragraph-layout-break-reuse-1',
+          runId: 'run-layout-break-reuse-1',
+          graphemeIndex: 0
+        }
+      },
+      previousLayout
+    }
+
+    const nextLayout = layoutDocument(nextInput)
+
+    expect(nextLayout.pages[1]).toBe(previousLayout.pages[1])
+    expect(nextLayout.pages[2]).toBe(previousLayout.pages[2])
+  })
+
+  it('reuses unchanged prefix pages when dirty range starts on a later page', () => {
+    const pageConfig = createPageConfig({
+      widthTwips: 6000,
+      heightTwips: 560,
+      marginTwips: {
+        top: 120,
+        right: 120,
+        bottom: 120,
+        left: 120
+      }
+    })
+    const fontManager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+    const previousLayout = layoutDocument({
+      projection: createThreePageBreakProjection('Alpha', 'Bravo', 'Charlie'),
+      pageConfig,
+      fontManager
+    })
+    const nextInput: LayoutInput & {
+      readonly previousLayout: DocumentLayout
+    } = {
+      projection: createThreePageBreakProjection('Alpha', 'Bravo', 'Charlie updated'),
+      pageConfig,
+      fontManager,
+      dirtyRange: {
+        anchor: {
+          sectionId: 'section-layout-break-reuse',
+          blockId: 'paragraph-layout-break-reuse-3',
+          runId: 'run-layout-break-reuse-3',
+          graphemeIndex: 10
+        },
+        focus: {
+          sectionId: 'section-layout-break-reuse',
+          blockId: 'paragraph-layout-break-reuse-3',
+          runId: 'run-layout-break-reuse-3',
+          graphemeIndex: 10
+        }
+      },
+      previousLayout
+    }
+
+    const nextLayout = layoutDocument(nextInput)
+
+    expect(nextLayout.pages[0]).toBe(previousLayout.pages[0])
+    expect(nextLayout.pages[1]).toBe(previousLayout.pages[1])
+  })
 })
 
 function createProjection(text: string): DocumentProjection {
@@ -157,6 +256,84 @@ function createProjection(text: string): DocumentProjection {
                     {
                       kind: 'text',
                       text
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+function createThreePageBreakProjection(
+  firstPageText: string,
+  secondPageText: string,
+  thirdPageText: string
+): DocumentProjection {
+  return {
+    document: {
+      kind: 'document',
+      id: 'document-layout-break-reuse',
+      sections: [
+        {
+          kind: 'section',
+          id: 'section-layout-break-reuse',
+          blocks: [
+            {
+              kind: 'paragraph',
+              id: 'paragraph-layout-break-reuse-1',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-layout-break-reuse-1',
+                  properties: {
+                    fontSizePx: 16
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: firstPageText
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              kind: 'paragraph',
+              id: 'paragraph-layout-break-reuse-2',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-layout-break-reuse-2',
+                  properties: {
+                    fontSizePx: 16
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: secondPageText
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              kind: 'paragraph',
+              id: 'paragraph-layout-break-reuse-3',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-layout-break-reuse-3',
+                  properties: {
+                    fontSizePx: 16
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: thirdPageText
                     }
                   ]
                 }

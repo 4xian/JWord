@@ -1,6 +1,6 @@
 /**
  * @fileoverview 职责: 配置 JWord E2E、IME、视觉和双窗口协同浏览器项目。
- * 边界: 不启动 demo 服务，不写具体测试用例。
+ * 边界: 只启动 vanilla demo 测试服务，不写具体测试用例。
  * 协作: examples/vanilla 和后续协同示例添加测试后复用此矩阵。
  * 约束: Chromium、Firefox、WebKit 都保留，视觉测试单独项目运行。
  * Specs: docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
@@ -20,6 +20,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure'
+  },
+  webServer: {
+    command: 'pnpm --filter @4xian/jword-example-vanilla dev',
+    url: 'http://127.0.0.1:5173',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120000
   },
   projects: [
     {

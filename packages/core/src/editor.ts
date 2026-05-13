@@ -36,7 +36,7 @@ import {
   hitTestDocumentLayout,
   layoutDocument
 } from './layout'
-import type { DocumentLayout, LayoutBox, LayoutRect, PageBox } from './layout'
+import type { DocumentLayout, LayoutBox, LayoutDirtyRange, LayoutRect, PageBox } from './layout'
 import { createLayoutSchedule } from './layout-scheduler'
 import { createPageConfig, twipsToCssPx } from './page-config'
 import { createTextAnchorRef, resolveAnchorRef } from './position'
@@ -47,7 +47,7 @@ import type { DocumentProjection } from './projection'
 import { createSelectionRestoreSnapshot, restoreSelection } from './selection'
 import type { SelectionState } from './selection'
 import { createTransactionPipeline } from './transaction'
-import type { Command, TextPosition, TransactionEvent, TransactionMetadata, TransactionResult } from './transaction'
+import type { Command, Operation, TextPosition, TransactionEvent, TransactionMetadata, TransactionResult } from './transaction'
 import { computeViewportPages } from './viewport-virtualizer'
 
 const DEFAULT_EDITOR_LABEL = 'JWord editor'
@@ -416,8 +416,11 @@ interface MountedEditorDom {
   readonly canvasContainer: HTMLElement
   readonly handleScroll: () => void
   readonly pool: ReturnType<typeof createCanvasPool>
+  readonly pageWrappers: Map<number, HTMLElement>
   canvases: Map<number, CanvasLike>
 }
+
+type RenderReason = 'mount' | 'document' | 'selection' | 'viewport'
 
 class JWordEditor implements Editor {
   private readonly label: string
@@ -428,19 +431,27 @@ class JWordEditor implements Editor {
   private readonly fontManager = createFontManager()
   private readonly listeners = new Set<EditorEventListener>()
   private readonly unsubscribePipeline: () => void
+  private currentProjection: DocumentProjection
+  private cachedLayout: DocumentLayout | undefined
+  private layoutDirtyRange: LayoutDirtyRange | undefined
+  private layoutNeedsRefresh = false
   private pageStartKeys: readonly string[] = []
   private dirtyPageIndex = 0
   private mountedDom: MountedEditorDom | undefined
   private currentSelection: SelectionState | null = null
+  private selectionPageIndexes: readonly number[] = []
   private isDestroyed = false
 
   constructor(options?: EditorOptions) {
     this.label = options?.label ?? DEFAULT_EDITOR_LABEL
     this.store = createDocumentStore()
+    this.currentProjection = createDocumentProjection(this.store)
     this.pipeline = createTransactionPipeline(this.store.doc)
     this.history = createHistoryManager(this.store)
     this.unsubscribePipeline = this.pipeline.subscribe((event) => {
-      this.renderMountedLayout()
+      this.currentProjection = event.projection
+      this.layoutNeedsRefresh = true
+      this.renderMountedLayout('document')
       this.emit({ kind: 'transaction', transaction: event })
     })
     this.replaceDocument(
@@ -453,7 +464,7 @@ class JWordEditor implements Editor {
   getProjection(): DocumentProjection {
     this.assertActive()
 
-    return createDocumentProjection(this.store)
+    return this.currentProjection
   }
 
   createDocument(input: EditorDocumentInput = {}): DocumentProjection {
@@ -504,13 +515,13 @@ class JWordEditor implements Editor {
   getLayout(): DocumentLayout {
     this.assertActive()
 
-    return this.createCurrentLayout()
+    return this.ensureCurrentLayout()
   }
 
   hitTest(point: EditorHitTestPoint): AnchorRef | undefined {
     this.assertActive()
 
-    const position = hitTestDocumentLayout(this.createCurrentLayout(), point)
+    const position = hitTestDocumentLayout(this.ensureCurrentLayout(), point)
 
     if (position === undefined) {
       return undefined
@@ -527,13 +538,13 @@ class JWordEditor implements Editor {
   getCaretRect(anchor: AnchorRef): LayoutRect | undefined {
     this.assertActive()
 
-    return getLayoutCaretRect(this.createCurrentLayout(), this.resolveTextPosition(anchor))
+    return getLayoutCaretRect(this.ensureCurrentLayout(), this.resolveTextPosition(anchor))
   }
 
   getSelectionRects(range: RangeRef): readonly LayoutRect[] {
     this.assertActive()
 
-    return getLayoutSelectionRects(this.createCurrentLayout(), {
+    return getLayoutSelectionRects(this.ensureCurrentLayout(), {
       anchor: this.resolveTextPosition(range.anchor),
       focus: this.resolveTextPosition(range.focus)
     })
@@ -549,6 +560,7 @@ class JWordEditor implements Editor {
     this.assertActive()
 
     this.currentSelection = selection
+    this.renderMountedLayout('selection')
   }
 
   executeCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
@@ -560,7 +572,8 @@ class JWordEditor implements Editor {
     const selectionBefore = this.currentSelection
     const hasSelectionAfter = 'selectionAfter' in options
     const selectionAfter = hasSelectionAfter ? options.selectionAfter ?? null : this.currentSelection
-    this.dirtyPageIndex = this.resolveCurrentSelectionPageIndex() ?? 0
+    this.dirtyPageIndex = this.resolveCommandDirtyPageIndex(command) ?? this.resolveCurrentSelectionPageIndex() ?? 0
+    this.layoutDirtyRange = resolveCommandDirtyRange(command)
 
     if (shouldTrackHistory) {
       this.history.stopCapturing()
@@ -660,7 +673,7 @@ class JWordEditor implements Editor {
     canvasContainer.style.position = 'relative'
 
     const handleScroll = () => {
-      this.renderMountedLayout()
+      this.renderMountedLayout('viewport')
     }
 
     canvasContainer.addEventListener('scroll', handleScroll)
@@ -674,9 +687,10 @@ class JWordEditor implements Editor {
       pool: createCanvasPool({
         createCanvas: () => createCanvasElement(ownerDocument)
       }),
+      pageWrappers: new Map(),
       canvases: new Map()
     }
-    this.renderMountedLayout()
+    this.renderMountedLayout('mount')
   }
 
   destroy(): void {
@@ -707,23 +721,26 @@ class JWordEditor implements Editor {
     commandName: string,
     origin: string
   ): DocumentProjection {
+    this.dirtyPageIndex = 0
+    this.layoutDirtyRange = undefined
     const result = this.pipeline.runMutation(commandName, { origin }, () => {
       replaceStoreDocument(this.store, input)
     })
 
+    this.currentProjection = result.projection
     this.currentSelection = null
 
     return result.projection
   }
 
-  private renderMountedLayout(): void {
+  private renderMountedLayout(reason: RenderReason): void {
     const mountedDom = this.mountedDom
 
     if (mountedDom === undefined) {
       return
     }
 
-    const layout = this.createCurrentLayout()
+    const layout = this.ensureCurrentLayout()
     const nextPageStartKeys = createPageStartKeys(layout)
     const schedule = createLayoutSchedule({
       pageCount: layout.pages.length,
@@ -742,18 +759,34 @@ class JWordEditor implements Editor {
       viewportHeight: mountedDom.canvasContainer.clientHeight || this.pageConfig.heightCssPx,
       bufferPages: 1
     })
+    const selectionRender = this.createSelectionRenderState(layout)
+    const scheduledPageIndexes = resolveScheduledPageIndexes(schedule)
+    const shouldUseSchedule = reason === 'document'
+    const retainedPageIndexes = mergePageIndexes(
+      viewport.retainedPageIndexes,
+      shouldUseSchedule ? scheduledPageIndexes : [],
+      selectionRender.pageIndexes,
+      this.selectionPageIndexes
+    )
+    const rerenderPageIndexes = mergePageIndexes(
+      reason === 'mount' ? viewport.retainedPageIndexes : [],
+      shouldUseSchedule ? scheduledPageIndexes : [],
+      selectionRender.pageIndexes,
+      this.selectionPageIndexes
+    )
 
     mountedDom.canvases = syncPageCanvases({
       pages: layout.pages,
-      retainedPageIndexes: viewport.retainedPageIndexes,
+      retainedPageIndexes,
+      rerenderPageIndexes,
       canvases: mountedDom.canvases,
       pool: mountedDom.pool,
+      ...(selectionRender.selectionRects === undefined ? {} : { selectionRects: selectionRender.selectionRects }),
+      ...(selectionRender.caretRect === undefined ? {} : { caretRect: selectionRender.caretRect }),
       scale: this.pageConfig.scale
     })
 
-    mountedDom.canvasContainer.replaceChildren(
-      ...layout.pages.map((page) => createPageElement(mountedDom, page, this.pageConfig.scale))
-    )
+    syncPageWrappers(mountedDom, layout.pages, this.pageConfig.scale)
     mountedDom.canvasContainer.setAttribute('data-jword-page-count', String(layout.pages.length))
     mountedDom.canvasContainer.setAttribute('data-jword-layout-immediate-pages', schedule.immediatePageIndexes.join(','))
     mountedDom.canvasContainer.setAttribute(
@@ -767,15 +800,30 @@ class JWordEditor implements Editor {
       mountedDom.canvasContainer.setAttribute('data-jword-layout-stopped-at', String(schedule.stoppedAtPageIndex))
     }
 
+    mountedDom.canvasContainer.setAttribute('data-jword-layout-rerender-pages', rerenderPageIndexes.join(','))
     this.pageStartKeys = nextPageStartKeys
+    this.selectionPageIndexes = selectionRender.pageIndexes
   }
 
-  private createCurrentLayout(): DocumentLayout {
-    return layoutDocument({
-      projection: createDocumentProjection(this.store),
+  private ensureCurrentLayout(): DocumentLayout {
+    if (this.cachedLayout !== undefined && !this.layoutNeedsRefresh) {
+      return this.cachedLayout
+    }
+
+    const nextLayout = layoutDocument({
+      projection: this.currentProjection,
       pageConfig: this.pageConfig,
-      fontManager: this.fontManager
+      fontManager: this.fontManager,
+      previousLayout: this.layoutNeedsRefresh ? this.cachedLayout : undefined,
+      dirtyPageIndex: this.layoutNeedsRefresh ? this.dirtyPageIndex : undefined,
+      ...(this.layoutDirtyRange === undefined ? {} : { dirtyRange: this.layoutDirtyRange })
     })
+
+    this.cachedLayout = nextLayout
+    this.layoutNeedsRefresh = false
+    this.layoutDirtyRange = undefined
+
+    return nextLayout
   }
 
   private resolveCurrentSelectionPageIndex(): number | undefined {
@@ -784,9 +832,55 @@ class JWordEditor implements Editor {
     }
 
     try {
-      return getLayoutCaretRect(this.createCurrentLayout(), this.resolveTextPosition(this.currentSelection.anchor))?.pageIndex
+      return getLayoutCaretRect(this.ensureCurrentLayout(), this.resolveTextPosition(this.currentSelection.anchor))?.pageIndex
     } catch {
       return undefined
+    }
+  }
+
+  private resolveCommandDirtyPageIndex(command: Command): number | undefined {
+    if (command.operations.length === 0) {
+      return undefined
+    }
+
+    const layout = this.ensureCurrentLayout()
+    const pageIndexes = mergePageIndexes(...command.operations.map((operation) => resolveOperationDirtyPageIndexes(layout, operation)))
+
+    return pageIndexes[0]
+  }
+
+  private createSelectionRenderState(layout: DocumentLayout): Readonly<{
+    selectionRects?: readonly LayoutRect[]
+    caretRect?: LayoutRect
+    pageIndexes: readonly number[]
+  }> {
+    if (this.currentSelection === null) {
+      return {
+        pageIndexes: []
+      }
+    }
+
+    try {
+      const range = {
+        anchor: this.resolveTextPosition(this.currentSelection.anchor),
+        focus: this.resolveTextPosition(this.currentSelection.focus)
+      }
+      const selectionRects = getLayoutSelectionRects(layout, range)
+      const caretRect = getLayoutCaretRect(layout, range.focus)
+      const pageIndexes = mergePageIndexes(
+        selectionRects.map((rect) => rect.pageIndex),
+        caretRect === undefined ? [] : [caretRect.pageIndex]
+      )
+
+      return {
+        ...(selectionRects.length === 0 ? {} : { selectionRects }),
+        ...(caretRect === undefined ? {} : { caretRect }),
+        pageIndexes
+      }
+    } catch {
+      return {
+        pageIndexes: []
+      }
     }
   }
 
@@ -805,8 +899,46 @@ class JWordEditor implements Editor {
 
 function createPageElement(mountedDom: MountedEditorDom, layoutPage: LayoutBox, scale: number) {
   const page = mountedDom.canvasContainer.ownerDocument.createElement('div')
-  const canvas = mountedDom.canvases.get(layoutPage.pageIndex)
+  updatePageElement(page, mountedDom.canvases.get(layoutPage.pageIndex), layoutPage, scale)
 
+  return page
+}
+
+function syncPageWrappers(
+  mountedDom: MountedEditorDom,
+  pages: readonly LayoutBox[],
+  scale: number
+): void {
+  const livePageIndexes = new Set(pages.map((page) => page.pageIndex))
+
+  for (const [pageIndex, wrapper] of mountedDom.pageWrappers) {
+    if (!livePageIndexes.has(pageIndex)) {
+      wrapper.remove()
+      mountedDom.pageWrappers.delete(pageIndex)
+    }
+  }
+
+  for (const [index, layoutPage] of pages.entries()) {
+    const wrapper = mountedDom.pageWrappers.get(layoutPage.pageIndex)
+      ?? createPageElement(mountedDom, layoutPage, scale)
+
+    mountedDom.pageWrappers.set(layoutPage.pageIndex, wrapper)
+    updatePageElement(wrapper, mountedDom.canvases.get(layoutPage.pageIndex), layoutPage, scale)
+
+    const currentChild = mountedDom.canvasContainer.children.item(index)
+
+    if (currentChild !== wrapper) {
+      mountedDom.canvasContainer.insertBefore(wrapper, currentChild)
+    }
+  }
+}
+
+function updatePageElement(
+  page: HTMLElement,
+  canvas: CanvasLike | undefined,
+  layoutPage: LayoutBox,
+  scale: number
+): void {
   page.className = 'jw-editor__page'
   page.setAttribute('data-jword-page', String(layoutPage.pageIndex))
   page.style.position = 'relative'
@@ -817,12 +949,17 @@ function createPageElement(mountedDom: MountedEditorDom, layoutPage: LayoutBox, 
 
   if (canvas !== undefined) {
     const styledCanvas = canvas as CanvasLike & { className?: string }
+    const canvasNode = canvas as unknown as Node
 
     styledCanvas.className = 'jw-editor__page-canvas'
-    page.append(canvas as unknown as Node)
-  }
+    if (canvasNode.parentNode !== page) {
+      page.append(canvasNode)
+    }
+  } else {
+    const renderedCanvas = page.querySelector('canvas')
 
-  return page
+    renderedCanvas?.remove()
+  }
 }
 
 function createPageStartKeys(layout: DocumentLayout): readonly string[] {
@@ -844,6 +981,104 @@ function createPageStartKey(page: PageBox): string {
   }
 
   return `${page.pageIndex}:empty`
+}
+
+function resolveScheduledPageIndexes(schedule: ReturnType<typeof createLayoutSchedule>): readonly number[] {
+  return mergePageIndexes(
+    schedule.immediatePageIndexes,
+    schedule.deferredChunks.flat()
+  )
+}
+
+function mergePageIndexes(...sources: readonly (readonly number[])[]): readonly number[] {
+  return Object.freeze([...new Set(sources.flat())].sort((left, right) => left - right))
+}
+
+function resolveCommandDirtyRange(command: Command): LayoutDirtyRange | undefined {
+  const firstOperation = command.operations[0]
+
+  if (firstOperation === undefined) {
+    return undefined
+  }
+
+  switch (firstOperation.kind) {
+    case 'insertText':
+    case 'splitBlock':
+      return {
+        anchor: firstOperation.at,
+        focus: firstOperation.at
+      }
+    case 'deleteRange':
+      return {
+        anchor: firstOperation.range.anchor,
+        focus: firstOperation.range.focus
+      }
+    default:
+      return undefined
+  }
+}
+
+function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operation: Operation): readonly number[] {
+  switch (operation.kind) {
+    case 'insertText':
+    case 'splitBlock':
+      return findTextPositionPageIndexes(layout, operation.at)
+    case 'deleteRange':
+      return mergePageIndexes(
+        findTextPositionPageIndexes(layout, operation.range.anchor),
+        findTextPositionPageIndexes(layout, operation.range.focus)
+      )
+    case 'setRunProperties':
+      return findRunPageIndexes(layout, operation.runId)
+    case 'setParagraphProperties':
+      return findParagraphPageIndexes(layout, operation.paragraphId)
+    case 'mergeBlock':
+      return mergePageIndexes(
+        findBlockPageIndexes(layout, operation.targetBlockId),
+        findBlockPageIndexes(layout, operation.sourceBlockId)
+      )
+    case 'insertBlock':
+      if (operation.placement.kind === 'append') {
+        const lastPage = layout.pages[layout.pages.length - 1]
+
+        return lastPage === undefined ? [] : [lastPage.pageIndex]
+      }
+
+      return findBlockPageIndexes(layout, operation.placement.blockId)
+    case 'deleteBlock':
+      return findBlockPageIndexes(layout, operation.blockId)
+  }
+}
+
+function findTextPositionPageIndexes(layout: DocumentLayout, position: TextPosition): readonly number[] {
+  const caretRect = getLayoutCaretRect(layout, position)
+
+  return caretRect === undefined ? [] : [caretRect.pageIndex]
+}
+
+function findRunPageIndexes(layout: DocumentLayout, runId: string): readonly number[] {
+  return mergePageIndexes(
+    layout.pages.flatMap((page) => page.lines.some((line) =>
+      line.fragments.some((fragment) => fragment.runId === runId)
+      || line.inlines.some((inline) => inline.runId === runId)
+    ) ? [page.pageIndex] : [])
+  )
+}
+
+function findParagraphPageIndexes(layout: DocumentLayout, paragraphId: string): readonly number[] {
+  return mergePageIndexes(
+    layout.pages.flatMap((page) => page.paragraphs.some((paragraph) => paragraph.paragraphId === paragraphId) ? [page.pageIndex] : [])
+  )
+}
+
+function findBlockPageIndexes(layout: DocumentLayout, blockId: string): readonly number[] {
+  return mergePageIndexes(
+    findParagraphPageIndexes(layout, blockId),
+    layout.pages.flatMap((page) => page.lines.some((line) =>
+      line.fragments.some((fragment) => fragment.blockId === blockId)
+      || line.inlines.some((inline) => inline.blockId === blockId)
+    ) ? [page.pageIndex] : [])
+  )
 }
 
 function createCanvasElement(ownerDocument: Document): HTMLCanvasElement {
