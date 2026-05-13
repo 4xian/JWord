@@ -7,6 +7,7 @@
  */
 import { createEditor } from '@4xian/jword-core'
 import type { RangeRef, SelectionState } from '@4xian/jword-core'
+import { createGate2FixtureEditorText } from '../../../fixtures/plain-text/gate2-fixture.mjs'
 import type { JWordDemoSelectionInput } from './vite-env'
 import gate2FixtureText from '../../../fixtures/plain-text/gate2-50-pages.txt?raw'
 import './styles.css'
@@ -42,12 +43,7 @@ window.addEventListener(
 )
 
 function createGate2DemoText(fixtureText: string): string {
-  const lines = fixtureText.trim().split(/\r?\n/u).filter((line) => line.length > 0)
-  const rounds = Array.from({ length: 32 }, (_, roundIndex) => roundIndex + 1)
-
-  return rounds
-    .flatMap((round) => lines.map((line) => `${line} Repeat ${String(round).padStart(2, '0')}.`))
-    .join('\n\n')
+  return createGate2FixtureEditorText(fixtureText)
 }
 
 function selectTextRange(input: JWordDemoSelectionInput): SelectionState {

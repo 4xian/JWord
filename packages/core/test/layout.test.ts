@@ -15,6 +15,7 @@ import { layoutDocument } from '../src/layout'
 import { createPageConfig } from '../src/page-config'
 import type { DocumentProjection } from '../src/projection'
 import type { LayoutInput, DocumentLayout } from '../src/layout'
+import type { FontManager } from '../src/font-manager'
 
 describe('Gate 2 布局', () => {
   it('creates paged layout boxes from DocumentProjection without reading writable state', () => {
@@ -198,28 +199,28 @@ describe('Gate 2 布局', () => {
       availableFontFamilies: ['Arial']
     })
     const previousLayout = layoutDocument({
-      projection: createThreePageBreakProjection('Alpha', 'Bravo', 'Charlie'),
+      projection: createExplicitThreePageProjection('Alpha', 'Bravo', 'Charlie'),
       pageConfig,
       fontManager
     })
     const nextInput: LayoutInput & {
       readonly previousLayout: DocumentLayout
     } = {
-      projection: createThreePageBreakProjection('Alpha', 'Bravo', 'Charlie updated'),
+      projection: createExplicitThreePageProjection('Alpha', 'Bravo', 'Charlie updated'),
       pageConfig,
       fontManager,
       dirtyRange: {
         anchor: {
-          sectionId: 'section-layout-break-reuse',
-          blockId: 'paragraph-layout-break-reuse-3',
-          runId: 'run-layout-break-reuse-3',
-          graphemeIndex: 10
+          sectionId: 'section-layout-explicit-break',
+          blockId: 'paragraph-layout-explicit-break-3',
+          runId: 'run-layout-explicit-break-3',
+          graphemeIndex: 0
         },
         focus: {
-          sectionId: 'section-layout-break-reuse',
-          blockId: 'paragraph-layout-break-reuse-3',
-          runId: 'run-layout-break-reuse-3',
-          graphemeIndex: 10
+          sectionId: 'section-layout-explicit-break',
+          blockId: 'paragraph-layout-explicit-break-3',
+          runId: 'run-layout-explicit-break-3',
+          graphemeIndex: 0
         }
       },
       previousLayout
@@ -229,6 +230,70 @@ describe('Gate 2 布局', () => {
 
     expect(nextLayout.pages[0]).toBe(previousLayout.pages[0])
     expect(nextLayout.pages[1]).toBe(previousLayout.pages[1])
+  })
+
+  it('consumes dirtyPageIndex and skips measuring unchanged prefix pages', () => {
+    const pageConfig = createPageConfig()
+    const fontManager = createCountingFontManager()
+    const previousLayout = layoutDocument({
+      projection: createExplicitThreePageProjection('甲甲', '乙乙', '丙丙'),
+      pageConfig,
+      fontManager
+    })
+
+    fontManager.resetMeasurements()
+
+    const nextLayout = layoutDocument({
+      projection: createExplicitThreePageProjection('甲甲', '乙乙', '丙丙新'),
+      pageConfig,
+      fontManager,
+      previousLayout,
+      dirtyPageIndex: 2
+    })
+
+    expect(nextLayout.pages[0]).toBe(previousLayout.pages[0])
+    expect(nextLayout.pages[1]).toBe(previousLayout.pages[1])
+    expect(fontManager.measuredTexts).not.toContain('甲')
+    expect(fontManager.measuredTexts).not.toContain('乙')
+  })
+
+  it('stops after the dirty page once the next page start stays stable', () => {
+    const pageConfig = createPageConfig()
+    const fontManager = createCountingFontManager()
+    const previousLayout = layoutDocument({
+      projection: createExplicitThreePageProjection('甲甲', '乙乙', '丙丙'),
+      pageConfig,
+      fontManager
+    })
+
+    fontManager.resetMeasurements()
+
+    const nextLayout = layoutDocument({
+      projection: createExplicitThreePageProjection('甲甲新', '乙乙', '丙丙'),
+      pageConfig,
+      fontManager,
+      previousLayout,
+      dirtyPageIndex: 0,
+      dirtyRange: {
+        anchor: {
+          sectionId: 'section-layout-explicit-break',
+          blockId: 'paragraph-layout-explicit-break-1',
+          runId: 'run-layout-explicit-break-1',
+          graphemeIndex: 0
+        },
+        focus: {
+          sectionId: 'section-layout-explicit-break',
+          blockId: 'paragraph-layout-explicit-break-1',
+          runId: 'run-layout-explicit-break-1',
+          graphemeIndex: 0
+        }
+      }
+    })
+
+    expect(nextLayout.pages[1]).toBe(previousLayout.pages[1])
+    expect(nextLayout.pages[2]).toBe(previousLayout.pages[2])
+    expect(fontManager.measuredTexts).not.toContain('乙')
+    expect(fontManager.measuredTexts).not.toContain('丙')
   })
 })
 
@@ -342,6 +407,115 @@ function createThreePageBreakProjection(
           ]
         }
       ]
+    }
+  }
+}
+
+function createExplicitThreePageProjection(
+  firstPageText: string,
+  secondPageText: string,
+  thirdPageText: string
+): DocumentProjection {
+  return {
+    document: {
+      kind: 'document',
+      id: 'document-layout-explicit-break',
+      sections: [
+        {
+          kind: 'section',
+          id: 'section-layout-explicit-break',
+          blocks: [
+            {
+              kind: 'paragraph',
+              id: 'paragraph-layout-explicit-break-1',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-layout-explicit-break-1',
+                  properties: {
+                    fontSizePx: 16
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: firstPageText
+                    },
+                    {
+                      kind: 'break',
+                      breakType: 'page'
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              kind: 'paragraph',
+              id: 'paragraph-layout-explicit-break-2',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-layout-explicit-break-2',
+                  properties: {
+                    fontSizePx: 16
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: secondPageText
+                    },
+                    {
+                      kind: 'break',
+                      breakType: 'page'
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              kind: 'paragraph',
+              id: 'paragraph-layout-explicit-break-3',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-layout-explicit-break-3',
+                  properties: {
+                    fontSizePx: 16
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: thirdPageText
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+function createCountingFontManager(): FontManager & {
+  readonly measuredTexts: string[]
+  resetMeasurements(): void
+} {
+  const base = createFontManager({
+    fallbackFontFamily: 'Arial',
+    availableFontFamilies: ['Arial']
+  })
+  const measuredTexts: string[] = []
+
+  return {
+    ...base,
+    measuredTexts,
+    measureText(text, style) {
+      measuredTexts.push(text)
+      return base.measureText(text, style)
+    },
+    resetMeasurements() {
+      measuredTexts.length = 0
     }
   }
 }

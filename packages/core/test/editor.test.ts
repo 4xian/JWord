@@ -19,8 +19,11 @@ describe('createEditor', () => {
     const host = document.createElement('div')
 
     const editor = createEditor()
+    const projection = editor.getProjection()
 
     expect(host.childElementCount).toBe(0)
+    expect(projection.document.id).toBe('document-1')
+    expect(projection.document.sections).toHaveLength(1)
     editor.destroy()
   })
 })

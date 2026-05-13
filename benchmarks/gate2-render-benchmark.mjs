@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
+import { splitGate2FixtureParagraphs } from '../fixtures/plain-text/gate2-fixture.mjs'
 import {
   computeViewportPages,
   createCanvasPool,
@@ -13,7 +14,7 @@ import {
 
 const fixturePath = join('fixtures', 'plain-text', 'gate2-50-pages.txt')
 const fixtureText = readFileSync(fixturePath, 'utf8')
-const fixtureLines = createBenchmarkLines(fixtureText)
+const fixtureLines = splitGate2FixtureParagraphs(fixtureText)
 const pageConfig = createPageConfig()
 const fontManager = createFontManager({
   fallbackFontFamily: 'Arial',
@@ -28,8 +29,8 @@ const layout = layoutDocument({
 })
 const layoutDurationMs = roundMetric(performance.now() - layoutStart)
 
-if (layout.pages.length < 50) {
-  throw new Error(`Gate 2 benchmark expected at least 50 pages, got ${layout.pages.length}.`)
+if (layout.pages.length !== 50) {
+  throw new Error(`Gate 2 benchmark expected exactly 50 pages, got ${layout.pages.length}.`)
 }
 
 const renderStart = performance.now()
@@ -71,13 +72,6 @@ console.log(
     2
   )
 )
-
-function createBenchmarkLines(text) {
-  const lines = text.trim().split('\n').filter((line) => line.length > 0)
-
-  return Array.from({ length: 32 }, (_, roundIndex) => roundIndex + 1)
-    .flatMap((round) => lines.map((line) => `${line} Repeat ${String(round).padStart(2, '0')}.`))
-}
 
 function createProjection(lines) {
   return {

@@ -30,11 +30,11 @@ test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', asy
 
   const container = page.locator('[data-jword-canvas-container]')
 
-  await expect(container).toHaveAttribute('data-jword-page-count', /^([5-9]\d|\d{3,})$/u)
+  await expect(container).toHaveAttribute('data-jword-page-count', '50')
 
   const firstProbe = await readDemoProbe(page)
 
-  expect(firstProbe.pageCount).toBeGreaterThanOrEqual(50)
+  expect(firstProbe.pageCount).toBe(50)
   expect(firstProbe.mountedCanvasCount).toBeLessThanOrEqual(5)
   expect(firstProbe.maxCanvasSidePx).toBeLessThanOrEqual(4096)
   expect(firstProbe.hitPosition).not.toBeNull()

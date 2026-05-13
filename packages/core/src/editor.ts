@@ -420,6 +420,8 @@ interface MountedEditorDom {
   canvases: Map<number, CanvasLike>
 }
 
+type EditorPageElement = HTMLElement
+
 type RenderReason = 'mount' | 'document' | 'selection' | 'viewport'
 
 class JWordEditor implements Editor {
@@ -431,7 +433,7 @@ class JWordEditor implements Editor {
   private readonly fontManager = createFontManager()
   private readonly listeners = new Set<EditorEventListener>()
   private readonly unsubscribePipeline: () => void
-  private currentProjection: DocumentProjection
+  private currentProjection!: DocumentProjection
   private cachedLayout: DocumentLayout | undefined
   private layoutDirtyRange: LayoutDirtyRange | undefined
   private layoutNeedsRefresh = false
@@ -445,7 +447,6 @@ class JWordEditor implements Editor {
   constructor(options?: EditorOptions) {
     this.label = options?.label ?? DEFAULT_EDITOR_LABEL
     this.store = createDocumentStore()
-    this.currentProjection = createDocumentProjection(this.store)
     this.pipeline = createTransactionPipeline(this.store.doc)
     this.history = createHistoryManager(this.store)
     this.unsubscribePipeline = this.pipeline.subscribe((event) => {
@@ -608,8 +609,19 @@ class JWordEditor implements Editor {
 
     const result = this.history.undo()
 
+    if (result.stackItem !== null) {
+      this.currentProjection = createDocumentProjection(this.store)
+      this.layoutNeedsRefresh = true
+      this.dirtyPageIndex = 0
+      this.layoutDirtyRange = undefined
+    }
+
     if (result.metadata?.selectionBefore !== undefined) {
       this.currentSelection = restoreSelection(result.metadata.selectionBefore)
+    }
+
+    if (result.stackItem !== null) {
+      this.renderMountedLayout('document')
     }
 
     return result
@@ -620,8 +632,19 @@ class JWordEditor implements Editor {
 
     const result = this.history.redo()
 
+    if (result.stackItem !== null) {
+      this.currentProjection = createDocumentProjection(this.store)
+      this.layoutNeedsRefresh = true
+      this.dirtyPageIndex = 0
+      this.layoutDirtyRange = undefined
+    }
+
     if (result.metadata?.selectionAfter !== undefined) {
       this.currentSelection = restoreSelection(result.metadata.selectionAfter)
+    }
+
+    if (result.stackItem !== null) {
+      this.renderMountedLayout('document')
     }
 
     return result
@@ -814,8 +837,10 @@ class JWordEditor implements Editor {
       projection: this.currentProjection,
       pageConfig: this.pageConfig,
       fontManager: this.fontManager,
-      previousLayout: this.layoutNeedsRefresh ? this.cachedLayout : undefined,
-      dirtyPageIndex: this.layoutNeedsRefresh ? this.dirtyPageIndex : undefined,
+      ...(this.layoutNeedsRefresh && this.cachedLayout !== undefined
+        ? { previousLayout: this.cachedLayout }
+        : {}),
+      ...(this.layoutNeedsRefresh ? { dirtyPageIndex: this.dirtyPageIndex } : {}),
       ...(this.layoutDirtyRange === undefined ? {} : { dirtyRange: this.layoutDirtyRange })
     })
 
@@ -934,7 +959,7 @@ function syncPageWrappers(
 }
 
 function updatePageElement(
-  page: HTMLElement,
+  page: EditorPageElement,
   canvas: CanvasLike | undefined,
   layoutPage: LayoutBox,
   scale: number

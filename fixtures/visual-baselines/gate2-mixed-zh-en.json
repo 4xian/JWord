@@ -4,10 +4,10 @@
   "case": "中文、英文、数字和标点混排基线",
   "pageCount": 1,
   "lineCount": 4,
-  "fragmentCount": 274,
+  "fragmentCount": 271,
   "renderedPageCount": 1,
-  "drawCallCount": 1099,
-  "drawCallHash": "94c036fd67c7d1dc8398d30c89ceee0f13a967f68b1b58dcf199f28189082beb",
+  "drawCallCount": 1087,
+  "drawCallHash": "ea3d2d2c825c1bd8a71d04ca54d249807cd509958940f206d746d5db8ad9ec6d",
   "notes": [
     "记录中英文混排样本，不声明真实字体测量结果",
     "真实行盒和文本片段数量由 Gate 2 layout 单元测试覆盖"

@@ -14,6 +14,7 @@
     "packages/*/test/**/*.ts",
     "tests/**/*.ts",
     "examples/*/src/**/*.ts",
+    "examples/*/vite.config.ts",
     "examples/*/tests/**/*.ts",
     "benchmarks/**/*.ts"
   ],

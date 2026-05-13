@@ -3,6 +3,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
+import { splitGate2FixtureParagraphs } from '../../fixtures/plain-text/gate2-fixture.mjs'
+
 const roots = ['packages', 'examples']
 const visualBaselineRoot = join('fixtures', 'visual-baselines')
 const packageManager = resolvePackageManager()
@@ -141,6 +143,14 @@ function renderBaseline(fixture) {
   }
 }
 
+function createBaselineLines(fixture, fixtureText) {
+  if (fixture.includes('gate2-50-pages')) {
+    return splitGate2FixtureParagraphs(fixtureText)
+  }
+
+  return fixtureText.trim().split('\n').filter((line) => line.length > 0)
+}
+
 function createBaselinePageConfig(fixture) {
   if (fixture.includes('gate2-50-pages')) {
     return core.createPageConfig()
@@ -157,17 +167,6 @@ function createBaselinePageConfig(fixture) {
       left: core.cssPxToTwips(72)
     }
   })
-}
-
-function createBaselineLines(fixture, fixtureText) {
-  const lines = fixtureText.trim().split('\n').filter((line) => line.length > 0)
-
-  if (!fixture.includes('gate2-50-pages')) {
-    return lines
-  }
-
-  return Array.from({ length: 32 }, (_, roundIndex) => roundIndex + 1)
-    .flatMap((round) => lines.map((line) => `${line} Repeat ${String(round).padStart(2, '0')}.`))
 }
 
 function createProjection(fixture, lines) {

@@ -18,7 +18,7 @@ interface CanvasPixelProbe {
 test('Gate 2 demo paints page content, selection, and caret on a real canvas', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', /^([5-9]\d|\d{3,})$/u)
+  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
 
   const pixels = await page.evaluate((): CanvasPixelProbe => {
     const demo = window.__jwordDemo

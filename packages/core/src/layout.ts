@@ -31,6 +31,8 @@ export interface LayoutInput {
   readonly fontManager: FontManager
   readonly viewport?: LayoutViewport
   readonly dirtyRange?: LayoutDirtyRange
+  readonly previousLayout?: DocumentLayout
+  readonly dirtyPageIndex?: number
 }
 
 export interface LayoutRect {
@@ -159,6 +161,14 @@ interface LayoutCursor {
   x: number
 }
 
+interface IncrementalLayoutContext {
+  readonly previousLayout: DocumentLayout
+  readonly dirtyPageIndex: number
+  readonly prefixPages: readonly PageBox[]
+  readonly sourceProjection: DocumentProjection
+  stoppedAtPageIndex?: number
+}
+
 const PAGE_GAP_TWIPS = 720
 
 /**
@@ -168,32 +178,51 @@ const PAGE_GAP_TWIPS = 720
  * @returns DocumentLayout 和 debug overlay 数据。
  */
 export function layoutDocument(input: LayoutInput): DocumentLayout {
+  const incremental = createIncrementalLayoutContext(input)
+  const layoutInput = createDerivedLayoutInput(input)
+  const sourceProjection = incremental?.sourceProjection ?? input.projection
+  const frozenPrefixPages = incremental?.prefixPages ?? Object.freeze([])
+  const initialPage = createPage(incremental?.dirtyPageIndex ?? 0, input.pageConfig)
   const pages: MutablePageBox[] = []
   const cursor: LayoutCursor = {
-    page: createPage(0, input.pageConfig),
+    page: initialPage,
     paragraph: undefined,
     line: undefined,
-    y: input.pageConfig.marginTwips.top,
-    x: input.pageConfig.marginTwips.left
+    y: initialPage.contentRect.y,
+    x: initialPage.contentRect.x
   }
 
   pages.push(cursor.page)
 
-  for (const section of input.projection.document.sections) {
+  let stoppedEarly = false
+
+  for (const section of sourceProjection.document.sections) {
     for (const block of section.blocks) {
-      layoutBlock(block, section.id, input, cursor, pages)
+      if (layoutBlock(block, section.id, layoutInput, cursor, pages, incremental)) {
+        stoppedEarly = true
+        break
+      }
+    }
+
+    if (stoppedEarly) {
+      break
     }
   }
 
   flushLine(cursor)
 
-  const frozenPages = pages.map(freezePage)
+  const frozenPages = finalizeLayoutPages(pages, incremental)
+  const resultPages = Object.freeze([
+    ...frozenPrefixPages,
+    ...frozenPages,
+    ...resolveReusedSuffixPages(incremental)
+  ])
 
   return Object.freeze({
     kind: 'documentLayout',
-    input,
-    pages: Object.freeze(frozenPages),
-    debugOverlay: createDebugOverlay(frozenPages)
+    input: layoutInput,
+    pages: resultPages,
+    debugOverlay: createDebugOverlay(resultPages)
   })
 }
 
@@ -312,24 +341,339 @@ export function getSelectionRects(layout: DocumentLayout, range: TextRange): rea
   return Object.freeze(rects)
 }
 
+function createIncrementalLayoutContext(input: LayoutInput): IncrementalLayoutContext | undefined {
+  const previousLayout = input.previousLayout
+
+  if (
+    previousLayout === undefined
+    || previousLayout.input.pageConfig !== input.pageConfig
+    || previousLayout.input.fontManager !== input.fontManager
+  ) {
+    return undefined
+  }
+
+  const dirtyPageIndex = resolveDirtyPageIndex(input, previousLayout)
+
+  if (dirtyPageIndex === undefined) {
+    return undefined
+  }
+
+  const startPosition = dirtyPageIndex === 0
+    ? undefined
+    : getPageStartPosition(previousLayout.pages[dirtyPageIndex])
+
+  if (dirtyPageIndex > 0 && startPosition === undefined) {
+    return undefined
+  }
+
+  const sourceProjection = startPosition === undefined
+    ? input.projection
+    : sliceProjectionFromPosition(input.projection, startPosition)
+
+  if (sourceProjection === undefined) {
+    return undefined
+  }
+
+  return {
+    previousLayout,
+    dirtyPageIndex,
+    prefixPages: Object.freeze(previousLayout.pages.slice(0, dirtyPageIndex)),
+    sourceProjection
+  }
+}
+
+function createDerivedLayoutInput(
+  input: LayoutInput
+): LayoutInput {
+  return Object.freeze({
+    projection: input.projection,
+    pageConfig: input.pageConfig,
+    fontManager: input.fontManager,
+    ...(input.viewport === undefined ? {} : { viewport: input.viewport }),
+    ...(input.dirtyRange === undefined ? {} : { dirtyRange: input.dirtyRange })
+  })
+}
+
+function resolveDirtyPageIndex(
+  input: LayoutInput,
+  previousLayout: DocumentLayout
+): number | undefined {
+  if (input.dirtyPageIndex !== undefined && Number.isInteger(input.dirtyPageIndex)) {
+    return clampPageIndex(input.dirtyPageIndex, previousLayout.pages.length)
+  }
+
+  if (input.dirtyRange === undefined) {
+    return undefined
+  }
+
+  const anchorPageIndex = locatePageIndex(previousLayout, input.dirtyRange.anchor)
+  const focusPageIndex = locatePageIndex(previousLayout, input.dirtyRange.focus)
+
+  if (anchorPageIndex === undefined) {
+    return focusPageIndex
+  }
+
+  if (focusPageIndex === undefined) {
+    return anchorPageIndex
+  }
+
+  return Math.min(anchorPageIndex, focusPageIndex)
+}
+
+function clampPageIndex(pageIndex: number, pageCount: number): number | undefined {
+  if (pageCount === 0) {
+    return undefined
+  }
+
+  return Math.min(Math.max(pageIndex, 0), pageCount - 1)
+}
+
+function finalizeLayoutPages(
+  pages: readonly MutablePageBox[],
+  incremental?: IncrementalLayoutContext
+): readonly PageBox[] {
+  const trailingEmptyPage = incremental?.stoppedAtPageIndex === undefined
+    ? false
+    : isTrailingStoppedPage(pages[pages.length - 1], incremental.stoppedAtPageIndex)
+  const activePages = trailingEmptyPage ? pages.slice(0, -1) : pages
+
+  return Object.freeze(activePages.map(freezePage))
+}
+
+function resolveReusedSuffixPages(
+  incremental?: IncrementalLayoutContext
+): readonly PageBox[] {
+  if (incremental?.stoppedAtPageIndex === undefined) {
+    return Object.freeze([])
+  }
+
+  return Object.freeze(incremental.previousLayout.pages.slice(incremental.stoppedAtPageIndex))
+}
+
+function isTrailingStoppedPage(
+  page: MutablePageBox | undefined,
+  stoppedAtPageIndex: number
+): boolean {
+  return page !== undefined
+    && page.pageIndex === stoppedAtPageIndex
+    && page.lines.length === 0
+    && page.paragraphs.every((paragraph) => paragraph.lines.length === 0)
+}
+
+function shouldStopAtStablePage(
+  incremental: IncrementalLayoutContext | undefined,
+  cursor: LayoutCursor,
+  position: TextPosition
+): boolean {
+  if (
+    incremental === undefined
+    || cursor.page.pageIndex <= incremental.dirtyPageIndex
+    || cursor.page.lines.length > 0
+  ) {
+    return false
+  }
+
+  const previousPageStart = getPageStartPosition(incremental.previousLayout.pages[cursor.page.pageIndex])
+
+  if (previousPageStart === undefined || !isSamePosition(previousPageStart, position)) {
+    return false
+  }
+
+  incremental.stoppedAtPageIndex = cursor.page.pageIndex
+
+  return true
+}
+
+function locatePageIndex(
+  layout: DocumentLayout,
+  position: TextPosition
+): number | undefined {
+  return locatePosition(layout, position)?.line.pageIndex
+}
+
+function getPageStartPosition(page: PageBox | undefined): TextPosition | undefined {
+  if (page === undefined) {
+    return undefined
+  }
+
+  for (const line of page.lines) {
+    const fragment = line.fragments[0]
+
+    if (fragment !== undefined) {
+      return fragment.start
+    }
+  }
+
+  return undefined
+}
+
+function sliceProjectionFromPosition(
+  projection: DocumentProjection,
+  start: TextPosition
+): DocumentProjection | undefined {
+  const sections = projection.document.sections
+  const startSectionIndex = findSectionIndex(sections, start.sectionId)
+
+  if (startSectionIndex < 0) {
+    return undefined
+  }
+
+  const slicedSections = sections.slice(startSectionIndex).flatMap((section, sectionOffset) => {
+    if (sectionOffset > 0) {
+      return [section]
+    }
+
+    const startBlockIndex = findBlockIndex(section.blocks, start.blockId)
+
+    if (startBlockIndex < 0) {
+      return []
+    }
+
+    const slicedBlocks = section.blocks.slice(startBlockIndex).flatMap((block, blockOffset) => {
+      if (blockOffset > 0) {
+        return [block]
+      }
+
+      if (block.kind !== 'paragraph') {
+        return []
+      }
+
+      const slicedParagraph = sliceParagraphFromPosition(block, start)
+
+      return slicedParagraph === undefined ? [] : [slicedParagraph]
+    })
+
+    if (slicedBlocks.length === 0) {
+      return []
+    }
+
+    return [{
+      ...section,
+      blocks: Object.freeze(slicedBlocks)
+    }]
+  })
+
+  if (slicedSections.length === 0) {
+    return undefined
+  }
+
+  return {
+    document: {
+      ...projection.document,
+      sections: Object.freeze(slicedSections)
+    }
+  }
+}
+
+function findSectionIndex(
+  sections: readonly { readonly id: string }[],
+  sectionId: string
+): number {
+  return sections.findIndex((section) => section.id === sectionId)
+}
+
+function findBlockIndex(
+  blocks: readonly Block[],
+  blockId: string
+): number {
+  return blocks.findIndex((block) => block.id === blockId)
+}
+
+function sliceParagraphFromPosition(
+  paragraph: Paragraph,
+  start: TextPosition
+): Paragraph | undefined {
+  const startRunIndex = paragraph.runs.findIndex((run) => run.id === start.runId)
+
+  if (startRunIndex < 0) {
+    return undefined
+  }
+
+  const slicedRuns = paragraph.runs.slice(startRunIndex).flatMap((run, runOffset) => {
+    if (runOffset > 0) {
+      return [run]
+    }
+
+    const slicedRun = sliceRunFromPosition(run, start.graphemeIndex)
+
+    return slicedRun === undefined ? [] : [slicedRun]
+  })
+
+  if (slicedRuns.length === 0) {
+    return undefined
+  }
+
+  return {
+    ...paragraph,
+    runs: Object.freeze(slicedRuns)
+  }
+}
+
+function sliceRunFromPosition(
+  run: Run,
+  startGraphemeIndex: number
+): Run | undefined {
+  const slicedInlines: Inline[] = []
+  let remainingGraphemeIndex = startGraphemeIndex
+  let started = false
+
+  for (const inline of run.inlines) {
+    if (started) {
+      slicedInlines.push(inline)
+      continue
+    }
+
+    if (inline.kind !== 'text') {
+      continue
+    }
+
+    const segments = segmentGraphemes(inline.text)
+
+    if (remainingGraphemeIndex >= segments.length) {
+      remainingGraphemeIndex -= segments.length
+      continue
+    }
+
+    started = true
+    slicedInlines.push({
+      ...inline,
+      text: segments.slice(remainingGraphemeIndex).map((segment) => segment.segment).join('')
+    })
+  }
+
+  if (!started) {
+    return undefined
+  }
+
+  return {
+    ...run,
+    inlines: Object.freeze(slicedInlines)
+  }
+}
+
 function layoutBlock(
   block: Block,
   sectionId: string,
   input: LayoutInput,
   cursor: LayoutCursor,
-  pages: MutablePageBox[]
-): void {
+  pages: MutablePageBox[],
+  incremental?: IncrementalLayoutContext
+): boolean {
   if (block.kind !== 'paragraph') {
-    return
+    return false
   }
 
   startParagraph(cursor, sectionId, block, input.pageConfig)
 
   for (const run of block.runs) {
-    layoutRun(run, sectionId, block, input, cursor, pages)
+    if (layoutRun(run, sectionId, block, input, cursor, pages, incremental)) {
+      return true
+    }
   }
 
   flushLine(cursor)
+
+  return false
 }
 
 function layoutRun(
@@ -338,14 +682,26 @@ function layoutRun(
   paragraph: Paragraph,
   input: LayoutInput,
   cursor: LayoutCursor,
-  pages: MutablePageBox[]
-): void {
+  pages: MutablePageBox[],
+  incremental?: IncrementalLayoutContext
+): boolean {
   const style = readRunStyle(run.properties)
   let runGraphemeIndex = 0
 
   for (const inline of run.inlines) {
     if (inline.kind === 'text') {
       for (const segment of segmentGraphemes(inline.text)) {
+        if (
+          shouldStopAtStablePage(incremental, cursor, {
+            sectionId,
+            blockId: paragraph.id,
+            runId: run.id,
+            graphemeIndex: runGraphemeIndex
+          })
+        ) {
+          return true
+        }
+
         const fragmentStyle = style
         const measurement = input.fontManager.measureText(segment.segment, fragmentStyle)
         const width = cssPxToTwips(measurement.widthCssPx)
@@ -353,6 +709,18 @@ function layoutRun(
         const baseline = cssPxToTwips(measurement.baselineCssPx)
 
         ensureLineFits(width, height, cursor, pages, input.pageConfig, sectionId, paragraph)
+
+        if (
+          shouldStopAtStablePage(incremental, cursor, {
+            sectionId,
+            blockId: paragraph.id,
+            runId: run.id,
+            graphemeIndex: runGraphemeIndex
+          })
+        ) {
+          return true
+        }
+
         appendTextFragment({
           cursor,
           sectionId,
@@ -372,6 +740,8 @@ function layoutRun(
       layoutInlineBreak(inline, sectionId, paragraph, run.id, runGraphemeIndex, cursor, pages, input.pageConfig)
     }
   }
+
+  return false
 }
 
 function layoutInlineBreak(
@@ -591,7 +961,7 @@ function startNewPage(
 ): void {
   flushLine(cursor)
 
-  const page = createPage(pages.length, pageConfig)
+  const page = createPage(cursor.page.pageIndex + 1, pageConfig)
 
   pages.push(page)
   cursor.page = page
