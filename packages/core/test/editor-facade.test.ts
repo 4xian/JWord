@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { buildSetBoldCommand } from '../src/command-builders'
 import { createEditor } from '../src/editor'
 import { createSelectionState } from '../src/selection'
 
@@ -123,6 +124,55 @@ describe('Editor facade', () => {
 
     expect(editor.getSelection()).toBeNull()
 
+    editor.destroy()
+  })
+
+  it('通过 facade 暴露 selection formatting state，并在 selection 与命令执行后触发同步事件', () => {
+    const editor = createEditor({ initialText: 'abcdef' })
+    const observedBoldStates: boolean[] = []
+    const anchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 1
+    })
+    const focus = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 5
+    })
+    const selection = createSelectionState(anchor, focus)
+    const unsubscribe = editor.subscribe((event) => {
+      if (event.kind === 'selectionChange' && event.formattingState.run !== null) {
+        observedBoldStates.push(event.formattingState.run.bold.value ?? false)
+      }
+    })
+
+    editor.setSelection(selection)
+
+    expect(editor.getSelectionFormattingState().run?.bold).toEqual({
+      value: false,
+      mixed: false
+    })
+
+    const command = buildSetBoldCommand(editor.getProjection(), editor.getSelection(), true)
+
+    expect(command).not.toBeNull()
+
+    const result = editor.executeCommand(command!, {
+      selectionAfter: selection
+    })
+
+    expect(readParagraphRunTexts(result.projection)).toEqual([['a', 'bcde', 'f']])
+    expect(readParagraphRunProperties(result.projection)).toEqual([[{}, { bold: true }, {}]])
+    expect(editor.getSelectionFormattingState().run?.bold).toEqual({
+      value: true,
+      mixed: false
+    })
+    expect(observedBoldStates).toEqual([false, true])
+
+    unsubscribe()
     editor.destroy()
   })
 
@@ -365,3 +415,19 @@ describe('Editor facade', () => {
     editor.destroy()
   })
 })
+
+function readParagraphRunTexts(projection: ReturnType<ReturnType<typeof createEditor>['getProjection']>) {
+  return projection.document.sections.flatMap((section) =>
+    section.blocks.flatMap((block) => block.kind === 'paragraph'
+      ? [block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join(''))]
+      : [])
+  )
+}
+
+function readParagraphRunProperties(projection: ReturnType<ReturnType<typeof createEditor>['getProjection']>) {
+  return projection.document.sections.flatMap((section) =>
+    section.blocks.flatMap((block) => block.kind === 'paragraph'
+      ? [block.runs.map((run) => run.properties ?? {})]
+      : [])
+  )
+}

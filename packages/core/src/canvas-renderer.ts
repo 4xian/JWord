@@ -19,6 +19,7 @@ export interface RenderPageInput {
   readonly selectionColor?: string
   readonly caretColor?: string
   readonly scale?: number
+  readonly pixelRatio?: number
 }
 
 export interface SyncPageCanvasesInput {
@@ -30,6 +31,7 @@ export interface SyncPageCanvasesInput {
   readonly selectionRects?: readonly LayoutRect[]
   readonly caretRect?: LayoutRect
   readonly scale?: number
+  readonly pixelRatio?: number
 }
 
 const MAX_CANVAS_SIDE_PX = 4096
@@ -42,25 +44,37 @@ export function renderPageCanvas(input: RenderPageInput): void {
     return
   }
 
-  const renderScale = resolveRenderScale(input.page, input.scale ?? 1)
-  const canvasWidth = Math.max(1, Math.round(twipsToCssPx(input.page.width, renderScale)))
-  const canvasHeight = Math.max(1, Math.round(twipsToCssPx(input.page.height, renderScale)))
+  const cssScale = input.scale ?? 1
+  const pixelRatio = Math.max(1, input.pixelRatio ?? 1)
+  const cssWidth = Math.max(1, Math.round(twipsToCssPx(input.page.width, cssScale)))
+  const cssHeight = Math.max(1, Math.round(twipsToCssPx(input.page.height, cssScale)))
+  const backingStoreScale = resolveBackingStoreScale(input.page, cssScale, pixelRatio)
+  const effectivePixelRatio = backingStoreScale / cssScale
+  const canvasWidth = Math.max(1, Math.round(twipsToCssPx(input.page.width, backingStoreScale)))
+  const canvasHeight = Math.max(1, Math.round(twipsToCssPx(input.page.height, backingStoreScale)))
+  const supportsTransform = typeof context.setTransform === 'function'
+  const drawingScale = supportsTransform ? cssScale : backingStoreScale
 
+  applyCanvasDisplaySize(input.canvas, cssWidth, cssHeight)
   input.canvas.width = canvasWidth
   input.canvas.height = canvasHeight
 
+  context.setTransform?.(1, 0, 0, 1, 0, 0)
   context.clearRect(0, 0, canvasWidth, canvasHeight)
+  if (supportsTransform && effectivePixelRatio !== 1) {
+    context.setTransform?.(effectivePixelRatio, 0, 0, effectivePixelRatio, 0, 0)
+  }
   context.fillStyle = input.backgroundColor ?? '#ffffff'
-  context.fillRect(0, 0, canvasWidth, canvasHeight)
+  context.fillRect(0, 0, supportsTransform ? cssWidth : canvasWidth, supportsTransform ? cssHeight : canvasHeight)
 
   for (const rect of input.selectionRects ?? []) {
     if (rect.pageIndex === input.page.pageIndex) {
       context.fillStyle = input.selectionColor ?? '#cfe3ff'
       context.fillRect(
-        toCanvasX(input.page, rect.x, renderScale),
-        toCanvasY(input.page, rect.y, renderScale),
-        twipsToCssPx(rect.width, renderScale),
-        twipsToCssPx(rect.height, renderScale)
+        toCanvasX(input.page, rect.x, drawingScale),
+        toCanvasY(input.page, rect.y, drawingScale),
+        twipsToCssPx(rect.width, drawingScale),
+        twipsToCssPx(rect.height, drawingScale)
       )
     }
   }
@@ -68,12 +82,12 @@ export function renderPageCanvas(input: RenderPageInput): void {
   for (const line of input.page.lines) {
     for (const fragment of line.fragments) {
       context.fillStyle = fragment.style?.color ?? '#111827'
-      context.font = formatCanvasFont(fragment, renderScale)
+      context.font = formatCanvasFont(fragment, drawingScale)
       context.textBaseline = 'alphabetic'
       context.fillText(
         fragment.text,
-        toCanvasX(input.page, fragment.x, renderScale),
-        toCanvasY(input.page, fragment.baseline, renderScale)
+        toCanvasX(input.page, fragment.x, drawingScale),
+        toCanvasY(input.page, fragment.baseline, drawingScale)
       )
     }
   }
@@ -81,10 +95,10 @@ export function renderPageCanvas(input: RenderPageInput): void {
   if (input.caretRect?.pageIndex === input.page.pageIndex) {
     context.fillStyle = input.caretColor ?? '#111827'
     context.fillRect(
-      toCanvasX(input.page, input.caretRect.x, renderScale),
-      toCanvasY(input.page, input.caretRect.y, renderScale),
-      Math.max(1, twipsToCssPx(input.caretRect.width, renderScale)),
-      twipsToCssPx(input.caretRect.height, renderScale)
+      toCanvasX(input.page, input.caretRect.x, drawingScale),
+      toCanvasY(input.page, input.caretRect.y, drawingScale),
+      Math.max(1, twipsToCssPx(input.caretRect.width, drawingScale)),
+      twipsToCssPx(input.caretRect.height, drawingScale)
     )
   }
 }
@@ -105,12 +119,9 @@ export function syncPageCanvases(input: SyncPageCanvasesInput): Map<number, Canv
       continue
     }
 
-    const renderScale = resolveRenderScale(page, input.scale ?? 1)
+    const dimensions = getCanvasDimensions(page, input.scale ?? 1, input.pixelRatio ?? 1)
     const existingCanvas = input.canvases.get(page.pageIndex)
-    const canvas = existingCanvas ?? input.pool.acquire(
-      Math.max(1, Math.round(twipsToCssPx(page.width, renderScale))),
-      Math.max(1, Math.round(twipsToCssPx(page.height, renderScale)))
-    )
+    const canvas = existingCanvas ?? input.pool.acquire(dimensions.width, dimensions.height)
     const shouldRender = existingCanvas === undefined || rerendered === undefined || rerendered.has(page.pageIndex)
 
     if (shouldRender) {
@@ -119,7 +130,8 @@ export function syncPageCanvases(input: SyncPageCanvasesInput): Map<number, Canv
         page,
         ...(input.selectionRects === undefined ? {} : { selectionRects: input.selectionRects }),
         ...(input.caretRect === undefined ? {} : { caretRect: input.caretRect }),
-        ...(input.scale === undefined ? {} : { scale: input.scale })
+        ...(input.scale === undefined ? {} : { scale: input.scale }),
+        ...(input.pixelRatio === undefined ? {} : { pixelRatio: input.pixelRatio })
       }
 
       renderPageCanvas(renderInput)
@@ -131,13 +143,47 @@ export function syncPageCanvases(input: SyncPageCanvasesInput): Map<number, Canv
   return next
 }
 
-function resolveRenderScale(page: LayoutBox, scale: number): number {
-  const rawWidth = twipsToCssPx(page.width, scale)
-  const rawHeight = twipsToCssPx(page.height, scale)
+function applyCanvasDisplaySize(canvas: CanvasLike, width: number, height: number): void {
+  const styledCanvas = canvas as CanvasLike & {
+    style?: {
+      width: string
+      height: string
+      display: string
+    }
+  }
+
+  if (styledCanvas.style === undefined) {
+    return
+  }
+
+  styledCanvas.style.width = `${width}px`
+  styledCanvas.style.height = `${height}px`
+  styledCanvas.style.display = 'block'
+}
+
+function getCanvasDimensions(
+  page: LayoutBox,
+  scale: number,
+  pixelRatio: number
+): Readonly<{
+  width: number
+  height: number
+}> {
+  const backingStoreScale = resolveBackingStoreScale(page, scale, pixelRatio)
+
+  return {
+    width: Math.max(1, Math.round(twipsToCssPx(page.width, backingStoreScale))),
+    height: Math.max(1, Math.round(twipsToCssPx(page.height, backingStoreScale)))
+  }
+}
+
+function resolveBackingStoreScale(page: LayoutBox, scale: number, pixelRatio: number): number {
+  const rawWidth = twipsToCssPx(page.width, scale * pixelRatio)
+  const rawHeight = twipsToCssPx(page.height, scale * pixelRatio)
   const sideScale = Math.min(1, MAX_CANVAS_SIDE_PX / rawWidth, MAX_CANVAS_SIDE_PX / rawHeight)
   const areaScale = Math.min(1, Math.sqrt(MAX_CANVAS_AREA_PX / Math.max(1, rawWidth * rawHeight)))
 
-  return scale * Math.min(sideScale, areaScale)
+  return scale * pixelRatio * Math.min(sideScale, areaScale)
 }
 
 function toCanvasX(page: LayoutBox, x: number, scale: number): number {

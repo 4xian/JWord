@@ -21,7 +21,10 @@ import {
   getTableRows
 } from './document-store'
 import { createJWordError } from './errors'
-import { graphemeIndexToUtf16Index } from './grapheme'
+import {
+  countGraphemes,
+  graphemeIndexToUtf16Index
+} from './grapheme'
 import type {
   BlockContainer,
   BlockRecord,
@@ -94,7 +97,7 @@ export function applyOperation(store: DocumentStore, operation: Operation): void
       deleteRange(store, operation.range.anchor, operation.range.focus)
       break
     case 'setRunProperties':
-      setProperties(findRunLocation(store, operation.runId as RunId).run, DOCUMENT_STORE_FIELDS.run.properties, operation.properties)
+      setRunProperties(store, operation)
       break
     case 'setParagraphProperties':
       setProperties(findBlockLocation(store, operation.paragraphId as BlockId).block, DOCUMENT_STORE_FIELDS.block.properties, operation.properties)
@@ -112,6 +115,65 @@ export function applyOperation(store: DocumentStore, operation: Operation): void
       deleteBlock(store, operation.blockId)
       break
   }
+}
+
+function setRunProperties(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'setRunProperties' }>
+): void {
+  const runLocation = findRunLocation(store, operation.runId as RunId)
+  const range = operation.range
+
+  if (range === undefined) {
+    setProperties(runLocation.run, DOCUMENT_STORE_FIELDS.run.properties, operation.properties)
+    return
+  }
+
+  const runText = getRunText(runLocation.run).toString()
+  const graphemeLength = countGraphemes(runText)
+
+  assertRunPropertyRange(range.startGraphemeIndex, range.endGraphemeIndex, graphemeLength)
+
+  if (range.startGraphemeIndex === 0 && range.endGraphemeIndex === graphemeLength) {
+    setProperties(runLocation.run, DOCUMENT_STORE_FIELDS.run.properties, operation.properties)
+    return
+  }
+
+  let formattedRunLocation = runLocation
+
+  if (range.startGraphemeIndex > 0) {
+    if (range.formattedRunId === undefined) {
+      throw createJWordError('OPERATION_RUN_FORMAT_RANGE_INVALID', '局部 run 格式缺少 formattedRunId', {
+        runId: operation.runId
+      })
+    }
+
+    assertRunIdUnused(store, range.formattedRunId as RunId)
+    formattedRunLocation = splitRunAtGraphemeIndex(
+      store,
+      runLocation,
+      range.startGraphemeIndex,
+      range.formattedRunId as RunId
+    )
+  }
+
+  if (range.endGraphemeIndex < graphemeLength) {
+    if (range.trailingRunId === undefined) {
+      throw createJWordError('OPERATION_RUN_FORMAT_RANGE_INVALID', '局部 run 格式缺少 trailingRunId', {
+        runId: operation.runId
+      })
+    }
+
+    assertRunIdUnused(store, range.trailingRunId as RunId)
+    splitRunAtGraphemeIndex(
+      store,
+      formattedRunLocation,
+      range.endGraphemeIndex - range.startGraphemeIndex,
+      range.trailingRunId as RunId
+    )
+  }
+
+  setProperties(formattedRunLocation.run, DOCUMENT_STORE_FIELDS.run.properties, operation.properties)
 }
 
 function insertText(store: DocumentStore, position: TextPosition, text: string): void {
@@ -312,6 +374,7 @@ interface RunLocation {
   readonly run: RunRecord
   readonly container: RunContainer
   readonly index: number
+  readonly blockId: BlockId
 }
 
 function findSection(store: DocumentStore, sectionId: SectionId): SectionRecord {
@@ -462,12 +525,13 @@ function findRunLocationInBlock(block: BlockRecord, runId: RunId): RunLocation {
 function findRunLocationInParagraph(block: BlockRecord, runId: RunId): RunLocation | undefined {
   const runs = getParagraphRuns(block)
   const runRecords = runs.toArray()
+  const blockId = readRequiredString(block, DOCUMENT_STORE_FIELDS.block.id) as BlockId
 
   for (let index = 0; index < runRecords.length; index += 1) {
     const run = runRecords[index]
 
     if (run !== undefined && run.get(DOCUMENT_STORE_FIELDS.run.id) === runId) {
-      return { run, container: runs, index }
+      return { run, container: runs, index, blockId }
     }
   }
 
@@ -584,6 +648,36 @@ function createSplitRunRecord(runId: RunId, textValue: string, source: RunRecord
   return clone
 }
 
+function splitRunAtGraphemeIndex(
+  store: DocumentStore,
+  runLocation: RunLocation,
+  graphemeIndex: number,
+  newRunId: RunId
+): RunLocation {
+  const sharedText = getRunText(runLocation.run)
+  const utf16Index = graphemeIndexToUtf16Index(sharedText.toString(), graphemeIndex)
+  const tailText = sharedText.toString().slice(utf16Index)
+  const splitRun = createSplitRunRecord(newRunId, tailText, runLocation.run)
+
+  runLocation.container.insert(runLocation.index + 1, [splitRun])
+  migrateTextAnchorsAfterSplit(sharedText, store.doc, utf16Index, {
+    blockId: runLocation.blockId,
+    runId: newRunId,
+    text: getRunText(splitRun)
+  })
+
+  if (tailText.length > 0) {
+    sharedText.delete(utf16Index, tailText.length)
+  }
+
+  return {
+    run: splitRun,
+    container: runLocation.container,
+    index: runLocation.index + 1,
+    blockId: runLocation.blockId
+  }
+}
+
 function collectText(run: Run): string {
   return run.inlines
     .filter((inline): inline is TextInline => inline.kind === 'text')
@@ -686,4 +780,24 @@ function toDocumentStoreJson(value: unknown): DocumentStoreJson {
   }
 
   throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', '属性值必须是 JSON 兼容数据')
+}
+
+function assertRunPropertyRange(
+  startGraphemeIndex: number,
+  endGraphemeIndex: number,
+  graphemeLength: number
+): void {
+  if (
+    !Number.isInteger(startGraphemeIndex)
+    || !Number.isInteger(endGraphemeIndex)
+    || startGraphemeIndex < 0
+    || endGraphemeIndex > graphemeLength
+    || startGraphemeIndex >= endGraphemeIndex
+  ) {
+    throw createJWordError('OPERATION_RUN_FORMAT_RANGE_INVALID', '局部 run 格式范围非法', {
+      startGraphemeIndex,
+      endGraphemeIndex,
+      graphemeLength
+    })
+  }
 }

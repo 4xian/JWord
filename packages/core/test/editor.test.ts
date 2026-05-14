@@ -8,7 +8,7 @@
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md#45-模块边界。
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createEditor } from '../src/index'
 import { twipsToCssPx } from '../src/page-config'
@@ -108,6 +108,9 @@ describe('Editor mount/destroy lifecycle', () => {
       set textBaseline(value: CanvasTextBaseline) {
         calls.push(`textBaseline:${value}`)
       },
+      setTransform(a: number, b: number, c: number, d: number, e: number, f: number) {
+        calls.push(`setTransform:${a},${b},${c},${d},${e},${f}`)
+      },
       clearRect(x: number, y: number, width: number, height: number) {
         calls.push(`clearRect:${x},${y},${width},${height}`)
       },
@@ -181,6 +184,9 @@ describe('Editor mount/destroy lifecycle', () => {
       set textBaseline(value: CanvasTextBaseline) {
         calls.push(`textBaseline:${value}`)
       },
+      setTransform(a: number, b: number, c: number, d: number, e: number, f: number) {
+        calls.push(`setTransform:${a},${b},${c},${d},${e},${f}`)
+      },
       clearRect(x: number, y: number, width: number, height: number) {
         calls.push(`clearRect:${x},${y},${width},${height}`)
       },
@@ -233,6 +239,102 @@ describe('Editor mount/destroy lifecycle', () => {
       expect(calls.filter((call) => call.startsWith('clearRect:'))).toHaveLength(1)
     } finally {
       editor.destroy()
+      Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+        configurable: true,
+        value: originalGetContext
+      })
+      Object.defineProperty(window.navigator, 'userAgent', {
+        configurable: true,
+        value: originalUserAgent
+      })
+    }
+  })
+
+  it('先同步重绘当前脏页，再异步执行后续 deferred chunks', () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    const calls: string[] = []
+    const originalUserAgent = window.navigator.userAgent
+    const originalGetContext = HTMLCanvasElement.prototype.getContext
+    const context = {
+      set fillStyle(value: string) {
+        calls.push(`fillStyle:${value}`)
+      },
+      set font(value: string) {
+        calls.push(`font:${value}`)
+      },
+      set textBaseline(value: CanvasTextBaseline) {
+        calls.push(`textBaseline:${value}`)
+      },
+      setTransform(a: number, b: number, c: number, d: number, e: number, f: number) {
+        calls.push(`setTransform:${a},${b},${c},${d},${e},${f}`)
+      },
+      clearRect(x: number, y: number, width: number, height: number) {
+        calls.push(`clearRect:${x},${y},${width},${height}`)
+      },
+      fillRect(x: number, y: number, width: number, height: number) {
+        calls.push(`fillRect:${x},${y},${width},${height}`)
+      },
+      fillText(text: string, x: number, y: number) {
+        calls.push(`fillText:${text},${x},${y}`)
+      }
+    } as unknown as CanvasRenderingContext2D
+    const getContext: HTMLCanvasElement['getContext'] = ((contextId: string) =>
+      contextId === '2d' ? context : null) as HTMLCanvasElement['getContext']
+    const text = '分页文本 '.repeat(6000)
+    const editor = createEditor({ initialText: text })
+
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: 'Desktop Chrome'
+    })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: getContext
+    })
+
+    try {
+      editor.mount(host)
+
+      expect(editor.getLayout().pages.length).toBeGreaterThan(4)
+
+      calls.length = 0
+
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 0
+      })
+
+      editor.executeCommand({
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: editor.resolveTextPosition(anchor),
+            text: '新增分页文本 '.repeat(3000)
+          }
+        ]
+      })
+
+      const canvasContainer = host.querySelector('[data-jword-canvas-container]') as HTMLElement | null
+      const immediateClears = calls.filter((call) => call.startsWith('clearRect:'))
+
+      expect(canvasContainer?.getAttribute('data-jword-layout-immediate-pages')).toBe('0')
+      expect(canvasContainer?.getAttribute('data-jword-layout-deferred-chunks')).not.toBe('')
+      expect(canvasContainer?.getAttribute('data-jword-layout-rerender-pages')).toBe('0')
+      expect(immediateClears).toHaveLength(1)
+
+      vi.runOnlyPendingTimers()
+
+      const totalClears = calls.filter((call) => call.startsWith('clearRect:'))
+
+      expect(totalClears.length).toBeGreaterThan(immediateClears.length)
+      expect(canvasContainer?.getAttribute('data-jword-layout-rerender-pages')).not.toBe('0')
+    } finally {
+      editor.destroy()
+      vi.useRealTimers()
       Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
         configurable: true,
         value: originalGetContext

@@ -90,9 +90,18 @@ export interface DeleteRangeOperation extends OperationBase<'deleteRange'> {
 }
 
 /** 设置 run 级属性。 */
+export interface SetRunPropertiesRange {
+  readonly startGraphemeIndex: number
+  readonly endGraphemeIndex: number
+  readonly formattedRunId?: string
+  readonly trailingRunId?: string
+}
+
+/** 设置 run 级属性。 */
 export interface SetRunPropertiesOperation extends OperationBase<'setRunProperties'> {
   readonly runId: string
   readonly properties: ModelProperties
+  readonly range?: SetRunPropertiesRange
 }
 
 /** 设置段落级属性。 */

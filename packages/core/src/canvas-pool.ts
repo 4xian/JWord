@@ -10,6 +10,7 @@ export interface CanvasRenderingContextLike {
   fillStyle: unknown
   font: unknown
   textBaseline: unknown
+  setTransform?(a: number, b: number, c: number, d: number, e: number, f: number): void
   clearRect(x: number, y: number, width: number, height: number): void
   fillRect(x: number, y: number, width: number, height: number): void
   fillText(text: string, x: number, y: number): void

@@ -43,6 +43,7 @@ describe('renderPageCanvas', () => {
     })
 
     expect(canvas.calls).toEqual([
+      'setTransform:1,0,0,1,0,0',
       'clearRect:0,0,600,800',
       'fillStyle:#ffffff',
       'fillRect:0,0,600,800',
@@ -55,6 +56,24 @@ describe('renderPageCanvas', () => {
       'fillStyle:#111827',
       'fillRect:130,96,2,18'
     ])
+  })
+
+  it('在高 DPR 屏幕上放大 backing store，但保持页面 CSS 尺寸不变', () => {
+    const canvas = createMockCanvas()
+    const page = createPageLayout(0, '高清文本') satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page,
+      pixelRatio: 2
+    })
+
+    expect(canvas.width).toBe(1200)
+    expect(canvas.height).toBe(1600)
+    expect(canvas.style.width).toBe('600px')
+    expect(canvas.style.height).toBe('800px')
+    expect(canvas.calls).toContain('setTransform:2,0,0,2,0,0')
+    expect(canvas.calls).toContain('fillText:高清文本,72,110')
   })
 
   it('只绘制属于当前页的 selection 和 caret', () => {
@@ -159,6 +178,11 @@ describe('syncPageCanvases', () => {
 
 interface MockCanvas extends CanvasLike {
   readonly calls: string[]
+  readonly style: {
+    width: string
+    height: string
+    display: string
+  }
 }
 
 function createMockCanvas(): MockCanvas {
@@ -172,6 +196,9 @@ function createMockCanvas(): MockCanvas {
     },
     set textBaseline(value: CanvasTextBaseline) {
       calls.push(`textBaseline:${value}`)
+    },
+    setTransform: (a, b, c, d, e, f) => {
+      calls.push(`setTransform:${a},${b},${c},${d},${e},${f}`)
     },
     clearRect: (x, y, width, height) => {
       calls.push(`clearRect:${x},${y},${width},${height}`)
@@ -188,6 +215,11 @@ function createMockCanvas(): MockCanvas {
     width: 0,
     height: 0,
     calls,
+    style: {
+      width: '',
+      height: '',
+      display: ''
+    },
     getContext: () => context
   }
 }

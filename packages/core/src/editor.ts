@@ -11,6 +11,7 @@ import * as Y from 'yjs'
 import { createCanvasPool } from './canvas-pool'
 import type { CanvasLike } from './canvas-pool'
 import { syncPageCanvases } from './canvas-renderer'
+import { buildSetBoldCommand, buildSetItalicCommand } from './command-builders'
 import {
   DOCUMENT_STORE_FIELDS,
   DOCUMENT_STORE_SCHEMA_VERSION,
@@ -28,6 +29,10 @@ import {
 import type { BlockRecord, DocumentStore, DocumentStoreJson, ResourceId, StyleId } from './document-store'
 import { createJWordError } from './errors'
 import { createFontManager } from './font-manager'
+import { createSelectionFormattingState } from './formatting-state'
+import type { SelectionFormattingState } from './formatting-types'
+import { countGraphemes } from './grapheme'
+import { splitGraphemes } from './grapheme'
 import { DEFAULT_HISTORY_ORIGIN, createHistoryManager } from './history'
 import type { HistoryOperationResult } from './history'
 import {
@@ -38,13 +43,19 @@ import {
 } from './layout'
 import type { DocumentLayout, LayoutBox, LayoutDirtyRange, LayoutRect, PageBox } from './layout'
 import { createLayoutSchedule } from './layout-scheduler'
-import { createPageConfig, twipsToCssPx } from './page-config'
-import { createTextAnchorRef, resolveAnchorRef } from './position'
+import { cssPxToTwips, createPageConfig, twipsToCssPx } from './page-config'
+import { createAnchorRef, createTextAnchorRef, resolveAnchorRef } from './position'
 import type { AnchorRef, BlockId, CommentId, DocumentId, RangeRef, RevisionId, RunId, SectionId } from './position'
 import { createGraphemeIndex } from './position'
 import { createDocumentProjection } from './projection'
 import type { DocumentProjection } from './projection'
-import { createSelectionRestoreSnapshot, restoreSelection } from './selection'
+import { collectSelectionTargets } from './selection-targets'
+import {
+  createSelectionRestoreSnapshot,
+  createSelectionState,
+  isSelectionCollapsed,
+  restoreSelection
+} from './selection'
 import type { SelectionState } from './selection'
 import { createTransactionPipeline } from './transaction'
 import type { Command, Operation, TextPosition, TransactionEvent, TransactionMetadata, TransactionResult } from './transaction'
@@ -170,6 +181,11 @@ export type EditorEvent =
   | {
       readonly kind: 'transaction'
       readonly transaction: TransactionEvent
+    }
+  | {
+      readonly kind: 'selectionChange'
+      readonly selection: SelectionState | null
+      readonly formattingState: SelectionFormattingState
     }
   | {
       readonly kind: 'destroyed'
@@ -302,6 +318,15 @@ export interface Editor {
   getSelection(): SelectionState | null
 
   /**
+   * 读取当前 selection 对应的只读 formatting state。
+   *
+   * @returns 当前选区聚合出的 run/paragraph 格式状态。
+   * @remarks
+   * 供 toolbar 等 UI 同步状态时直接读取，不需要访问 projection 细节。
+   */
+  getSelectionFormattingState(): SelectionFormattingState
+
+  /**
    * 设置当前 facade runtime 选择区。
    *
    * @param selection 当前选择区；传入 null 表示清空选择区。
@@ -414,10 +439,38 @@ export interface Editor {
 interface MountedEditorDom {
   readonly shell: HTMLElement
   readonly canvasContainer: HTMLElement
+  readonly hiddenTextarea: HTMLTextAreaElement
+  readonly liveRegion: HTMLElement
+  readonly textMirror: HTMLElement
   readonly handleScroll: () => void
+  readonly handleInput: (event: Event) => void
+  readonly handleKeyDown: (event: KeyboardEvent) => void
+  readonly handleCopy: (event: Event) => void
+  readonly handleCut: (event: Event) => void
+  readonly handlePaste: (event: Event) => void
+  readonly handlePointerDown: (event: MouseEvent) => void
+  readonly handlePointerMove: (event: MouseEvent) => void
+  readonly handlePointerUp: (event: MouseEvent) => void
+  readonly handleDoubleClick: (event: MouseEvent) => void
+  readonly handleCompositionStart: (event: Event) => void
+  readonly handleCompositionUpdate: (event: Event) => void
+  readonly handleCompositionEnd: (event: Event) => void
   readonly pool: ReturnType<typeof createCanvasPool>
   readonly pageWrappers: Map<number, HTMLElement>
+  readonly inputState: {
+    isComposing: boolean
+    compositionText: string
+  }
+  readonly pointerState: {
+    anchor: AnchorRef | null
+  }
   canvases: Map<number, CanvasLike>
+  deferredRender: {
+    timeoutId: ReturnType<typeof setTimeout>
+    chunks: readonly (readonly number[])[]
+    nextChunkIndex: number
+    layout: DocumentLayout
+  } | undefined
 }
 
 type EditorPageElement = HTMLElement
@@ -557,11 +610,18 @@ class JWordEditor implements Editor {
     return this.currentSelection
   }
 
+  getSelectionFormattingState(): SelectionFormattingState {
+    this.assertActive()
+
+    return createSelectionFormattingState(this.currentProjection, this.currentSelection)
+  }
+
   setSelection(selection: SelectionState | null): void {
     this.assertActive()
 
     this.currentSelection = selection
     this.renderMountedLayout('selection')
+    this.emitSelectionChange()
   }
 
   executeCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
@@ -594,6 +654,9 @@ class JWordEditor implements Editor {
         this.currentSelection = options.selectionAfter ?? null
       }
 
+      this.refreshMountedSelectionRuntime(selectionBefore)
+      this.emitSelectionChange()
+
       return result
     } catch (error) {
       if (shouldTrackHistory) {
@@ -623,6 +686,7 @@ class JWordEditor implements Editor {
     if (result.stackItem !== null) {
       this.renderMountedLayout('document')
     }
+    this.emitSelectionChange()
 
     return result
   }
@@ -646,6 +710,7 @@ class JWordEditor implements Editor {
     if (result.stackItem !== null) {
       this.renderMountedLayout('document')
     }
+    this.emitSelectionChange()
 
     return result
   }
@@ -688,8 +753,12 @@ class JWordEditor implements Editor {
     const canvasContainer = ownerDocument.createElement('div')
     canvasContainer.className = 'jw-editor__canvas-container'
     canvasContainer.setAttribute('data-jword-canvas-container', '')
+    const hiddenTextarea = createHiddenTextareaElement(ownerDocument)
+    const liveRegion = createLiveRegionElement(ownerDocument)
+    const textMirror = createTextMirrorElement(ownerDocument)
     shell.style.width = '100%'
     shell.style.height = '100%'
+    shell.style.position = 'relative'
     canvasContainer.style.width = '100%'
     canvasContainer.style.height = '100%'
     canvasContainer.style.overflow = 'auto'
@@ -698,20 +767,91 @@ class JWordEditor implements Editor {
     const handleScroll = () => {
       this.renderMountedLayout('viewport')
     }
+    const handleInput = (event: Event) => {
+      this.handleRuntimeInput(event)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      this.handleRuntimeKeyDown(event)
+    }
+    const handleCopy = (event: Event) => {
+      this.handleRuntimeCopy(event)
+    }
+    const handleCut = (event: Event) => {
+      this.handleRuntimeCut(event)
+    }
+    const handlePaste = (event: Event) => {
+      this.handleRuntimePaste(event)
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      this.handleRuntimePointerDown(event)
+    }
+    const handlePointerMove = (event: MouseEvent) => {
+      this.handleRuntimePointerMove(event)
+    }
+    const handlePointerUp = (event: MouseEvent) => {
+      this.handleRuntimePointerUp(event)
+    }
+    const handleDoubleClick = (event: MouseEvent) => {
+      this.handleRuntimeDoubleClick(event)
+    }
+    const handleCompositionStart = (event: Event) => {
+      this.handleRuntimeCompositionStart(event)
+    }
+    const handleCompositionUpdate = (event: Event) => {
+      this.handleRuntimeCompositionUpdate(event)
+    }
+    const handleCompositionEnd = (event: Event) => {
+      this.handleRuntimeCompositionEnd(event)
+    }
 
     canvasContainer.addEventListener('scroll', handleScroll)
-    shell.append(canvasContainer)
+    canvasContainer.addEventListener('mousedown', handlePointerDown)
+    canvasContainer.addEventListener('mousemove', handlePointerMove)
+    canvasContainer.addEventListener('mouseup', handlePointerUp)
+    canvasContainer.addEventListener('dblclick', handleDoubleClick)
+    hiddenTextarea.addEventListener('input', handleInput)
+    hiddenTextarea.addEventListener('keydown', handleKeyDown)
+    hiddenTextarea.addEventListener('copy', handleCopy)
+    hiddenTextarea.addEventListener('cut', handleCut)
+    hiddenTextarea.addEventListener('paste', handlePaste)
+    hiddenTextarea.addEventListener('compositionstart', handleCompositionStart)
+    hiddenTextarea.addEventListener('compositionupdate', handleCompositionUpdate)
+    hiddenTextarea.addEventListener('compositionend', handleCompositionEnd)
+    shell.append(canvasContainer, hiddenTextarea, liveRegion, textMirror)
     host.append(shell)
 
     this.mountedDom = {
       shell,
       canvasContainer,
+      hiddenTextarea,
+      liveRegion,
+      textMirror,
       handleScroll,
+      handleInput,
+      handleKeyDown,
+      handleCopy,
+      handleCut,
+      handlePaste,
+      handlePointerDown,
+      handlePointerMove,
+      handlePointerUp,
+      handleDoubleClick,
+      handleCompositionStart,
+      handleCompositionUpdate,
+      handleCompositionEnd,
       pool: createCanvasPool({
         createCanvas: () => createCanvasElement(ownerDocument)
       }),
       pageWrappers: new Map(),
-      canvases: new Map()
+      inputState: {
+        isComposing: false,
+        compositionText: ''
+      },
+      pointerState: {
+        anchor: null
+      },
+      canvases: new Map(),
+      deferredRender: undefined
     }
     this.renderMountedLayout('mount')
   }
@@ -722,7 +862,20 @@ class JWordEditor implements Editor {
     }
 
     if (this.mountedDom !== undefined) {
+      this.cancelDeferredRender()
       this.mountedDom.canvasContainer.removeEventListener('scroll', this.mountedDom.handleScroll)
+      this.mountedDom.canvasContainer.removeEventListener('mousedown', this.mountedDom.handlePointerDown)
+      this.mountedDom.canvasContainer.removeEventListener('mousemove', this.mountedDom.handlePointerMove)
+      this.mountedDom.canvasContainer.removeEventListener('mouseup', this.mountedDom.handlePointerUp)
+      this.mountedDom.canvasContainer.removeEventListener('dblclick', this.mountedDom.handleDoubleClick)
+      this.mountedDom.hiddenTextarea.removeEventListener('input', this.mountedDom.handleInput)
+      this.mountedDom.hiddenTextarea.removeEventListener('keydown', this.mountedDom.handleKeyDown)
+      this.mountedDom.hiddenTextarea.removeEventListener('copy', this.mountedDom.handleCopy)
+      this.mountedDom.hiddenTextarea.removeEventListener('cut', this.mountedDom.handleCut)
+      this.mountedDom.hiddenTextarea.removeEventListener('paste', this.mountedDom.handlePaste)
+      this.mountedDom.hiddenTextarea.removeEventListener('compositionstart', this.mountedDom.handleCompositionStart)
+      this.mountedDom.hiddenTextarea.removeEventListener('compositionupdate', this.mountedDom.handleCompositionUpdate)
+      this.mountedDom.hiddenTextarea.removeEventListener('compositionend', this.mountedDom.handleCompositionEnd)
 
       for (const canvas of this.mountedDom.canvases.values()) {
         this.mountedDom.pool.release(canvas)
@@ -744,6 +897,8 @@ class JWordEditor implements Editor {
     commandName: string,
     origin: string
   ): DocumentProjection {
+    const previousSelection = this.currentSelection
+
     this.dirtyPageIndex = 0
     this.layoutDirtyRange = undefined
     const result = this.pipeline.runMutation(commandName, { origin }, () => {
@@ -752,6 +907,8 @@ class JWordEditor implements Editor {
 
     this.currentProjection = result.projection
     this.currentSelection = null
+    this.refreshMountedSelectionRuntime(previousSelection)
+    this.emitSelectionChange()
 
     return result.projection
   }
@@ -761,6 +918,10 @@ class JWordEditor implements Editor {
 
     if (mountedDom === undefined) {
       return
+    }
+
+    if (reason === 'document') {
+      this.cancelDeferredRender()
     }
 
     const layout = this.ensureCurrentLayout()
@@ -783,33 +944,30 @@ class JWordEditor implements Editor {
       bufferPages: 1
     })
     const selectionRender = this.createSelectionRenderState(layout)
-    const scheduledPageIndexes = resolveScheduledPageIndexes(schedule)
     const shouldUseSchedule = reason === 'document'
+    const scheduledImmediatePageIndexes = shouldUseSchedule ? schedule.immediatePageIndexes : []
     const retainedPageIndexes = mergePageIndexes(
       viewport.retainedPageIndexes,
-      shouldUseSchedule ? scheduledPageIndexes : [],
+      scheduledImmediatePageIndexes,
       selectionRender.pageIndexes,
       this.selectionPageIndexes
     )
     const rerenderPageIndexes = mergePageIndexes(
       reason === 'mount' ? viewport.retainedPageIndexes : [],
-      shouldUseSchedule ? scheduledPageIndexes : [],
+      scheduledImmediatePageIndexes,
       selectionRender.pageIndexes,
       this.selectionPageIndexes
     )
 
-    mountedDom.canvases = syncPageCanvases({
+    mountedDom.canvases = renderPageBatch({
+      mountedDom,
       pages: layout.pages,
       retainedPageIndexes,
       rerenderPageIndexes,
-      canvases: mountedDom.canvases,
-      pool: mountedDom.pool,
-      ...(selectionRender.selectionRects === undefined ? {} : { selectionRects: selectionRender.selectionRects }),
-      ...(selectionRender.caretRect === undefined ? {} : { caretRect: selectionRender.caretRect }),
-      scale: this.pageConfig.scale
+      selectionRender,
+      scale: this.pageConfig.scale,
+      pixelRatio: resolveCanvasPixelRatio(mountedDom)
     })
-
-    syncPageWrappers(mountedDom, layout.pages, this.pageConfig.scale)
     mountedDom.canvasContainer.setAttribute('data-jword-page-count', String(layout.pages.length))
     mountedDom.canvasContainer.setAttribute('data-jword-layout-immediate-pages', schedule.immediatePageIndexes.join(','))
     mountedDom.canvasContainer.setAttribute(
@@ -826,6 +984,11 @@ class JWordEditor implements Editor {
     mountedDom.canvasContainer.setAttribute('data-jword-layout-rerender-pages', rerenderPageIndexes.join(','))
     this.pageStartKeys = nextPageStartKeys
     this.selectionPageIndexes = selectionRender.pageIndexes
+    this.syncMountedAssistiveDom(layout)
+
+    if (reason === 'document' && schedule.deferredChunks.length > 0) {
+      this.scheduleDeferredRender(layout, schedule.deferredChunks)
+    }
   }
 
   private ensureCurrentLayout(): DocumentLayout {
@@ -915,11 +1078,1320 @@ class JWordEditor implements Editor {
     }
   }
 
+  private emitSelectionChange(): void {
+    this.emit({
+      kind: 'selectionChange',
+      selection: this.currentSelection,
+      formattingState: createSelectionFormattingState(this.currentProjection, this.currentSelection)
+    })
+  }
+
+  private syncMountedAssistiveDom(layout: DocumentLayout): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined) {
+      return
+    }
+
+    mountedDom.textMirror.textContent = readProjectionPlainText(this.currentProjection)
+    syncHiddenTextareaPosition({
+      mountedDom,
+      caretRect: this.resolveSelectionCaretRect(layout),
+      scale: this.pageConfig.scale
+    })
+  }
+
+  private resolveSelectionCaretRect(layout: DocumentLayout): LayoutRect | undefined {
+    if (this.currentSelection === null) {
+      return undefined
+    }
+
+    try {
+      return getLayoutCaretRect(layout, this.resolveTextPosition(this.currentSelection.focus))
+    } catch {
+      return undefined
+    }
+  }
+
+  private refreshMountedSelectionRuntime(previousSelection: SelectionState | null): void {
+    if (this.mountedDom === undefined) {
+      return
+    }
+
+    if (
+      previousSelection !== this.currentSelection
+      || (this.currentSelection === null && this.selectionPageIndexes.length > 0)
+    ) {
+      this.renderMountedLayout('selection')
+      return
+    }
+
+    this.syncMountedAssistiveDom(this.ensureCurrentLayout())
+  }
+
+  private handleRuntimeInput(event: Event): void {
+    const textarea = event.currentTarget
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      return
+    }
+
+    if (this.mountedDom?.inputState.isComposing) {
+      return
+    }
+
+    const text = textarea.value
+
+    textarea.value = ''
+
+    if (text.length === 0) {
+      return
+    }
+
+    this.runProtectedInputHandler(() => {
+      this.insertTextFromRuntime(text)
+    })
+  }
+
+  private handleRuntimeCompositionStart(event: Event): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined) {
+      return
+    }
+
+    mountedDom.inputState.isComposing = true
+    mountedDom.inputState.compositionText = readEventData(event)
+  }
+
+  private handleRuntimeCompositionUpdate(event: Event): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined) {
+      return
+    }
+
+    mountedDom.inputState.compositionText = readEventData(event)
+  }
+
+  private handleRuntimeCompositionEnd(event: Event): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined) {
+      return
+    }
+
+    const text = readEventData(event) || mountedDom.inputState.compositionText || mountedDom.hiddenTextarea.value
+
+    mountedDom.inputState.isComposing = false
+    mountedDom.inputState.compositionText = ''
+    mountedDom.hiddenTextarea.value = ''
+
+    if (text.length === 0) {
+      return
+    }
+
+    this.runProtectedInputHandler(() => {
+      this.insertTextFromRuntime(text)
+    })
+  }
+
+  private handleRuntimeKeyDown(event: KeyboardEvent): void {
+    const lowerKey = event.key.toLowerCase()
+    const usesCommandModifier = event.metaKey || event.ctrlKey
+
+    if (usesCommandModifier && lowerKey === 'z') {
+      event.preventDefault()
+      this.runProtectedInputHandler(() => {
+        if (event.shiftKey) {
+          this.redo()
+          return
+        }
+
+        this.undo()
+      })
+      return
+    }
+
+    if (usesCommandModifier && lowerKey === 'y') {
+      event.preventDefault()
+      this.runProtectedInputHandler(() => {
+        this.redo()
+      })
+      return
+    }
+
+    if (usesCommandModifier && lowerKey === 'b') {
+      event.preventDefault()
+      this.runProtectedInputHandler(() => {
+        this.toggleRuntimeBold()
+      })
+      return
+    }
+
+    if (usesCommandModifier && lowerKey === 'i') {
+      event.preventDefault()
+      this.runProtectedInputHandler(() => {
+        this.toggleRuntimeItalic()
+      })
+      return
+    }
+
+    switch (event.key) {
+      case 'Backspace':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.deleteBackwardFromRuntime()
+        })
+        return
+      case 'Delete':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.deleteForwardFromRuntime()
+        })
+        return
+      case 'Enter':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.splitParagraphFromRuntime()
+        })
+        return
+      case 'ArrowLeft':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.moveSelectionHorizontally(-1)
+        })
+        return
+      case 'ArrowRight':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.moveSelectionHorizontally(1)
+        })
+        return
+    }
+  }
+
+  private handleRuntimeCopy(event: Event): void {
+    const clipboardData = readClipboardData(event)
+    const text = this.readSelectionPlainText()
+
+    if (clipboardData === undefined || text.length === 0) {
+      return
+    }
+
+    event.preventDefault()
+    clipboardData.setData('text/plain', text)
+  }
+
+  private handleRuntimeCut(event: Event): void {
+    const clipboardData = readClipboardData(event)
+    const text = this.readSelectionPlainText()
+
+    if (clipboardData === undefined || text.length === 0) {
+      return
+    }
+
+    event.preventDefault()
+    clipboardData.setData('text/plain', text)
+    this.runProtectedInputHandler(() => {
+      this.deleteSelectedTextFromRuntime()
+    })
+  }
+
+  private handleRuntimePaste(event: Event): void {
+    const clipboardData = readClipboardData(event)
+
+    if (clipboardData === undefined) {
+      return
+    }
+
+    const text = clipboardData.getData('text/plain')
+
+    if (text.length === 0) {
+      return
+    }
+
+    event.preventDefault()
+    this.runProtectedInputHandler(() => {
+      this.insertPlainTextFromRuntime(text)
+    })
+  }
+
+  private handleRuntimePointerDown(event: MouseEvent): void {
+    if (event.button !== 0) {
+      return
+    }
+
+    const anchor = this.resolvePointerAnchor(event)
+    const mountedDom = this.mountedDom
+
+    if (anchor === undefined || mountedDom === undefined) {
+      return
+    }
+
+    event.preventDefault()
+    mountedDom.pointerState.anchor = anchor
+    mountedDom.hiddenTextarea.focus()
+    this.setSelection(createSelectionState(anchor, anchor))
+  }
+
+  private handleRuntimePointerMove(event: MouseEvent): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined || mountedDom.pointerState.anchor === null) {
+      return
+    }
+
+    const focus = this.resolvePointerAnchor(event)
+
+    if (focus === undefined) {
+      return
+    }
+
+    event.preventDefault()
+    this.setSelection(createSelectionState(mountedDom.pointerState.anchor, focus))
+  }
+
+  private handleRuntimePointerUp(event: MouseEvent): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined || mountedDom.pointerState.anchor === null) {
+      return
+    }
+
+    const focus = this.resolvePointerAnchor(event)
+
+    if (focus !== undefined) {
+      event.preventDefault()
+      this.setSelection(createSelectionState(mountedDom.pointerState.anchor, focus))
+    }
+
+    mountedDom.pointerState.anchor = null
+  }
+
+  private handleRuntimeDoubleClick(event: MouseEvent): void {
+    const anchor = this.resolvePointerAnchor(event)
+
+    if (anchor === undefined) {
+      return
+    }
+
+    event.preventDefault()
+    this.setSelection(this.expandWordSelection(anchor))
+  }
+
+  private runProtectedInputHandler(action: () => void): void {
+    const mountedDom = this.mountedDom
+
+    try {
+      action()
+
+      if (mountedDom !== undefined) {
+        mountedDom.liveRegion.textContent = ''
+        mountedDom.hiddenTextarea.value = ''
+      }
+    } catch {
+      if (mountedDom !== undefined) {
+        mountedDom.liveRegion.textContent = '输入失败'
+        mountedDom.hiddenTextarea.value = ''
+      }
+    }
+  }
+
+  private insertPlainTextFromRuntime(text: string): void {
+    const selection = this.currentSelection
+
+    if (selection !== null && !isSelectionCollapsed(selection)) {
+      if (!this.replaceSelectedTextFromRuntime(text)) {
+        return
+      }
+
+      return
+    }
+
+    this.insertTextFromRuntime(text)
+  }
+
+  private insertTextFromRuntime(text: string): void {
+    const selection = this.currentSelection
+
+    if (selection === null || !isSelectionCollapsed(selection)) {
+      return
+    }
+
+    const position = this.resolveTextPosition(selection.focus)
+    const selectionAfter = createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: position.sectionId,
+        blockId: position.blockId,
+        runId: position.runId,
+        graphemeIndex: position.graphemeIndex + countGraphemes(text)
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: position.sectionId,
+        blockId: position.blockId,
+        runId: position.runId,
+        graphemeIndex: position.graphemeIndex + countGraphemes(text)
+      })
+    )
+
+    this.executeCommand(
+      {
+        name: 'insertText',
+        operations: [{
+          kind: 'insertText',
+          at: position,
+          text
+        }]
+      },
+      { selectionAfter }
+    )
+  }
+
+  private replaceSelectedTextFromRuntime(text: string): boolean {
+    const range = this.resolveSelectedTextRange()
+
+    if (range === undefined) {
+      return false
+    }
+
+    const selectionAfter = createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: range.start.sectionId,
+        blockId: range.start.blockId,
+        runId: range.start.runId,
+        graphemeIndex: range.start.graphemeIndex + countGraphemes(text)
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: range.start.sectionId,
+        blockId: range.start.blockId,
+        runId: range.start.runId,
+        graphemeIndex: range.start.graphemeIndex + countGraphemes(text)
+      })
+    )
+
+    this.executeCommand(
+      {
+        name: 'replaceText',
+        operations: [
+          {
+            kind: 'deleteRange',
+            range: {
+              anchor: range.start,
+              focus: range.end
+            }
+          },
+          {
+            kind: 'insertText',
+            at: range.start,
+            text
+          }
+        ]
+      },
+      { selectionAfter }
+    )
+
+    return true
+  }
+
+  private deleteSelectedTextFromRuntime(): boolean {
+    const range = this.resolveSelectedTextRange()
+
+    if (range === undefined) {
+      return false
+    }
+
+    this.executeCommand(
+      {
+        name: 'deleteSelection',
+        operations: [{
+          kind: 'deleteRange',
+          range: {
+            anchor: range.start,
+            focus: range.end
+          }
+        }]
+      },
+      {
+        selectionAfter: createSelectionState(
+          createRuntimeAnchor({
+            documentId: this.currentProjection.document.id,
+            ...range.start
+          }),
+          createRuntimeAnchor({
+            documentId: this.currentProjection.document.id,
+            ...range.start
+          })
+        )
+      }
+    )
+
+    return true
+  }
+
+  private resolveSelectedTextRange(): Readonly<{
+    start: TextPosition
+    end: TextPosition
+  }> | undefined {
+    const selection = this.currentSelection
+
+    if (selection === null || isSelectionCollapsed(selection)) {
+      return undefined
+    }
+
+    const anchor = this.resolveTextPosition(selection.anchor)
+    const focus = this.resolveTextPosition(selection.focus)
+
+    if (
+      anchor.sectionId !== focus.sectionId
+      || anchor.blockId !== focus.blockId
+      || anchor.runId !== focus.runId
+    ) {
+      return undefined
+    }
+
+    return anchor.graphemeIndex <= focus.graphemeIndex
+      ? { start: anchor, end: focus }
+      : { start: focus, end: anchor }
+  }
+
+  private readSelectionPlainText(): string {
+    const selection = this.currentSelection
+
+    if (selection === null || isSelectionCollapsed(selection)) {
+      return ''
+    }
+
+    const targets = collectSelectionTargets(this.currentProjection, selection)
+    let text = ''
+    let previousParagraphId: string | undefined
+
+    for (const target of targets.runs) {
+      if (previousParagraphId !== undefined && previousParagraphId !== target.paragraphId) {
+        text += '\n'
+      }
+
+      text += splitGraphemes(
+        target.run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')
+      )
+        .slice(target.selectedStartGraphemeIndex, target.selectedEndGraphemeIndex)
+        .join('')
+      previousParagraphId = target.paragraphId
+    }
+
+    return text
+  }
+
+  private deleteBackwardFromRuntime(): void {
+    const selection = this.currentSelection
+
+    if (selection === null || !isSelectionCollapsed(selection)) {
+      return
+    }
+
+    const position = this.resolveTextPosition(selection.focus)
+    const paragraphs = collectParagraphRuntimeContexts(this.currentProjection)
+    const paragraph = paragraphs.find((candidate) => candidate.blockId === position.blockId)
+
+    if (paragraph === undefined) {
+      return
+    }
+
+    if (position.graphemeIndex > 0) {
+      const selectionAfter = createSelectionState(
+        createRuntimeAnchor({
+          documentId: this.currentProjection.document.id,
+          sectionId: position.sectionId,
+          blockId: position.blockId,
+          runId: position.runId,
+          graphemeIndex: position.graphemeIndex - 1
+        }),
+        createRuntimeAnchor({
+          documentId: this.currentProjection.document.id,
+          sectionId: position.sectionId,
+          blockId: position.blockId,
+          runId: position.runId,
+          graphemeIndex: position.graphemeIndex - 1
+        })
+      )
+
+      this.executeCommand(
+        {
+          name: 'deleteBackward',
+          operations: [{
+            kind: 'deleteRange',
+            range: {
+              anchor: {
+                ...position,
+                graphemeIndex: position.graphemeIndex - 1
+              },
+              focus: position
+            }
+          }]
+        },
+        { selectionAfter }
+      )
+      return
+    }
+
+    const paragraphIndex = paragraphs.indexOf(paragraph)
+    const previousParagraph = paragraphIndex > 0 ? paragraphs[paragraphIndex - 1] : undefined
+
+    if (previousParagraph === undefined || paragraph.runs[0]?.id !== position.runId) {
+      return
+    }
+
+    this.executeCommand(
+      {
+        name: 'mergeParagraphBackward',
+        operations: [{
+          kind: 'mergeBlock',
+          targetBlockId: previousParagraph.blockId,
+          sourceBlockId: paragraph.blockId
+        }]
+      },
+      {
+        selectionAfter: createSelectionState(
+          createRuntimeAnchor({
+            documentId: this.currentProjection.document.id,
+            sectionId: previousParagraph.sectionId,
+            blockId: previousParagraph.blockId,
+            runId: position.runId,
+            graphemeIndex: 0
+          }),
+          createRuntimeAnchor({
+            documentId: this.currentProjection.document.id,
+            sectionId: previousParagraph.sectionId,
+            blockId: previousParagraph.blockId,
+            runId: position.runId,
+            graphemeIndex: 0
+          })
+        )
+      }
+    )
+  }
+
+  private deleteForwardFromRuntime(): void {
+    const selection = this.currentSelection
+
+    if (selection === null || !isSelectionCollapsed(selection)) {
+      return
+    }
+
+    const position = this.resolveTextPosition(selection.focus)
+    const paragraphs = collectParagraphRuntimeContexts(this.currentProjection)
+    const paragraph = paragraphs.find((candidate) => candidate.blockId === position.blockId)
+
+    if (paragraph === undefined) {
+      return
+    }
+
+    const currentRun = paragraph.runs.find((candidate) => candidate.id === position.runId)
+
+    if (currentRun === undefined) {
+      return
+    }
+
+    if (position.graphemeIndex < currentRun.graphemeLength) {
+      const selectionAfter = createSelectionState(
+        createRuntimeAnchor({
+          documentId: this.currentProjection.document.id,
+          ...position
+        }),
+        createRuntimeAnchor({
+          documentId: this.currentProjection.document.id,
+          ...position
+        })
+      )
+
+      this.executeCommand(
+        {
+          name: 'deleteForward',
+          operations: [{
+            kind: 'deleteRange',
+            range: {
+              anchor: position,
+              focus: {
+                ...position,
+                graphemeIndex: position.graphemeIndex + 1
+              }
+            }
+          }]
+        },
+        { selectionAfter }
+      )
+      return
+    }
+
+    const paragraphIndex = paragraphs.indexOf(paragraph)
+    const nextParagraph = paragraphIndex >= 0 ? paragraphs[paragraphIndex + 1] : undefined
+
+    if (nextParagraph === undefined || paragraph.runs[paragraph.runs.length - 1]?.id !== position.runId) {
+      return
+    }
+
+    const nextRun = nextParagraph.runs[0]
+
+    if (nextRun === undefined) {
+      return
+    }
+
+    this.executeCommand(
+      {
+        name: 'mergeParagraphForward',
+        operations: [{
+          kind: 'mergeBlock',
+          targetBlockId: paragraph.blockId,
+          sourceBlockId: nextParagraph.blockId
+        }]
+      },
+      {
+        selectionAfter: createSelectionState(
+          createRuntimeAnchor({
+            documentId: this.currentProjection.document.id,
+            sectionId: paragraph.sectionId,
+            blockId: paragraph.blockId,
+            runId: nextRun.id,
+            graphemeIndex: 0
+          }),
+          createRuntimeAnchor({
+            documentId: this.currentProjection.document.id,
+            sectionId: paragraph.sectionId,
+            blockId: paragraph.blockId,
+            runId: nextRun.id,
+            graphemeIndex: 0
+          })
+        )
+      }
+    )
+  }
+
+  private splitParagraphFromRuntime(): void {
+    const selection = this.currentSelection
+
+    if (selection === null || !isSelectionCollapsed(selection)) {
+      return
+    }
+
+    const position = this.resolveTextPosition(selection.focus)
+    const identifiers = allocateParagraphSplitIds(this.currentProjection)
+    const selectionAfter = createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: position.sectionId,
+        blockId: identifiers.blockId,
+        runId: identifiers.runId,
+        graphemeIndex: 0
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: position.sectionId,
+        blockId: identifiers.blockId,
+        runId: identifiers.runId,
+        graphemeIndex: 0
+      })
+    )
+
+    this.executeCommand(
+      {
+        name: 'splitParagraph',
+        operations: [{
+          kind: 'splitBlock',
+          at: position,
+          newBlockId: identifiers.blockId,
+          newRunId: identifiers.runId
+        }]
+      },
+      { selectionAfter }
+    )
+  }
+
+  private moveSelectionHorizontally(delta: -1 | 1): void {
+    const selection = this.currentSelection
+
+    if (selection === null) {
+      return
+    }
+
+    if (!isSelectionCollapsed(selection)) {
+      const anchor = delta < 0
+        ? selection.direction === 'backward' ? selection.focus : selection.anchor
+        : selection.direction === 'backward' ? selection.anchor : selection.focus
+
+      this.setSelection(createSelectionState(anchor, anchor))
+      return
+    }
+
+    const nextPosition = moveTextPosition(this.currentProjection, this.resolveTextPosition(selection.focus), delta)
+
+    if (nextPosition === undefined) {
+      return
+    }
+
+    this.setSelection(createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...nextPosition
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...nextPosition
+      })
+    ))
+  }
+
+  private toggleRuntimeBold(): void {
+    const command = buildSetBoldCommand(
+      this.currentProjection,
+      this.currentSelection,
+      this.getSelectionFormattingState().run?.bold.value !== true
+    )
+
+    if (command === null) {
+      return
+    }
+
+    this.executeCommand(command, {
+      selectionAfter: this.currentSelection
+    })
+  }
+
+  private toggleRuntimeItalic(): void {
+    const command = buildSetItalicCommand(
+      this.currentProjection,
+      this.currentSelection,
+      this.getSelectionFormattingState().run?.italic.value !== true
+    )
+
+    if (command === null) {
+      return
+    }
+
+    this.executeCommand(command, {
+      selectionAfter: this.currentSelection
+    })
+  }
+
+  private resolvePointerAnchor(event: MouseEvent): AnchorRef | undefined {
+    const target = event.target
+
+    if (!(target instanceof Element)) {
+      return undefined
+    }
+
+    const page = target.closest('[data-jword-page]')
+
+    if (!(page instanceof HTMLElement)) {
+      return undefined
+    }
+
+    const pageIndex = Number.parseInt(page.getAttribute('data-jword-page') ?? '-1', 10)
+
+    if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+      return undefined
+    }
+
+    const rect = page.getBoundingClientRect()
+
+    return this.hitTest({
+      pageIndex,
+      x: cssPxToTwips(event.clientX - rect.left, this.pageConfig.scale),
+      y: cssPxToTwips(event.clientY - rect.top, this.pageConfig.scale)
+    })
+  }
+
+  private expandWordSelection(anchor: AnchorRef): SelectionState {
+    const position = this.resolveTextPosition(anchor)
+    const text = readProjectionRunText(this.currentProjection, position.blockId, position.runId)
+    const graphemes = splitGraphemes(text)
+
+    if (graphemes.length === 0) {
+      return createSelectionState(anchor, anchor)
+    }
+
+    const index = Math.min(position.graphemeIndex, Math.max(graphemes.length - 1, 0))
+    const isWord = isWordLikeGrapheme(graphemes[index] ?? '')
+    let start = index
+    let end = isWord ? index : index + 1
+
+    if (isWord) {
+      while (start > 0 && isWordLikeGrapheme(graphemes[start - 1] ?? '')) {
+        start -= 1
+      }
+
+      while (end < graphemes.length && isWordLikeGrapheme(graphemes[end] ?? '')) {
+        end += 1
+      }
+    }
+
+    return createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: position.sectionId,
+        blockId: position.blockId,
+        runId: position.runId,
+        graphemeIndex: start
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: position.sectionId,
+        blockId: position.blockId,
+        runId: position.runId,
+        graphemeIndex: end
+      })
+    )
+  }
+
+  private scheduleDeferredRender(
+    layout: DocumentLayout,
+    deferredChunks: readonly (readonly number[])[]
+  ): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined || deferredChunks.length === 0) {
+      return
+    }
+
+    const deferredRender = {
+      timeoutId: setTimeout(() => {
+        this.flushDeferredRenderChunk()
+      }, 0),
+      chunks: deferredChunks,
+      nextChunkIndex: 0,
+      layout
+    }
+
+    mountedDom.deferredRender = deferredRender
+  }
+
+  private flushDeferredRenderChunk(): void {
+    const mountedDom = this.mountedDom
+    const deferredRender = mountedDom?.deferredRender
+
+    if (mountedDom === undefined || deferredRender === undefined) {
+      return
+    }
+
+    const chunk = deferredRender.chunks[deferredRender.nextChunkIndex]
+
+    if (chunk === undefined) {
+      mountedDom.deferredRender = undefined
+      return
+    }
+
+    const viewport = computeViewportPages({
+      pages: deferredRender.layout.pages.map((page) => ({
+        pageIndex: page.pageIndex,
+        top: twipsToCssPx(page.y, this.pageConfig.scale),
+        height: twipsToCssPx(page.height, this.pageConfig.scale)
+      })),
+      scrollTop: mountedDom.canvasContainer.scrollTop,
+      viewportHeight: mountedDom.canvasContainer.clientHeight || this.pageConfig.heightCssPx,
+      bufferPages: 1
+    })
+    const selectionRender = this.createSelectionRenderState(deferredRender.layout)
+    const retainedPageIndexes = mergePageIndexes(
+      viewport.retainedPageIndexes,
+      chunk,
+      selectionRender.pageIndexes,
+      this.selectionPageIndexes
+    )
+    const rerenderPageIndexes = mergePageIndexes(
+      chunk,
+      selectionRender.pageIndexes,
+      this.selectionPageIndexes
+    )
+
+    mountedDom.canvases = renderPageBatch({
+      mountedDom,
+      pages: deferredRender.layout.pages,
+      retainedPageIndexes,
+      rerenderPageIndexes,
+      selectionRender,
+      scale: this.pageConfig.scale,
+      pixelRatio: resolveCanvasPixelRatio(mountedDom)
+    })
+    mountedDom.canvasContainer.setAttribute('data-jword-layout-rerender-pages', rerenderPageIndexes.join(','))
+    this.selectionPageIndexes = selectionRender.pageIndexes
+    this.syncMountedAssistiveDom(deferredRender.layout)
+    deferredRender.nextChunkIndex += 1
+
+    if (deferredRender.nextChunkIndex >= deferredRender.chunks.length) {
+      mountedDom.deferredRender = undefined
+      return
+    }
+
+    deferredRender.timeoutId = setTimeout(() => {
+      this.flushDeferredRenderChunk()
+    }, 0)
+  }
+
+  private cancelDeferredRender(): void {
+    const deferredRender = this.mountedDom?.deferredRender
+
+    if (deferredRender === undefined) {
+      return
+    }
+
+    clearTimeout(deferredRender.timeoutId)
+    this.mountedDom!.deferredRender = undefined
+  }
+
   private assertActive(): void {
     if (this.isDestroyed) {
       throw createJWordError('EDITOR_DESTROYED', 'JWord editor has been destroyed.')
     }
   }
+}
+
+interface ParagraphRuntimeContext {
+  readonly sectionId: string
+  readonly blockId: string
+  readonly runs: readonly RunRuntimeContext[]
+}
+
+interface RunRuntimeContext {
+  readonly id: string
+  readonly graphemeLength: number
+}
+
+function createHiddenTextareaElement(ownerDocument: Document): HTMLTextAreaElement {
+  const textarea = ownerDocument.createElement('textarea')
+
+  textarea.setAttribute('data-jword-hidden-textarea', '')
+  textarea.setAttribute('aria-label', 'JWord hidden input')
+  textarea.setAttribute('autocapitalize', 'off')
+  textarea.setAttribute('autocomplete', 'off')
+  textarea.spellcheck = false
+  textarea.style.position = 'absolute'
+  textarea.style.left = '0px'
+  textarea.style.top = '0px'
+  textarea.style.width = '1px'
+  textarea.style.height = '1px'
+  textarea.style.padding = '0'
+  textarea.style.border = '0'
+  textarea.style.margin = '0'
+  textarea.style.opacity = '0'
+  textarea.style.pointerEvents = 'none'
+  textarea.style.resize = 'none'
+  textarea.style.overflow = 'hidden'
+  textarea.style.whiteSpace = 'pre'
+
+  return textarea
+}
+
+function createLiveRegionElement(ownerDocument: Document): HTMLElement {
+  const element = ownerDocument.createElement('div')
+
+  element.setAttribute('data-jword-aria-live', '')
+  element.setAttribute('aria-live', 'polite')
+  element.setAttribute('role', 'status')
+  applyVisuallyHiddenStyle(element)
+
+  return element
+}
+
+function createTextMirrorElement(ownerDocument: Document): HTMLElement {
+  const element = ownerDocument.createElement('div')
+
+  element.setAttribute('data-jword-text-mirror', '')
+  element.style.whiteSpace = 'pre-wrap'
+  applyVisuallyHiddenStyle(element)
+
+  return element
+}
+
+function applyVisuallyHiddenStyle(element: HTMLElement): void {
+  element.style.position = 'absolute'
+  element.style.left = '0'
+  element.style.top = '0'
+  element.style.width = '1px'
+  element.style.height = '1px'
+  element.style.padding = '0'
+  element.style.border = '0'
+  element.style.margin = '-1px'
+  element.style.overflow = 'hidden'
+  element.style.clip = 'rect(0 0 0 0)'
+}
+
+function syncHiddenTextareaPosition(input: Readonly<{
+  mountedDom: MountedEditorDom
+  caretRect: LayoutRect | undefined
+  scale: number
+}>): void {
+  const left = input.caretRect === undefined
+    ? 0
+    : twipsToCssPx(input.caretRect.x, input.scale)
+  const top = input.caretRect === undefined
+    ? 0
+    : twipsToCssPx(input.caretRect.y, input.scale) - input.mountedDom.canvasContainer.scrollTop
+
+  input.mountedDom.hiddenTextarea.style.left = `${Math.max(0, left)}px`
+  input.mountedDom.hiddenTextarea.style.top = `${Math.max(0, top)}px`
+}
+
+function readProjectionPlainText(projection: DocumentProjection): string {
+  return collectParagraphRuntimeContexts(projection)
+    .map((paragraph) => paragraph.runs.map((run) => readProjectionRunText(projection, paragraph.blockId, run.id)).join(''))
+    .join('\n')
+}
+
+function collectParagraphRuntimeContexts(projection: DocumentProjection): readonly ParagraphRuntimeContext[] {
+  const paragraphs: ParagraphRuntimeContext[] = []
+
+  for (const section of projection.document.sections) {
+    visitBlocks(section.id, section.blocks)
+  }
+
+  return Object.freeze(paragraphs)
+
+  function visitBlocks(sectionId: string, blocks: readonly import('./model').Block[]) {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        paragraphs.push({
+          sectionId,
+          blockId: block.id,
+          runs: Object.freeze(block.runs.map((run) => ({
+            id: run.id,
+            graphemeLength: countGraphemes(
+              run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')
+            )
+          })))
+        })
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          visitBlocks(sectionId, cell.blocks)
+        }
+      }
+    }
+  }
+}
+
+function readProjectionRunText(
+  projection: DocumentProjection,
+  blockId: string,
+  runId: string
+): string {
+  for (const section of projection.document.sections) {
+    const text = readBlocksRunText(section.blocks, blockId, runId)
+
+    if (text !== undefined) {
+      return text
+    }
+  }
+
+  return ''
+}
+
+function readBlocksRunText(
+  blocks: readonly import('./model').Block[],
+  blockId: string,
+  runId: string
+): string | undefined {
+  for (const block of blocks) {
+    if (block.kind === 'paragraph') {
+      if (block.id !== blockId) {
+        continue
+      }
+
+      const run = block.runs.find((candidate) => candidate.id === runId)
+
+      return run?.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')
+    }
+
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        const text = readBlocksRunText(cell.blocks, blockId, runId)
+
+        if (text !== undefined) {
+          return text
+        }
+      }
+    }
+  }
+
+  return undefined
+}
+
+function moveTextPosition(
+  projection: DocumentProjection,
+  position: TextPosition,
+  delta: -1 | 1
+): TextPosition | undefined {
+  const paragraphs = collectParagraphRuntimeContexts(projection)
+  const paragraphIndex = paragraphs.findIndex((candidate) => candidate.blockId === position.blockId)
+
+  if (paragraphIndex < 0) {
+    return undefined
+  }
+
+  const paragraph = paragraphs[paragraphIndex]
+
+  if (paragraph === undefined) {
+    return undefined
+  }
+
+  const runIndex = paragraph.runs.findIndex((candidate) => candidate.id === position.runId)
+
+  if (runIndex < 0) {
+    return undefined
+  }
+
+  const run = paragraph.runs[runIndex]
+
+  if (run === undefined) {
+    return undefined
+  }
+
+  if (delta < 0) {
+    if (position.graphemeIndex > 0) {
+      return {
+        ...position,
+        graphemeIndex: position.graphemeIndex - 1
+      }
+    }
+
+    const previousRun = runIndex > 0 ? paragraph.runs[runIndex - 1] : undefined
+
+    if (previousRun !== undefined) {
+      return {
+        sectionId: paragraph.sectionId,
+        blockId: paragraph.blockId,
+        runId: previousRun.id,
+        graphemeIndex: previousRun.graphemeLength
+      }
+    }
+
+    const previousParagraph = paragraphIndex > 0 ? paragraphs[paragraphIndex - 1] : undefined
+    const previousParagraphRun = previousParagraph?.runs[previousParagraph.runs.length - 1]
+
+    if (previousParagraph === undefined || previousParagraphRun === undefined) {
+      return undefined
+    }
+
+    return {
+      sectionId: previousParagraph.sectionId,
+      blockId: previousParagraph.blockId,
+      runId: previousParagraphRun.id,
+      graphemeIndex: previousParagraphRun.graphemeLength
+    }
+  }
+
+  if (position.graphemeIndex < run.graphemeLength) {
+    return {
+      ...position,
+      graphemeIndex: position.graphemeIndex + 1
+    }
+  }
+
+  const nextRun = paragraph.runs[runIndex + 1]
+
+  if (nextRun !== undefined) {
+    return {
+      sectionId: paragraph.sectionId,
+      blockId: paragraph.blockId,
+      runId: nextRun.id,
+      graphemeIndex: 0
+    }
+  }
+
+  const nextParagraph = paragraphs[paragraphIndex + 1]
+  const nextParagraphRun = nextParagraph?.runs[0]
+
+  if (nextParagraph === undefined || nextParagraphRun === undefined) {
+    return undefined
+  }
+
+  return {
+    sectionId: nextParagraph.sectionId,
+    blockId: nextParagraph.blockId,
+    runId: nextParagraphRun.id,
+    graphemeIndex: 0
+  }
+}
+
+function allocateParagraphSplitIds(projection: DocumentProjection): Readonly<{
+  blockId: string
+  runId: string
+}> {
+  const paragraphs = collectParagraphRuntimeContexts(projection)
+  const blockIds = new Set(paragraphs.map((paragraph) => paragraph.blockId))
+  const runIds = new Set(paragraphs.flatMap((paragraph) => paragraph.runs.map((run) => run.id)))
+
+  return {
+    blockId: allocateSequentialIdentifier(blockIds, 'paragraph'),
+    runId: allocateSequentialIdentifier(runIds, 'run')
+  }
+}
+
+function allocateSequentialIdentifier(ids: Set<string>, prefix: string): string {
+  let nextIndex = 1
+
+  for (const id of ids) {
+    const match = new RegExp(`^${prefix}-(\\d+)$`, 'u').exec(id)
+
+    if (match === null) {
+      continue
+    }
+
+    nextIndex = Math.max(nextIndex, Number(match[1]) + 1)
+  }
+
+  let candidate = `${prefix}-${nextIndex}`
+
+  while (ids.has(candidate)) {
+    nextIndex += 1
+    candidate = `${prefix}-${nextIndex}`
+  }
+
+  return candidate
+}
+
+function createRuntimeAnchor(input: Readonly<{
+  documentId?: string
+  sectionId: string
+  blockId: string
+  runId: string
+  graphemeIndex: number
+}>): AnchorRef {
+  return createAnchorRef({
+    documentId: (input.documentId ?? DEFAULT_DOCUMENT_ID) as DocumentId,
+    sectionId: input.sectionId as SectionId,
+    blockId: input.blockId as BlockId,
+    runId: input.runId as RunId,
+    graphemeIndex: createGraphemeIndex(input.graphemeIndex)
+  })
+}
+
+function readEventData(event: Event): string {
+  const data = (event as Event & { data?: unknown }).data
+
+  return typeof data === 'string' ? data : ''
+}
+
+function readClipboardData(event: Event): {
+  getData(type: string): string
+  setData(type: string, value: string): void
+} | undefined {
+  const clipboardData = (event as Event & {
+    clipboardData?: {
+      getData(type: string): string
+      setData(type: string, value: string): void
+    }
+  }).clipboardData
+
+  return clipboardData === undefined ? undefined : clipboardData
+}
+
+function isWordLikeGrapheme(grapheme: string): boolean {
+  return /[\p{Letter}\p{Number}_]/u.test(grapheme)
 }
 
 function createPageElement(mountedDom: MountedEditorDom, layoutPage: LayoutBox, scale: number) {
@@ -1008,15 +2480,46 @@ function createPageStartKey(page: PageBox): string {
   return `${page.pageIndex}:empty`
 }
 
-function resolveScheduledPageIndexes(schedule: ReturnType<typeof createLayoutSchedule>): readonly number[] {
-  return mergePageIndexes(
-    schedule.immediatePageIndexes,
-    schedule.deferredChunks.flat()
-  )
-}
-
 function mergePageIndexes(...sources: readonly (readonly number[])[]): readonly number[] {
   return Object.freeze([...new Set(sources.flat())].sort((left, right) => left - right))
+}
+
+function renderPageBatch(input: Readonly<{
+  mountedDom: MountedEditorDom
+  pages: readonly LayoutBox[]
+  retainedPageIndexes: readonly number[]
+  rerenderPageIndexes: readonly number[]
+  selectionRender: Readonly<{
+    selectionRects?: readonly LayoutRect[]
+    caretRect?: LayoutRect
+  }>
+  scale: number
+  pixelRatio: number
+}>): Map<number, CanvasLike> {
+  const nextCanvases = syncPageCanvases({
+    pages: input.pages,
+    retainedPageIndexes: input.retainedPageIndexes,
+    rerenderPageIndexes: input.rerenderPageIndexes,
+    canvases: input.mountedDom.canvases,
+    pool: input.mountedDom.pool,
+    ...(input.selectionRender.selectionRects === undefined
+      ? {}
+      : { selectionRects: input.selectionRender.selectionRects }),
+    ...(input.selectionRender.caretRect === undefined
+      ? {}
+      : { caretRect: input.selectionRender.caretRect }),
+    scale: input.scale,
+    pixelRatio: input.pixelRatio
+  })
+
+  input.mountedDom.canvases = nextCanvases
+  syncPageWrappers(input.mountedDom, input.pages, input.scale)
+
+  return nextCanvases
+}
+
+function resolveCanvasPixelRatio(mountedDom: MountedEditorDom): number {
+  return Math.max(1, mountedDom.canvasContainer.ownerDocument.defaultView?.devicePixelRatio ?? 1)
 }
 
 function resolveCommandDirtyRange(command: Command): LayoutDirtyRange | undefined {

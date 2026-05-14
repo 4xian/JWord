@@ -35,6 +35,18 @@ export type {
 export { createEditor } from './editor'
 export { JWordError } from './errors'
 export type { JWordErrorCode, JWordErrorDetails } from './errors'
+export {
+  buildSetBackgroundColorCommand,
+  buildSetBoldCommand,
+  buildSetFontFamilyCommand,
+  buildSetFontSizeCommand,
+  buildSetItalicCommand,
+  buildSetParagraphAlignmentCommand,
+  buildSetParagraphIndentCommand,
+  buildSetStrikeCommand,
+  buildSetTextColorCommand,
+  buildSetUnderlineCommand
+} from './command-builders'
 export { createFontManager } from './font-manager'
 export type {
   FontAvailabilityStatus,
@@ -49,6 +61,14 @@ export type {
   HistoryEntryMetadata,
   HistoryOperationResult
 } from './history'
+export { createSelectionFormattingState } from './formatting-state'
+export type {
+  FormattingStateValue,
+  ParagraphAlignment,
+  ParagraphFormattingState,
+  RunFormattingState,
+  SelectionFormattingState
+} from './formatting-types'
 export {
   getCaretRect,
   getSelectionRects,
