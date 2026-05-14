@@ -1,8 +1,8 @@
 /**
- * @fileoverview 职责: 用真实浏览器 canvas 像素验证 Gate 2 多页内容、选区和光标已绘制。
- * 边界: 只做浏览器视觉验收，不固定跨平台截图基线。
- * 协作: vanilla demo 测试钩子、Editor selection facade 和 canvas renderer。
- * 约束: 通过像素采样证明首/中/末页非空以及选区色、光标色存在，避免人工打开页面。
+ * @fileoverview 职责: 用真实浏览器 canvas 像素验证 Gate 2 多页内容和中段挂载窗口的真实渲染。
+ * 边界: 只做浏览器视觉验收，不固定跨平台截图基线，不把 Gate 3 手势语义算作 Gate 2 证据。
+ * 协作: vanilla demo 测试钩子和 canvas renderer。
+ * 约束: 通过像素采样证明首/中/末页非空以及中段窗口页已绘制，避免人工打开页面。
  * Specs: docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
  */
 import { expect, test } from '@playwright/test'
@@ -16,9 +16,14 @@ interface CanvasPixelProbe {
   readonly caretPixels: number
 }
 
-interface LayoutPageTarget {
-  readonly pageIndex: number
+interface MountedWindowProbe {
   readonly pageCount: number
+  readonly mountedCanvasCount: number
+  readonly mountedPageIndexes: readonly number[]
+  readonly beforeMountedPageIndex: number | null
+  readonly beforeMountedHasCanvas: boolean | null
+  readonly afterMountedPageIndex: number | null
+  readonly afterMountedHasCanvas: boolean | null
 }
 
 test('Gate 2 demo paints first, middle, and last fixture pages on real canvases', async ({ page }) => {
@@ -59,90 +64,42 @@ test('Gate 2 demo paints first, middle, and last fixture pages on real canvases'
   expect(lastPixels.pageIndex).toBe(lastPageIndex)
 })
 
-test('Gate 2 demo paints selection and caret on a lightweight visual probe document', async ({ page }) => {
+test('Gate 2 demo paints only the mounted middle-window pages after scrolling the 50-page fixture', async ({ page }) => {
   await page.goto('/')
 
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
 
-  const pixels = await page.evaluate(async (): Promise<CanvasPixelProbe> => {
-    const demo = window.__jwordDemo
-    const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
+  await scrollToRatio(page, 0.5)
+  const probe = await readMountedWindowProbe(page)
 
-    if (demo === undefined || container === null) {
-      throw new Error('缺少 Gate 2 visual 所需的 demo 测试钩子或容器 DOM')
-    }
+  expect(probe.pageCount).toBe(50)
+  expect(probe.mountedCanvasCount).toBeLessThanOrEqual(5)
+  expect(probe.mountedPageIndexes).toHaveLength(probe.mountedCanvasCount)
+  expect(probe.mountedPageIndexes[0]).toBeGreaterThan(0)
+  expect(probe.mountedPageIndexes[probe.mountedPageIndexes.length - 1]).toBeLessThan(probe.pageCount - 1)
+  expect(probe.beforeMountedPageIndex).not.toBeNull()
+  expect(probe.afterMountedPageIndex).not.toBeNull()
+  expect(probe.beforeMountedHasCanvas).toBe(false)
+  expect(probe.afterMountedHasCanvas).toBe(false)
 
-    demo.editor.createDocument({ text: 'Gate 2 visual sample keeps pixel sampling focused.' })
+  for (let index = 1; index < probe.mountedPageIndexes.length; index += 1) {
+    const previousPageIndex = probe.mountedPageIndexes[index - 1]
+    const currentPageIndex = probe.mountedPageIndexes[index]
 
-    const firstFragment = demo.editor.getLayout().pages[0]?.lines[0]?.fragments[0]
+    expect(currentPageIndex).toBe((previousPageIndex ?? 0) + 1)
+  }
 
-    if (firstFragment === undefined) {
-      throw new Error('缺少可用于选区采样的第一页文本片段')
-    }
+  const firstWindowPixels = await samplePagePixels(page, probe.mountedPageIndexes[0]!)
+  const lastWindowPixels = await samplePagePixels(page, probe.mountedPageIndexes[probe.mountedPageIndexes.length - 1]!)
 
-    demo.selectTextRange({
-      sectionId: firstFragment.sectionId,
-      blockId: firstFragment.blockId,
-      runId: firstFragment.runId,
-      anchorGraphemeIndex: firstFragment.start.graphemeIndex,
-      focusGraphemeIndex: firstFragment.start.graphemeIndex + 4
-    })
-
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          resolve()
-        })
-      })
-    })
-
-    const canvas = document.querySelector<HTMLCanvasElement>('.jw-editor__page-canvas')
-    const context = canvas?.getContext('2d')
-
-    if (canvas === null || context === undefined || context === null) {
-      throw new Error('缺少可采样 canvas')
-    }
-
-    const image = context.getImageData(0, 0, canvas.width, canvas.height).data
-    let nonWhitePixels = 0
-    let selectionPixels = 0
-    let caretPixels = 0
-
-    for (let index = 0; index < image.length; index += 4) {
-      const red = image[index] ?? 0
-      const green = image[index + 1] ?? 0
-      const blue = image[index + 2] ?? 0
-      const alpha = image[index + 3] ?? 0
-
-      if (alpha > 0 && (red < 245 || green < 245 || blue < 245)) {
-        nonWhitePixels += 1
-      }
-
-      if (red === 207 && green === 227 && blue === 255 && alpha === 255) {
-        selectionPixels += 1
-      }
-
-      if (red < 40 && green < 50 && blue < 70 && alpha === 255) {
-        caretPixels += 1
-      }
-    }
-
-    return {
-      pageIndex: 0,
-      width: canvas.width,
-      height: canvas.height,
-      nonWhitePixels,
-      selectionPixels,
-      caretPixels
-    }
-  })
-
-  expect(pixels.pageIndex).toBe(0)
-  expect(pixels.width).toBeGreaterThan(0)
-  expect(pixels.height).toBeGreaterThan(0)
-  expect(pixels.nonWhitePixels).toBeGreaterThan(100)
-  expect(pixels.selectionPixels).toBeGreaterThan(10)
-  expect(pixels.caretPixels).toBeGreaterThan(0)
+  expect(firstWindowPixels.width).toBeGreaterThan(0)
+  expect(firstWindowPixels.height).toBeGreaterThan(0)
+  expect(firstWindowPixels.nonWhitePixels).toBeGreaterThan(100)
+  expect(firstWindowPixels.pageIndex).toBe(probe.mountedPageIndexes[0])
+  expect(lastWindowPixels.width).toBeGreaterThan(0)
+  expect(lastWindowPixels.height).toBeGreaterThan(0)
+  expect(lastWindowPixels.nonWhitePixels).toBeGreaterThan(100)
+  expect(lastWindowPixels.pageIndex).toBe(probe.mountedPageIndexes[probe.mountedPageIndexes.length - 1])
 })
 
 async function readFixturePageBounds(page: import('@playwright/test').Page): Promise<Readonly<{
@@ -226,6 +183,46 @@ async function readMountedMedianPageIndex(page: import('@playwright/test').Page)
     }
 
     return pageIndexes[Math.floor(pageIndexes.length / 2)] ?? pageIndexes[0] ?? 0
+  })
+}
+
+async function readMountedWindowProbe(page: import('@playwright/test').Page): Promise<MountedWindowProbe> {
+  return page.evaluate(() => {
+    const demo = window.__jwordDemo
+
+    if (demo === undefined) {
+      throw new Error('缺少 Gate 2 visual 所需的 demo 测试钩子')
+    }
+
+    const mountedPageIndexes = [...document.querySelectorAll<HTMLElement>('[data-jword-page]')]
+      .filter((element) => element.querySelector('canvas') !== null)
+      .map((element) => Number(element.getAttribute('data-jword-page')))
+      .filter((value): value is number => Number.isFinite(value))
+      .sort((left, right) => left - right)
+
+    if (mountedPageIndexes.length < 2) {
+      throw new Error('缺少 Gate 2 middle-window 像素采样所需的已挂载文本页')
+    }
+
+    const pageCount = demo.editor.getLayout().pages.length
+    const firstMountedPageIndex = mountedPageIndexes[0] ?? null
+    const lastMountedPageIndex = mountedPageIndexes[mountedPageIndexes.length - 1] ?? null
+
+    return {
+      pageCount,
+      mountedCanvasCount: mountedPageIndexes.length,
+      mountedPageIndexes,
+      beforeMountedPageIndex: firstMountedPageIndex === null || firstMountedPageIndex <= 0 ? null : firstMountedPageIndex - 1,
+      beforeMountedHasCanvas: firstMountedPageIndex === null || firstMountedPageIndex <= 0
+        ? null
+        : document.querySelector(`[data-jword-page="${firstMountedPageIndex - 1}"] canvas`) !== null,
+      afterMountedPageIndex: lastMountedPageIndex === null || lastMountedPageIndex >= pageCount - 1
+        ? null
+        : lastMountedPageIndex + 1,
+      afterMountedHasCanvas: lastMountedPageIndex === null || lastMountedPageIndex >= pageCount - 1
+        ? null
+        : document.querySelector(`[data-jword-page="${lastMountedPageIndex + 1}"] canvas`) !== null
+    }
   })
 }
 

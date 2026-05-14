@@ -260,6 +260,11 @@ function createPageLayout(
     y: pageTop,
     width: cssPxToTwips(600),
     height: cssPxToTwips(800),
+    sectionBoundary: 'single',
+    sectionIds: ['section-render'],
+    sectionId: 'section-render',
+    headerIds: [],
+    footerIds: [],
     lines: [
       {
         kind: 'line',
@@ -310,6 +315,7 @@ function createPageLayout(
       }
     ],
     paragraphs: [],
+    blocks: [],
     contentRect: {
       pageIndex,
       x: cssPxToTwips(72),

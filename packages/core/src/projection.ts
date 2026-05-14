@@ -13,6 +13,10 @@ import {
   DOCUMENT_STORE_FIELDS,
   createDocumentStore,
   getParagraphRuns,
+  getRunField,
+  getRunInlines,
+  getRunLink,
+  getRunRevisionId,
   getRunText,
   getSectionBlocks,
   getTableCellBlocks,
@@ -30,6 +34,7 @@ import type {
 import type {
   Block,
   Document,
+  SectionPageLayout,
   ModelProperties,
   Paragraph,
   Run,
@@ -73,9 +78,19 @@ export function createDocumentProjection(input: DocumentStore | Y.Doc): Document
 }
 
 function projectSection(section: SectionRecord): Section {
+  const properties = section.get(DOCUMENT_STORE_FIELDS.section.properties) as Y.Map<unknown> | undefined
+  const page = projectSectionPage(properties?.get('page'))
+  const columns = readOptionalNumber(properties?.get('columns'))
+  const headerIds = projectStringList(section.get(DOCUMENT_STORE_FIELDS.section.headerIds))
+  const footerIds = projectStringList(section.get(DOCUMENT_STORE_FIELDS.section.footerIds))
+
   return deepFreeze({
     kind: 'section',
     id: readString(section.get(DOCUMENT_STORE_FIELDS.section.id), 'section'),
+    ...(page === undefined ? {} : { page }),
+    ...(columns === undefined ? {} : { columns }),
+    ...(headerIds === undefined ? {} : { headerIds }),
+    ...(footerIds === undefined ? {} : { footerIds }),
     blocks: deepFreezeArray(getSectionBlocks(section).toArray().map(projectBlock))
   })
 }
@@ -109,12 +124,19 @@ function projectParagraph(block: BlockRecord): Paragraph {
 
 function projectRun(run: RunRecord): Run {
   const properties = projectProperties(run.get(DOCUMENT_STORE_FIELDS.run.properties))
+  const field = getRunField(run)
+  const link = getRunLink(run)
+  const revisionId = getRunRevisionId(run)
+  const structuredInlines = getRunInlines(run)
 
   return deepFreeze({
     kind: 'run',
     id: readString(run.get(DOCUMENT_STORE_FIELDS.run.id), 'run'),
     ...(properties === undefined ? {} : { properties }),
-    inlines: deepFreezeArray([
+    ...(field === undefined ? {} : { field }),
+    ...(link === undefined ? {} : { link }),
+    ...(revisionId === undefined ? {} : { revisionId }),
+    inlines: deepFreezeArray(structuredInlines ?? [
       deepFreeze({
         kind: 'text',
         text: getRunText(run).toString()
@@ -164,6 +186,62 @@ function projectProperties(value: unknown): ModelProperties | undefined {
   return deepFreeze(Object.fromEntries(value.entries()) as ModelProperties)
 }
 
+function projectSectionPage(value: unknown): SectionPageLayout | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+
+  const widthTwips = readOptionalNumber(value.widthTwips)
+  const heightTwips = readOptionalNumber(value.heightTwips)
+  const marginTwips = projectPageMargins(value.marginTwips)
+
+  if (widthTwips === undefined && heightTwips === undefined && marginTwips === undefined) {
+    return undefined
+  }
+
+  return deepFreeze({
+    ...(widthTwips === undefined ? {} : { widthTwips }),
+    ...(heightTwips === undefined ? {} : { heightTwips }),
+    ...(marginTwips === undefined ? {} : { marginTwips })
+  })
+}
+
+function projectPageMargins(value: unknown): SectionPageLayout['marginTwips'] | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+
+  const top = readOptionalNumber(value.top)
+  const right = readOptionalNumber(value.right)
+  const bottom = readOptionalNumber(value.bottom)
+  const left = readOptionalNumber(value.left)
+
+  if (top === undefined && right === undefined && bottom === undefined && left === undefined) {
+    return undefined
+  }
+
+  return deepFreeze({
+    ...(top === undefined ? {} : { top }),
+    ...(right === undefined ? {} : { right }),
+    ...(bottom === undefined ? {} : { bottom }),
+    ...(left === undefined ? {} : { left })
+  })
+}
+
+function projectStringList(value: unknown): readonly string[] | undefined {
+  if (!(value instanceof Y.Array)) {
+    return undefined
+  }
+
+  const items = value.toArray().filter((item): item is string => typeof item === 'string')
+
+  if (items.length === 0) {
+    return undefined
+  }
+
+  return deepFreezeArray(items)
+}
+
 function readString(value: unknown, label: string): string {
   if (typeof value === 'string') {
     return value
@@ -176,6 +254,12 @@ function readString(value: unknown, label: string): string {
 
 function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined
+}
+
+function isRecord(
+  value: unknown
+): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function deepFreezeArray<Item>(items: readonly Item[]): readonly Item[] {

@@ -23,6 +23,10 @@ import {
   createTableRecord,
   createTableRowRecord,
   getParagraphRuns,
+  getRunField,
+  getRunInlines,
+  getRunLink,
+  getRunRevisionId,
   getRunText,
   getSectionBlocks,
   getTableCellBlocks,
@@ -182,6 +186,90 @@ describe('createDocumentStore', () => {
     expect(section.get(DOCUMENT_STORE_FIELDS.section.id)).toBe('section-1')
     expect(paragraph.get(DOCUMENT_STORE_FIELDS.block.kind)).toBe('paragraph')
     expect(run.get(DOCUMENT_STORE_FIELDS.run.kind)).toBe('run')
+  })
+
+  it('stores structured run field link revisionId and inline metadata without breaking shared text', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-structured' as SectionId)
+    const paragraph = createParagraphRecord('paragraph-structured' as BlockId)
+    const run = createRunRecord('run-structured' as RunId, '你好世界', {
+      field: {
+        code: 'PAGE',
+        result: '1'
+      },
+      link: {
+        target: 'https://example.com/spec',
+        tooltip: '规格链接'
+      },
+      revisionId: 'revision-1',
+      inlines: [
+        {
+          kind: 'bookmark',
+          id: 'bookmark-1',
+          name: 'intro',
+          edge: 'start'
+        },
+        {
+          kind: 'text',
+          text: '你好'
+        },
+        {
+          kind: 'image',
+          resourceId: 'resource-1',
+          alt: '示意图'
+        },
+        {
+          kind: 'break',
+          breakType: 'line'
+        },
+        {
+          kind: 'commentRangeMarker',
+          commentId: 'comment-1',
+          edge: 'end'
+        }
+      ]
+    })
+
+    store.sections.push([section])
+    getSectionBlocks(section).push([paragraph])
+    getParagraphRuns(paragraph).push([run])
+
+    expect(getRunText(run).toString()).toBe('你好世界')
+    expect(getRunField(run)).toEqual({
+      code: 'PAGE',
+      result: '1'
+    })
+    expect(getRunLink(run)).toEqual({
+      target: 'https://example.com/spec',
+      tooltip: '规格链接'
+    })
+    expect(getRunRevisionId(run)).toBe('revision-1')
+    expect(getRunInlines(run)).toEqual([
+      {
+        kind: 'bookmark',
+        id: 'bookmark-1',
+        name: 'intro',
+        edge: 'start'
+      },
+      {
+        kind: 'text',
+        text: '你好'
+      },
+      {
+        kind: 'image',
+        resourceId: 'resource-1',
+        alt: '示意图'
+      },
+      {
+        kind: 'break',
+        breakType: 'line'
+      },
+      {
+        kind: 'commentRangeMarker',
+        commentId: 'comment-1',
+        edge: 'end'
+      }
+    ])
   })
 
   it('stores table rows, cells, and nested cell blocks as ordered containers', () => {

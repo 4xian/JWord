@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import * as Y from 'yjs'
 
 import {
   DOCUMENT_STORE_FIELDS,
@@ -29,6 +30,7 @@ import {
 import { createDocumentProjection } from '../src/projection'
 import type { BlockId, DocumentId, RunId, SectionId } from '../src/position'
 import type { Inline, Paragraph, Table } from '../src/model'
+import { createOperationAdapter } from '../src/operation-adapter'
 
 describe('createDocumentProjection', () => {
   it('从 DocumentStore 派生 document section block run text 只读快照', () => {
@@ -115,6 +117,59 @@ describe('createDocumentProjection', () => {
     })
   })
 
+  it('保留 section page columns 和 header/footer 结构信息', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-layout-boundary' as SectionId)
+    const paragraph = createParagraphRecord('paragraph-layout-boundary' as BlockId)
+    const run = createRunRecord('run-layout-boundary' as RunId, '保留节级结构')
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-layout-boundary' as DocumentId)
+    store.sections.push([section])
+    const sectionProperties = section.get(DOCUMENT_STORE_FIELDS.section.properties) as Y.Map<unknown> | undefined
+    const headerIds = section.get(DOCUMENT_STORE_FIELDS.section.headerIds) as Y.Array<string> | undefined
+    const footerIds = section.get(DOCUMENT_STORE_FIELDS.section.footerIds) as Y.Array<string> | undefined
+
+    getSectionBlocks(section).push([paragraph])
+    getParagraphRuns(paragraph).push([run])
+    headerIds?.push(['header-1'])
+    footerIds?.push(['footer-1'])
+
+    expect(sectionProperties).toBeDefined()
+
+    sectionProperties?.set('page', {
+      widthTwips: 12240,
+      heightTwips: 15840,
+      marginTwips: {
+        top: 1440,
+        right: 1200,
+        bottom: 1440,
+        left: 1200
+      }
+    })
+    sectionProperties?.set('columns', 2)
+
+    const projection = createDocumentProjection(store)
+    const projectedSection = projection.document.sections[0]
+
+    expect(projectedSection).toMatchObject({
+      kind: 'section',
+      id: 'section-layout-boundary',
+      columns: 2,
+      headerIds: ['header-1'],
+      footerIds: ['footer-1'],
+      page: {
+        widthTwips: 12240,
+        heightTwips: 15840,
+        marginTwips: {
+          top: 1440,
+          right: 1200,
+          bottom: 1440,
+          left: 1200
+        }
+      }
+    })
+  })
+
   it('投影对象冻结且不暴露可写 Yjs 容器', () => {
     const store = createDocumentStore()
     const section = createSectionRecord('section-readonly' as SectionId)
@@ -137,6 +192,141 @@ describe('createDocumentProjection', () => {
     expect(Object.isFrozen(projectedRun?.inlines)).toBe(true)
     expect(() => pushInline(projectedRun?.inlines ?? [])).toThrow(TypeError)
     expect(getRunText(run).toString()).toBe('只读文本')
+  })
+
+  it('保留 run 的 field link revisionId 和非纯文本 inline 闭环', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-inline-roundtrip' as SectionId)
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-inline-roundtrip' as DocumentId)
+    store.sections.push([section])
+
+    const adapter = createOperationAdapter(store)
+
+    adapter.apply({
+      kind: 'insertBlock',
+      sectionId: 'section-inline-roundtrip',
+      placement: { kind: 'append' },
+      block: {
+        kind: 'paragraph',
+        id: 'paragraph-inline-roundtrip',
+        runs: [
+          {
+            kind: 'run',
+            id: 'run-inline-roundtrip',
+            field: {
+              code: 'PAGE',
+              result: '1'
+            },
+            link: {
+              target: 'https://example.com/spec',
+              tooltip: '规格链接'
+            },
+            revisionId: 'revision-inline-roundtrip',
+            inlines: [
+              {
+                kind: 'bookmark',
+                id: 'bookmark-1',
+                name: 'intro',
+                edge: 'start'
+              },
+              {
+                kind: 'text',
+                text: '你好'
+              },
+              {
+                kind: 'image',
+                resourceId: 'resource-1',
+                alt: '示意图'
+              },
+              {
+                kind: 'break',
+                breakType: 'line'
+              },
+              {
+                kind: 'commentRangeMarker',
+                commentId: 'comment-1',
+                edge: 'start'
+              },
+              {
+                kind: 'text',
+                text: '世界'
+              },
+              {
+                kind: 'commentRangeMarker',
+                commentId: 'comment-1',
+                edge: 'end'
+              },
+              {
+                kind: 'bookmark',
+                id: 'bookmark-1',
+                name: 'intro',
+                edge: 'end'
+              }
+            ]
+          }
+        ]
+      }
+    })
+
+    const projection = createDocumentProjection(store)
+    const projectedParagraph = projection.document.sections[0]?.blocks[0] as Paragraph
+    const projectedRun = projectedParagraph.runs[0]
+
+    expect(projectedRun).toMatchObject({
+      kind: 'run',
+      id: 'run-inline-roundtrip',
+      field: {
+        code: 'PAGE',
+        result: '1'
+      },
+      link: {
+        target: 'https://example.com/spec',
+        tooltip: '规格链接'
+      },
+      revisionId: 'revision-inline-roundtrip'
+    })
+    expect(projectedRun?.inlines).toEqual([
+      {
+        kind: 'bookmark',
+        id: 'bookmark-1',
+        name: 'intro',
+        edge: 'start'
+      },
+      {
+        kind: 'text',
+        text: '你好'
+      },
+      {
+        kind: 'image',
+        resourceId: 'resource-1',
+        alt: '示意图'
+      },
+      {
+        kind: 'break',
+        breakType: 'line'
+      },
+      {
+        kind: 'commentRangeMarker',
+        commentId: 'comment-1',
+        edge: 'start'
+      },
+      {
+        kind: 'text',
+        text: '世界'
+      },
+      {
+        kind: 'commentRangeMarker',
+        commentId: 'comment-1',
+        edge: 'end'
+      },
+      {
+        kind: 'bookmark',
+        id: 'bookmark-1',
+        name: 'intro',
+        edge: 'end'
+      }
+    ])
   })
 })
 

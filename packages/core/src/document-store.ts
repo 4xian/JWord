@@ -9,6 +9,7 @@
 import * as Y from 'yjs'
 
 import { createJWordError } from './errors'
+import type { Inline, RunField, RunLink } from './model'
 import type { BlockId, CommentId, DocumentId, RevisionId, RunId, SectionId } from './position'
 
 declare const documentStoreIdBrand: unique symbol
@@ -85,6 +86,10 @@ export const DOCUMENT_STORE_FIELDS = {
     id: 'id',
     properties: 'properties',
     text: 'text',
+    field: 'field',
+    link: 'link',
+    revisionId: 'revisionId',
+    inlines: 'inlines',
     resourceIds: 'resourceIds',
     styleIds: 'styleIds',
     commentIds: 'commentIds',
@@ -204,12 +209,15 @@ export type BlockRecordValue =
 export type RunRecordValue =
   | RunKind
   | RunId
+  | string
   | Y.Text
+  | Y.Array<DocumentStoreJson>
   | Y.Array<ResourceId>
   | Y.Array<StyleId>
   | Y.Array<CommentId>
   | Y.Array<RevisionId>
   | Y.Map<DocumentStoreJson>
+  | DocumentStoreJson
 
 export type TableRowRecordValue =
   | string
@@ -286,6 +294,14 @@ export interface DocumentStore {
   readonly styles: StyleTable
   readonly comments: CommentTable
   readonly revisions: RevisionTable
+}
+
+export interface RunRecordStructureInput {
+  readonly properties?: Readonly<Record<string, unknown>>
+  readonly field?: RunField
+  readonly link?: RunLink
+  readonly revisionId?: string
+  readonly inlines?: readonly Inline[]
 }
 
 /**
@@ -379,7 +395,7 @@ export function createTableRecord(id: BlockId): BlockRecord {
  * @param text 初始文本。
  * @returns 带有共享 Y.Text 的 run 记录。
  */
-export function createRunRecord(id: RunId, text = ''): RunRecord {
+export function createRunRecord(id: RunId, text = '', structure?: RunRecordStructureInput): RunRecord {
   const run = new Y.Map<RunRecordValue>() as RunRecord
   const sharedText = new Y.Text()
 
@@ -389,12 +405,13 @@ export function createRunRecord(id: RunId, text = ''): RunRecord {
 
   run.set(DOCUMENT_STORE_FIELDS.run.kind, 'run')
   run.set(DOCUMENT_STORE_FIELDS.run.id, id)
-  run.set(DOCUMENT_STORE_FIELDS.run.properties, new Y.Map<DocumentStoreJson>())
+  run.set(DOCUMENT_STORE_FIELDS.run.properties, createJsonMap(structure?.properties))
   run.set(DOCUMENT_STORE_FIELDS.run.text, sharedText)
   run.set(DOCUMENT_STORE_FIELDS.run.resourceIds, new Y.Array<ResourceId>())
   run.set(DOCUMENT_STORE_FIELDS.run.styleIds, new Y.Array<StyleId>())
   run.set(DOCUMENT_STORE_FIELDS.run.commentIds, new Y.Array<CommentId>())
   run.set(DOCUMENT_STORE_FIELDS.run.revisionIds, new Y.Array<RevisionId>())
+  setRunStructure(run, structure)
 
   return run
 }
@@ -469,6 +486,128 @@ export function getRunText(run: RunRecord): Y.Text {
 }
 
 /**
+ * 读取 run 的 field 元数据。
+ *
+ * @param run run 记录。
+ * @returns field 元数据；未设置时返回 undefined。
+ */
+export function getRunField(run: RunRecord): RunField | undefined {
+  const value = run.get(DOCUMENT_STORE_FIELDS.run.field)
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!isRecord(value) || typeof value.code !== 'string') {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'run field 结构非法')
+  }
+
+  const result = typeof value.result === 'string' ? value.result : undefined
+
+  return result === undefined
+    ? { code: value.code }
+    : { code: value.code, result }
+}
+
+/**
+ * 读取 run 的链接元数据。
+ *
+ * @param run run 记录。
+ * @returns link 元数据；未设置时返回 undefined。
+ */
+export function getRunLink(run: RunRecord): RunLink | undefined {
+  const value = run.get(DOCUMENT_STORE_FIELDS.run.link)
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!isRecord(value) || typeof value.target !== 'string') {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'run link 结构非法')
+  }
+
+  const tooltip = typeof value.tooltip === 'string' ? value.tooltip : undefined
+
+  return tooltip === undefined
+    ? { target: value.target }
+    : { target: value.target, tooltip }
+}
+
+/**
+ * 读取 run 的修订 ID。
+ *
+ * @param run run 记录。
+ * @returns 修订 ID；未设置时返回 undefined。
+ */
+export function getRunRevisionId(run: RunRecord): string | undefined {
+  const value = run.get(DOCUMENT_STORE_FIELDS.run.revisionId)
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (typeof value !== 'string') {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'run revisionId 结构非法')
+  }
+
+  return value
+}
+
+/**
+ * 读取 run 的结构化 inline 列表。
+ *
+ * @param run run 记录。
+ * @returns inline 列表；未设置时返回 undefined。
+ */
+export function getRunInlines(run: RunRecord): readonly Inline[] | undefined {
+  const value = run.get(DOCUMENT_STORE_FIELDS.run.inlines)
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!(value instanceof Y.Array)) {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'run inlines 容器非法')
+  }
+
+  return value.toArray().map(projectInlineFromJson)
+}
+
+/**
+ * 写入或覆盖 run 的结构化元数据。
+ *
+ * @param run run 记录。
+ * @param structure field/link/revisionId/inlines 结构。
+ */
+export function setRunStructure(run: RunRecord, structure?: RunRecordStructureInput): void {
+  if (structure === undefined) {
+    return
+  }
+
+  if (structure.field !== undefined) {
+    run.set(DOCUMENT_STORE_FIELDS.run.field, toDocumentStoreJson(structure.field))
+  }
+
+  if (structure.link !== undefined) {
+    run.set(DOCUMENT_STORE_FIELDS.run.link, toDocumentStoreJson(structure.link))
+  }
+
+  if (structure.revisionId !== undefined) {
+    run.set(DOCUMENT_STORE_FIELDS.run.revisionId, structure.revisionId)
+  }
+
+  if (structure.inlines !== undefined) {
+    const inlines = new Y.Array<DocumentStoreJson>()
+
+    if (structure.inlines.length > 0) {
+      inlines.push(structure.inlines.map((inline) => toDocumentStoreJson(inline)))
+    }
+
+    run.set(DOCUMENT_STORE_FIELDS.run.inlines, inlines)
+  }
+}
+
+/**
  * 读取表格内有序行容器。
  *
  * @param block 表格块记录。
@@ -512,4 +651,102 @@ function readSharedArray<Item>(record: SharedMapReader, fieldName: string, label
   throw createJWordError('DOCUMENT_STORE_ARRAY_CONTAINER_MISSING', `${label} 缺失`, {
     label
   })
+}
+
+function projectInlineFromJson(value: unknown): Inline {
+  if (!isRecord(value) || typeof value.kind !== 'string') {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'run inline 结构非法')
+  }
+
+  switch (value.kind) {
+    case 'text':
+      if (typeof value.text !== 'string') {
+        break
+      }
+
+      return { kind: 'text', text: value.text }
+    case 'image':
+      if (typeof value.resourceId !== 'string') {
+        break
+      }
+
+      return typeof value.alt === 'string'
+        ? { kind: 'image', resourceId: value.resourceId, alt: value.alt }
+        : { kind: 'image', resourceId: value.resourceId }
+    case 'break':
+      if (value.breakType === 'line' || value.breakType === 'page' || value.breakType === 'column') {
+        return { kind: 'break', breakType: value.breakType }
+      }
+      break
+    case 'bookmark':
+      if (
+        typeof value.id === 'string'
+        && typeof value.name === 'string'
+        && (value.edge === 'start' || value.edge === 'end')
+      ) {
+        return {
+          kind: 'bookmark',
+          id: value.id,
+          name: value.name,
+          edge: value.edge
+        }
+      }
+      break
+    case 'commentRangeMarker':
+      if (typeof value.commentId === 'string' && (value.edge === 'start' || value.edge === 'end')) {
+        return {
+          kind: 'commentRangeMarker',
+          commentId: value.commentId,
+          edge: value.edge
+        }
+      }
+      break
+  }
+
+  throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'run inline 内容非法', {
+    kind: String(value.kind)
+  })
+}
+
+function toDocumentStoreJson(value: unknown): DocumentStoreJson {
+  if (
+    value === null
+    || typeof value === 'string'
+    || typeof value === 'number'
+    || typeof value === 'boolean'
+  ) {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(toDocumentStoreJson)
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, nestedValue]) => nestedValue !== undefined)
+        .map(([key, nestedValue]) => [key, toDocumentStoreJson(nestedValue)])
+    )
+  }
+
+  throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', 'run 结构化数据必须是 JSON 兼容数据')
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function createJsonMap(properties: Readonly<Record<string, unknown>> | undefined): Y.Map<DocumentStoreJson> {
+  const map = new Y.Map<DocumentStoreJson>()
+
+  if (properties === undefined) {
+    return map
+  }
+
+  for (const [key, value] of Object.entries(properties)) {
+    map.set(key, toDocumentStoreJson(value))
+  }
+
+  return map
 }

@@ -176,6 +176,454 @@ describe('Gate 2 布局', () => {
     })
   })
 
+  it('keeps section page and header footer boundary on laid out page boxes', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-section-boundary',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-section-boundary',
+              page: {
+                widthTwips: 12240,
+                heightTwips: 15840,
+                marginTwips: {
+                  top: 1440,
+                  right: 1200,
+                  bottom: 1440,
+                  left: 1200
+                }
+              },
+              headerIds: ['header-1'],
+              footerIds: ['footer-1'],
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-section-boundary',
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-section-boundary',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: 'section boundary'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig(),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const page = layout.pages[0]
+
+    expect(page).toMatchObject({
+      sectionBoundary: 'single',
+      sectionIds: ['section-layout-section-boundary'],
+      sectionId: 'section-layout-section-boundary',
+      pageLayout: {
+        widthTwips: 12240,
+        heightTwips: 15840,
+        marginTwips: {
+          top: 1440,
+          right: 1200,
+          bottom: 1440,
+          left: 1200
+        }
+      },
+      headerIds: ['header-1'],
+      footerIds: ['footer-1']
+    })
+  })
+
+  it('marks a page as mixed when multiple sections share the same page instead of pretending the first section still owns it', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-mixed-section-boundary',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-mixed-section-boundary-1',
+              page: {
+                widthTwips: 12000
+              },
+              headerIds: ['header-a'],
+              footerIds: ['footer-a'],
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-mixed-section-boundary-1',
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-mixed-section-boundary-1',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: 'section one'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              kind: 'section',
+              id: 'section-layout-mixed-section-boundary-2',
+              page: {
+                widthTwips: 14000
+              },
+              headerIds: ['header-b'],
+              footerIds: ['footer-b'],
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-mixed-section-boundary-2',
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-mixed-section-boundary-2',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: 'section two'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig({
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const page = layout.pages[0]
+
+    expect(page?.sectionBoundary).toBe('mixed')
+    expect(page?.sectionIds).toEqual([
+      'section-layout-mixed-section-boundary-1',
+      'section-layout-mixed-section-boundary-2'
+    ])
+    expect(page?.sectionId).toBeUndefined()
+    expect(page?.pageLayout).toBeUndefined()
+    expect(page?.headerIds).toEqual([])
+    expect(page?.footerIds).toEqual([])
+  })
+
+  it('moves an overflowing table onto a real next page and keeps that page tied to the owning section boundary', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-table-overflow',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-table-overflow',
+              page: {
+                widthTwips: 12240
+              },
+              headerIds: ['header-table'],
+              footerIds: ['footer-table'],
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-table-overflow',
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-table-overflow',
+                      properties: {
+                        fontSizePx: 16
+                      },
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: 'table moves to next page'
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  kind: 'table',
+                  id: 'table-layout-overflow',
+                  rows: [
+                    {
+                      id: 'row-layout-overflow-1',
+                      cells: [
+                        {
+                          id: 'cell-layout-overflow-1',
+                          blocks: []
+                        }
+                      ]
+                    },
+                    {
+                      id: 'row-layout-overflow-2',
+                      cells: [
+                        {
+                          id: 'cell-layout-overflow-2',
+                          blocks: []
+                        }
+                      ]
+                    },
+                    {
+                      id: 'row-layout-overflow-3',
+                      cells: [
+                        {
+                          id: 'cell-layout-overflow-3',
+                          blocks: []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig({
+        orientation: 'landscape',
+        widthTwips: 12240,
+        heightTwips: 1140,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const firstPage = layout.pages[0]
+    const secondPage = layout.pages[1]
+    const secondPageTable = secondPage?.blocks.find((block) => block.kind === 'table')
+
+    expect(layout.pages).toHaveLength(2)
+    expect(firstPage?.blocks.map((block) => block.kind)).toEqual(['paragraph'])
+    expect(secondPageTable).toMatchObject({
+      kind: 'table',
+      pageIndex: 1,
+      sectionId: 'section-layout-table-overflow',
+      tableId: 'table-layout-overflow'
+    })
+    expect(secondPage).toMatchObject({
+      sectionBoundary: 'single',
+      sectionIds: ['section-layout-table-overflow'],
+      sectionId: 'section-layout-table-overflow',
+      pageLayout: {
+        widthTwips: 12240
+      },
+      headerIds: ['header-table'],
+      footerIds: ['footer-table']
+    })
+  })
+
+  it('emits explicit table block boxes instead of dropping table structure', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-table-boundary',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-table-boundary',
+              blocks: [
+                {
+                  kind: 'table',
+                  id: 'table-layout-boundary',
+                  grid: [1200, 2400],
+                  rows: [
+                    {
+                      id: 'row-layout-boundary-1',
+                      cells: [
+                        {
+                          id: 'cell-layout-boundary-1',
+                          blocks: [
+                            {
+                              kind: 'paragraph',
+                              id: 'cell-layout-paragraph-1',
+                              runs: []
+                            }
+                          ]
+                        },
+                        {
+                          id: 'cell-layout-boundary-2',
+                          gridSpan: 2,
+                          blocks: []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig(),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const table = layout.pages[0]?.blocks.find((block) => block.kind === 'table')
+
+    expect(table).toEqual(expect.objectContaining({
+      kind: 'table',
+      sectionId: 'section-layout-table-boundary',
+      tableId: 'table-layout-boundary',
+      grid: [1200, 2400],
+      rowCount: 1,
+      cellCount: 2,
+      rows: [
+        {
+          rowId: 'row-layout-boundary-1',
+          cells: [
+            {
+              cellId: 'cell-layout-boundary-1',
+              gridSpan: 1,
+              blockIds: ['cell-layout-paragraph-1']
+            },
+            {
+              cellId: 'cell-layout-boundary-2',
+              gridSpan: 2,
+              blockIds: []
+            }
+          ]
+        }
+      ]
+    }))
+  })
+
+  it('emits explicit inline object boxes for non-text inline structure', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-inline-boundary',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-inline-boundary',
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-inline-boundary',
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-inline-boundary',
+                      inlines: [
+                        {
+                          kind: 'bookmark',
+                          id: 'bookmark-1',
+                          name: 'bookmark',
+                          edge: 'start'
+                        },
+                        {
+                          kind: 'image',
+                          resourceId: 'image-1',
+                          alt: 'cover'
+                        },
+                        {
+                          kind: 'commentRangeMarker',
+                          commentId: 'comment-1',
+                          edge: 'start'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig(),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const inlines = layout.pages[0]?.lines[0]?.inlines
+
+    expect(inlines?.map((inline) => inline.kind)).toEqual([
+      'inlineObject',
+      'inlineObject',
+      'inlineObject'
+    ])
+    expect(inlines?.map((inline) => inline.kind === 'inlineObject' ? inline.inlineKind : inline.kind)).toEqual([
+      'bookmark',
+      'image',
+      'commentRangeMarker'
+    ])
+    expect(inlines?.map((inline) => inline.kind === 'inlineObject' ? inline.payload : undefined)).toEqual([
+      {
+        id: 'bookmark-1',
+        name: 'bookmark',
+        edge: 'start'
+      },
+      {
+        resourceId: 'image-1',
+        alt: 'cover'
+      },
+      {
+        commentId: 'comment-1',
+        edge: 'start'
+      }
+    ])
+  })
+
+  it('freezes paragraph blocks once and reuses the same frozen object in paragraphs and blocks', () => {
+    const layout = layoutDocument({
+      projection: createProjection('paragraph freeze'),
+      pageConfig: createPageConfig(),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const paragraph = layout.pages[0]?.paragraphs[0]
+    const block = layout.pages[0]?.blocks[0]
+
+    expect(block).toBe(paragraph)
+    expect(Object.isFrozen(block)).toBe(true)
+  })
+
   it('returns debug overlay boxes for page, line and fragment boundaries', () => {
     const layout = layoutDocument({
       projection: createProjection('debug'),

@@ -185,6 +185,7 @@
 - [x] Step 2.15：建立 render benchmark，记录滚动 FPS、layout 耗时、render 耗时、canvas 数量、显存相关指标。
   - 完成 2026-05-12：Gate 2 已落在 core 的 page config、font manager、layout、layout scheduler、canvas renderer、viewport virtualizer、canvas pool、Editor facade 桥接、fixtures、visual baseline 和 benchmark。
   - 复核修正 2026-05-12：补齐 scroll 后 viewport virtualizer 刷新、页面 DOM 尺寸占位、layout scheduler 接入 Editor render 路径、真实 core layout/render benchmark、真实 draw-call visual baseline 校验。
+  - 现状口径 2026-05-14：`pnpm bench` 提供确定性 core `layoutDocument`/`syncPageCanvases` 指标；浏览器滚动/虚拟化 perf 证据走 `examples/vanilla/tests/gate2.perf.e2e.ts`。
 
 ### 验收
 
@@ -446,14 +447,15 @@
 
 - [x] `pnpm build`
 - [x] `pnpm test:e2e`
-  - 审查 2026-05-12：命令 dry-run 通过，但当前没有实际 `.e2e.ts` 用例覆盖编辑行为。
+  - 回写 2026-05-14：当前命令覆盖三浏览器 `examples/vanilla/tests/gate2.e2e.ts`，并追加 `perf-chromium` 下的 `examples/vanilla/tests/gate2.perf.e2e.ts`；现有 Gate 2 证据只覆盖 50 页 fixture 的分页滚动、canvas 虚拟化、page geometry、page-local hit-test、caret/selection rect mapping 和 Chromium 浏览器 perf，不把 Gate 3 pointer selection 或 word selection 语义算作 Gate 2 已完成。
 - [x] `pnpm test:visual`
-  - 完成 2026-05-12：命令构建 core 后用 Gate 2 fixtures 跑真实 `layoutDocument` + `renderPageCanvas` draw-call hash baseline；当前没有 Playwright 截图用例，后续 Gate 3/Alpha 再补浏览器视觉截图。
+  - 回写 2026-05-14：命令先校验 Gate 2 fixtures 的 `layoutDocument` + `renderPageCanvas` draw-call hash baseline，再跑 `visual-chromium` 下的 `examples/vanilla/tests/gate2.visual.ts`；当前浏览器视觉证据是 50 页 fixture 首/中/末页非空像素与 deterministic rect-mapping overlay 像素采样，不是跨平台截图基线。
 - [x] `pnpm bench`
 - [x] bundle size 检查
+  - 回写 2026-05-14：当前命令先 fresh build core 与 vanilla demo，再检查 `packages/core/dist/index.js` 与 vanilla demo 首屏 JS/CSS 的 Gate 2 产物尺寸上限，同时阻止 spec 禁止的重依赖进入首屏 bundle，不再复用旧 dist。
 - [x] architecture boundary 检查
 - [x] 文档同步检查
-  - 完成 2026-05-12：Gate 2 步骤、验收、验证与复核点 B 已同步。
+  - 回写 2026-05-14：Gate 2 步骤、验收、验证与复核点 B 口径已按现有脚本与测试命名同步，避免把 Gate 3/4/5 能力写成 Gate 2 已完成。
 
 ### Alpha 完成
 
@@ -485,8 +487,8 @@
 - [x] 复核点 A：Gate 1 完成后，确认 Y.Doc schema、Projection、Operation、AnchorRef 是否足以承载 docx、协同、自动插入；若不足，在进入 Gate 2 前修正。
   - 已修：Operation/TextPosition/TextRange 已是 JSON 可序列化契约，`splitBlock.newRunId` 改为显式字段，operation fixture 可跨实例回放。
   - 完成 2026-05-12：边界已收口为 Operation adapter/replay 路径，raw Yjs structural update 非 Gate 1 保证；实现说明见 `docs/superpowers/implementation-notes/2026-05-12-gate-1-anchor-replay-boundary.md`。
-- [x] 复核点 B：Gate 2 完成后，确认 LayoutBox 是否能支撑 PDF、页眉页脚、表格、图片和 hit-test；若不足，在进入 Gate 3 前修正。
-  - 完成 2026-05-12：LayoutBox/PageBox/LineBox/TextFragment/InlineBox 已作为只读 layout/render/PDF 边界导出，hit-test 和 rect mapping 通过 AnchorRef/RangeRef 接入 Editor facade；表格、图片、页眉页脚的具体 box 扩展仍按 Gate 4/5 实施，不需要推翻当前边界。
+- [x] 复核点 B：Gate 2 完成后，确认 LayoutBox 当前边界是否足以继续承载 PDF、页眉页脚、表格、图片和 hit-test 的后续扩展；若不足，在进入 Gate 3 前修正。
+  - 回写 2026-05-14：当前可执行证据只覆盖分页 text layout/render、viewport virtualization、hit-test 和 rect mapping。LayoutBox/PageBox/LineBox/TextFragment/InlineBox 已作为只读 layout/render/PDF 边界导出，未见会阻断 Gate 4/5 表格、图片、页眉页脚扩展的结构性缺口；但这些能力本身不算 Gate 2 已完成。
 - [ ] 复核点 C：Gate 3 完成后，确认输入系统、IME、selection、history 没有绕开 transaction pipeline；若绕开，不进入 Alpha。
 - [ ] 复核点 D：Gate 5 完成后，确认 OOXML mapping 的 warning、fixture diff、worker cancel/progress 可用；若不可用，不进入 Beta。
 - [ ] 复核点 E：Gate 6 完成后，确认 origin、undo scope、remote/AI/local 并发语义清晰；若不清晰，不进入 Stable。

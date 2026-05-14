@@ -29,6 +29,7 @@ import {
   resolveAnchorRef
 } from '../src/position'
 import type { BlockId, DocumentId, RunId, SectionId } from '../src/position'
+import { createDocumentProjection } from '../src/projection'
 import type { TextPosition } from '../src/transaction'
 
 describe('createOperationAdapter', () => {
@@ -256,6 +257,103 @@ describe('createOperationAdapter', () => {
     })
 
     expect(sectionBlocks.toArray()).toHaveLength(0)
+  })
+
+  it('preserves structured run metadata when insertBlock writes model data into the store', () => {
+    const store = createDocumentStore()
+    const sectionId = 'section-1' as SectionId
+    const section = createSectionRecord(sectionId)
+    const adapter = createOperationAdapter(store)
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-1' as DocumentId)
+    store.sections.push([section])
+
+    adapter.apply({
+      kind: 'insertBlock',
+      sectionId,
+      placement: { kind: 'append' },
+      block: {
+        kind: 'paragraph',
+        id: 'paragraph-structured',
+        runs: [
+          {
+            kind: 'run',
+            id: 'run-structured',
+            field: {
+              code: 'MERGEFIELD customer_name'
+            },
+            link: {
+              target: 'https://example.com/customer'
+            },
+            revisionId: 'revision-structured',
+            inlines: [
+              {
+                kind: 'text',
+                text: '客户：'
+              },
+              {
+                kind: 'bookmark',
+                id: 'bookmark-structured',
+                name: 'customer',
+                edge: 'start'
+              },
+              {
+                kind: 'text',
+                text: '张三'
+              },
+              {
+                kind: 'bookmark',
+                id: 'bookmark-structured',
+                name: 'customer',
+                edge: 'end'
+              }
+            ]
+          }
+        ]
+      }
+    })
+
+    const projection = createDocumentProjection(store)
+    const paragraph = projection.document.sections[0]?.blocks[0]
+
+    expect(paragraph?.kind).toBe('paragraph')
+    if (paragraph?.kind !== 'paragraph') {
+      throw new Error('expected paragraph block')
+    }
+
+    expect(paragraph.runs[0]).toMatchObject({
+      kind: 'run',
+      id: 'run-structured',
+      field: {
+        code: 'MERGEFIELD customer_name'
+      },
+      link: {
+        target: 'https://example.com/customer'
+      },
+      revisionId: 'revision-structured',
+      inlines: [
+        {
+          kind: 'text',
+          text: '客户：'
+        },
+        {
+          kind: 'bookmark',
+          id: 'bookmark-structured',
+          name: 'customer',
+          edge: 'start'
+        },
+        {
+          kind: 'text',
+          text: '张三'
+        },
+        {
+          kind: 'bookmark',
+          id: 'bookmark-structured',
+          name: 'customer',
+          edge: 'end'
+        }
+      ]
+    })
   })
 })
 

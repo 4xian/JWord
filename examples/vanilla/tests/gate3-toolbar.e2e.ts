@@ -7,6 +7,7 @@
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import type { RangeRef } from '@4xian/jword-core'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -218,12 +219,13 @@ async function selectFirstParagraphAcrossRuns(page: Page): Promise<void> {
 
     const firstRun = firstBlock.runs[0]
     const lastRun = firstBlock.runs[1]
-    const readRunLength = (run: typeof firstRun): number =>
-      run.inlines.flatMap((inline) => inline.kind === 'text' ? Array.from(inline.text) : []).length
 
     if (firstRun === undefined || lastRun === undefined) {
       throw new Error('缺少跨 run 选区目标')
     }
+
+    const readRunLength = (run: typeof firstRun): number =>
+      run.inlines.flatMap((inline) => inline.kind === 'text' ? Array.from(inline.text) : []).length
 
     const anchor = demo.editor.createTextAnchor({
       sectionId: 'section-1',
@@ -241,7 +243,7 @@ async function selectFirstParagraphAcrossRuns(page: Page): Promise<void> {
     demo.editor.setSelection({
       anchor,
       focus,
-      range: { anchor, focus },
+      range: Object.freeze({ anchor, focus }) as RangeRef,
       direction: 'forward',
       affinity: 'none'
     })

@@ -9,7 +9,7 @@
 import { segmentGraphemes } from './grapheme'
 import { cssPxToTwips, twipsToCssPx } from './page-config'
 import type { FontManager, ResolvedFontStyle, RunTextStyle } from './font-manager'
-import type { Block, Inline, ModelProperties, Paragraph, Run } from './model'
+import type { Block, Inline, ModelProperties, Paragraph, Run, Section, Table } from './model'
 import type { PageConfig } from './page-config'
 import type { DocumentProjection } from './projection'
 import type { TextPosition, TextRange } from './transaction'
@@ -52,8 +52,15 @@ export interface DocumentLayout {
 
 export interface PageBox extends LayoutRect {
   readonly kind: 'page'
+  readonly sectionBoundary: 'single' | 'mixed'
+  readonly sectionIds: readonly string[]
+  readonly sectionId?: string
+  readonly pageLayout?: Section['page']
+  readonly headerIds: readonly string[]
+  readonly footerIds: readonly string[]
   readonly lines: readonly LineBox[]
   readonly paragraphs: readonly ParagraphBox[]
+  readonly blocks: readonly BlockBox[]
   readonly contentRect: LayoutRect
 }
 
@@ -65,6 +72,29 @@ export interface ParagraphBox extends LayoutRect {
   readonly paragraphId: string
   readonly pageBreakPolicy: ParagraphPageBreakPolicy
   readonly lines: readonly LineBox[]
+}
+
+export interface TableBox extends LayoutRect {
+  readonly kind: 'table'
+  readonly sectionId: string
+  readonly tableId: string
+  readonly grid: readonly number[]
+  readonly rowCount: number
+  readonly cellCount: number
+  readonly rows: readonly TableRowBox[]
+}
+
+export type BlockBox = ParagraphBox | TableBox
+
+export interface TableRowBox {
+  readonly rowId: string
+  readonly cells: readonly TableCellBox[]
+}
+
+export interface TableCellBox {
+  readonly cellId: string
+  readonly gridSpan: number
+  readonly blockIds: readonly string[]
 }
 
 export interface LineBox extends LayoutRect {
@@ -89,7 +119,9 @@ export interface TextFragment extends LayoutRect {
   readonly advanceTwips: readonly number[]
 }
 
-export type InlineBox = PageBreakBox
+export type InlineBox =
+  | PageBreakBox
+  | NonTextInlineBox
 
 export interface PageBreakBox extends LayoutRect {
   readonly kind: 'pageBreak'
@@ -98,6 +130,24 @@ export interface PageBreakBox extends LayoutRect {
   readonly runId: string
   readonly at: TextPosition
 }
+
+export interface NonTextInlineBox extends LayoutRect {
+  readonly kind: 'inlineObject'
+  readonly inlineKind: Exclude<Inline['kind'], 'text' | 'break'>
+  readonly payload: InlineObjectPayload
+  readonly sectionId: string
+  readonly blockId: string
+  readonly runId: string
+  readonly at: TextPosition
+}
+
+type InlineObjectPayload = Inline extends infer Candidate
+  ? Candidate extends { readonly kind: 'text' | 'break' }
+    ? never
+    : Candidate extends { readonly kind: string }
+      ? Omit<Candidate, 'kind'>
+      : never
+  : never
 
 export interface LayoutDebugOverlay {
   readonly boxes: readonly LayoutDebugBox[]
@@ -121,8 +171,15 @@ interface MutablePageBox {
   y: number
   width: number
   height: number
+  sectionBoundary: 'single' | 'mixed'
+  sectionIds: string[]
+  sectionId?: string
+  pageLayout?: Section['page']
+  headerIds: readonly string[]
+  footerIds: readonly string[]
   lines: LineBox[]
   paragraphs: MutableParagraphBox[]
+  blocks: BlockBox[]
   contentRect: LayoutRect
 }
 
@@ -231,8 +288,10 @@ export function layoutDocumentIncrementally(input: IncrementalLayoutPassInput): 
   let stoppedEarly = false
 
   for (const section of sourceProjection.document.sections) {
+    assignPageSectionBoundary(cursor.page, section)
+
     for (const block of section.blocks) {
-      if (layoutBlock(block, section.id, layoutInput, cursor, pages, incremental)) {
+      if (layoutBlock(block, section, layoutInput, cursor, pages, incremental)) {
         stoppedEarly = true
         break
       }
@@ -868,20 +927,27 @@ function sliceRunFromPosition(
 
 function layoutBlock(
   block: Block,
-  sectionId: string,
+  section: Section,
   input: LayoutInput,
   cursor: LayoutCursor,
   pages: MutablePageBox[],
   incremental?: IncrementalLayoutContext
 ): boolean {
+  assignPageSectionBoundary(cursor.page, section)
+
+  if (block.kind === 'table') {
+    layoutTable(block, section, cursor, pages, input.pageConfig)
+    return false
+  }
+
   if (block.kind !== 'paragraph') {
     return false
   }
 
-  startParagraph(cursor, sectionId, block, input.pageConfig)
+  startParagraph(cursor, section.id, block, input.pageConfig)
 
   for (const run of block.runs) {
-    if (layoutRun(run, sectionId, block, input, cursor, pages, incremental)) {
+    if (layoutRun(run, section, block, input, cursor, pages, incremental)) {
       return true
     }
   }
@@ -893,13 +959,14 @@ function layoutBlock(
 
 function layoutRun(
   run: Run,
-  sectionId: string,
+  section: Section,
   paragraph: Paragraph,
   input: LayoutInput,
   cursor: LayoutCursor,
   pages: MutablePageBox[],
   incremental?: IncrementalLayoutContext
 ): boolean {
+  const sectionId = section.id
   const style = readRunStyle(run.properties)
   let runGraphemeIndex = resolveRunStartGraphemeIndex(incremental, sectionId, paragraph.id, run.id)
 
@@ -922,7 +989,7 @@ function layoutRun(
         const height = cssPxToTwips(measurement.heightCssPx)
         const baseline = cssPxToTwips(measurement.baselineCssPx)
 
-        ensureLineFits(width, height, cursor, pages, input.pageConfig, sectionId, paragraph)
+        ensureLineFits(width, height, cursor, pages, input.pageConfig, section, paragraph)
 
         if (
           shouldStopLayoutPass(incremental, cursor, {
@@ -951,7 +1018,7 @@ function layoutRun(
         runGraphemeIndex += 1
       }
     } else {
-      layoutInlineBreak(inline, sectionId, paragraph, run.id, runGraphemeIndex, cursor, pages, input.pageConfig)
+      layoutInlineBoundary(inline, section, paragraph, run.id, runGraphemeIndex, cursor, pages, input.pageConfig)
     }
   }
 
@@ -978,9 +1045,9 @@ function resolveRunStartGraphemeIndex(
   return sourceStartPosition.graphemeIndex
 }
 
-function layoutInlineBreak(
+function layoutInlineBoundary(
   inline: Inline,
-  sectionId: string,
+  section: Section,
   paragraph: Paragraph,
   runId: string,
   graphemeIndex: number,
@@ -988,7 +1055,12 @@ function layoutInlineBreak(
   pages: MutablePageBox[],
   pageConfig: PageConfig
 ): void {
+  const sectionId = section.id
+
   if (inline.kind !== 'break') {
+    if (inline.kind !== 'text') {
+      appendNonTextInlineBox(inline, sectionId, paragraph.id, runId, graphemeIndex, cursor, pageConfig)
+    }
     return
   }
 
@@ -1023,7 +1095,91 @@ function layoutInlineBreak(
   line.inlines.push(Object.freeze(pageBreak))
   flushLine(cursor)
   startNewPage(cursor, pages, pageConfig)
+  assignPageSectionBoundary(cursor.page, section)
   startParagraph(cursor, sectionId, paragraph, pageConfig)
+}
+
+function layoutTable(
+  table: Table,
+  section: Section,
+  cursor: LayoutCursor,
+  pages: MutablePageBox[],
+  pageConfig: PageConfig
+): void {
+  flushLine(cursor)
+
+  const tableHeight = Math.max(cssPxToTwips(24), table.rows.length * cssPxToTwips(24))
+
+  if (cursor.y + tableHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
+    startNewPage(cursor, pages, pageConfig)
+    assignPageSectionBoundary(cursor.page, section)
+  }
+
+  const tableBox: TableBox = Object.freeze({
+    kind: 'table',
+    pageIndex: cursor.page.pageIndex,
+    sectionId: section.id,
+    tableId: table.id,
+    grid: Object.freeze([...(table.grid ?? [])]),
+    rowCount: table.rows.length,
+    cellCount: table.rows.reduce((count, row) => count + row.cells.length, 0),
+    rows: Object.freeze(table.rows.map((row) => Object.freeze({
+      rowId: row.id,
+      cells: Object.freeze(row.cells.map((cell) => Object.freeze({
+        cellId: cell.id,
+        gridSpan: cell.gridSpan ?? 1,
+        blockIds: Object.freeze(cell.blocks.map((block) => block.id))
+      })))
+    }))),
+    x: cursor.page.contentRect.x,
+    y: cursor.y,
+    width: cursor.page.contentRect.width,
+    height: tableHeight
+  })
+
+  cursor.page.blocks.push(tableBox)
+  cursor.y += tableHeight
+  cursor.x = cursor.page.contentRect.x
+}
+
+function appendNonTextInlineBox(
+  inline: Exclude<Inline, { readonly kind: 'text' | 'break' }>,
+  sectionId: string,
+  blockId: string,
+  runId: string,
+  graphemeIndex: number,
+  cursor: LayoutCursor,
+  pageConfig: PageConfig
+): void {
+  const line = ensureLine(cursor, sectionId, {
+    kind: 'paragraph',
+    id: blockId,
+    runs: []
+  }, pageConfig)
+  const at = {
+    sectionId,
+    blockId,
+    runId,
+    graphemeIndex
+  } satisfies TextPosition
+  const inlineBox: NonTextInlineBox = Object.freeze({
+    kind: 'inlineObject',
+    inlineKind: inline.kind,
+    payload: createInlineObjectPayload(inline),
+    pageIndex: cursor.page.pageIndex,
+    sectionId,
+    blockId,
+    runId,
+    at,
+    x: cursor.x,
+    y: line.y,
+    width: 0,
+    height: Math.max(line.height, cssPxToTwips(16))
+  })
+
+  line.inlines.push(inlineBox)
+  line.height = Math.max(line.height, inlineBox.height)
+  cursor.x += inlineBox.width
 }
 
 function startParagraph(
@@ -1052,6 +1208,7 @@ function startParagraph(
   }
 
   cursor.page.paragraphs.push(paragraphBox)
+  cursor.page.blocks.push(paragraphBox)
   cursor.paragraph = paragraphBox
 }
 
@@ -1061,7 +1218,7 @@ function ensureLineFits(
   cursor: LayoutCursor,
   pages: MutablePageBox[],
   pageConfig: PageConfig,
-  sectionId: string,
+  section: Section,
   paragraph: Paragraph
 ): void {
   const contentRight = pageConfig.marginTwips.left + pageConfig.contentWidthTwips
@@ -1072,10 +1229,11 @@ function ensureLineFits(
 
   if (cursor.y + nextHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
     startNewPage(cursor, pages, pageConfig)
-    startParagraph(cursor, sectionId, paragraph, pageConfig)
+    assignPageSectionBoundary(cursor.page, section)
+    startParagraph(cursor, section.id, paragraph, pageConfig)
   }
 
-  ensureLine(cursor, sectionId, paragraph, pageConfig)
+  ensureLine(cursor, section.id, paragraph, pageConfig)
 }
 
 function ensureLine(
@@ -1215,8 +1373,13 @@ function createPage(pageIndex: number, pageConfig: PageConfig): MutablePageBox {
     y: pageY,
     width: pageConfig.widthTwips,
     height: pageConfig.heightTwips,
+    sectionBoundary: 'single',
+    sectionIds: [],
+    headerIds: Object.freeze([]),
+    footerIds: Object.freeze([]),
     lines: [],
     paragraphs: [],
+    blocks: [],
     contentRect: {
       pageIndex,
       x: pageConfig.marginTwips.left,
@@ -1228,15 +1391,27 @@ function createPage(pageIndex: number, pageConfig: PageConfig): MutablePageBox {
 }
 
 function freezePage(page: MutablePageBox): PageBox {
+  const frozenParagraphs = page.paragraphs.map((paragraph) => Object.freeze({
+    ...paragraph,
+    lines: Object.freeze(paragraph.lines),
+    pageBreakPolicy: Object.freeze(paragraph.pageBreakPolicy)
+  }))
+  const frozenParagraphById = new Map(frozenParagraphs.map((paragraph) => [paragraph.paragraphId, paragraph]))
+
   return Object.freeze({
     ...page,
+    sectionIds: Object.freeze([...page.sectionIds]),
+    headerIds: Object.freeze([...page.headerIds]),
+    footerIds: Object.freeze([...page.footerIds]),
     lines: Object.freeze(page.lines),
-    paragraphs: Object.freeze(page.paragraphs.map((paragraph) => Object.freeze({
-      ...paragraph,
-      lines: Object.freeze(paragraph.lines),
-      pageBreakPolicy: Object.freeze(paragraph.pageBreakPolicy)
-    }))),
-    contentRect: Object.freeze(page.contentRect)
+    paragraphs: Object.freeze(frozenParagraphs),
+    blocks: Object.freeze(page.blocks.map((block) =>
+      block.kind === 'paragraph'
+        ? frozenParagraphById.get(block.paragraphId) ?? block
+        : block
+    )),
+    contentRect: Object.freeze(page.contentRect),
+    ...(page.pageLayout === undefined ? {} : { pageLayout: freezeSectionPageLayout(page.pageLayout) })
   })
 }
 
@@ -1348,6 +1523,65 @@ function locatePosition(
   return position.assoc !== undefined && position.assoc < 0
     ? candidates[0]
     : candidates[candidates.length - 1]
+}
+
+function assignPageSectionBoundary(page: MutablePageBox, section: Section): void {
+  if (page.sectionIds[page.sectionIds.length - 1] === section.id) {
+    return
+  }
+
+  page.sectionIds.push(section.id)
+
+  if (page.sectionIds.length === 1) {
+    page.sectionBoundary = 'single'
+    page.sectionId = section.id
+    page.pageLayout = section.page
+    page.headerIds = section.headerIds ?? Object.freeze([])
+    page.footerIds = section.footerIds ?? Object.freeze([])
+    return
+  }
+
+  page.sectionBoundary = 'mixed'
+  delete page.sectionId
+  delete page.pageLayout
+  page.headerIds = Object.freeze([])
+  page.footerIds = Object.freeze([])
+}
+
+function createInlineObjectPayload(
+  inline: Exclude<Inline, { readonly kind: 'text' | 'break' }>
+): InlineObjectPayload {
+  switch (inline.kind) {
+    case 'bookmark':
+      return Object.freeze({
+        id: inline.id,
+        name: inline.name,
+        edge: inline.edge
+      })
+    case 'image':
+      return Object.freeze({
+        resourceId: inline.resourceId,
+        ...(inline.alt === undefined ? {} : { alt: inline.alt })
+      })
+    case 'commentRangeMarker':
+      return Object.freeze({
+        commentId: inline.commentId,
+        edge: inline.edge
+      })
+  }
+}
+
+function freezeSectionPageLayout(pageLayout: Section['page']): Section['page'] {
+  return Object.freeze({
+    ...pageLayout,
+    ...(pageLayout?.marginTwips === undefined
+      ? {}
+      : {
+          marginTwips: Object.freeze({
+            ...pageLayout.marginTwips
+          })
+        })
+  })
 }
 
 function containsPosition(fragment: TextFragment, position: TextPosition): boolean {

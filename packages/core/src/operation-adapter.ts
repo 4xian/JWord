@@ -13,9 +13,14 @@ import {
   createDocumentStore,
   createParagraphRecord,
   createRunRecord,
+  getRunField,
+  getRunInlines,
+  getRunLink,
+  getRunRevisionId,
   getParagraphRuns,
   getRunText,
   getSectionBlocks,
+  setRunStructure,
   getTableCellBlocks,
   getTableRowCells,
   getTableRows
@@ -34,6 +39,7 @@ import type {
   ResourceId,
   RunContainer,
   RunRecord,
+  RunRecordStructureInput,
   RunRecordValue,
   SectionRecord,
   StyleId,
@@ -565,18 +571,15 @@ function createParagraphRecordFromModel(paragraph: Paragraph): BlockRecord {
 }
 
 function createRunRecordFromModel(run: Run): RunRecord {
-  const record = new Y.Map<RunRecordValue>() as RunRecord
-  const text = new Y.Text()
+  const structureInput: RunRecordStructureInput = {
+    ...(run.properties === undefined ? {} : { properties: run.properties }),
+    ...(run.field === undefined ? {} : { field: run.field }),
+    ...(run.link === undefined ? {} : { link: run.link }),
+    ...(run.revisionId === undefined ? {} : { revisionId: run.revisionId }),
+    inlines: run.inlines
+  }
 
-  text.insert(0, collectText(run))
-  record.set(DOCUMENT_STORE_FIELDS.run.kind, 'run')
-  record.set(DOCUMENT_STORE_FIELDS.run.id, run.id as RunId)
-  record.set(DOCUMENT_STORE_FIELDS.run.properties, createPropertyMap(run.properties ?? {}))
-  record.set(DOCUMENT_STORE_FIELDS.run.text, text)
-  record.set(DOCUMENT_STORE_FIELDS.run.resourceIds, new Y.Array<ResourceId>())
-  record.set(DOCUMENT_STORE_FIELDS.run.styleIds, new Y.Array<StyleId>())
-  record.set(DOCUMENT_STORE_FIELDS.run.commentIds, new Y.Array<CommentId>())
-  record.set(DOCUMENT_STORE_FIELDS.run.revisionIds, new Y.Array<RevisionId>())
+  const record = createRunRecord(run.id as RunId, collectText(run), structureInput)
 
   return record
 }
@@ -631,19 +634,21 @@ function cloneRunRecord(run: RunRecord): RunRecord {
 }
 
 function createSplitRunRecord(runId: RunId, textValue: string, source: RunRecord): RunRecord {
-  const clone = new Y.Map<RunRecordValue>() as RunRecord
-  const properties = clonePropertyMap(readPropertyMap(source, DOCUMENT_STORE_FIELDS.run.properties))
-  const text = new Y.Text()
+  const field = getRunField(source)
+  const link = getRunLink(source)
+  const revisionId = getRunRevisionId(source)
+  const inlines = getRunInlines(source)
+  const structureInput: RunRecordStructureInput = {
+    ...(field === undefined ? {} : { field }),
+    ...(link === undefined ? {} : { link }),
+    ...(revisionId === undefined ? {} : { revisionId }),
+    ...(inlines === undefined ? {} : { inlines })
+  }
 
-  text.insert(0, textValue)
-  clone.set(DOCUMENT_STORE_FIELDS.run.kind, 'run')
-  clone.set(DOCUMENT_STORE_FIELDS.run.id, runId)
+  const clone = createRunRecord(runId, textValue, structureInput)
+  const properties = clonePropertyMap(readPropertyMap(source, DOCUMENT_STORE_FIELDS.run.properties))
+
   clone.set(DOCUMENT_STORE_FIELDS.run.properties, properties)
-  clone.set(DOCUMENT_STORE_FIELDS.run.text, text)
-  clone.set(DOCUMENT_STORE_FIELDS.run.resourceIds, new Y.Array<ResourceId>())
-  clone.set(DOCUMENT_STORE_FIELDS.run.styleIds, new Y.Array<StyleId>())
-  clone.set(DOCUMENT_STORE_FIELDS.run.commentIds, new Y.Array<CommentId>())
-  clone.set(DOCUMENT_STORE_FIELDS.run.revisionIds, new Y.Array<RevisionId>())
 
   return clone
 }
