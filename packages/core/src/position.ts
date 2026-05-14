@@ -72,6 +72,7 @@ export interface TextAnchorRefInput extends AnchorRefInput {
 /** core 内部读取 AnchorRef 时使用的不可变快照。 */
 export interface AnchorRefSnapshot extends AnchorRefInput {
   readonly kind: 'block' | 'text'
+  readonly assoc?: number
   readonly relativePosition?: Y.RelativePosition
 }
 
@@ -289,6 +290,7 @@ function createSnapshotFromState(state: AnchorRefState): AnchorRefSnapshot {
     blockId: state.blockId,
     runId: state.runId,
     graphemeIndex: state.graphemeIndex,
+    ...(state.assoc === 0 ? {} : { assoc: state.assoc }),
     ...(state.relativePosition === undefined ? {} : { relativePosition: state.relativePosition })
   }
 }

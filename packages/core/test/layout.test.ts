@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createFontManager } from '../src/font-manager'
-import { layoutDocument } from '../src/layout'
+import { layoutDocument, layoutDocumentIncrementally } from '../src/layout'
 import { createPageConfig } from '../src/page-config'
 import type { DocumentProjection } from '../src/projection'
 import type { LayoutInput, DocumentLayout } from '../src/layout'
@@ -119,6 +119,63 @@ describe('Gate 2 布局', () => {
     })
   })
 
+  it('stores resolved fallback font on fragments when requested font is unavailable', () => {
+    const projection: DocumentProjection = {
+      document: {
+        kind: 'document',
+        id: 'document-layout-fallback-font',
+        sections: [
+          {
+            kind: 'section',
+            id: 'section-layout-fallback-font',
+            blocks: [
+              {
+                kind: 'paragraph',
+                id: 'paragraph-layout-fallback-font',
+                runs: [
+                  {
+                    kind: 'run',
+                    id: 'run-layout-fallback-font',
+                    properties: {
+                      fontFamily: 'Missing Corp Sans',
+                      fontSizePx: 16,
+                      italic: true,
+                      color: '#445566'
+                    },
+                    inlines: [
+                      {
+                        kind: 'text',
+                        text: 'A'
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+    const layout = layoutDocument({
+      projection,
+      pageConfig: createPageConfig(),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const fragment = layout.pages[0]?.lines[0]?.fragments[0]
+
+    expect(fragment?.style).toMatchObject({
+      fontFamily: 'Arial',
+      requestedFontFamily: 'Missing Corp Sans',
+      status: 'missing',
+      fontSizePx: 16,
+      italic: true,
+      color: '#445566'
+    })
+  })
+
   it('returns debug overlay boxes for page, line and fragment boundaries', () => {
     const layout = layoutDocument({
       projection: createProjection('debug'),
@@ -183,6 +240,64 @@ describe('Gate 2 布局', () => {
     expect(nextLayout.pages[2]).toBe(previousLayout.pages[2])
   })
 
+  it('reuses unchanged suffix pages when equal page config and font manager come from new instances', () => {
+    const previousPageConfig = createPageConfig({
+      widthTwips: 6000,
+      heightTwips: 560,
+      marginTwips: {
+        top: 120,
+        right: 120,
+        bottom: 120,
+        left: 120
+      }
+    })
+    const previousFontManager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+    const previousLayout = layoutDocument({
+      projection: createThreePageBreakProjection('Alpha', 'Bravo', 'Charlie'),
+      pageConfig: previousPageConfig,
+      fontManager: previousFontManager
+    })
+
+    const nextLayout = layoutDocument({
+      projection: createThreePageBreakProjection('Alpha updated', 'Bravo', 'Charlie'),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 560,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      }),
+      dirtyRange: {
+        anchor: {
+          sectionId: 'section-layout-break-reuse',
+          blockId: 'paragraph-layout-break-reuse-1',
+          runId: 'run-layout-break-reuse-1',
+          graphemeIndex: 0
+        },
+        focus: {
+          sectionId: 'section-layout-break-reuse',
+          blockId: 'paragraph-layout-break-reuse-1',
+          runId: 'run-layout-break-reuse-1',
+          graphemeIndex: 0
+        }
+      },
+      previousLayout
+    })
+
+    expect(nextLayout.pages[1]).toBe(previousLayout.pages[1])
+    expect(nextLayout.pages[2]).toBe(previousLayout.pages[2])
+  })
+
   it('reuses unchanged prefix pages when dirty range starts on a later page', () => {
     const pageConfig = createPageConfig({
       widthTwips: 6000,
@@ -227,6 +342,64 @@ describe('Gate 2 布局', () => {
     }
 
     const nextLayout = layoutDocument(nextInput)
+
+    expect(nextLayout.pages[0]).toBe(previousLayout.pages[0])
+    expect(nextLayout.pages[1]).toBe(previousLayout.pages[1])
+  })
+
+  it('reuses unchanged prefix pages when equal page config and font manager come from new instances', () => {
+    const previousPageConfig = createPageConfig({
+      widthTwips: 6000,
+      heightTwips: 560,
+      marginTwips: {
+        top: 120,
+        right: 120,
+        bottom: 120,
+        left: 120
+      }
+    })
+    const previousFontManager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+    const previousLayout = layoutDocument({
+      projection: createExplicitThreePageProjection('Alpha', 'Bravo', 'Charlie'),
+      pageConfig: previousPageConfig,
+      fontManager: previousFontManager
+    })
+
+    const nextLayout = layoutDocument({
+      projection: createExplicitThreePageProjection('Alpha', 'Bravo', 'Charlie updated'),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 560,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      }),
+      dirtyRange: {
+        anchor: {
+          sectionId: 'section-layout-explicit-break',
+          blockId: 'paragraph-layout-explicit-break-3',
+          runId: 'run-layout-explicit-break-3',
+          graphemeIndex: 0
+        },
+        focus: {
+          sectionId: 'section-layout-explicit-break',
+          blockId: 'paragraph-layout-explicit-break-3',
+          runId: 'run-layout-explicit-break-3',
+          graphemeIndex: 0
+        }
+      },
+      previousLayout
+    })
 
     expect(nextLayout.pages[0]).toBe(previousLayout.pages[0])
     expect(nextLayout.pages[1]).toBe(previousLayout.pages[1])
@@ -294,6 +467,46 @@ describe('Gate 2 布局', () => {
     expect(nextLayout.pages[2]).toBe(previousLayout.pages[2])
     expect(fontManager.measuredTexts).not.toContain('乙')
     expect(fontManager.measuredTexts).not.toContain('丙')
+  })
+  it('stops at the stable next page before maxPages continuation', () => {
+    const pageConfig = createPageConfig()
+    const fontManager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+    const previousLayout = layoutDocument({
+      projection: createExplicitThreePageProjection('Alpha', 'Bravo', 'Charlie'),
+      pageConfig,
+      fontManager
+    })
+
+    const pass = layoutDocumentIncrementally({
+      projection: createExplicitThreePageProjection('Alpha updated', 'Bravo', 'Charlie'),
+      pageConfig,
+      fontManager,
+      previousLayout,
+      dirtyRange: {
+        anchor: {
+          sectionId: 'section-layout-explicit-break',
+          blockId: 'paragraph-layout-explicit-break-1',
+          runId: 'run-layout-explicit-break-1',
+          graphemeIndex: 0
+        },
+        focus: {
+          sectionId: 'section-layout-explicit-break',
+          blockId: 'paragraph-layout-explicit-break-1',
+          runId: 'run-layout-explicit-break-1',
+          graphemeIndex: 0
+        }
+      },
+      maxPages: 1
+    })
+
+    expect(pass.laidOutPageIndexes).toEqual([0])
+    expect(pass.continuation).toBeUndefined()
+    expect(pass.stoppedAtPageIndex).toBe(1)
+    expect(pass.layout.pages[1]).toBe(previousLayout.pages[1])
+    expect(pass.layout.pages[2]).toBe(previousLayout.pages[2])
   })
 })
 

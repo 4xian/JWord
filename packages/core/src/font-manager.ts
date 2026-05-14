@@ -8,7 +8,7 @@
 
 import { splitGraphemes } from './grapheme'
 
-export type FontAvailabilityStatus = 'available' | 'fallback' | 'missing'
+export type FontAvailabilityStatus = 'available' | 'fallback' | 'loading' | 'missing'
 
 export interface RunTextStyle {
   readonly fontFamily?: string
@@ -49,6 +49,9 @@ export interface FontManagerOptions {
 export interface FontManager {
   resolveFont(style?: RunTextStyle): ResolvedFontStyle
   measureText(text: string, style?: RunTextStyle): TextMeasurement
+  registerFontFamily(fontFamily: string): void
+  markFontFamilyAvailable(fontFamily: string): void
+  getLoadingFontFamilies(): readonly string[]
   getMissingFontFamilies(): readonly string[]
   getCacheStats(): FontCacheStats
   clearCache(): void
@@ -66,10 +69,17 @@ const DEFAULT_FALLBACK_FONT = 'Arial'
 export function createFontManager(options: FontManagerOptions = {}): FontManager {
   const fallbackFontFamily = options.fallbackFontFamily ?? DEFAULT_FALLBACK_FONT
   const availableFontFamilies = new Set(options.availableFontFamilies ?? [fallbackFontFamily])
+  const loadingFontFamilies = new Set<string>()
   const missingFontFamilies = new Set<string>()
   const cache = new Map<string, TextMeasurement>()
   let hits = 0
   let misses = 0
+
+  const resetCache = (): void => {
+    cache.clear()
+    hits = 0
+    misses = 0
+  }
 
   return {
     resolveFont(style: RunTextStyle = {}): ResolvedFontStyle {
@@ -91,6 +101,16 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
           fontFamily: requestedFontFamily,
           fontSizePx,
           status: 'available'
+        }
+      }
+
+      if (loadingFontFamilies.has(requestedFontFamily)) {
+        return {
+          ...style,
+          fontFamily: fallbackFontFamily,
+          requestedFontFamily,
+          fontSizePx,
+          status: 'loading'
         }
       }
 
@@ -134,6 +154,28 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
 
       return measurement
     },
+    registerFontFamily(fontFamily: string): void {
+      if (fontFamily.length === 0 || availableFontFamilies.has(fontFamily) || loadingFontFamilies.has(fontFamily)) {
+        return
+      }
+
+      missingFontFamilies.delete(fontFamily)
+      loadingFontFamilies.add(fontFamily)
+      resetCache()
+    },
+    markFontFamilyAvailable(fontFamily: string): void {
+      if (fontFamily.length === 0 || availableFontFamilies.has(fontFamily)) {
+        return
+      }
+
+      loadingFontFamilies.delete(fontFamily)
+      missingFontFamilies.delete(fontFamily)
+      availableFontFamilies.add(fontFamily)
+      resetCache()
+    },
+    getLoadingFontFamilies(): readonly string[] {
+      return Object.freeze([...loadingFontFamilies])
+    },
     getMissingFontFamilies(): readonly string[] {
       return Object.freeze([...missingFontFamilies])
     },
@@ -145,9 +187,7 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
       }
     },
     clearCache(): void {
-      cache.clear()
-      hits = 0
-      misses = 0
+      resetCache()
     }
   }
 }

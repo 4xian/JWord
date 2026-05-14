@@ -39,12 +39,14 @@ import {
   getCaretRect as getLayoutCaretRect,
   getSelectionRects as getLayoutSelectionRects,
   hitTestDocumentLayout,
-  layoutDocument
+  layoutDocument,
+  layoutDocumentIncrementally
 } from './layout'
 import type { DocumentLayout, LayoutBox, LayoutDirtyRange, LayoutRect, PageBox } from './layout'
 import { createLayoutSchedule } from './layout-scheduler'
 import { cssPxToTwips, createPageConfig, twipsToCssPx } from './page-config'
 import { createAnchorRef, createTextAnchorRef, resolveAnchorRef } from './position'
+import { readAnchorRefSnapshot } from './position'
 import type { AnchorRef, BlockId, CommentId, DocumentId, RangeRef, RevisionId, RunId, SectionId } from './position'
 import { createGraphemeIndex } from './position'
 import { createDocumentProjection } from './projection'
@@ -467,10 +469,24 @@ interface MountedEditorDom {
   canvases: Map<number, CanvasLike>
   deferredRender: {
     timeoutId: ReturnType<typeof setTimeout>
-    chunks: readonly (readonly number[])[]
-    nextChunkIndex: number
-    layout: DocumentLayout
+    chunkSize: number
+    continuation: Readonly<{
+      dirtyPageIndex: number
+      dirtyPageEndIndex: number
+      startPosition: TextPosition
+    }>
   } | undefined
+}
+
+interface TransientLayoutQuerySnapshot {
+  readonly layout?: DocumentLayout
+  readonly continuation?: Readonly<{
+    dirtyPageIndex: number
+    dirtyPageEndIndex: number
+    startPosition: TextPosition
+  }>
+  readonly staleFromPageIndex?: number
+  readonly needsInitialPass: boolean
 }
 
 type EditorPageElement = HTMLElement
@@ -492,6 +508,12 @@ class JWordEditor implements Editor {
   private layoutNeedsRefresh = false
   private pageStartKeys: readonly string[] = []
   private dirtyPageIndex = 0
+  private dirtyPageEndIndex = 0
+  private pendingLayoutContinuation: Readonly<{
+    dirtyPageIndex: number
+    dirtyPageEndIndex: number
+    startPosition: TextPosition
+  }> | undefined
   private mountedDom: MountedEditorDom | undefined
   private currentSelection: SelectionState | null = null
   private selectionPageIndexes: readonly number[] = []
@@ -562,20 +584,21 @@ class JWordEditor implements Editor {
       sectionId: String(snapshot.sectionId),
       blockId: String(snapshot.blockId),
       runId: String(snapshot.runId),
-      graphemeIndex: Number(snapshot.graphemeIndex)
+      graphemeIndex: Number(snapshot.graphemeIndex),
+      ...(snapshot.assoc === undefined ? {} : { assoc: snapshot.assoc })
     }
   }
 
   getLayout(): DocumentLayout {
     this.assertActive()
 
-    return this.ensureCurrentLayout()
+    return this.readLayoutForQuery()
   }
 
   hitTest(point: EditorHitTestPoint): AnchorRef | undefined {
     this.assertActive()
 
-    const position = hitTestDocumentLayout(this.ensureCurrentLayout(), point)
+    const position = hitTestDocumentLayout(this.readTransientLayoutThroughPage(point.pageIndex), point)
 
     if (position === undefined) {
       return undefined
@@ -585,23 +608,32 @@ class JWordEditor implements Editor {
       sectionId: position.sectionId,
       blockId: position.blockId,
       runId: position.runId,
-      graphemeIndex: position.graphemeIndex
+      graphemeIndex: position.graphemeIndex,
+      ...(position.assoc === undefined ? {} : { assoc: position.assoc })
     })
   }
 
   getCaretRect(anchor: AnchorRef): LayoutRect | undefined {
     this.assertActive()
 
-    return getLayoutCaretRect(this.ensureCurrentLayout(), this.resolveTextPosition(anchor))
+    const position = this.resolveTextPosition(anchor)
+    const snapshot = readAnchorRefSnapshot(anchor)
+
+    return getLayoutCaretRect(this.readTransientLayoutForPosition(position), {
+      ...position,
+      ...(snapshot.assoc === undefined ? {} : { assoc: snapshot.assoc })
+    })
   }
 
   getSelectionRects(range: RangeRef): readonly LayoutRect[] {
     this.assertActive()
 
-    return getLayoutSelectionRects(this.ensureCurrentLayout(), {
+    const resolvedRange = {
       anchor: this.resolveTextPosition(range.anchor),
       focus: this.resolveTextPosition(range.focus)
-    })
+    }
+
+    return getLayoutSelectionRects(this.readTransientLayoutForRange(resolvedRange), resolvedRange)
   }
 
   getSelection(): SelectionState | null {
@@ -633,7 +665,11 @@ class JWordEditor implements Editor {
     const selectionBefore = this.currentSelection
     const hasSelectionAfter = 'selectionAfter' in options
     const selectionAfter = hasSelectionAfter ? options.selectionAfter ?? null : this.currentSelection
-    this.dirtyPageIndex = this.resolveCommandDirtyPageIndex(command) ?? this.resolveCurrentSelectionPageIndex() ?? 0
+    const dirtyPageBounds = this.resolveCommandDirtyPageBounds(command)
+    const fallbackDirtyPageIndex = this.resolveCurrentSelectionPageIndex() ?? 0
+
+    this.dirtyPageIndex = dirtyPageBounds?.start ?? fallbackDirtyPageIndex
+    this.dirtyPageEndIndex = dirtyPageBounds?.end ?? this.dirtyPageIndex
     this.layoutDirtyRange = resolveCommandDirtyRange(command)
 
     if (shouldTrackHistory) {
@@ -676,6 +712,7 @@ class JWordEditor implements Editor {
       this.currentProjection = createDocumentProjection(this.store)
       this.layoutNeedsRefresh = true
       this.dirtyPageIndex = 0
+      this.dirtyPageEndIndex = 0
       this.layoutDirtyRange = undefined
     }
 
@@ -700,6 +737,7 @@ class JWordEditor implements Editor {
       this.currentProjection = createDocumentProjection(this.store)
       this.layoutNeedsRefresh = true
       this.dirtyPageIndex = 0
+      this.dirtyPageEndIndex = 0
       this.layoutDirtyRange = undefined
     }
 
@@ -900,6 +938,7 @@ class JWordEditor implements Editor {
     const previousSelection = this.currentSelection
 
     this.dirtyPageIndex = 0
+    this.dirtyPageEndIndex = 0
     this.layoutDirtyRange = undefined
     const result = this.pipeline.runMutation(commandName, { origin }, () => {
       replaceStoreDocument(this.store, input)
@@ -920,19 +959,42 @@ class JWordEditor implements Editor {
       return
     }
 
+    let layout: DocumentLayout
+    let schedule: ReturnType<typeof createLayoutSchedule>
+
     if (reason === 'document') {
       this.cancelDeferredRender()
+      const pass = this.runLayoutPass({
+        maxPages: 1
+      })
+
+      layout = pass.layout
+      schedule = createLayoutSchedule({
+        pageCount: Math.max(layout.pages.length, (pass.continuation?.dirtyPageIndex ?? -1) + 1),
+        dirtyPageIndex: this.dirtyPageIndex,
+        immediatePageIndexes: pass.laidOutPageIndexes,
+        ...(pass.continuation?.dirtyPageIndex === undefined
+          ? {}
+          : { deferredStartPageIndex: pass.continuation.dirtyPageIndex }),
+        ...(pass.continuation === undefined && pass.stoppedAtPageIndex !== undefined
+          ? { stoppedAtPageIndexHint: pass.stoppedAtPageIndex }
+          : {}),
+        chunkSize: 4
+      })
+    } else {
+      layout = this.cachedLayout ?? this.ensureCurrentLayout()
+      const nextPageStartKeys = createPageStartKeys(layout)
+
+      schedule = createLayoutSchedule({
+        pageCount: layout.pages.length,
+        dirtyPageIndex: this.dirtyPageIndex,
+        previousPageStartKeys: this.pageStartKeys,
+        nextPageStartKeys,
+        chunkSize: 4
+      })
     }
 
-    const layout = this.ensureCurrentLayout()
     const nextPageStartKeys = createPageStartKeys(layout)
-    const schedule = createLayoutSchedule({
-      pageCount: layout.pages.length,
-      dirtyPageIndex: this.dirtyPageIndex,
-      previousPageStartKeys: this.pageStartKeys,
-      nextPageStartKeys,
-      chunkSize: 4
-    })
     const viewport = computeViewportPages({
       pages: layout.pages.map((page) => ({
         pageIndex: page.pageIndex,
@@ -986,32 +1048,271 @@ class JWordEditor implements Editor {
     this.selectionPageIndexes = selectionRender.pageIndexes
     this.syncMountedAssistiveDom(layout)
 
-    if (reason === 'document' && schedule.deferredChunks.length > 0) {
-      this.scheduleDeferredRender(layout, schedule.deferredChunks)
+    if (reason === 'document' && this.pendingLayoutContinuation !== undefined) {
+      this.scheduleDeferredRender(this.pendingLayoutContinuation, 4)
     }
   }
 
   private ensureCurrentLayout(): DocumentLayout {
+    if (this.cachedLayout !== undefined && !this.layoutNeedsRefresh && this.pendingLayoutContinuation === undefined) {
+      return this.cachedLayout
+    }
+
+    if (this.pendingLayoutContinuation !== undefined && this.cachedLayout !== undefined && !this.layoutNeedsRefresh) {
+      const pass = this.runLayoutPass({
+        dirtyPageIndex: this.pendingLayoutContinuation.dirtyPageIndex,
+        dirtyPageEndIndex: this.pendingLayoutContinuation.dirtyPageEndIndex,
+        startPosition: this.pendingLayoutContinuation.startPosition
+      })
+
+      this.cancelDeferredRender()
+
+      return pass.layout
+    }
+
+    return this.runLayoutPass().layout
+  }
+
+  private readLayoutForQuery(): DocumentLayout {
     if (this.cachedLayout !== undefined && !this.layoutNeedsRefresh) {
       return this.cachedLayout
     }
 
-    const nextLayout = layoutDocument({
+    if (!this.layoutNeedsRefresh) {
+      return this.ensureCurrentLayout()
+    }
+
+    if (this.mountedDom !== undefined) {
+      return this.readTransientLayoutThroughPage(this.dirtyPageEndIndex)
+    }
+
+    return this.runLayoutPass({
+      maxPages: Math.max(1, this.dirtyPageEndIndex - this.dirtyPageIndex + 1)
+    }).layout
+  }
+
+  private readTransientLayoutThroughPage(pageIndex: number): DocumentLayout {
+    let snapshot = this.createTransientLayoutQuerySnapshot()
+
+    while (true) {
+      if (
+        snapshot.layout !== undefined
+        && (
+          snapshot.staleFromPageIndex === undefined
+          || pageIndex < snapshot.staleFromPageIndex
+        )
+      ) {
+        return snapshot.layout
+      }
+
+      if (!this.canAdvanceTransientLayoutQuerySnapshot(snapshot)) {
+        return snapshot.layout ?? this.ensureCurrentLayout()
+      }
+
+      snapshot = this.advanceTransientLayoutQuerySnapshot(
+        snapshot,
+        this.resolveTransientLayoutPassPageCount(snapshot, pageIndex)
+      )
+    }
+  }
+
+  private readTransientLayoutForPosition(position: TextPosition): DocumentLayout {
+    let snapshot = this.createTransientLayoutQuerySnapshot()
+
+    while (true) {
+      const layout = snapshot.layout
+      const rect = layout === undefined ? undefined : getLayoutCaretRect(layout, position)
+
+      if (
+        layout !== undefined
+        && (
+          snapshot.staleFromPageIndex === undefined
+          || (rect !== undefined && rect.pageIndex < snapshot.staleFromPageIndex)
+        )
+      ) {
+        return layout
+      }
+
+      if (!this.canAdvanceTransientLayoutQuerySnapshot(snapshot)) {
+        return layout ?? this.ensureCurrentLayout()
+      }
+
+      snapshot = this.advanceTransientLayoutQuerySnapshot(
+        snapshot,
+        this.resolveTransientLayoutPassPageCount(
+          snapshot,
+          rect?.pageIndex ?? snapshot.staleFromPageIndex ?? this.dirtyPageEndIndex
+        )
+      )
+    }
+  }
+
+  private readTransientLayoutForRange(range: Readonly<{
+    anchor: TextPosition
+    focus: TextPosition
+  }>): DocumentLayout {
+    if (isSameTextPosition(range.anchor, range.focus)) {
+      return this.readLayoutForQuery()
+    }
+
+    let snapshot = this.createTransientLayoutQuerySnapshot()
+
+    while (true) {
+      const layout = snapshot.layout
+      const anchorRect = layout === undefined ? undefined : getLayoutCaretRect(layout, range.anchor)
+      const focusRect = layout === undefined ? undefined : getLayoutCaretRect(layout, range.focus)
+
+      if (
+        layout !== undefined
+        && (
+          snapshot.staleFromPageIndex === undefined
+          || (
+            anchorRect !== undefined
+            && focusRect !== undefined
+            && anchorRect.pageIndex < snapshot.staleFromPageIndex
+            && focusRect.pageIndex < snapshot.staleFromPageIndex
+          )
+        )
+      ) {
+        return layout
+      }
+
+      if (!this.canAdvanceTransientLayoutQuerySnapshot(snapshot)) {
+        return layout ?? this.ensureCurrentLayout()
+      }
+
+      snapshot = this.advanceTransientLayoutQuerySnapshot(
+        snapshot,
+        this.resolveTransientLayoutPassPageCount(
+          snapshot,
+          Math.max(
+            anchorRect?.pageIndex ?? -1,
+            focusRect?.pageIndex ?? -1,
+            snapshot.staleFromPageIndex ?? this.dirtyPageEndIndex
+          )
+        )
+      )
+    }
+  }
+
+  private createTransientLayoutQuerySnapshot(): TransientLayoutQuerySnapshot {
+    if (this.layoutNeedsRefresh) {
+      return {
+        ...(this.cachedLayout === undefined ? {} : { layout: this.cachedLayout }),
+        staleFromPageIndex: this.dirtyPageIndex,
+        needsInitialPass: true
+      }
+    }
+
+    if (this.pendingLayoutContinuation !== undefined) {
+      return {
+        ...(this.cachedLayout === undefined ? {} : { layout: this.cachedLayout }),
+        continuation: this.pendingLayoutContinuation,
+        staleFromPageIndex: this.pendingLayoutContinuation.dirtyPageIndex,
+        needsInitialPass: this.cachedLayout === undefined
+      }
+    }
+
+    return {
+      ...(this.cachedLayout === undefined ? {} : { layout: this.cachedLayout }),
+      needsInitialPass: this.cachedLayout === undefined
+    }
+  }
+
+  private canAdvanceTransientLayoutQuerySnapshot(snapshot: TransientLayoutQuerySnapshot): boolean {
+    return snapshot.needsInitialPass || snapshot.continuation !== undefined
+  }
+
+  private resolveTransientLayoutPassPageCount(
+    snapshot: TransientLayoutQuerySnapshot,
+    targetPageIndex: number
+  ): number | undefined {
+    const normalizedTargetPageIndex = Math.max(0, targetPageIndex)
+
+    if (snapshot.continuation !== undefined) {
+      return Math.max(1, normalizedTargetPageIndex - snapshot.continuation.dirtyPageIndex + 1)
+    }
+
+    if (!snapshot.needsInitialPass || !this.layoutNeedsRefresh) {
+      return undefined
+    }
+
+    return Math.max(
+      1,
+      this.dirtyPageEndIndex - this.dirtyPageIndex + 1,
+      normalizedTargetPageIndex - this.dirtyPageIndex + 1
+    )
+  }
+
+  private advanceTransientLayoutQuerySnapshot(
+    snapshot: TransientLayoutQuerySnapshot,
+    maxPages?: number
+  ): TransientLayoutQuerySnapshot {
+    const pass = layoutDocumentIncrementally({
       projection: this.currentProjection,
       pageConfig: this.pageConfig,
       fontManager: this.fontManager,
-      ...(this.layoutNeedsRefresh && this.cachedLayout !== undefined
-        ? { previousLayout: this.cachedLayout }
-        : {}),
-      ...(this.layoutNeedsRefresh ? { dirtyPageIndex: this.dirtyPageIndex } : {}),
-      ...(this.layoutDirtyRange === undefined ? {} : { dirtyRange: this.layoutDirtyRange })
+      ...(snapshot.layout === undefined ? {} : { previousLayout: snapshot.layout }),
+      ...(snapshot.continuation === undefined
+        ? {
+            ...(this.layoutNeedsRefresh
+              ? {
+                  dirtyPageIndex: this.dirtyPageIndex,
+                  dirtyPageEndIndex: this.dirtyPageEndIndex
+                }
+              : {}),
+            ...(this.layoutNeedsRefresh && this.layoutDirtyRange !== undefined
+              ? { dirtyRange: this.layoutDirtyRange }
+              : {})
+          }
+        : {
+            dirtyPageIndex: snapshot.continuation.dirtyPageIndex,
+            dirtyPageEndIndex: snapshot.continuation.dirtyPageEndIndex,
+            startPosition: snapshot.continuation.startPosition
+          }),
+      ...(maxPages === undefined ? {} : { maxPages })
     })
 
-    this.cachedLayout = nextLayout
-    this.layoutNeedsRefresh = false
-    this.layoutDirtyRange = undefined
+    if (snapshot.continuation !== undefined || this.mountedDom !== undefined) {
+      this.cachedLayout = pass.layout
+      this.pendingLayoutContinuation = pass.continuation
+      this.syncDeferredRenderWithCurrentContinuation()
+    }
 
-    return nextLayout
+    return {
+      layout: pass.layout,
+      ...(pass.continuation === undefined
+        ? {}
+        : {
+            continuation: pass.continuation,
+            staleFromPageIndex: pass.continuation.dirtyPageIndex
+          }),
+      needsInitialPass: false
+    }
+  }
+
+  private syncDeferredRenderWithCurrentContinuation(): void {
+    const mountedDom = this.mountedDom
+    const deferredRender = mountedDom?.deferredRender
+
+    if (mountedDom === undefined || deferredRender === undefined) {
+      return
+    }
+
+    clearTimeout(deferredRender.timeoutId)
+
+    if (this.pendingLayoutContinuation === undefined) {
+      mountedDom.deferredRender = undefined
+      return
+    }
+
+    mountedDom.deferredRender = {
+      timeoutId: setTimeout(() => {
+        this.flushDeferredRenderChunk()
+      }, 0),
+      chunkSize: deferredRender.chunkSize,
+      continuation: this.pendingLayoutContinuation
+    }
   }
 
   private resolveCurrentSelectionPageIndex(): number | undefined {
@@ -1020,21 +1321,90 @@ class JWordEditor implements Editor {
     }
 
     try {
-      return getLayoutCaretRect(this.ensureCurrentLayout(), this.resolveTextPosition(this.currentSelection.anchor))?.pageIndex
+      const selectionPosition = this.resolveTextPosition(this.currentSelection.anchor)
+      const cachedPageIndex = this.cachedLayout === undefined
+        ? undefined
+        : getLayoutCaretRect(this.cachedLayout, selectionPosition)?.pageIndex
+
+      return cachedPageIndex ?? getLayoutCaretRect(this.ensureCurrentLayout(), selectionPosition)?.pageIndex
     } catch {
       return undefined
     }
   }
 
   private resolveCommandDirtyPageIndex(command: Command): number | undefined {
+    return this.resolveCommandDirtyPageBounds(command)?.start
+  }
+
+  private resolveCommandDirtyPageBounds(command: Command): Readonly<{
+    start: number
+    end: number
+  }> | undefined {
     if (command.operations.length === 0) {
       return undefined
+    }
+
+    const cachedPageIndexes = this.cachedLayout === undefined
+      ? []
+      : mergePageIndexes(...command.operations.map((operation) => resolveOperationDirtyPageIndexes(this.cachedLayout!, operation)))
+
+    if (cachedPageIndexes.length > 0) {
+      return {
+        start: cachedPageIndexes[0]!,
+        end: cachedPageIndexes[cachedPageIndexes.length - 1]!
+      }
     }
 
     const layout = this.ensureCurrentLayout()
     const pageIndexes = mergePageIndexes(...command.operations.map((operation) => resolveOperationDirtyPageIndexes(layout, operation)))
 
-    return pageIndexes[0]
+    if (pageIndexes.length === 0) {
+      return undefined
+    }
+
+    return {
+      start: pageIndexes[0]!,
+      end: pageIndexes[pageIndexes.length - 1]!
+    }
+  }
+
+  private runLayoutPass(input: Readonly<{
+    dirtyPageIndex?: number
+    dirtyPageEndIndex?: number
+    startPosition?: TextPosition
+    maxPages?: number
+  }> = {}): Readonly<{
+    layout: DocumentLayout
+    laidOutPageIndexes: readonly number[]
+    continuation?: Readonly<{
+      dirtyPageIndex: number
+      dirtyPageEndIndex: number
+      startPosition: TextPosition
+    }>
+    stoppedAtPageIndex?: number
+  }> {
+    const pass = layoutDocumentIncrementally({
+      projection: this.currentProjection,
+      pageConfig: this.pageConfig,
+      fontManager: this.fontManager,
+      ...(this.cachedLayout === undefined ? {} : { previousLayout: this.cachedLayout }),
+      ...(input.dirtyPageIndex !== undefined || this.layoutNeedsRefresh
+        ? { dirtyPageIndex: input.dirtyPageIndex ?? this.dirtyPageIndex }
+        : {}),
+      ...(input.dirtyPageEndIndex !== undefined || this.layoutNeedsRefresh
+        ? { dirtyPageEndIndex: input.dirtyPageEndIndex ?? this.dirtyPageEndIndex }
+        : {}),
+      ...(input.startPosition === undefined ? {} : { startPosition: input.startPosition }),
+      ...(this.layoutDirtyRange === undefined || input.startPosition !== undefined ? {} : { dirtyRange: this.layoutDirtyRange }),
+      ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages })
+    })
+
+    this.cachedLayout = pass.layout
+    this.pendingLayoutContinuation = pass.continuation
+    this.layoutNeedsRefresh = false
+    this.layoutDirtyRange = undefined
+
+    return pass
   }
 
   private createSelectionRenderState(layout: DocumentLayout): Readonly<{
@@ -1126,7 +1496,7 @@ class JWordEditor implements Editor {
       return
     }
 
-    this.syncMountedAssistiveDom(this.ensureCurrentLayout())
+    this.syncMountedAssistiveDom(this.cachedLayout ?? this.ensureCurrentLayout())
   }
 
   private handleRuntimeInput(event: Event): void {
@@ -1947,12 +2317,16 @@ class JWordEditor implements Editor {
   }
 
   private scheduleDeferredRender(
-    layout: DocumentLayout,
-    deferredChunks: readonly (readonly number[])[]
+    continuation: Readonly<{
+      dirtyPageIndex: number
+      dirtyPageEndIndex: number
+      startPosition: TextPosition
+    }>,
+    chunkSize: number
   ): void {
     const mountedDom = this.mountedDom
 
-    if (mountedDom === undefined || deferredChunks.length === 0) {
+    if (mountedDom === undefined) {
       return
     }
 
@@ -1960,9 +2334,8 @@ class JWordEditor implements Editor {
       timeoutId: setTimeout(() => {
         this.flushDeferredRenderChunk()
       }, 0),
-      chunks: deferredChunks,
-      nextChunkIndex: 0,
-      layout
+      chunkSize,
+      continuation
     }
 
     mountedDom.deferredRender = deferredRender
@@ -1976,15 +2349,28 @@ class JWordEditor implements Editor {
       return
     }
 
-    const chunk = deferredRender.chunks[deferredRender.nextChunkIndex]
-
-    if (chunk === undefined) {
-      mountedDom.deferredRender = undefined
-      return
-    }
+    const pass = this.runLayoutPass({
+      dirtyPageIndex: deferredRender.continuation.dirtyPageIndex,
+      dirtyPageEndIndex: deferredRender.continuation.dirtyPageEndIndex,
+      startPosition: deferredRender.continuation.startPosition,
+      maxPages: deferredRender.chunkSize
+    })
+    const layout = pass.layout
+    const schedule = createLayoutSchedule({
+      pageCount: Math.max(layout.pages.length, (pass.continuation?.dirtyPageIndex ?? -1) + 1),
+      dirtyPageIndex: deferredRender.continuation.dirtyPageIndex,
+      immediatePageIndexes: pass.laidOutPageIndexes,
+      ...(pass.continuation?.dirtyPageIndex === undefined
+        ? {}
+        : { deferredStartPageIndex: pass.continuation.dirtyPageIndex }),
+      ...(pass.continuation === undefined && pass.stoppedAtPageIndex !== undefined
+        ? { stoppedAtPageIndexHint: pass.stoppedAtPageIndex }
+        : {}),
+      chunkSize: deferredRender.chunkSize
+    })
 
     const viewport = computeViewportPages({
-      pages: deferredRender.layout.pages.map((page) => ({
+      pages: layout.pages.map((page) => ({
         pageIndex: page.pageIndex,
         top: twipsToCssPx(page.y, this.pageConfig.scale),
         height: twipsToCssPx(page.height, this.pageConfig.scale)
@@ -1993,41 +2379,56 @@ class JWordEditor implements Editor {
       viewportHeight: mountedDom.canvasContainer.clientHeight || this.pageConfig.heightCssPx,
       bufferPages: 1
     })
-    const selectionRender = this.createSelectionRenderState(deferredRender.layout)
+    const selectionRender = this.createSelectionRenderState(layout)
     const retainedPageIndexes = mergePageIndexes(
       viewport.retainedPageIndexes,
-      chunk,
+      pass.laidOutPageIndexes,
       selectionRender.pageIndexes,
       this.selectionPageIndexes
     )
     const rerenderPageIndexes = mergePageIndexes(
-      chunk,
+      pass.laidOutPageIndexes,
       selectionRender.pageIndexes,
       this.selectionPageIndexes
     )
 
     mountedDom.canvases = renderPageBatch({
       mountedDom,
-      pages: deferredRender.layout.pages,
+      pages: layout.pages,
       retainedPageIndexes,
       rerenderPageIndexes,
       selectionRender,
       scale: this.pageConfig.scale,
       pixelRatio: resolveCanvasPixelRatio(mountedDom)
     })
+    mountedDom.canvasContainer.setAttribute('data-jword-page-count', String(layout.pages.length))
+    mountedDom.canvasContainer.setAttribute('data-jword-layout-immediate-pages', schedule.immediatePageIndexes.join(','))
+    mountedDom.canvasContainer.setAttribute(
+      'data-jword-layout-deferred-chunks',
+      schedule.deferredChunks.map((chunk) => chunk.join(',')).join(';')
+    )
+    if (schedule.stoppedAtPageIndex === undefined) {
+      mountedDom.canvasContainer.removeAttribute('data-jword-layout-stopped-at')
+    } else {
+      mountedDom.canvasContainer.setAttribute('data-jword-layout-stopped-at', String(schedule.stoppedAtPageIndex))
+    }
     mountedDom.canvasContainer.setAttribute('data-jword-layout-rerender-pages', rerenderPageIndexes.join(','))
     this.selectionPageIndexes = selectionRender.pageIndexes
-    this.syncMountedAssistiveDom(deferredRender.layout)
-    deferredRender.nextChunkIndex += 1
+    this.pageStartKeys = createPageStartKeys(layout)
+    this.syncMountedAssistiveDom(layout)
 
-    if (deferredRender.nextChunkIndex >= deferredRender.chunks.length) {
+    if (pass.continuation === undefined) {
       mountedDom.deferredRender = undefined
       return
     }
 
-    deferredRender.timeoutId = setTimeout(() => {
-      this.flushDeferredRenderChunk()
-    }, 0)
+    mountedDom.deferredRender = {
+      timeoutId: setTimeout(() => {
+        this.flushDeferredRenderChunk()
+      }, 0),
+      chunkSize: deferredRender.chunkSize,
+      continuation: pass.continuation
+    }
   }
 
   private cancelDeferredRender(): void {
@@ -2084,7 +2485,7 @@ function createHiddenTextareaElement(ownerDocument: Document): HTMLTextAreaEleme
   return textarea
 }
 
-function createLiveRegionElement(ownerDocument: Document): HTMLElement {
+function createLiveRegionElement(ownerDocument: Document): HTMLDivElement {
   const element = ownerDocument.createElement('div')
 
   element.setAttribute('data-jword-aria-live', '')
@@ -2095,7 +2496,7 @@ function createLiveRegionElement(ownerDocument: Document): HTMLElement {
   return element
 }
 
-function createTextMirrorElement(ownerDocument: Document): HTMLElement {
+function createTextMirrorElement(ownerDocument: Document): HTMLDivElement {
   const element = ownerDocument.createElement('div')
 
   element.setAttribute('data-jword-text-mirror', '')
@@ -2105,7 +2506,7 @@ function createTextMirrorElement(ownerDocument: Document): HTMLElement {
   return element
 }
 
-function applyVisuallyHiddenStyle(element: HTMLElement): void {
+function applyVisuallyHiddenStyle(element: HTMLDivElement): void {
   element.style.position = 'absolute'
   element.style.left = '0'
   element.style.top = '0'
@@ -2582,6 +2983,13 @@ function findTextPositionPageIndexes(layout: DocumentLayout, position: TextPosit
   const caretRect = getLayoutCaretRect(layout, position)
 
   return caretRect === undefined ? [] : [caretRect.pageIndex]
+}
+
+function isSameTextPosition(left: TextPosition, right: TextPosition): boolean {
+  return left.sectionId === right.sectionId
+    && left.blockId === right.blockId
+    && left.runId === right.runId
+    && left.graphemeIndex === right.graphemeIndex
 }
 
 function findRunPageIndexes(layout: DocumentLayout, runId: string): readonly number[] {

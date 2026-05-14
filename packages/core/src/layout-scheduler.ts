@@ -12,6 +12,9 @@ export interface LayoutScheduleInput {
   readonly previousPageStartKeys?: readonly string[]
   readonly nextPageStartKeys?: readonly string[]
   readonly chunkSize?: number
+  readonly immediatePageIndexes?: readonly number[]
+  readonly deferredStartPageIndex?: number
+  readonly stoppedAtPageIndexHint?: number
 }
 
 export interface LayoutSchedule {
@@ -29,25 +32,33 @@ export interface LayoutSchedule {
 export function createLayoutSchedule(input: LayoutScheduleInput): LayoutSchedule {
   const pageCount = Math.max(0, input.pageCount)
   const dirtyPageIndex = clampPageIndex(input.dirtyPageIndex, pageCount)
+  const immediatePageIndexes = normalizeImmediatePageIndexes(input.immediatePageIndexes, pageCount)
 
-  if (dirtyPageIndex === undefined) {
+  if (dirtyPageIndex === undefined && immediatePageIndexes.length === 0) {
     return Object.freeze({
       immediatePageIndexes: Object.freeze([]),
       deferredChunks: Object.freeze([])
     })
   }
 
+  const normalizedImmediatePageIndexes = Object.freeze(
+    immediatePageIndexes.length > 0
+      ? immediatePageIndexes
+      : [dirtyPageIndex!]
+  )
   const chunkSize = Math.max(1, input.chunkSize ?? 4)
   const deferredPageIndexes: number[] = []
-  const stoppedAtPageIndex = findStablePageStart(input, dirtyPageIndex, pageCount)
+  const deferredStartPageIndex = resolveDeferredStartPageIndex(input, normalizedImmediatePageIndexes)
+  const stoppedAtPageIndex = input.stoppedAtPageIndexHint
+    ?? (dirtyPageIndex === undefined ? undefined : findStablePageStart(input, dirtyPageIndex, pageCount))
   const endPageIndex = stoppedAtPageIndex ?? pageCount
 
-  for (let pageIndex = dirtyPageIndex + 1; pageIndex < endPageIndex; pageIndex += 1) {
+  for (let pageIndex = deferredStartPageIndex; pageIndex < endPageIndex; pageIndex += 1) {
     deferredPageIndexes.push(pageIndex)
   }
 
   return Object.freeze({
-    immediatePageIndexes: Object.freeze([dirtyPageIndex]),
+    immediatePageIndexes: normalizedImmediatePageIndexes,
     deferredChunks: Object.freeze(chunkPageIndexes(deferredPageIndexes, chunkSize)),
     ...(stoppedAtPageIndex === undefined ? {} : { stoppedAtPageIndex })
   })
@@ -80,6 +91,36 @@ function findStablePageStart(
   }
 
   return undefined
+}
+
+function normalizeImmediatePageIndexes(
+  pageIndexes: readonly number[] | undefined,
+  pageCount: number
+): number[] {
+  if (pageIndexes === undefined) {
+    return []
+  }
+
+  return [...new Set(pageIndexes)]
+    .filter((pageIndex) => Number.isInteger(pageIndex) && pageIndex >= 0 && pageIndex < pageCount)
+    .sort((left, right) => left - right)
+}
+
+function resolveDeferredStartPageIndex(
+  input: LayoutScheduleInput,
+  immediatePageIndexes: readonly number[]
+): number {
+  if (input.deferredStartPageIndex !== undefined && Number.isInteger(input.deferredStartPageIndex)) {
+    return Math.max(0, input.deferredStartPageIndex)
+  }
+
+  const lastImmediatePageIndex = immediatePageIndexes[immediatePageIndexes.length - 1]
+
+  if (lastImmediatePageIndex !== undefined) {
+    return lastImmediatePageIndex + 1
+  }
+
+  return Math.max(0, input.dirtyPageIndex + 1)
 }
 
 function chunkPageIndexes(

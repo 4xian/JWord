@@ -54,6 +54,75 @@ describe('Gate 2 字体管理器', () => {
     expect(manager.getMissingFontFamilies()).toEqual(['Missing Corp Font'])
   })
 
+  it('registers loading fonts, measures with fallback, and clears stale cache when font becomes available', () => {
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+
+    manager.registerFontFamily('Corp Sans')
+
+    const pending = manager.measureText('abc', {
+      fontFamily: 'Corp Sans',
+      fontSizePx: 12
+    })
+
+    expect(pending.resolvedFont.fontFamily).toBe('Arial')
+    expect(pending.resolvedFont.requestedFontFamily).toBe('Corp Sans')
+    expect(pending.resolvedFont.status).toBe('loading')
+    expect(manager.getLoadingFontFamilies()).toEqual(['Corp Sans'])
+    expect(manager.getMissingFontFamilies()).toEqual([])
+    expect(manager.getCacheStats()).toEqual({
+      size: 1,
+      hits: 0,
+      misses: 1
+    })
+
+    manager.markFontFamilyAvailable('Corp Sans')
+
+    expect(manager.getLoadingFontFamilies()).toEqual([])
+    expect(manager.getCacheStats()).toEqual({
+      size: 0,
+      hits: 0,
+      misses: 0
+    })
+
+    const resolved = manager.measureText('abc', {
+      fontFamily: 'Corp Sans',
+      fontSizePx: 12
+    })
+
+    expect(resolved.resolvedFont.fontFamily).toBe('Corp Sans')
+    expect(resolved.resolvedFont.requestedFontFamily).toBeUndefined()
+    expect(resolved.resolvedFont.status).toBe('available')
+  })
+
+  it('removes previously missing font from diagnostics after registration', () => {
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+
+    const missing = manager.resolveFont({
+      fontFamily: 'Corp Sans',
+      fontSizePx: 12
+    })
+
+    expect(missing.status).toBe('missing')
+    expect(manager.getMissingFontFamilies()).toEqual(['Corp Sans'])
+
+    manager.registerFontFamily('Corp Sans')
+
+    const loading = manager.resolveFont({
+      fontFamily: 'Corp Sans',
+      fontSizePx: 12
+    })
+
+    expect(loading.status).toBe('loading')
+    expect(manager.getLoadingFontFamilies()).toEqual(['Corp Sans'])
+    expect(manager.getMissingFontFamilies()).toEqual([])
+  })
+
   it('measures CJK, emoji and combining characters by grapheme cluster', () => {
     const manager = createFontManager({
       fallbackFontFamily: 'Arial',

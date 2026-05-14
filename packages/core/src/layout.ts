@@ -8,7 +8,7 @@
 
 import { segmentGraphemes } from './grapheme'
 import { cssPxToTwips, twipsToCssPx } from './page-config'
-import type { FontManager, RunTextStyle } from './font-manager'
+import type { FontManager, ResolvedFontStyle, RunTextStyle } from './font-manager'
 import type { Block, Inline, ModelProperties, Paragraph, Run } from './model'
 import type { PageConfig } from './page-config'
 import type { DocumentProjection } from './projection'
@@ -84,7 +84,7 @@ export interface TextFragment extends LayoutRect {
   readonly text: string
   readonly start: TextPosition
   readonly end: TextPosition
-  readonly style: RunTextStyle
+  readonly style: ResolvedFontStyle
   readonly baseline: number
   readonly advanceTwips: readonly number[]
 }
@@ -164,12 +164,27 @@ interface LayoutCursor {
 interface IncrementalLayoutContext {
   readonly previousLayout: DocumentLayout
   readonly dirtyPageIndex: number
+  readonly dirtyPageEndIndex: number
   readonly prefixPages: readonly PageBox[]
   readonly sourceProjection: DocumentProjection
+  readonly sourceStartPosition?: TextPosition
+  readonly pageLimit?: number
+  continuation?: Readonly<{
+    dirtyPageIndex: number
+    dirtyPageEndIndex: number
+    startPosition: TextPosition
+  }>
   stoppedAtPageIndex?: number
 }
 
+interface IncrementalLayoutPassInput extends LayoutInput {
+  readonly dirtyPageEndIndex?: number
+  readonly startPosition?: TextPosition
+  readonly maxPages?: number
+}
+
 const PAGE_GAP_TWIPS = 720
+const FONT_MANAGER_COMPATIBILITY_PROBE_TEXTS = Object.freeze(['M', '中', '😀', ' ', '.'])
 
 /**
  * 从只读投影生成分页布局。
@@ -178,6 +193,25 @@ const PAGE_GAP_TWIPS = 720
  * @returns DocumentLayout 和 debug overlay 数据。
  */
 export function layoutDocument(input: LayoutInput): DocumentLayout {
+  return layoutDocumentIncrementally(input).layout
+}
+
+/**
+ * 执行一次可恢复的分片 layout pass。
+ *
+ * @param input 布局输入，以及可选的 续排起点 和 本次最多排出的页数。
+ * @returns 本次产出的布局、已完成的新页，以及是否还需要继续续排。
+ */
+export function layoutDocumentIncrementally(input: IncrementalLayoutPassInput): Readonly<{
+  layout: DocumentLayout
+  laidOutPageIndexes: readonly number[]
+  continuation?: Readonly<{
+    dirtyPageIndex: number
+    dirtyPageEndIndex: number
+    startPosition: TextPosition
+  }>
+  stoppedAtPageIndex?: number
+}> {
   const incremental = createIncrementalLayoutContext(input)
   const layoutInput = createDerivedLayoutInput(input)
   const sourceProjection = incremental?.sourceProjection ?? input.projection
@@ -217,12 +251,19 @@ export function layoutDocument(input: LayoutInput): DocumentLayout {
     ...frozenPages,
     ...resolveReusedSuffixPages(incremental)
   ])
-
-  return Object.freeze({
-    kind: 'documentLayout',
+  const layout = Object.freeze({
+    kind: 'documentLayout' as const,
     input: layoutInput,
     pages: resultPages,
     debugOverlay: createDebugOverlay(resultPages)
+  })
+  const laidOutPageIndexes = Object.freeze(frozenPages.map((page) => page.pageIndex))
+
+  return Object.freeze({
+    layout,
+    laidOutPageIndexes,
+    ...(incremental?.continuation === undefined ? {} : { continuation: incremental.continuation }),
+    ...(incremental?.stoppedAtPageIndex === undefined ? {} : { stoppedAtPageIndex: incremental.stoppedAtPageIndex })
   })
 }
 
@@ -341,13 +382,13 @@ export function getSelectionRects(layout: DocumentLayout, range: TextRange): rea
   return Object.freeze(rects)
 }
 
-function createIncrementalLayoutContext(input: LayoutInput): IncrementalLayoutContext | undefined {
+function createIncrementalLayoutContext(input: IncrementalLayoutPassInput): IncrementalLayoutContext | undefined {
   const previousLayout = input.previousLayout
 
   if (
     previousLayout === undefined
-    || previousLayout.input.pageConfig !== input.pageConfig
-    || previousLayout.input.fontManager !== input.fontManager
+    || !isEquivalentLayoutPageConfig(previousLayout.input.pageConfig, input.pageConfig)
+    || !isCompatibleLayoutFontManager(previousLayout.input.fontManager, input.fontManager, input.projection)
   ) {
     return undefined
   }
@@ -358,9 +399,13 @@ function createIncrementalLayoutContext(input: LayoutInput): IncrementalLayoutCo
     return undefined
   }
 
-  const startPosition = dirtyPageIndex === 0
-    ? undefined
-    : getPageStartPosition(previousLayout.pages[dirtyPageIndex])
+  const dirtyPageEndIndex = resolveDirtyPageEndIndex(input, previousLayout, dirtyPageIndex)
+
+  const startPosition = input.startPosition ?? (
+    dirtyPageIndex === 0
+      ? undefined
+      : getPageStartPosition(previousLayout.pages[dirtyPageIndex])
+  )
 
   if (dirtyPageIndex > 0 && startPosition === undefined) {
     return undefined
@@ -377,8 +422,11 @@ function createIncrementalLayoutContext(input: LayoutInput): IncrementalLayoutCo
   return {
     previousLayout,
     dirtyPageIndex,
+    dirtyPageEndIndex,
     prefixPages: Object.freeze(previousLayout.pages.slice(0, dirtyPageIndex)),
-    sourceProjection
+    sourceProjection,
+    ...(startPosition === undefined ? {} : { sourceStartPosition: startPosition }),
+    ...(input.maxPages === undefined ? {} : { pageLimit: Math.max(1, input.maxPages) })
   }
 }
 
@@ -394,11 +442,113 @@ function createDerivedLayoutInput(
   })
 }
 
+function isEquivalentLayoutPageConfig(left: PageConfig, right: PageConfig): boolean {
+  return left.widthTwips === right.widthTwips
+    && left.heightTwips === right.heightTwips
+    && left.contentWidthTwips === right.contentWidthTwips
+    && left.contentHeightTwips === right.contentHeightTwips
+    && left.marginTwips.top === right.marginTwips.top
+    && left.marginTwips.right === right.marginTwips.right
+    && left.marginTwips.bottom === right.marginTwips.bottom
+    && left.marginTwips.left === right.marginTwips.left
+}
+
+function isCompatibleLayoutFontManager(
+  previousFontManager: FontManager,
+  nextFontManager: FontManager,
+  projection: DocumentProjection
+): boolean {
+  if (previousFontManager === nextFontManager) {
+    return true
+  }
+
+  const styles = collectFontManagerProbeStyles(projection)
+
+  for (const style of styles) {
+    for (const text of FONT_MANAGER_COMPATIBILITY_PROBE_TEXTS) {
+      const previousMeasurement = previousFontManager.measureText(text, style)
+      const nextMeasurement = nextFontManager.measureText(text, style)
+
+      if (!isEquivalentTextMeasurement(previousMeasurement, nextMeasurement)) {
+        return false
+      }
+    }
+  }
+
+  return true
+}
+
+function collectFontManagerProbeStyles(projection: DocumentProjection): readonly RunTextStyle[] {
+  const styles = new Map<string, RunTextStyle>()
+  const defaultStyle: RunTextStyle = Object.freeze({})
+
+  styles.set(createRunStyleSignature(defaultStyle), defaultStyle)
+
+  for (const section of projection.document.sections) {
+    for (const block of section.blocks) {
+      if (block.kind !== 'paragraph') {
+        continue
+      }
+
+      for (const run of block.runs) {
+        const style = Object.freeze(readRunStyle(run.properties))
+        const key = createRunStyleSignature(style)
+
+        if (!styles.has(key)) {
+          styles.set(key, style)
+        }
+      }
+    }
+  }
+
+  return Object.freeze([...styles.values()])
+}
+
+function createRunStyleSignature(style: RunTextStyle): string {
+  return [
+    style.fontFamily ?? '',
+    style.fontSizePx ?? '',
+    style.fontSizeTwips ?? '',
+    style.bold === true ? 'bold' : 'normal',
+    style.italic === true ? 'italic' : 'upright',
+    style.color ?? '',
+    style.lineHeight ?? ''
+  ].join('\u0000')
+}
+
+function isEquivalentTextMeasurement(
+  left: ReturnType<FontManager['measureText']>,
+  right: ReturnType<FontManager['measureText']>
+): boolean {
+  return left.widthCssPx === right.widthCssPx
+    && left.heightCssPx === right.heightCssPx
+    && left.baselineCssPx === right.baselineCssPx
+    && left.graphemeCount === right.graphemeCount
+    && createResolvedFontSignature(left.resolvedFont) === createResolvedFontSignature(right.resolvedFont)
+}
+
+function createResolvedFontSignature(style: ResolvedFontStyle): string {
+  return [
+    style.fontFamily,
+    style.requestedFontFamily ?? '',
+    style.fontSizePx,
+    style.status,
+    style.bold === true ? 'bold' : 'normal',
+    style.italic === true ? 'italic' : 'upright',
+    style.color ?? '',
+    style.lineHeight ?? ''
+  ].join('\u0000')
+}
+
 function resolveDirtyPageIndex(
-  input: LayoutInput,
+  input: IncrementalLayoutPassInput,
   previousLayout: DocumentLayout
 ): number | undefined {
   if (input.dirtyPageIndex !== undefined && Number.isInteger(input.dirtyPageIndex)) {
+    if (input.startPosition !== undefined) {
+      return Math.max(0, input.dirtyPageIndex)
+    }
+
     return clampPageIndex(input.dirtyPageIndex, previousLayout.pages.length)
   }
 
@@ -418,6 +568,33 @@ function resolveDirtyPageIndex(
   }
 
   return Math.min(anchorPageIndex, focusPageIndex)
+}
+
+function resolveDirtyPageEndIndex(
+  input: IncrementalLayoutPassInput,
+  previousLayout: DocumentLayout,
+  dirtyPageIndex: number
+): number {
+  if (input.dirtyPageEndIndex !== undefined && Number.isInteger(input.dirtyPageEndIndex)) {
+    return clampPageIndex(input.dirtyPageEndIndex, previousLayout.pages.length) ?? dirtyPageIndex
+  }
+
+  if (input.dirtyRange === undefined) {
+    return dirtyPageIndex
+  }
+
+  const anchorPageIndex = locatePageIndex(previousLayout, input.dirtyRange.anchor)
+  const focusPageIndex = locatePageIndex(previousLayout, input.dirtyRange.focus)
+
+  if (anchorPageIndex === undefined) {
+    return focusPageIndex ?? dirtyPageIndex
+  }
+
+  if (focusPageIndex === undefined) {
+    return anchorPageIndex
+  }
+
+  return Math.max(anchorPageIndex, focusPageIndex)
 }
 
 function clampPageIndex(pageIndex: number, pageCount: number): number | undefined {
@@ -460,6 +637,44 @@ function isTrailingStoppedPage(
     && page.paragraphs.every((paragraph) => paragraph.lines.length === 0)
 }
 
+function shouldStopLayoutPass(
+  incremental: IncrementalLayoutContext | undefined,
+  cursor: LayoutCursor,
+  position: TextPosition
+): boolean {
+  if (shouldStopAtStablePage(incremental, cursor, position)) {
+    return true
+  }
+
+  return shouldStopAtPageLimit(incremental, cursor, position)
+}
+
+function shouldStopAtPageLimit(
+  incremental: IncrementalLayoutContext | undefined,
+  cursor: LayoutCursor,
+  position: TextPosition
+): boolean {
+  const pageLimit = incremental?.pageLimit
+
+  if (
+    incremental === undefined
+    || pageLimit === undefined
+    || cursor.page.pageIndex < incremental.dirtyPageIndex + pageLimit
+    || cursor.page.lines.length > 0
+  ) {
+    return false
+  }
+
+  incremental.stoppedAtPageIndex = cursor.page.pageIndex
+  incremental.continuation = Object.freeze({
+    dirtyPageIndex: cursor.page.pageIndex,
+    dirtyPageEndIndex: incremental.dirtyPageEndIndex,
+    startPosition: position
+  })
+
+  return true
+}
+
 function shouldStopAtStablePage(
   incremental: IncrementalLayoutContext | undefined,
   cursor: LayoutCursor,
@@ -467,7 +682,7 @@ function shouldStopAtStablePage(
 ): boolean {
   if (
     incremental === undefined
-    || cursor.page.pageIndex <= incremental.dirtyPageIndex
+    || cursor.page.pageIndex <= incremental.dirtyPageEndIndex
     || cursor.page.lines.length > 0
   ) {
     return false
@@ -686,13 +901,13 @@ function layoutRun(
   incremental?: IncrementalLayoutContext
 ): boolean {
   const style = readRunStyle(run.properties)
-  let runGraphemeIndex = 0
+  let runGraphemeIndex = resolveRunStartGraphemeIndex(incremental, sectionId, paragraph.id, run.id)
 
   for (const inline of run.inlines) {
     if (inline.kind === 'text') {
       for (const segment of segmentGraphemes(inline.text)) {
         if (
-          shouldStopAtStablePage(incremental, cursor, {
+          shouldStopLayoutPass(incremental, cursor, {
             sectionId,
             blockId: paragraph.id,
             runId: run.id,
@@ -702,8 +917,7 @@ function layoutRun(
           return true
         }
 
-        const fragmentStyle = style
-        const measurement = input.fontManager.measureText(segment.segment, fragmentStyle)
+        const measurement = input.fontManager.measureText(segment.segment, style)
         const width = cssPxToTwips(measurement.widthCssPx)
         const height = cssPxToTwips(measurement.heightCssPx)
         const baseline = cssPxToTwips(measurement.baselineCssPx)
@@ -711,7 +925,7 @@ function layoutRun(
         ensureLineFits(width, height, cursor, pages, input.pageConfig, sectionId, paragraph)
 
         if (
-          shouldStopAtStablePage(incremental, cursor, {
+          shouldStopLayoutPass(incremental, cursor, {
             sectionId,
             blockId: paragraph.id,
             runId: run.id,
@@ -732,7 +946,7 @@ function layoutRun(
           width,
           height,
           baseline,
-          style: fragmentStyle
+          style: measurement.resolvedFont
         })
         runGraphemeIndex += 1
       }
@@ -742,6 +956,26 @@ function layoutRun(
   }
 
   return false
+}
+
+function resolveRunStartGraphemeIndex(
+  incremental: IncrementalLayoutContext | undefined,
+  sectionId: string,
+  paragraphId: string,
+  runId: string
+): number {
+  const sourceStartPosition = incremental?.sourceStartPosition
+
+  if (
+    sourceStartPosition === undefined
+    || sourceStartPosition.sectionId !== sectionId
+    || sourceStartPosition.blockId !== paragraphId
+    || sourceStartPosition.runId !== runId
+  ) {
+    return 0
+  }
+
+  return sourceStartPosition.graphemeIndex
 }
 
 function layoutInlineBreak(
@@ -887,7 +1121,7 @@ function appendTextFragment(input: Readonly<{
   width: number
   height: number
   baseline: number
-  style: RunTextStyle
+  style: ResolvedFontStyle
 }>): void {
   const line = input.cursor.line
 
@@ -1061,7 +1295,8 @@ function positionInFragment(fragment: TextFragment, x: number): TextPosition {
     sectionId: fragment.sectionId,
     blockId: fragment.blockId,
     runId: fragment.runId,
-    graphemeIndex
+    graphemeIndex,
+    ...(graphemeIndex === fragment.end.graphemeIndex ? { assoc: -1 } : {})
   }
 }
 
@@ -1073,14 +1308,20 @@ function locatePosition(
   fragment?: TextFragment
   inline?: InlineBox
 }> | undefined {
+  const candidates: Array<Readonly<{
+    line: LineBox
+    fragment?: TextFragment
+    inline?: InlineBox
+  }>> = []
+
   for (const page of layout.pages) {
     for (const line of page.lines) {
       for (const fragment of line.fragments) {
         if (containsPosition(fragment, position)) {
-          return {
+          candidates.push({
             line,
             fragment
-          }
+          })
         }
       }
 
@@ -1091,16 +1332,22 @@ function locatePosition(
           inline.at.runId === position.runId &&
           inline.at.graphemeIndex === position.graphemeIndex
         ) {
-          return {
+          candidates.push({
             line,
             inline
-          }
+          })
         }
       }
     }
   }
 
-  return undefined
+  if (candidates.length === 0) {
+    return undefined
+  }
+
+  return position.assoc !== undefined && position.assoc < 0
+    ? candidates[0]
+    : candidates[candidates.length - 1]
 }
 
 function containsPosition(fragment: TextFragment, position: TextPosition): boolean {

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { posix } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 import { splitGate2FixtureParagraphs } from '../fixtures/plain-text/gate2-fixture.mjs'
@@ -12,7 +12,7 @@ import {
   syncPageCanvases
 } from '../packages/core/dist/index.js'
 
-const fixturePath = join('fixtures', 'plain-text', 'gate2-50-pages.txt')
+const fixturePath = posix.join('fixtures', 'plain-text', 'gate2-50-pages.txt')
 const fixtureText = readFileSync(fixturePath, 'utf8')
 const fixtureLines = splitGate2FixtureParagraphs(fixtureText)
 const pageConfig = createPageConfig()
@@ -66,7 +66,11 @@ console.log(
       canvasBytesPeak: renderMetrics.canvasBytesPeak,
       offscreenCanvasSize: renderMetrics.offscreenCanvasSize,
       drawCalls: renderMetrics.drawCalls,
-      note: '确定性 core layout/render benchmark；真实浏览器 canvas 绘制和滚动由 Playwright Gate 2 用例覆盖。'
+      browserEvidence: {
+        perfTest: 'examples/vanilla/tests/gate2.perf.e2e.ts',
+        visualTest: 'examples/vanilla/tests/gate2.visual.ts'
+      },
+      note: '确定性 core layout/render benchmark；真实浏览器滚动/虚拟化指标与 canvas 绘制由 Playwright Gate 2 perf/visual 用例覆盖。'
     },
     null,
     2

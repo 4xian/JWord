@@ -414,6 +414,30 @@ describe('Editor facade', () => {
 
     editor.destroy()
   })
+
+  it('keeps hitTest -> AnchorRef -> caret rect stable at a shared fragment boundary in the same run', () => {
+    const editor = createEditor({ initialText: 'abcdef' })
+    const layout = editor.getLayout()
+    const secondFragment = layout.pages[0]?.lines[0]?.fragments[1]
+
+    expect(secondFragment).toBeDefined()
+
+    const anchor = editor.hitTest({
+      pageIndex: 0,
+      x: (secondFragment?.x ?? 0) + 1,
+      y: (secondFragment?.y ?? 0) + 1
+    })
+    const caret = anchor === undefined ? undefined : editor.getCaretRect(anchor)
+
+    expect(anchor).toBeDefined()
+    expect(caret).toMatchObject({
+      pageIndex: secondFragment?.pageIndex,
+      x: secondFragment?.x,
+      y: secondFragment?.y
+    })
+
+    editor.destroy()
+  })
 })
 
 function readParagraphRunTexts(projection: ReturnType<ReturnType<typeof createEditor>['getProjection']>) {

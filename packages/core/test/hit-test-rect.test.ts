@@ -107,6 +107,53 @@ describe('Gate 2 命中测试 and 矩形映射', () => {
       graphemeIndex: 4
     })
   })
+
+  it('keeps round-trip stable at shared boundary around an inline page break', () => {
+    const layout = layoutDocument({
+      projection: createProjection('第一页', '第二页'),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 2400,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const firstPageTail = layout.pages[0]?.lines[0]?.fragments.at(-1)
+    const secondPageHead = layout.pages[1]?.lines[0]?.fragments[0]
+
+    expect(firstPageTail).toBeDefined()
+    expect(secondPageHead).toBeDefined()
+
+    const secondPagePosition = hitTestDocumentLayout(layout, {
+      pageIndex: 1,
+      x: ((secondPageHead?.x ?? 0) - (layout.pages[1]?.x ?? 0)) + 1,
+      y: ((secondPageHead?.y ?? 0) - (layout.pages[1]?.y ?? 0)) + 1
+    })
+    const firstPagePosition = hitTestDocumentLayout(layout, {
+      pageIndex: 0,
+      x: ((firstPageTail?.x ?? 0) - (layout.pages[0]?.x ?? 0)) + (firstPageTail?.width ?? 0) - 1,
+      y: ((firstPageTail?.y ?? 0) - (layout.pages[0]?.y ?? 0)) + 1
+    })
+
+    expect(getCaretRect(layout, secondPagePosition!)).toMatchObject({
+      pageIndex: 1,
+      x: secondPageHead?.x,
+      y: secondPageHead?.y
+    })
+    expect(getCaretRect(layout, firstPagePosition!)).toMatchObject({
+      pageIndex: 0,
+      x: (firstPageTail?.x ?? 0) + (firstPageTail?.width ?? 0),
+      y: firstPageTail?.y
+    })
+  })
 })
 
 function createSingleLineLayout() {

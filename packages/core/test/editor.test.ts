@@ -10,7 +10,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { createEditor } from '../src/index'
+import { buildSetBoldCommand, createEditor } from '../src/index'
 import { twipsToCssPx } from '../src/page-config'
 import { createSelectionState } from '../src/selection'
 
@@ -346,6 +346,314 @@ describe('Editor mount/destroy lifecycle', () => {
     }
   })
 
+  it('mounted 小编辑在下一页起点稳定时不会继续调度 deferred render', () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    const calls: string[] = []
+    const originalUserAgent = window.navigator.userAgent
+    const originalGetContext = HTMLCanvasElement.prototype.getContext
+    const context = {
+      set fillStyle(value: string) {
+        calls.push(`fillStyle:${value}`)
+      },
+      set font(value: string) {
+        calls.push(`font:${value}`)
+      },
+      set textBaseline(value: CanvasTextBaseline) {
+        calls.push(`textBaseline:${value}`)
+      },
+      setTransform(a: number, b: number, c: number, d: number, e: number, f: number) {
+        calls.push(`setTransform:${a},${b},${c},${d},${e},${f}`)
+      },
+      clearRect(x: number, y: number, width: number, height: number) {
+        calls.push(`clearRect:${x},${y},${width},${height}`)
+      },
+      fillRect(x: number, y: number, width: number, height: number) {
+        calls.push(`fillRect:${x},${y},${width},${height}`)
+      },
+      fillText(text: string, x: number, y: number) {
+        calls.push(`fillText:${text},${x},${y}`)
+      }
+    } as unknown as CanvasRenderingContext2D
+    const getContext: HTMLCanvasElement['getContext'] = ((contextId: string) =>
+      contextId === '2d' ? context : null) as HTMLCanvasElement['getContext']
+    const text = Array.from(
+      { length: 160 },
+      (_, index) => `第 ${index + 1} 段稳定分页文本`
+    ).join('\n\n')
+    const editor = createEditor({ initialText: text })
+
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: 'Desktop Chrome'
+    })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: getContext
+    })
+
+    try {
+      editor.mount(host)
+
+      expect(editor.getLayout().pages.length).toBeGreaterThan(1)
+
+      calls.length = 0
+
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 0
+      })
+
+      editor.executeCommand({
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: editor.resolveTextPosition(anchor),
+            text: '前'
+          }
+        ]
+      })
+
+      const canvasContainer = host.querySelector('[data-jword-canvas-container]') as HTMLElement | null
+      const immediateClears = calls.filter((call) => call.startsWith('clearRect:'))
+
+      expect(canvasContainer?.getAttribute('data-jword-layout-immediate-pages')).toBe('0')
+      expect(canvasContainer?.getAttribute('data-jword-layout-deferred-chunks')).toBe('')
+      expect(canvasContainer?.getAttribute('data-jword-layout-stopped-at')).toBe('1')
+      expect(immediateClears).toHaveLength(1)
+
+      vi.runOnlyPendingTimers()
+
+      const totalClears = calls.filter((call) => call.startsWith('clearRect:'))
+
+      expect(totalClears.length).toBe(immediateClears.length)
+      expect(canvasContainer?.getAttribute('data-jword-layout-rerender-pages')).toBe('0')
+    } finally {
+      editor.destroy()
+      vi.useRealTimers()
+      Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+        configurable: true,
+        value: originalGetContext
+      })
+      Object.defineProperty(window.navigator, 'userAgent', {
+        configurable: true,
+        value: originalUserAgent
+      })
+    }
+  })
+
+  it('mounted 查询 getLayout 不会同步吃完整个 deferred continuation', () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    const calls: string[] = []
+    const originalUserAgent = window.navigator.userAgent
+    const originalGetContext = HTMLCanvasElement.prototype.getContext
+    const context = {
+      set fillStyle(value: string) {
+        calls.push(`fillStyle:${value}`)
+      },
+      set font(value: string) {
+        calls.push(`font:${value}`)
+      },
+      set textBaseline(value: CanvasTextBaseline) {
+        calls.push(`textBaseline:${value}`)
+      },
+      setTransform(a: number, b: number, c: number, d: number, e: number, f: number) {
+        calls.push(`setTransform:${a},${b},${c},${d},${e},${f}`)
+      },
+      clearRect(x: number, y: number, width: number, height: number) {
+        calls.push(`clearRect:${x},${y},${width},${height}`)
+      },
+      fillRect(x: number, y: number, width: number, height: number) {
+        calls.push(`fillRect:${x},${y},${width},${height}`)
+      },
+      fillText(text: string, x: number, y: number) {
+        calls.push(`fillText:${text},${x},${y}`)
+      }
+    } as unknown as CanvasRenderingContext2D
+    const getContext: HTMLCanvasElement['getContext'] = ((contextId: string) =>
+      contextId === '2d' ? context : null) as HTMLCanvasElement['getContext']
+    const text = '分页查询文本 '.repeat(6000)
+    const editor = createEditor({ initialText: text })
+
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: 'Desktop Chrome'
+    })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: getContext
+    })
+
+    try {
+      editor.mount(host)
+      calls.length = 0
+
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 0
+      })
+
+      editor.executeCommand({
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: editor.resolveTextPosition(anchor),
+            text: '新增分页查询文本 '.repeat(3000)
+          }
+        ]
+      })
+
+      const immediateClears = calls.filter((call) => call.startsWith('clearRect:'))
+
+      expect(immediateClears).toHaveLength(1)
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+      const queriedLayout = editor.getLayout()
+
+      expect(queriedLayout.pages.length).toBeGreaterThan(0)
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+      vi.runOnlyPendingTimers()
+
+      const totalClears = calls.filter((call) => call.startsWith('clearRect:'))
+
+      expect(totalClears.length).toBeGreaterThan(immediateClears.length)
+    } finally {
+      editor.destroy()
+      vi.useRealTimers()
+      Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+        configurable: true,
+        value: originalGetContext
+      })
+      Object.defineProperty(window.navigator, 'userAgent', {
+        configurable: true,
+        value: originalUserAgent
+      })
+    }
+  })
+
+  it('mounted 命中与 rect 查询只按需续排并保留 deferred continuation', () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    const calls: string[] = []
+    const originalUserAgent = window.navigator.userAgent
+    const originalGetContext = HTMLCanvasElement.prototype.getContext
+    const context = {
+      set fillStyle(value: string) {
+        calls.push(`fillStyle:${value}`)
+      },
+      set font(value: string) {
+        calls.push(`font:${value}`)
+      },
+      set textBaseline(value: CanvasTextBaseline) {
+        calls.push(`textBaseline:${value}`)
+      },
+      setTransform(a: number, b: number, c: number, d: number, e: number, f: number) {
+        calls.push(`setTransform:${a},${b},${c},${d},${e},${f}`)
+      },
+      clearRect(x: number, y: number, width: number, height: number) {
+        calls.push(`clearRect:${x},${y},${width},${height}`)
+      },
+      fillRect(x: number, y: number, width: number, height: number) {
+        calls.push(`fillRect:${x},${y},${width},${height}`)
+      },
+      fillText(text: string, x: number, y: number) {
+        calls.push(`fillText:${text},${x},${y}`)
+      }
+    } as unknown as CanvasRenderingContext2D
+    const getContext: HTMLCanvasElement['getContext'] = ((contextId: string) =>
+      contextId === '2d' ? context : null) as HTMLCanvasElement['getContext']
+    const text = '分页命中文本 '.repeat(6000)
+    const editor = createEditor({ initialText: text })
+
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: 'Desktop Chrome'
+    })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: getContext
+    })
+
+    try {
+      editor.mount(host)
+
+      const before = editor.getLayout()
+      const fragment = before.pages[0]?.lines[0]?.fragments[0]
+      const insertionAnchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+
+      expect(fragment).toBeDefined()
+
+      calls.length = 0
+
+      editor.executeCommand({
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: editor.resolveTextPosition(insertionAnchor),
+            text: '扩展分页命中查询文本 '.repeat(3000)
+          }
+        ]
+      })
+
+      const hit = editor.hitTest({
+        pageIndex: 0,
+        x: (fragment?.x ?? 0) + 1,
+        y: (fragment?.y ?? 0) + 1
+      })
+      const hitPosition = hit === undefined ? undefined : editor.resolveTextPosition(hit)
+      const focus = hitPosition === undefined
+        ? undefined
+        : editor.createTextAnchor({
+            sectionId: hitPosition.sectionId,
+            blockId: hitPosition.blockId,
+            runId: hitPosition.runId,
+            graphemeIndex: hitPosition.graphemeIndex + 2
+          })
+      const caretRect = hit === undefined ? undefined : editor.getCaretRect(hit)
+      const selectionRects = hit === undefined || focus === undefined
+        ? []
+        : editor.getSelectionRects(createSelectionState(hit, focus).range)
+      const immediateClears = calls.filter((call) => call.startsWith('clearRect:'))
+
+      expect(hit).toBeDefined()
+      expect(caretRect?.pageIndex).toBe(0)
+      expect(selectionRects.length).toBeGreaterThan(0)
+      expect(immediateClears).toHaveLength(1)
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+      vi.runOnlyPendingTimers()
+
+      const totalClears = calls.filter((call) => call.startsWith('clearRect:'))
+
+      expect(totalClears.length).toBeGreaterThan(immediateClears.length)
+    } finally {
+      editor.destroy()
+      vi.useRealTimers()
+      Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+        configurable: true,
+        value: originalGetContext
+      })
+      Object.defineProperty(window.navigator, 'userAgent', {
+        configurable: true,
+        value: originalUserAgent
+      })
+    }
+  })
+
   it('returns the cached layout until the document changes', () => {
     const editor = createEditor({ initialText: '缓存布局' })
 
@@ -391,6 +699,67 @@ describe('Editor mount/destroy lifecycle', () => {
       expect(after).not.toBe(before)
       expect(after.pages[0]).not.toBe(before.pages[0])
       expect(after.pages[1]).toBe(before.pages[1])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('relayouts every touched page for multi-page formatting commands before reusing a stable suffix', () => {
+    const text = Array.from(
+      { length: 160 },
+      (_, index) => `绗?${index + 1} 娈佃法椤垫牱寮忓懡浠ゆ枃鏈琡`
+    ).join('\n\n')
+    const editor = createEditor({ initialText: text })
+
+    try {
+      const before = editor.getLayout()
+      const startFragment = before.pages[0]?.lines.find((line) => line.fragments.length > 0)?.fragments[0]
+      const targetPage = before.pages.find((page) =>
+        page.pageIndex >= 2 && page.lines.some((line) => line.fragments.length > 0)
+      )
+      const endLine = [...(targetPage?.lines ?? [])].reverse().find((line) => line.fragments.length > 0)
+      const endFragment = endLine?.fragments[endLine.fragments.length - 1]
+      const stableSuffixPageIndex = targetPage === undefined ? undefined : targetPage.pageIndex + 1
+
+      expect(before.pages.length).toBeGreaterThanOrEqual(4)
+      expect(startFragment).toBeDefined()
+      expect(targetPage).toBeDefined()
+      expect(endFragment).toBeDefined()
+
+      const selection = createSelectionState(
+        editor.createTextAnchor({
+          sectionId: startFragment!.sectionId,
+          blockId: startFragment!.blockId,
+          runId: startFragment!.runId,
+          graphemeIndex: startFragment!.start.graphemeIndex
+        }),
+        editor.createTextAnchor({
+          sectionId: endFragment!.sectionId,
+          blockId: endFragment!.blockId,
+          runId: endFragment!.runId,
+          graphemeIndex: endFragment!.end.graphemeIndex
+        })
+      )
+      const command = buildSetBoldCommand(editor.getProjection(), selection, true)
+
+      expect(command).not.toBeNull()
+
+      editor.executeCommand(command!)
+
+      const after = editor.getLayout()
+      const middleFragment = after.pages[1]?.lines.find((line) => line.fragments.length > 0)?.fragments[0]
+      const targetFragment = after.pages[targetPage!.pageIndex]?.lines
+        .find((line) => line.fragments.length > 0)?.fragments[0]
+
+      expect(after.pages[0]).not.toBe(before.pages[0])
+      expect(after.pages[1]).not.toBe(before.pages[1])
+      expect(after.pages[targetPage!.pageIndex]).not.toBe(before.pages[targetPage!.pageIndex])
+      expect(middleFragment?.style.bold).toBe(true)
+      expect(targetFragment?.style.bold).toBe(true)
+
+      if (stableSuffixPageIndex !== undefined) {
+        expect(after.pages[stableSuffixPageIndex]).toBe(before.pages[stableSuffixPageIndex])
+      }
     } finally {
       editor.destroy()
     }
@@ -471,6 +840,58 @@ describe('Editor mount/destroy lifecycle', () => {
       expect(host.querySelector('[data-jword-page="1"]')).toBe(secondPage)
     } finally {
       editor.destroy()
+    }
+  })
+
+  it('keeps page wrappers stable while deferred mounted relayout is still pending', () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    const text = Array.from(
+      { length: 160 },
+      (_, index) => `绗?${index + 1} 娈电紪杈戝悗椤靛３绋冲畾鏂囨湰`
+    ).join('\n\n')
+    const editor = createEditor({ initialText: text })
+
+    try {
+      editor.mount(host)
+
+      const before = editor.getLayout()
+      const canvasContainer = host.querySelector('[data-jword-canvas-container]') as HTMLElement | null
+      const firstPage = host.querySelector('[data-jword-page="0"]')
+      const secondPage = host.querySelector('[data-jword-page="1"]')
+      const lastPage = host.querySelector(`[data-jword-page="${before.pages.length - 1}"]`)
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 0
+      })
+
+      expect(canvasContainer).toBeInstanceOf(HTMLElement)
+      expect(firstPage).toBeInstanceOf(HTMLElement)
+      expect(secondPage).toBeInstanceOf(HTMLElement)
+      expect(lastPage).toBeInstanceOf(HTMLElement)
+
+      editor.executeCommand({
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: editor.resolveTextPosition(anchor),
+            text: '鍓?' + '琛?'.repeat(400)
+          }
+        ]
+      })
+
+      expect(canvasContainer?.getAttribute('data-jword-page-count')).toBe(String(before.pages.length))
+      expect(canvasContainer?.getAttribute('data-jword-layout-deferred-chunks')).not.toBe('')
+      expect(host.querySelectorAll('[data-jword-page]')).toHaveLength(before.pages.length)
+      expect(host.querySelector('[data-jword-page="0"]')).toBe(firstPage)
+      expect(host.querySelector('[data-jword-page="1"]')).toBe(secondPage)
+      expect(host.querySelector(`[data-jword-page="${before.pages.length - 1}"]`)).toBe(lastPage)
+    } finally {
+      editor.destroy()
+      vi.useRealTimers()
     }
   })
 

@@ -200,8 +200,8 @@ function formatCanvasFont(fragment: TextFragment, scale: number): string {
     style.italic === true ? 'italic' : '',
     style.bold === true ? '700' : ''
   ].filter((trait) => trait.length > 0)
-  const fontSizePx = Math.max(1, Math.round((style.fontSizePx ?? 16) * scale))
-  const fontFamily = style.fontFamily ?? 'sans-serif'
+  const fontSizePx = Math.max(1, Math.round(style.fontSizePx * scale))
+  const fontFamily = style.fontFamily
 
   return [...traits, `${fontSizePx}px`, fontFamily].join(' ')
 }

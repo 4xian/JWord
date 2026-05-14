@@ -49,11 +49,21 @@ describe('Gate 2 纯文本 fixture', () => {
       readonly fixture: string
       readonly pageCount: number
       readonly frames: number
+      readonly browserEvidence: {
+        readonly perfTest: string
+        readonly visualTest: string
+      }
+      readonly note: string
     }
 
     expect(benchmark.fixture).toBe('fixtures/plain-text/gate2-50-pages.txt')
     expect(benchmark.pageCount).toBe(50)
     expect(benchmark.frames).toBe(50)
+    expect(benchmark.browserEvidence).toEqual({
+      perfTest: 'examples/vanilla/tests/gate2.perf.e2e.ts',
+      visualTest: 'examples/vanilla/tests/gate2.visual.ts'
+    })
+    expect(benchmark.note).toContain('真实浏览器滚动/虚拟化指标')
   })
 
   it('gate2-50-pages visual baseline 与直接消费 fixture 的观测值一致', () => {
@@ -96,7 +106,7 @@ describe('Gate 2 纯文本 fixture', () => {
     expect(baseline.renderedPageCount).toBe(observed.renderedPageCount)
     expect(baseline.drawCallCount).toBe(observed.drawCallCount)
     expect(baseline.drawCallHash).toBe(observed.drawCallHash)
-  })
+  }, 15000)
 
   it('gate2-mixed-zh-en visual baseline 与 built core visual 渲染语义一致', async () => {
     const baselinePath = join(process.cwd(), 'fixtures', 'visual-baselines', 'gate2-mixed-zh-en.json')
@@ -116,7 +126,27 @@ describe('Gate 2 纯文本 fixture', () => {
     expect(baseline.renderedPageCount).toBe(observed.renderedPageCount)
     expect(baseline.drawCallCount).toBe(observed.drawCallCount)
     expect(baseline.drawCallHash).toBe(observed.drawCallHash)
-  })
+  }, 15000)
+
+  it('gate2-long-paragraph visual baseline 与 built core visual 渲染语义一致', async () => {
+    const baselinePath = join(process.cwd(), 'fixtures', 'visual-baselines', 'gate2-long-paragraph.json')
+    const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')) as {
+      readonly pageCount: number
+      readonly lineCount: number
+      readonly fragmentCount: number
+      readonly renderedPageCount: number
+      readonly drawCallCount: number
+      readonly drawCallHash: string
+    }
+    const observed = await observeLandscapeVisualFixtureFromBuiltCore('gate2-long-paragraph.txt')
+
+    expect(baseline.pageCount).toBe(observed.pageCount)
+    expect(baseline.lineCount).toBe(observed.lineCount)
+    expect(baseline.fragmentCount).toBe(observed.fragmentCount)
+    expect(baseline.renderedPageCount).toBe(observed.renderedPageCount)
+    expect(baseline.drawCallCount).toBe(observed.drawCallCount)
+    expect(baseline.drawCallHash).toBe(observed.drawCallHash)
+  }, 15000)
 })
 
 function observeGate2Fixture(): Readonly<{
@@ -198,6 +228,15 @@ function observeGate2Fixture(): Readonly<{
 }
 
 let builtCorePromise: Promise<void> | undefined
+const pnpmBuildCommand = process.platform === 'win32'
+  ? {
+      command: process.env.ComSpec ?? 'cmd.exe',
+      args: ['/d', '/s', '/c', 'pnpm build']
+    }
+  : {
+      command: 'pnpm',
+      args: ['build']
+    }
 
 async function observeLandscapeVisualFixtureFromBuiltCore(filename: string): Promise<Readonly<{
   pageCount: number
@@ -356,11 +395,10 @@ function ensureBuiltCore(): Promise<void> {
       VITEST: '',
       VITEST_MODE: ''
     }
-    const result = spawnSync('pnpm', ['build'], {
+    const result = spawnSync(pnpmBuildCommand.command, pnpmBuildCommand.args, {
       cwd: process.cwd(),
       encoding: 'utf8',
-      env: childEnv,
-      shell: process.platform === 'win32'
+      env: childEnv
     })
 
     expect(result.status).toBe(0)

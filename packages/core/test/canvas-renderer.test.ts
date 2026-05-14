@@ -106,6 +106,26 @@ describe('renderPageCanvas', () => {
     expect(canvas.calls).toContain('fillText:第二页,72,110')
   })
 
+  it('uses resolved fallback font when fragment requested font is unavailable', () => {
+    const canvas = createMockCanvas()
+    const page = createPageLayout(0, 'Fallback', {
+      color: '#223344',
+      fontFamily: 'Arial',
+      requestedFontFamily: 'Missing Corp Sans',
+      status: 'missing',
+      italic: true,
+      fontSizePx: 16
+    }) satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page
+    })
+
+    expect(canvas.calls).toContain('font:italic 16px Arial')
+    expect(canvas.calls).not.toContain('font:italic 16px Missing Corp Sans')
+  })
+
   it('限制异常大页面的 canvas 尺寸，避免保留超大画布', () => {
     const canvas = createMockCanvas()
     const basePage = createPageLayout(0, '大页面')
@@ -224,7 +244,11 @@ function createMockCanvas(): MockCanvas {
   }
 }
 
-function createPageLayout(pageIndex: number, text: string): LayoutBox {
+function createPageLayout(
+  pageIndex: number,
+  text: string,
+  styleOverrides: Partial<LayoutBox['lines'][number]['fragments'][number]['style']> = {}
+): LayoutBox {
   const pageTop = cssPxToTwips(pageIndex * 820)
   const lineTop = pageTop + cssPxToTwips(96)
   const lineBaseline = pageTop + cssPxToTwips(110)
@@ -263,7 +287,10 @@ function createPageLayout(pageIndex: number, text: string): LayoutBox {
             baseline: lineBaseline,
             style: {
               color: '#111827',
-              fontSizePx: 16
+              fontFamily: 'sans-serif',
+              fontSizePx: 16,
+              status: 'available',
+              ...styleOverrides
             },
             start: {
               sectionId: 'section-render',
