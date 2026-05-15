@@ -42,7 +42,7 @@ import {
   layoutDocument,
   layoutDocumentIncrementally
 } from './layout'
-import type { DocumentLayout, LayoutBox, LayoutDirtyRange, LayoutRect, PageBox } from './layout'
+import type { DocumentLayout, LayoutBox, LayoutDirtyRange, LayoutRect, PageBox, LineBox } from './layout'
 import { createLayoutSchedule } from './layout-scheduler'
 import { cssPxToTwips, createPageConfig, twipsToCssPx } from './page-config'
 import { createAnchorRef, createTextAnchorRef, resolveAnchorRef } from './position'
@@ -462,6 +462,7 @@ interface MountedEditorDom {
   readonly inputState: {
     isComposing: boolean
     compositionText: string
+    pendingPlainInputText: string
   }
   readonly pointerState: {
     anchor: AnchorRef | null
@@ -517,6 +518,7 @@ class JWordEditor implements Editor {
   private mountedDom: MountedEditorDom | undefined
   private currentSelection: SelectionState | null = null
   private selectionPageIndexes: readonly number[] = []
+  private mountedTextMirrorNeedsRefresh = true
   private isDestroyed = false
 
   constructor(options?: EditorOptions) {
@@ -527,6 +529,7 @@ class JWordEditor implements Editor {
     this.unsubscribePipeline = this.pipeline.subscribe((event) => {
       this.currentProjection = event.projection
       this.layoutNeedsRefresh = true
+      this.mountedTextMirrorNeedsRefresh = true
       this.renderMountedLayout('document')
       this.emit({ kind: 'transaction', transaction: event })
     })
@@ -684,17 +687,23 @@ class JWordEditor implements Editor {
     }
 
     try {
-      const result = this.pipeline.run(command, metadata)
-
       if (hasSelectionAfter) {
-        this.currentSelection = options.selectionAfter ?? null
+        this.currentSelection = selectionAfter
       }
 
-      this.refreshMountedSelectionRuntime(selectionBefore)
+      const result = this.pipeline.run(command, metadata)
+
+      if (!hasSelectionAfter) {
+        this.refreshMountedSelectionRuntime(selectionBefore)
+      }
       this.emitSelectionChange()
 
       return result
     } catch (error) {
+      if (hasSelectionAfter) {
+        this.currentSelection = selectionBefore
+      }
+
       if (shouldTrackHistory) {
         this.history.discardNextTransactionMetadata()
       }
@@ -714,6 +723,7 @@ class JWordEditor implements Editor {
       this.dirtyPageIndex = 0
       this.dirtyPageEndIndex = 0
       this.layoutDirtyRange = undefined
+      this.mountedTextMirrorNeedsRefresh = true
     }
 
     if (result.metadata?.selectionBefore !== undefined) {
@@ -739,6 +749,7 @@ class JWordEditor implements Editor {
       this.dirtyPageIndex = 0
       this.dirtyPageEndIndex = 0
       this.layoutDirtyRange = undefined
+      this.mountedTextMirrorNeedsRefresh = true
     }
 
     if (result.metadata?.selectionAfter !== undefined) {
@@ -883,7 +894,8 @@ class JWordEditor implements Editor {
       pageWrappers: new Map(),
       inputState: {
         isComposing: false,
-        compositionText: ''
+        compositionText: '',
+        pendingPlainInputText: ''
       },
       pointerState: {
         anchor: null
@@ -1463,12 +1475,23 @@ class JWordEditor implements Editor {
       return
     }
 
-    mountedDom.textMirror.textContent = readProjectionPlainText(this.currentProjection)
+    this.syncMountedTextMirror()
     syncHiddenTextareaPosition({
       mountedDom,
       caretRect: this.resolveSelectionCaretRect(layout),
       scale: this.pageConfig.scale
     })
+  }
+
+  private syncMountedTextMirror(): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined || !this.mountedTextMirrorNeedsRefresh) {
+      return
+    }
+
+    mountedDom.textMirror.textContent = readProjectionPlainText(this.currentProjection)
+    this.mountedTextMirrorNeedsRefresh = false
   }
 
   private resolveSelectionCaretRect(layout: DocumentLayout): LayoutRect | undefined {
@@ -1501,21 +1524,38 @@ class JWordEditor implements Editor {
 
   private handleRuntimeInput(event: Event): void {
     const textarea = event.currentTarget
+    const mountedDom = this.mountedDom
 
     if (!(textarea instanceof HTMLTextAreaElement)) {
       return
     }
 
-    if (this.mountedDom?.inputState.isComposing) {
+    if (mountedDom?.inputState.isComposing) {
+      const composingText = readEventData(event) || textarea.value
+
+      if (composingText.length > 0) {
+        mountedDom.inputState.compositionText = composingText
+      }
+
       return
     }
 
-    const text = textarea.value
+    const text = textarea.value || readEventData(event)
 
     textarea.value = ''
 
     if (text.length === 0) {
       return
+    }
+
+    if (mountedDom !== undefined && mountedDom.inputState.pendingPlainInputText.length > 0) {
+      const pendingText = mountedDom.inputState.pendingPlainInputText
+
+      mountedDom.inputState.pendingPlainInputText = ''
+
+      if (text === pendingText) {
+        return
+      }
     }
 
     this.runProtectedInputHandler(() => {
@@ -1530,8 +1570,9 @@ class JWordEditor implements Editor {
       return
     }
 
+    mountedDom.inputState.pendingPlainInputText = ''
     mountedDom.inputState.isComposing = true
-    mountedDom.inputState.compositionText = readEventData(event)
+    mountedDom.inputState.compositionText = readEventData(event) || mountedDom.hiddenTextarea.value
   }
 
   private handleRuntimeCompositionUpdate(event: Event): void {
@@ -1541,7 +1582,11 @@ class JWordEditor implements Editor {
       return
     }
 
-    mountedDom.inputState.compositionText = readEventData(event)
+    const compositionText = readEventData(event) || mountedDom.hiddenTextarea.value
+
+    if (compositionText.length > 0) {
+      mountedDom.inputState.compositionText = compositionText
+    }
   }
 
   private handleRuntimeCompositionEnd(event: Event): void {
@@ -1555,9 +1600,11 @@ class JWordEditor implements Editor {
 
     mountedDom.inputState.isComposing = false
     mountedDom.inputState.compositionText = ''
+    mountedDom.inputState.pendingPlainInputText = text
     mountedDom.hiddenTextarea.value = ''
 
     if (text.length === 0) {
+      mountedDom.inputState.pendingPlainInputText = ''
       return
     }
 
@@ -1567,6 +1614,16 @@ class JWordEditor implements Editor {
   }
 
   private handleRuntimeKeyDown(event: KeyboardEvent): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom !== undefined) {
+      if (mountedDom.inputState.isComposing || isCompositionKeyboardEvent(event)) {
+        return
+      }
+
+      mountedDom.inputState.pendingPlainInputText = ''
+    }
+
     const lowerKey = event.key.toLowerCase()
     const usesCommandModifier = event.metaKey || event.ctrlKey
 
@@ -1636,6 +1693,30 @@ class JWordEditor implements Editor {
         event.preventDefault()
         this.runProtectedInputHandler(() => {
           this.moveSelectionHorizontally(1)
+        })
+        return
+      case 'ArrowUp':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.moveSelectionVertically(-1)
+        })
+        return
+      case 'ArrowDown':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.moveSelectionVertically(1)
+        })
+        return
+      case 'Home':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.moveSelectionToLineBoundary('start')
+        })
+        return
+      case 'End':
+        event.preventDefault()
+        this.runProtectedInputHandler(() => {
+          this.moveSelectionToLineBoundary('end')
         })
         return
     }
@@ -2214,6 +2295,102 @@ class JWordEditor implements Editor {
     ))
   }
 
+  private moveSelectionVertically(direction: -1 | 1): void {
+    const selection = this.currentSelection
+
+    if (selection === null) {
+      return
+    }
+
+    if (!isSelectionCollapsed(selection)) {
+      const anchor = direction < 0
+        ? selection.direction === 'backward' ? selection.focus : selection.anchor
+        : selection.direction === 'backward' ? selection.anchor : selection.focus
+
+      this.setSelection(createSelectionState(anchor, anchor))
+      return
+    }
+
+    const focus = this.resolveTextPosition(selection.focus)
+    const layout = this.ensureCurrentLayout()
+    const caretRect = getLayoutCaretRect(layout, focus)
+    const lines = flattenLayoutLines(layout)
+
+    if (caretRect === undefined) {
+      return
+    }
+
+    const currentLineIndex = lines.findIndex((line) =>
+      line.pageIndex === caretRect.pageIndex
+      && line.y === caretRect.y
+      && line.height === caretRect.height
+    )
+
+    if (currentLineIndex < 0) {
+      return
+    }
+
+    const targetLine = lines[currentLineIndex + direction]
+    const targetPosition = targetLine === undefined
+      ? undefined
+      : hitTestLineAtAbsoluteX(layout, targetLine, caretRect.x)
+
+    if (targetPosition === undefined) {
+      return
+    }
+
+    this.setSelection(createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...targetPosition
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...targetPosition
+      })
+    ))
+  }
+
+  private moveSelectionToLineBoundary(boundary: 'start' | 'end'): void {
+    const selection = this.currentSelection
+
+    if (selection === null) {
+      return
+    }
+
+    const focus = this.resolveTextPosition(selection.focus)
+    const layout = this.ensureCurrentLayout()
+    const caretRect = getLayoutCaretRect(layout, focus)
+
+    if (caretRect === undefined) {
+      return
+    }
+
+    const line = flattenLayoutLines(layout).find((candidate) =>
+      candidate.pageIndex === caretRect.pageIndex
+      && candidate.y === caretRect.y
+      && candidate.height === caretRect.height
+    )
+    const targetPosition = line === undefined
+      ? undefined
+      : resolveLineBoundaryPosition(line, boundary)
+
+    if (targetPosition === undefined) {
+      return
+    }
+
+    this.setSelection(createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...targetPosition
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...targetPosition
+      })
+    ))
+  }
+
   private toggleRuntimeBold(): void {
     const command = buildSetBoldCommand(
       this.currentProjection,
@@ -2777,6 +2954,13 @@ function readEventData(event: Event): string {
   return typeof data === 'string' ? data : ''
 }
 
+function isCompositionKeyboardEvent(event: KeyboardEvent): boolean {
+  const composing = (event as KeyboardEvent & { isComposing?: unknown }).isComposing
+  const keyCode = (event as KeyboardEvent & { keyCode?: unknown }).keyCode
+
+  return composing === true || keyCode === 229
+}
+
 function readClipboardData(event: Event): {
   getData(type: string): string
   setData(type: string, value: string): void
@@ -2800,6 +2984,57 @@ function createPageElement(mountedDom: MountedEditorDom, layoutPage: LayoutBox, 
   updatePageElement(page, mountedDom.canvases.get(layoutPage.pageIndex), layoutPage, scale)
 
   return page
+}
+
+function flattenLayoutLines(layout: DocumentLayout): readonly LineBox[] {
+  return Object.freeze(layout.pages.flatMap((page) => page.lines))
+}
+
+function resolveLineBoundaryPosition(
+  line: LineBox,
+  boundary: 'start' | 'end'
+): TextPosition | undefined {
+  const firstFragment = line.fragments[0]
+  const lastFragment = line.fragments[line.fragments.length - 1]
+
+  if (firstFragment === undefined || lastFragment === undefined) {
+    return undefined
+  }
+
+  return boundary === 'start'
+    ? {
+        sectionId: firstFragment.start.sectionId,
+        blockId: firstFragment.start.blockId,
+        runId: firstFragment.start.runId,
+        graphemeIndex: firstFragment.start.graphemeIndex
+      }
+    : {
+        sectionId: lastFragment.end.sectionId,
+        blockId: lastFragment.end.blockId,
+        runId: lastFragment.end.runId,
+        graphemeIndex: lastFragment.end.graphemeIndex,
+        assoc: -1
+      }
+}
+
+function hitTestLineAtAbsoluteX(
+  layout: DocumentLayout,
+  line: LineBox,
+  absoluteX: number
+): TextPosition | undefined {
+  const page = layout.pages[line.pageIndex]
+
+  if (page === undefined) {
+    return undefined
+  }
+
+  const localY = line.y - page.y + Math.max(1, Math.floor(line.height / 2))
+
+  return hitTestDocumentLayout(layout, {
+    pageIndex: line.pageIndex,
+    x: Math.max(0, absoluteX - page.x),
+    y: Math.max(0, localY)
+  })
 }
 
 function syncPageWrappers(

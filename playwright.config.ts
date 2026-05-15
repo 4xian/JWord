@@ -24,6 +24,7 @@ export default defineConfig({
   webServer: {
     command: 'pnpm --filter @4xian/jword-example-vanilla dev',
     url: 'http://127.0.0.1:5173',
+    cwd: 'examples/vanilla',
     reuseExistingServer: !process.env.CI,
     timeout: 120000
   },

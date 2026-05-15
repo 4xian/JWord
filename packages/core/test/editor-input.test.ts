@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createEditor } from '../src/index'
+import type { LineBox } from '../src/layout'
 import { twipsToCssPx } from '../src/page-config'
 import type { DocumentId, RunId, SectionId, BlockId } from '../src/position'
 import { createAnchorRef, createGraphemeIndex } from '../src/position'
@@ -92,6 +93,109 @@ describe('Editor input runtime', () => {
 
       dispatchKey(textarea, 'z', { metaKey: true, shiftKey: true })
       expect(readParagraphTexts(editor)).toEqual(['ab你'])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('deduplicates composition commits across browser event order differences and preserves textarea fallback', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+    const transactions: string[] = []
+
+    try {
+      editor.subscribe((event) => {
+        if (event.kind === 'transaction') {
+          transactions.push(event.transaction.commandName)
+        }
+      })
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      editor.setSelection(createSelectionState(anchor, anchor))
+      dispatchCompositionEvent(textarea, 'compositionstart', '')
+      dispatchCompositionEvent(textarea, 'compositionupdate', '你')
+      dispatchCompositionEvent(textarea, 'compositionend', '你')
+      dispatchTextInput(textarea, '你')
+
+      expect(readParagraphTexts(editor)).toEqual(['ab你'])
+      expect(transactions).toEqual(['insertText'])
+
+      dispatchKey(textarea, 'z', { metaKey: true })
+      expect(readParagraphTexts(editor)).toEqual(['ab'])
+
+      const resetAnchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      editor.setSelection(createSelectionState(resetAnchor, resetAnchor))
+      dispatchCompositionEvent(textarea, 'compositionstart', '')
+      dispatchCompositionEvent(textarea, 'compositionupdate', '')
+      textarea.value = '好'
+      dispatchCompositionEvent(textarea, 'compositionend', '')
+      dispatchTextInput(textarea, '好')
+
+      expect(readParagraphTexts(editor)).toEqual(['ab好'])
+      expect(transactions).toEqual(['insertText', 'insertText'])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('ignores normal input and editing shortcuts while composition is active or just finalized', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+    const transactions: string[] = []
+
+    try {
+      editor.subscribe((event) => {
+        if (event.kind === 'transaction') {
+          transactions.push(event.transaction.commandName)
+        }
+      })
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      editor.setSelection(createSelectionState(anchor, anchor))
+      dispatchCompositionEvent(textarea, 'compositionstart', '')
+      dispatchCompositionEvent(textarea, 'compositionupdate', '你')
+      dispatchTextInput(textarea, 'x')
+      dispatchKey(textarea, 'Backspace', { isComposing: true })
+      dispatchKey(textarea, 'b', { metaKey: true, isComposing: true })
+
+      expect(readParagraphTexts(editor)).toEqual(['ab'])
+      expect(transactions).toEqual([])
+
+      dispatchCompositionEvent(textarea, 'compositionend', '你')
+      expect(readParagraphTexts(editor)).toEqual(['ab你'])
+      expect(transactions).toEqual(['insertText'])
+
+      dispatchKey(textarea, 'Backspace', { keyCode: 229 })
+      expect(readParagraphTexts(editor)).toEqual(['ab你'])
+      expect(transactions).toEqual(['insertText'])
+
+      dispatchKey(textarea, 'b', { metaKey: true })
+      expect(editor.getSelectionFormattingState().run?.bold).toEqual({
+        value: true,
+        mixed: false
+      })
     } finally {
       editor.destroy()
     }
@@ -184,6 +288,70 @@ describe('Editor input runtime', () => {
 
       dispatchKey(textarea, 'z', { metaKey: true })
       expect(readParagraphTexts(editor)).toEqual(['ab'])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('supports Home End ArrowUp and ArrowDown with layout-aware caret navigation', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'A'.repeat(400) })
+
+    try {
+      editor.mount(host)
+
+      const layout = editor.getLayout()
+      const paragraphLines = layout.pages.flatMap((page) =>
+        page.lines.filter((line) => line.paragraphId === 'paragraph-1' && line.fragments.length > 0)
+      )
+
+      expect(paragraphLines.length).toBeGreaterThanOrEqual(3)
+
+      const middleLine = paragraphLines[1]!
+      const previousLine = paragraphLines[0]!
+      const nextLine = paragraphLines[2]!
+      const middleIndex = Math.max(1, Math.floor(middleLine.fragments.length / 2))
+      const middleFragment = middleLine.fragments[middleIndex]!
+      const focusAnchor = editor.createTextAnchor({
+        sectionId: middleFragment.end.sectionId,
+        blockId: middleFragment.end.blockId,
+        runId: middleFragment.end.runId,
+        graphemeIndex: middleFragment.end.graphemeIndex
+      })
+
+      editor.setSelection(createSelectionState(focusAnchor, focusAnchor))
+
+      dispatchKey(textareaFrom(host), 'Home')
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus).graphemeIndex).toBe(
+        middleLine.fragments[0]!.start.graphemeIndex
+      )
+
+      dispatchKey(textareaFrom(host), 'End')
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus).graphemeIndex).toBe(
+        middleLine.fragments[middleLine.fragments.length - 1]!.end.graphemeIndex
+      )
+
+      editor.setSelection(createSelectionState(focusAnchor, focusAnchor))
+      dispatchKey(textareaFrom(host), 'ArrowUp')
+
+      const upPosition = editor.resolveTextPosition(editor.getSelection()!.focus)
+      expect(upPosition.graphemeIndex).toBe(
+        findClosestLineGraphemeIndex(previousLine, middleFragment.x + middleFragment.width)
+      )
+
+      dispatchKey(textareaFrom(host), 'ArrowDown')
+
+      const restoredPosition = editor.resolveTextPosition(editor.getSelection()!.focus)
+      expect(restoredPosition.graphemeIndex).toBe(
+        findClosestLineGraphemeIndex(middleLine, middleFragment.x + middleFragment.width)
+      )
+
+      dispatchKey(textareaFrom(host), 'ArrowDown')
+
+      const downPosition = editor.resolveTextPosition(editor.getSelection()!.focus)
+      expect(downPosition.graphemeIndex).toBe(
+        findClosestLineGraphemeIndex(nextLine, middleFragment.x + middleFragment.width)
+      )
     } finally {
       editor.destroy()
     }
@@ -324,6 +492,10 @@ function getHiddenTextarea(host: HTMLElement): HTMLTextAreaElement {
   return textarea
 }
 
+function textareaFrom(host: HTMLElement): HTMLTextAreaElement {
+  return getHiddenTextarea(host)
+}
+
 function dispatchTextInput(textarea: HTMLTextAreaElement, text: string) {
   textarea.value = text
   textarea.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }))
@@ -347,14 +519,46 @@ function dispatchCompositionEvent(
 function dispatchKey(
   textarea: HTMLTextAreaElement,
   key: string,
-  options: Pick<KeyboardEventInit, 'metaKey' | 'ctrlKey' | 'shiftKey'> = {}
+  options: Pick<KeyboardEventInit, 'metaKey' | 'ctrlKey' | 'shiftKey'> & {
+    isComposing?: boolean
+    keyCode?: number
+  } = {}
 ) {
-  textarea.dispatchEvent(new KeyboardEvent('keydown', {
+  const init: KeyboardEventInit = {
     key,
     bubbles: true,
-    cancelable: true,
-    ...options
-  }))
+    cancelable: true
+  }
+
+  if (options.metaKey !== undefined) {
+    init.metaKey = options.metaKey
+  }
+
+  if (options.ctrlKey !== undefined) {
+    init.ctrlKey = options.ctrlKey
+  }
+
+  if (options.shiftKey !== undefined) {
+    init.shiftKey = options.shiftKey
+  }
+
+  const event = new KeyboardEvent('keydown', init)
+
+  if (options.isComposing !== undefined) {
+    Object.defineProperty(event, 'isComposing', {
+      configurable: true,
+      value: options.isComposing
+    })
+  }
+
+  if (options.keyCode !== undefined) {
+    Object.defineProperty(event, 'keyCode', {
+      configurable: true,
+      value: options.keyCode
+    })
+  }
+
+  textarea.dispatchEvent(event)
 }
 
 function dispatchMouse(
@@ -469,4 +673,33 @@ function readParagraphTexts(editor: ReturnType<typeof createEditor>) {
       ? [block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')).join('')]
       : [])
   )
+}
+
+function findClosestLineGraphemeIndex(
+  line: LineBox,
+  absoluteX: number
+) {
+  const firstFragment = line.fragments[0]
+
+  if (firstFragment === undefined) {
+    throw new Error('line 没有文本 fragment')
+  }
+
+  if (absoluteX <= firstFragment.x) {
+    return firstFragment.start.graphemeIndex
+  }
+
+  for (const fragment of line.fragments) {
+    const midpoint = fragment.x + fragment.width / 2
+
+    if (absoluteX < midpoint) {
+      return fragment.start.graphemeIndex
+    }
+
+    if (absoluteX <= fragment.x + fragment.width) {
+      return fragment.end.graphemeIndex
+    }
+  }
+
+  return line.fragments[line.fragments.length - 1]!.end.graphemeIndex
 }

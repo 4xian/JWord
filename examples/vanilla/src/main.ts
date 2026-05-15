@@ -6,17 +6,26 @@
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md。
  */
 import {
+  buildSetBackgroundColorCommand,
   buildSetBoldCommand,
+  buildSetFontFamilyCommand,
+  buildSetFontSizeCommand,
   buildSetItalicCommand,
+  buildSetParagraphAlignmentCommand,
+  buildSetParagraphIndentCommand,
+  buildSetStrikeCommand,
+  buildSetTextColorCommand,
+  buildSetUnderlineCommand,
   createEditor
 } from '@4xian/jword-core'
 import type {
   Block,
+  Command,
   DocumentProjection,
   FormattingStateValue,
   Paragraph,
+  ParagraphAlignment,
   RangeRef,
-  Run,
   SelectionFormattingState,
   SelectionState,
   TextPosition
@@ -26,8 +35,11 @@ import type { JWordDemoSelectionInput } from './vite-env'
 import gate2FixtureText from '../../../fixtures/plain-text/gate2-50-pages.txt?raw'
 import './styles.css'
 
-type RunFormatKey = 'bold' | 'italic'
+type RunBooleanFormatKey = 'bold' | 'italic' | 'underline' | 'strike'
+type RunStringFormatKey = 'fontFamily' | 'textColor' | 'backgroundColor'
+type RunNumberFormatKey = 'fontSize'
 type ToolbarPressedState = 'true' | 'false' | 'mixed'
+type ToolbarValueState = 'empty' | 'value' | 'mixed'
 
 interface ToolbarElements {
   readonly host: HTMLElement
@@ -39,6 +51,21 @@ interface ToolbarElements {
   readonly redoButton: HTMLButtonElement
   readonly boldButton: HTMLButtonElement
   readonly italicButton: HTMLButtonElement
+  readonly underlineButton: HTMLButtonElement
+  readonly strikeButton: HTMLButtonElement
+  readonly fontFamilySelect: HTMLSelectElement
+  readonly fontSizeSelect: HTMLSelectElement
+  readonly textColorInput: HTMLInputElement
+  readonly textColorValueNode: HTMLElement
+  readonly backgroundColorInput: HTMLInputElement
+  readonly backgroundColorValueNode: HTMLElement
+  readonly alignLeftButton: HTMLButtonElement
+  readonly alignCenterButton: HTMLButtonElement
+  readonly alignRightButton: HTMLButtonElement
+  readonly alignJustifyButton: HTMLButtonElement
+  readonly indentDecreaseButton: HTMLButtonElement
+  readonly indentIncreaseButton: HTMLButtonElement
+  readonly indentValueNode: HTMLElement
   readonly selectionSummaryNode: HTMLElement
   readonly runSummaryNode: HTMLElement
   readonly blockedSummaryNode: HTMLElement
@@ -52,17 +79,73 @@ interface ToolbarState {
   readonly blockedSummary: string
   readonly selectSampleEnabled: boolean
   readonly clearSelectionEnabled: boolean
-  readonly formatEnabled: boolean
+  readonly runFormatEnabled: boolean
+  readonly paragraphFormatEnabled: boolean
   readonly boldPressed: ToolbarPressedState
   readonly italicPressed: ToolbarPressedState
+  readonly underlinePressed: ToolbarPressedState
+  readonly strikePressed: ToolbarPressedState
+  readonly fontFamilyValue: string
+  readonly fontFamilyState: ToolbarValueState
+  readonly fontSizeValue: string
+  readonly fontSizeState: ToolbarValueState
+  readonly textColorValue: string
+  readonly textColorState: ToolbarValueState
+  readonly textColorLabel: string
+  readonly backgroundColorValue: string
+  readonly backgroundColorState: ToolbarValueState
+  readonly backgroundColorLabel: string
+  readonly alignmentValue: ParagraphAlignment | ''
+  readonly alignmentState: ToolbarValueState
+  readonly indentLabel: string
+  readonly indentState: ToolbarValueState
+}
+
+interface SelectionEndpointContext {
+  readonly paragraphId: string
+  readonly runId: string
+  readonly graphemeIndex: number
 }
 
 interface SelectionContext {
-  readonly anchorPosition: TextPosition
-  readonly focusPosition: TextPosition
-  readonly paragraph: Paragraph
-  readonly run: Run
+  readonly anchor: SelectionEndpointContext
+  readonly focus: SelectionEndpointContext
 }
+
+interface ToolbarOption {
+  readonly value: string
+  readonly label: string
+}
+
+const FONT_FAMILY_EMPTY_VALUE = ''
+const FONT_FAMILY_MIXED_VALUE = '__mixed__'
+const FONT_SIZE_EMPTY_VALUE = ''
+const FONT_SIZE_MIXED_VALUE = '__mixed__'
+const DEFAULT_TEXT_COLOR = '#111111'
+const DEFAULT_BACKGROUND_COLOR = '#fff59d'
+const INDENT_STEP_TWIPS = 720
+const FONT_FAMILY_OPTIONS: readonly ToolbarOption[] = [
+  { value: FONT_FAMILY_EMPTY_VALUE, label: '字体' },
+  { value: FONT_FAMILY_MIXED_VALUE, label: '混合' },
+  { value: 'Inter', label: 'Inter' },
+  { value: 'Arial', label: 'Arial' },
+  { value: 'SimSun', label: '宋体' },
+  { value: 'KaiTi', label: '楷体' },
+  { value: 'SimHei', label: '黑体' },
+  { value: 'FangSong', label: '仿宋' }
+] as const
+const FONT_SIZE_OPTIONS: readonly ToolbarOption[] = [
+  { value: FONT_SIZE_EMPTY_VALUE, label: '字号' },
+  { value: FONT_SIZE_MIXED_VALUE, label: '混合' },
+  { value: '180', label: '9 pt' },
+  { value: '200', label: '10 pt' },
+  { value: '220', label: '11 pt' },
+  { value: '240', label: '12 pt' },
+  { value: '280', label: '14 pt' },
+  { value: '320', label: '16 pt' },
+  { value: '360', label: '18 pt' },
+  { value: '420', label: '21 pt' }
+] as const
 
 const editorHost = document.querySelector<HTMLElement>('#jword-editor')
 const statusNode = document.querySelector<HTMLElement>('#jword-status')
@@ -99,6 +182,7 @@ const unsubscribeEditor = editor.subscribe((event) => {
   }
 
   if (event.kind === 'transaction') {
+    renderRuntimeState(editor.getSelection(), editor.getSelectionFormattingState())
     announceStatus(readTransactionAnnouncement(event.transaction.commandName), true)
     return
   }
@@ -131,43 +215,118 @@ toolbar.selectSampleButton.addEventListener('click', () => {
 
 toolbar.loadAlphaSampleButton.addEventListener('click', () => {
   editor.createDocument({ text: alphaDemoText })
+  syncRuntimeState()
   announceStatus('已加载 Alpha 工具栏样例。', true)
 })
 
 toolbar.restoreGate2FixtureButton.addEventListener('click', () => {
   editor.createDocument({ text: createGate2DemoText(gate2FixtureText) })
+  syncRuntimeState()
   announceStatus('已恢复 Gate 2 50 页夹具。', true)
 })
 
 toolbar.clearSelectionButton.addEventListener('click', () => {
   editor.setSelection(null)
+  syncRuntimeState()
   announceStatus('选区已清空。')
 })
 
 toolbar.undoButton.addEventListener('click', () => {
   const result = editor.undo()
 
+  syncRuntimeState()
   announceStatus(result.stackItem === null ? '没有可撤销的本地操作。' : '已撤销最近一次本地操作。', result.stackItem !== null)
 })
 
 toolbar.redoButton.addEventListener('click', () => {
   const result = editor.redo()
 
+  syncRuntimeState()
   announceStatus(result.stackItem === null ? '没有可重做的本地操作。' : '已重做最近一次本地操作。', result.stackItem !== null)
 })
 
 toolbar.boldButton.addEventListener('click', () => {
-  toggleActiveRunFormat('bold', '加粗')
+  toggleActiveRunBooleanFormat('bold', '加粗')
 })
 
 toolbar.italicButton.addEventListener('click', () => {
-  toggleActiveRunFormat('italic', '斜体')
+  toggleActiveRunBooleanFormat('italic', '斜体')
 })
 
-renderRuntimeState(editor.getSelection(), editor.getSelectionFormattingState())
+toolbar.underlineButton.addEventListener('click', () => {
+  toggleActiveRunBooleanFormat('underline', '下划线')
+})
+
+toolbar.strikeButton.addEventListener('click', () => {
+  toggleActiveRunBooleanFormat('strike', '删除线')
+})
+
+toolbar.fontFamilySelect.addEventListener('change', () => {
+  const value = toolbar.fontFamilySelect.value
+
+  if (value === FONT_FAMILY_EMPTY_VALUE || value === FONT_FAMILY_MIXED_VALUE) {
+    syncRuntimeState()
+    return
+  }
+
+  applyRunStringFormat('fontFamily', '字体', value)
+})
+
+toolbar.fontSizeSelect.addEventListener('change', () => {
+  const value = toolbar.fontSizeSelect.value
+
+  if (value === FONT_SIZE_EMPTY_VALUE || value === FONT_SIZE_MIXED_VALUE) {
+    syncRuntimeState()
+    return
+  }
+
+  const parsedValue = Number.parseInt(value, 10)
+
+  if (!Number.isFinite(parsedValue)) {
+    announceStatus(`BLOCKED: 无法识别字号值 ${value}。`)
+    syncRuntimeState()
+    return
+  }
+
+  applyRunNumberFormat('fontSize', '字号', parsedValue)
+})
+
+toolbar.textColorInput.addEventListener('change', () => {
+  applyRunStringFormat('textColor', '文字颜色', toolbar.textColorInput.value.toLowerCase())
+})
+
+toolbar.backgroundColorInput.addEventListener('change', () => {
+  applyRunStringFormat('backgroundColor', '背景色', toolbar.backgroundColorInput.value.toLowerCase())
+})
+
+toolbar.alignLeftButton.addEventListener('click', () => {
+  applyParagraphAlignment('left', '左对齐')
+})
+
+toolbar.alignCenterButton.addEventListener('click', () => {
+  applyParagraphAlignment('center', '居中对齐')
+})
+
+toolbar.alignRightButton.addEventListener('click', () => {
+  applyParagraphAlignment('right', '右对齐')
+})
+
+toolbar.alignJustifyButton.addEventListener('click', () => {
+  applyParagraphAlignment('justify', '两端对齐')
+})
+
+toolbar.indentDecreaseButton.addEventListener('click', () => {
+  adjustParagraphIndent(-INDENT_STEP_TWIPS, '减少缩进')
+})
+
+toolbar.indentIncreaseButton.addEventListener('click', () => {
+  adjustParagraphIndent(INDENT_STEP_TWIPS, '增加缩进')
+})
+
+syncRuntimeState()
 syncTextMirror()
 announceStatus(
-  `Gate 3 Alpha toolbar 已挂载，pages: ${editor.getLayout().pages.length}。当前已接通 facade-driven 选区状态、B/I、撤销重做、aria-live 与文本镜像。`,
+  `Gate 3 Alpha toolbar 已挂载，pages: ${editor.getLayout().pages.length}。当前已接通 facade-driven 基础格式命令、状态同步、撤销重做、aria-live 与文本镜像。`,
   true
 )
 
@@ -209,6 +368,7 @@ function selectTextRange(input: JWordDemoSelectionInput): SelectionState {
   }) satisfies SelectionState
 
   editor.setSelection(selection)
+  syncRuntimeState()
   announceStatus(readSelectionAnnouncement(selection))
 
   return selection
@@ -228,23 +388,16 @@ function announceStatus(message?: string, refreshMirror = false): void {
   }
 }
 
+function syncRuntimeState(): void {
+  renderRuntimeState(editor.getSelection(), editor.getSelectionFormattingState())
+}
+
 function renderRuntimeState(
   selection: SelectionState | null,
   formattingState: SelectionFormattingState
 ): void {
   const state = buildToolbarState(selection, formattingState)
-  const nextStateKey = [
-    state.canUndo,
-    state.canRedo,
-    state.selectionSummary,
-    state.runSummary,
-    state.blockedSummary,
-    state.selectSampleEnabled,
-    state.clearSelectionEnabled,
-    state.formatEnabled,
-    state.boldPressed,
-    state.italicPressed
-  ].join('|')
+  const nextStateKey = JSON.stringify(state)
 
   if (nextStateKey === lastToolbarStateKey) {
     return
@@ -274,7 +427,13 @@ function buildToolbarState(
   const canRedo = editor.canRedo()
   const clearSelectionEnabled = selection !== null
   const selectSampleEnabled = editor.getLayout().pages.length <= 4
-  const formatEnabled = formattingState.run !== null
+  const runFormatEnabled = formattingState.run !== null
+  const paragraphFormatEnabled = formattingState.paragraph !== null
+  const fontFamily = readSelectState(formattingState.run?.fontFamily ?? null, FONT_FAMILY_EMPTY_VALUE, FONT_FAMILY_MIXED_VALUE)
+  const fontSize = readNumberSelectState(formattingState.run?.fontSizeTwips ?? null, FONT_SIZE_EMPTY_VALUE, FONT_SIZE_MIXED_VALUE)
+  const textColor = readColorControlState(formattingState.run?.color ?? null, DEFAULT_TEXT_COLOR)
+  const backgroundColor = readColorControlState(formattingState.run?.backgroundColor ?? null, DEFAULT_BACKGROUND_COLOR)
+  const alignment = readAlignmentControlState(formattingState.paragraph?.alignment ?? null)
 
   return {
     canUndo,
@@ -284,9 +443,26 @@ function buildToolbarState(
     blockedSummary: readBlockedSummary(context, formattingState),
     selectSampleEnabled,
     clearSelectionEnabled,
-    formatEnabled,
+    runFormatEnabled,
+    paragraphFormatEnabled,
     boldPressed: readPressedState(formattingState.run?.bold ?? null),
-    italicPressed: readPressedState(formattingState.run?.italic ?? null)
+    italicPressed: readPressedState(formattingState.run?.italic ?? null),
+    underlinePressed: readPressedState(formattingState.run?.underline ?? null),
+    strikePressed: readPressedState(formattingState.run?.strike ?? null),
+    fontFamilyValue: fontFamily.value,
+    fontFamilyState: fontFamily.state,
+    fontSizeValue: fontSize.value,
+    fontSizeState: fontSize.state,
+    textColorValue: textColor.value,
+    textColorState: textColor.state,
+    textColorLabel: textColor.label,
+    backgroundColorValue: backgroundColor.value,
+    backgroundColorState: backgroundColor.state,
+    backgroundColorLabel: backgroundColor.label,
+    alignmentValue: alignment.value,
+    alignmentState: alignment.state,
+    indentLabel: readIndentLabel(formattingState.paragraph?.indentLeftTwips ?? null),
+    indentState: readValueState(formattingState.paragraph?.indentLeftTwips ?? null)
   }
 }
 
@@ -295,16 +471,49 @@ function renderToolbarState(elements: ToolbarElements, state: ToolbarState): voi
   elements.undoButton.disabled = !state.canUndo
   elements.redoButton.disabled = !state.canRedo
   elements.clearSelectionButton.disabled = !state.clearSelectionEnabled
-  elements.boldButton.disabled = !state.formatEnabled
-  elements.italicButton.disabled = !state.formatEnabled
+  elements.boldButton.disabled = !state.runFormatEnabled
+  elements.italicButton.disabled = !state.runFormatEnabled
+  elements.underlineButton.disabled = !state.runFormatEnabled
+  elements.strikeButton.disabled = !state.runFormatEnabled
+  elements.fontFamilySelect.disabled = !state.runFormatEnabled
+  elements.fontSizeSelect.disabled = !state.runFormatEnabled
+  elements.textColorInput.disabled = !state.runFormatEnabled
+  elements.backgroundColorInput.disabled = !state.runFormatEnabled
+  elements.alignLeftButton.disabled = !state.paragraphFormatEnabled
+  elements.alignCenterButton.disabled = !state.paragraphFormatEnabled
+  elements.alignRightButton.disabled = !state.paragraphFormatEnabled
+  elements.alignJustifyButton.disabled = !state.paragraphFormatEnabled
+  elements.indentDecreaseButton.disabled = !state.paragraphFormatEnabled
+  elements.indentIncreaseButton.disabled = !state.paragraphFormatEnabled
+
   elements.boldButton.setAttribute('aria-pressed', state.boldPressed)
   elements.italicButton.setAttribute('aria-pressed', state.italicPressed)
+  elements.underlineButton.setAttribute('aria-pressed', state.underlinePressed)
+  elements.strikeButton.setAttribute('aria-pressed', state.strikePressed)
+  setAlignmentButtonState(elements.alignLeftButton, state, 'left')
+  setAlignmentButtonState(elements.alignCenterButton, state, 'center')
+  setAlignmentButtonState(elements.alignRightButton, state, 'right')
+  setAlignmentButtonState(elements.alignJustifyButton, state, 'justify')
+
+  elements.fontFamilySelect.value = state.fontFamilyValue
+  elements.fontFamilySelect.setAttribute('data-jword-state', state.fontFamilyState)
+  elements.fontSizeSelect.value = state.fontSizeValue
+  elements.fontSizeSelect.setAttribute('data-jword-state', state.fontSizeState)
+  elements.textColorInput.value = state.textColorValue
+  elements.textColorInput.setAttribute('data-jword-state', state.textColorState)
+  elements.textColorValueNode.textContent = `字色：${state.textColorLabel}`
+  elements.backgroundColorInput.value = state.backgroundColorValue
+  elements.backgroundColorInput.setAttribute('data-jword-state', state.backgroundColorState)
+  elements.backgroundColorValueNode.textContent = `底色：${state.backgroundColorLabel}`
+  elements.indentValueNode.textContent = `缩进：${state.indentLabel}`
+  elements.indentValueNode.setAttribute('data-jword-state', state.indentState)
+
   elements.selectionSummaryNode.textContent = state.selectionSummary
   elements.runSummaryNode.textContent = state.runSummary
   elements.blockedSummaryNode.textContent = state.blockedSummary
 }
 
-function toggleActiveRunFormat(property: RunFormatKey, label: string): void {
+function toggleActiveRunBooleanFormat(property: RunBooleanFormatKey, label: string): void {
   const selection = editor.getSelection()
   const formattingState = editor.getSelectionFormattingState()
 
@@ -313,21 +522,152 @@ function toggleActiveRunFormat(property: RunFormatKey, label: string): void {
     return
   }
 
-  const nextValue = readNextBooleanValue(property === 'bold' ? formattingState.run.bold : formattingState.run.italic)
-  const command = property === 'bold'
-    ? buildSetBoldCommand(editor.getProjection(), selection, nextValue)
-    : buildSetItalicCommand(editor.getProjection(), selection, nextValue)
+  const state = formattingState.run[property]
+  const nextValue = readNextBooleanValue(state)
+  const command = buildRunBooleanCommand(property, selection, nextValue)
 
   if (command === null) {
     announceStatus(`${label} 已经处于目标状态。`)
     return
   }
 
+  executeToolbarCommand(command, `toolbar-${property}`, selection)
+}
+
+function applyRunStringFormat(property: RunStringFormatKey, label: string, value: string): void {
+  const selection = editor.getSelection()
+  const formattingState = editor.getSelectionFormattingState()
+
+  if (selection === null || formattingState.run === null) {
+    announceStatus(`BLOCKED: ${label} 需要当前有可格式化的文本选区。`)
+    syncRuntimeState()
+    return
+  }
+
+  const command = buildRunStringCommand(property, selection, value)
+
+  if (command === null) {
+    announceStatus(`${label} 已经处于目标状态。`)
+    syncRuntimeState()
+    return
+  }
+
+  executeToolbarCommand(command, `toolbar-${property}`, selection)
+}
+
+function applyRunNumberFormat(property: RunNumberFormatKey, label: string, value: number): void {
+  const selection = editor.getSelection()
+  const formattingState = editor.getSelectionFormattingState()
+
+  if (selection === null || formattingState.run === null) {
+    announceStatus(`BLOCKED: ${label} 需要当前有可格式化的文本选区。`)
+    syncRuntimeState()
+    return
+  }
+
+  const command = buildRunNumberCommand(property, selection, value)
+
+  if (command === null) {
+    announceStatus(`${label} 已经处于目标状态。`)
+    syncRuntimeState()
+    return
+  }
+
+  executeToolbarCommand(command, `toolbar-${property}`, selection)
+}
+
+function applyParagraphAlignment(value: ParagraphAlignment, label: string): void {
+  const selection = editor.getSelection()
+  const formattingState = editor.getSelectionFormattingState()
+
+  if (selection === null || formattingState.paragraph === null) {
+    announceStatus(`BLOCKED: ${label} 需要当前有可格式化的段落选区。`)
+    return
+  }
+
+  const command = buildSetParagraphAlignmentCommand(editor.getProjection(), selection, value)
+
+  if (command === null) {
+    announceStatus(`${label} 已经处于目标状态。`)
+    return
+  }
+
+  executeToolbarCommand(command, `toolbar-align-${value}`, selection)
+}
+
+function adjustParagraphIndent(deltaTwips: number, label: string): void {
+  const selection = editor.getSelection()
+  const formattingState = editor.getSelectionFormattingState()
+
+  if (selection === null || formattingState.paragraph === null) {
+    announceStatus(`BLOCKED: ${label} 需要当前有可格式化的段落选区。`)
+    return
+  }
+
+  const currentIndent = formattingState.paragraph.indentLeftTwips.mixed
+    ? 0
+    : formattingState.paragraph.indentLeftTwips.value ?? 0
+  const nextIndent = Math.max(0, currentIndent + deltaTwips)
+  const command = buildSetParagraphIndentCommand(editor.getProjection(), selection, nextIndent)
+
+  if (command === null) {
+    announceStatus(`${label} 已经处于目标状态。`)
+    return
+  }
+
+  executeToolbarCommand(command, `toolbar-indent-${deltaTwips > 0 ? 'increase' : 'decrease'}`, selection)
+}
+
+function executeToolbarCommand(command: Command, label: string, selection: SelectionState): void {
   editor.executeCommand(command, {
     origin: 'local-user',
-    label: `toolbar-${property}`,
+    label,
     selectionAfter: selection
   })
+  syncRuntimeState()
+}
+
+function buildRunBooleanCommand(
+  property: RunBooleanFormatKey,
+  selection: SelectionState,
+  value: boolean
+): Command | null {
+  switch (property) {
+    case 'bold':
+      return buildSetBoldCommand(editor.getProjection(), selection, value)
+    case 'italic':
+      return buildSetItalicCommand(editor.getProjection(), selection, value)
+    case 'underline':
+      return buildSetUnderlineCommand(editor.getProjection(), selection, value)
+    case 'strike':
+      return buildSetStrikeCommand(editor.getProjection(), selection, value)
+  }
+}
+
+function buildRunStringCommand(
+  property: RunStringFormatKey,
+  selection: SelectionState,
+  value: string
+): Command | null {
+  switch (property) {
+    case 'fontFamily':
+      return buildSetFontFamilyCommand(editor.getProjection(), selection, value)
+    case 'textColor':
+      return buildSetTextColorCommand(editor.getProjection(), selection, value)
+    case 'backgroundColor':
+      return buildSetBackgroundColorCommand(editor.getProjection(), selection, value)
+  }
+}
+
+function buildRunNumberCommand(
+  property: RunNumberFormatKey,
+  selection: SelectionState,
+  value: number
+): Command | null {
+  switch (property) {
+    case 'fontSize':
+      return buildSetFontSizeCommand(editor.getProjection(), selection, value)
+  }
 }
 
 function findFirstFragmentSelectionInput(): JWordDemoSelectionInput | null {
@@ -353,25 +693,70 @@ function findFirstFragmentSelectionInput(): JWordDemoSelectionInput | null {
 function resolveSelectionContext(projection: DocumentProjection, selection: SelectionState): SelectionContext | null {
   const anchorPosition = editor.resolveTextPosition(selection.anchor)
   const focusPosition = editor.resolveTextPosition(selection.focus)
-  const section = projection.document.sections.find((item) => item.id === anchorPosition.sectionId)
-  const block = section?.blocks.find((item) => item.id === anchorPosition.blockId)
+  const anchorRun = resolveParagraphRun(projection, anchorPosition)
+  const focusRun = resolveParagraphRun(projection, focusPosition)
 
-  if (block === undefined || block.kind !== 'paragraph') {
+  if (anchorRun === null || focusRun === null) {
     return null
   }
 
-  const run = block.runs.find((item) => item.id === anchorPosition.runId)
+  return {
+    anchor: {
+      paragraphId: anchorRun.paragraph.id,
+      runId: anchorRun.runId,
+      graphemeIndex: anchorPosition.graphemeIndex
+    },
+    focus: {
+      paragraphId: focusRun.paragraph.id,
+      runId: focusRun.runId,
+      graphemeIndex: focusPosition.graphemeIndex
+    }
+  }
+}
+
+function resolveParagraphRun(
+  projection: DocumentProjection,
+  position: TextPosition
+): { readonly paragraph: Paragraph, readonly runId: string } | null {
+  const section = projection.document.sections.find((item) => item.id === position.sectionId)
+  const paragraph = section === undefined ? null : findParagraphById(section.blocks, position.blockId)
+
+  if (paragraph === null) {
+    return null
+  }
+
+  const run = paragraph.runs.find((item) => item.id === position.runId)
 
   if (run === undefined) {
     return null
   }
 
   return {
-    anchorPosition,
-    focusPosition,
-    paragraph: block,
-    run
+    paragraph,
+    runId: run.id
   }
+}
+
+function findParagraphById(blocks: readonly Block[], blockId: string): Paragraph | null {
+  for (const block of blocks) {
+    if (block.kind === 'paragraph' && block.id === blockId) {
+      return block
+    }
+
+    if (block.kind === 'table') {
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          const nested = findParagraphById(cell.blocks, blockId)
+
+          if (nested !== null) {
+            return nested
+          }
+        }
+      }
+    }
+  }
+
+  return null
 }
 
 function readSelectionSummary(
@@ -386,10 +771,21 @@ function readSelectionSummary(
     return '选区已更新，但当前未能映射到可读文本位置。'
   }
 
-  const start = Math.min(context.anchorPosition.graphemeIndex, context.focusPosition.graphemeIndex)
-  const end = Math.max(context.anchorPosition.graphemeIndex, context.focusPosition.graphemeIndex)
+  if (
+    context.anchor.paragraphId === context.focus.paragraphId
+    && context.anchor.runId === context.focus.runId
+  ) {
+    const start = Math.min(context.anchor.graphemeIndex, context.focus.graphemeIndex)
+    const end = Math.max(context.anchor.graphemeIndex, context.focus.graphemeIndex)
 
-  return `选区：${context.paragraph.id} / ${context.run.id} / ${start}→${end}`
+    return `选区：${context.anchor.paragraphId} / ${context.anchor.runId} / ${start}→${end}`
+  }
+
+  return `选区：${readSelectionEndpoint(context.anchor)} → ${readSelectionEndpoint(context.focus)}`
+}
+
+function readSelectionEndpoint(endpoint: SelectionEndpointContext): string {
+  return `${endpoint.paragraphId} / ${endpoint.runId} / ${endpoint.graphemeIndex}`
 }
 
 function readRunSummary(formattingState: SelectionFormattingState): string {
@@ -397,11 +793,18 @@ function readRunSummary(formattingState: SelectionFormattingState): string {
     return '当前格式：未定位'
   }
 
-  const bold = readFormattingToken(formattingState.run.bold, '开', '关')
-  const italic = readFormattingToken(formattingState.run.italic, '开', '关')
-  const alignment = readFormattingToken(formattingState.paragraph.alignment, undefined, 'inherit')
-
-  return `当前格式：B ${bold} / I ${italic} / 对齐 ${alignment}`
+  return [
+    `B ${readFormattingToken(formattingState.run.bold, '开', '关')}`,
+    `I ${readFormattingToken(formattingState.run.italic, '开', '关')}`,
+    `U ${readFormattingToken(formattingState.run.underline, '开', '关')}`,
+    `S ${readFormattingToken(formattingState.run.strike, '开', '关')}`,
+    `字体 ${readStringFormattingToken(formattingState.run.fontFamily, '默认')}`,
+    `字号 ${readNumberFormattingToken(formattingState.run.fontSizeTwips, '默认', formatFontSizeTwips)}`,
+    `字色 ${readStringFormattingToken(formattingState.run.color, '默认')}`,
+    `底色 ${readStringFormattingToken(formattingState.run.backgroundColor, '默认')}`,
+    `对齐 ${readStringFormattingToken(formattingState.paragraph.alignment, '默认')}`,
+    `缩进 ${readNumberFormattingToken(formattingState.paragraph.indentLeftTwips, '0 pt', formatIndentTwips)}`
+  ].join(' / ')
 }
 
 function readPressedState(value: FormattingStateValue<boolean> | null): ToolbarPressedState {
@@ -444,6 +847,29 @@ function readFormattingToken<Value>(
   return String(value.value)
 }
 
+function readStringFormattingToken(
+  value: FormattingStateValue<string>,
+  emptyLabel: string
+): string {
+  if (value.mixed) {
+    return '混合'
+  }
+
+  return value.value === undefined ? emptyLabel : value.value
+}
+
+function readNumberFormattingToken(
+  value: FormattingStateValue<number>,
+  emptyLabel: string,
+  formatter: (value: number) => string
+): string {
+  if (value.mixed) {
+    return '混合'
+  }
+
+  return value.value === undefined ? emptyLabel : formatter(value.value)
+}
+
 function readBlockedSummary(
   context: SelectionContext | null,
   formattingState: SelectionFormattingState
@@ -453,14 +879,30 @@ function readBlockedSummary(
   }
 
   if (context === null) {
-    return '当前已接通 facade-driven B/I、撤销重做与 runtime 状态同步；请先选择片段后再格式化。'
+    return '当前已接通 facade-driven 基础格式、颜色、对齐和缩进；请先选择片段后再格式化。'
   }
 
-  if (formattingState.run?.bold.mixed === true || formattingState.run?.italic.mixed === true) {
-    return '当前选区已跨多个 run；toolbar 会通过 facade formatting state 显示 mixed，并统一走 command builder 执行格式命令。'
+  if (hasMixedFormattingState(formattingState)) {
+    return '当前选区已覆盖多个 run 或段落；toolbar 会直接显示 mixed，并把下一次格式命令统一归一到整个选区上。'
   }
 
-  return '当前已可通过 facade 事件和 command builder 执行基础 B/I；字体字号、段落对齐、键盘/IME、剪贴板与真实 pointer selection 仍待 Gate 3 后续步骤。'
+  return '当前已可通过 facade 事件和 command builder 执行基础格式化、颜色、对齐和缩进；键盘/IME、剪贴板与真实 pointer selection 仍待 Gate 3 后续步骤。'
+}
+
+function hasMixedFormattingState(formattingState: SelectionFormattingState): boolean {
+  return formattingState.run !== null && (
+    formattingState.run.bold.mixed
+      || formattingState.run.italic.mixed
+      || formattingState.run.underline.mixed
+      || formattingState.run.strike.mixed
+      || formattingState.run.fontFamily.mixed
+      || formattingState.run.fontSizeTwips.mixed
+      || formattingState.run.color.mixed
+      || formattingState.run.backgroundColor.mixed
+  ) || formattingState.paragraph !== null && (
+    formattingState.paragraph.alignment.mixed
+      || formattingState.paragraph.indentLeftTwips.mixed
+  )
 }
 
 function readSelectionAnnouncement(selection: SelectionState | null): string {
@@ -475,20 +917,34 @@ function readSelectionAnnouncement(selection: SelectionState | null): string {
 
 function readTransactionAnnouncement(commandName: string): string {
   const selection = editor.getSelection()
+  const summaryPrefix = selection === null
+    ? ''
+    : `${readSelectionSummary(resolveSelectionContext(editor.getProjection(), selection), selection)}，`
 
-  if (commandName === 'setBold') {
-    return selection === null
-      ? '已更新加粗状态。'
-      : `${readSelectionSummary(resolveSelectionContext(editor.getProjection(), selection), selection)}，已同步加粗状态。`
+  switch (commandName) {
+    case 'setBold':
+      return `${summaryPrefix}已同步加粗状态。`
+    case 'setItalic':
+      return `${summaryPrefix}已同步斜体状态。`
+    case 'setUnderline':
+      return `${summaryPrefix}已同步下划线状态。`
+    case 'setStrike':
+      return `${summaryPrefix}已同步删除线状态。`
+    case 'setFontFamily':
+      return `${summaryPrefix}已同步字体。`
+    case 'setFontSize':
+      return `${summaryPrefix}已同步字号。`
+    case 'setTextColor':
+      return `${summaryPrefix}已同步文字颜色。`
+    case 'setBackgroundColor':
+      return `${summaryPrefix}已同步背景色。`
+    case 'setParagraphAlignment':
+      return `${summaryPrefix}已同步段落对齐。`
+    case 'setParagraphIndent':
+      return `${summaryPrefix}已同步段落缩进。`
+    default:
+      return `已执行 ${commandName}。`
   }
-
-  if (commandName === 'setItalic') {
-    return selection === null
-      ? '已更新斜体状态。'
-      : `${readSelectionSummary(resolveSelectionContext(editor.getProjection(), selection), selection)}，已同步斜体状态。`
-  }
-
-  return `已执行 ${commandName}。`
 }
 
 function createToolbar(host: HTMLElement): ToolbarElements {
@@ -501,7 +957,9 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   const brandGroup = document.createElement('div')
   const actionGroup = document.createElement('div')
   const historyGroup = document.createElement('div')
-  const formatGroup = document.createElement('div')
+  const inlineFormatGroup = document.createElement('div')
+  const runValueGroup = document.createElement('div')
+  const paragraphGroup = document.createElement('div')
   const summaryGroup = document.createElement('div')
   const titleNode = document.createElement('strong')
   const subtitleNode = document.createElement('span')
@@ -516,11 +974,34 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   const redoButton = createToolbarButton('重做')
   const boldButton = createToolbarButton('加粗')
   const italicButton = createToolbarButton('斜体')
+  const underlineButton = createToolbarButton('下划线')
+  const strikeButton = createToolbarButton('删除线')
+  const fontFamilySelect = createToolbarSelect(FONT_FAMILY_OPTIONS, '选择字体')
+  const fontSizeSelect = createToolbarSelect(FONT_SIZE_OPTIONS, '选择字号')
+  const textColorInput = createToolbarColorInput('选择文字颜色')
+  const textColorValueNode = document.createElement('span')
+  const backgroundColorInput = createToolbarColorInput('选择背景色')
+  const backgroundColorValueNode = document.createElement('span')
+  const alignLeftButton = createToolbarButton('左')
+  const alignCenterButton = createToolbarButton('中')
+  const alignRightButton = createToolbarButton('右')
+  const alignJustifyButton = createToolbarButton('两端')
+  const indentDecreaseButton = createToolbarButton('缩进-')
+  const indentIncreaseButton = createToolbarButton('缩进+')
+  const indentValueNode = document.createElement('span')
+
+  const fontFamilyField = createToolbarField('字体', fontFamilySelect)
+  const fontSizeField = createToolbarField('字号', fontSizeSelect)
+  const textColorField = createToolbarField('字色', textColorInput, textColorValueNode)
+  const backgroundColorField = createToolbarField('底色', backgroundColorInput, backgroundColorValueNode)
+  const paragraphLabel = document.createElement('span')
 
   brandGroup.className = 'jw-toolbar__group jw-toolbar__group--brand'
   actionGroup.className = 'jw-toolbar__group'
   historyGroup.className = 'jw-toolbar__group'
-  formatGroup.className = 'jw-toolbar__group'
+  inlineFormatGroup.className = 'jw-toolbar__group'
+  runValueGroup.className = 'jw-toolbar__group'
+  paragraphGroup.className = 'jw-toolbar__group jw-toolbar__group--stack'
   summaryGroup.className = 'jw-toolbar__summary'
   titleNode.className = 'jw-toolbar__title'
   subtitleNode.className = 'jw-toolbar__subtitle'
@@ -530,6 +1011,11 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   runSummaryNode.setAttribute('data-jword-run-summary', 'true')
   blockedSummaryNode.className = 'jw-toolbar__note'
   blockedSummaryNode.setAttribute('data-jword-blocked-summary', 'true')
+  textColorValueNode.className = 'jw-toolbar__field-value'
+  backgroundColorValueNode.className = 'jw-toolbar__field-value'
+  indentValueNode.className = 'jw-toolbar__field-value'
+  paragraphLabel.className = 'jw-toolbar__field-label'
+
   loadAlphaSampleButton.setAttribute('data-jword-load-alpha', 'true')
   restoreGate2FixtureButton.setAttribute('data-jword-restore-gate2', 'true')
   selectSampleButton.setAttribute('data-jword-select-sample', 'true')
@@ -538,16 +1024,45 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   redoButton.setAttribute('data-jword-history-redo', 'true')
   boldButton.setAttribute('data-jword-format-bold', 'true')
   italicButton.setAttribute('data-jword-format-italic', 'true')
+  underlineButton.setAttribute('data-jword-format-underline', 'true')
+  strikeButton.setAttribute('data-jword-format-strike', 'true')
+  fontFamilySelect.setAttribute('data-jword-format-font-family', 'true')
+  fontSizeSelect.setAttribute('data-jword-format-font-size', 'true')
+  textColorInput.setAttribute('data-jword-format-text-color', 'true')
+  backgroundColorInput.setAttribute('data-jword-format-background-color', 'true')
+  alignLeftButton.setAttribute('data-jword-format-align-left', 'true')
+  alignCenterButton.setAttribute('data-jword-format-align-center', 'true')
+  alignRightButton.setAttribute('data-jword-format-align-right', 'true')
+  alignJustifyButton.setAttribute('data-jword-format-align-justify', 'true')
+  indentDecreaseButton.setAttribute('data-jword-format-indent-decrease', 'true')
+  indentIncreaseButton.setAttribute('data-jword-format-indent-increase', 'true')
+
+  alignLeftButton.setAttribute('aria-label', '左对齐')
+  alignCenterButton.setAttribute('aria-label', '居中对齐')
+  alignRightButton.setAttribute('aria-label', '右对齐')
+  alignJustifyButton.setAttribute('aria-label', '两端对齐')
 
   titleNode.textContent = 'JWord'
-  subtitleNode.textContent = 'Gate 3 Alpha toolbar'
+  subtitleNode.textContent = 'Gate 3 vanilla toolbar'
+  paragraphLabel.textContent = '段落'
 
   brandGroup.append(titleNode, subtitleNode)
   actionGroup.append(loadAlphaSampleButton, restoreGate2FixtureButton, selectSampleButton, clearSelectionButton)
   historyGroup.append(undoButton, redoButton)
-  formatGroup.append(boldButton, italicButton)
+  inlineFormatGroup.append(boldButton, italicButton, underlineButton, strikeButton)
+  runValueGroup.append(fontFamilyField, fontSizeField, textColorField, backgroundColorField)
+  paragraphGroup.append(
+    paragraphLabel,
+    alignLeftButton,
+    alignCenterButton,
+    alignRightButton,
+    alignJustifyButton,
+    indentDecreaseButton,
+    indentIncreaseButton,
+    indentValueNode
+  )
   summaryGroup.append(selectionSummaryNode, runSummaryNode, blockedSummaryNode)
-  host.append(brandGroup, actionGroup, historyGroup, formatGroup, summaryGroup)
+  host.append(brandGroup, actionGroup, historyGroup, inlineFormatGroup, runValueGroup, paragraphGroup, summaryGroup)
 
   return {
     host,
@@ -559,6 +1074,21 @@ function createToolbar(host: HTMLElement): ToolbarElements {
     redoButton,
     boldButton,
     italicButton,
+    underlineButton,
+    strikeButton,
+    fontFamilySelect,
+    fontSizeSelect,
+    textColorInput,
+    textColorValueNode,
+    backgroundColorInput,
+    backgroundColorValueNode,
+    alignLeftButton,
+    alignCenterButton,
+    alignRightButton,
+    alignJustifyButton,
+    indentDecreaseButton,
+    indentIncreaseButton,
+    indentValueNode,
     selectionSummaryNode,
     runSummaryNode,
     blockedSummaryNode
@@ -575,6 +1105,61 @@ function createToolbarButton(label: string, extraClassName?: string): HTMLButton
   return button
 }
 
+function createToolbarSelect(
+  options: readonly ToolbarOption[],
+  ariaLabel: string
+): HTMLSelectElement {
+  const select = document.createElement('select')
+
+  select.className = 'jw-toolbar__select'
+  select.setAttribute('aria-label', ariaLabel)
+
+  for (const option of options) {
+    const node = document.createElement('option')
+
+    node.value = option.value
+    node.textContent = option.label
+
+    if (option.value === FONT_FAMILY_MIXED_VALUE || option.value === FONT_SIZE_MIXED_VALUE) {
+      node.disabled = true
+    }
+
+    select.append(node)
+  }
+
+  return select
+}
+
+function createToolbarColorInput(ariaLabel: string): HTMLInputElement {
+  const input = document.createElement('input')
+
+  input.type = 'color'
+  input.className = 'jw-toolbar__color'
+  input.setAttribute('aria-label', ariaLabel)
+
+  return input
+}
+
+function createToolbarField(
+  label: string,
+  control: HTMLElement,
+  valueNode?: HTMLElement
+): HTMLElement {
+  const field = document.createElement('label')
+  const labelNode = document.createElement('span')
+
+  field.className = 'jw-toolbar__field'
+  labelNode.className = 'jw-toolbar__field-label'
+  labelNode.textContent = label
+  field.append(labelNode, control)
+
+  if (valueNode !== undefined) {
+    field.append(valueNode)
+  }
+
+  return field
+}
+
 function createTextMirror(): HTMLElement {
   const mirror = document.createElement('div')
 
@@ -588,7 +1173,7 @@ function createTextMirror(): HTMLElement {
 
 function createAlphaDemoText(): string {
   return [
-    'Alpha toolbar sample 第一段：用于验证单 run 选区、撤销重做和 B/I 状态同步。',
+    'Alpha toolbar sample 第一段：用于验证单 run 选区、撤销重做以及基础格式、颜色与字体状态同步。',
     '第二段：保持分页 canvas 路线，但把交互样例收敛到小文档，避免大夹具的 selection 热路径拖慢体验。'
   ].join('\n\n')
 }
@@ -609,7 +1194,7 @@ function readBlockPlainText(block: Block): string {
     .join('\n')
 }
 
-function readRunPlainText(run: Run): string {
+function readRunPlainText(run: Paragraph['runs'][number]): string {
   return run.inlines
     .map((inline) => {
       if (inline.kind === 'text') {
@@ -627,4 +1212,150 @@ function readRunPlainText(run: Run): string {
       return ''
     })
     .join('')
+}
+
+function readSelectState(
+  value: FormattingStateValue<string> | null,
+  emptyValue: string,
+  mixedValue: string
+): { readonly value: string, readonly state: ToolbarValueState } {
+  if (value === null) {
+    return { value: emptyValue, state: 'empty' }
+  }
+
+  if (value.mixed) {
+    return { value: mixedValue, state: 'mixed' }
+  }
+
+  if (value.value === undefined || value.value.length === 0) {
+    return { value: emptyValue, state: 'empty' }
+  }
+
+  return { value: value.value, state: 'value' }
+}
+
+function readNumberSelectState(
+  value: FormattingStateValue<number> | null,
+  emptyValue: string,
+  mixedValue: string
+): { readonly value: string, readonly state: ToolbarValueState } {
+  if (value === null) {
+    return { value: emptyValue, state: 'empty' }
+  }
+
+  if (value.mixed) {
+    return { value: mixedValue, state: 'mixed' }
+  }
+
+  if (value.value === undefined) {
+    return { value: emptyValue, state: 'empty' }
+  }
+
+  return { value: String(value.value), state: 'value' }
+}
+
+function readColorControlState(
+  value: FormattingStateValue<string> | null,
+  fallback: string
+): { readonly value: string, readonly state: ToolbarValueState, readonly label: string } {
+  if (value === null) {
+    return { value: fallback, state: 'empty', label: '默认' }
+  }
+
+  if (value.mixed) {
+    return { value: fallback, state: 'mixed', label: '混合' }
+  }
+
+  if (value.value === undefined) {
+    return { value: fallback, state: 'empty', label: '默认' }
+  }
+
+  const normalized = normalizeHexColor(value.value)
+
+  return {
+    value: normalized ?? fallback,
+    state: 'value',
+    label: value.value
+  }
+}
+
+function readAlignmentControlState(
+  value: FormattingStateValue<ParagraphAlignment> | null
+): { readonly value: ParagraphAlignment | '', readonly state: ToolbarValueState } {
+  if (value === null) {
+    return { value: '', state: 'empty' }
+  }
+
+  if (value.mixed) {
+    return { value: '', state: 'mixed' }
+  }
+
+  if (value.value === undefined) {
+    return { value: '', state: 'empty' }
+  }
+
+  return { value: value.value, state: 'value' }
+}
+
+function readIndentLabel(value: FormattingStateValue<number> | null): string {
+  if (value === null) {
+    return '未定位'
+  }
+
+  if (value.mixed) {
+    return '混合'
+  }
+
+  return formatIndentTwips(value.value ?? 0)
+}
+
+function readValueState<Value>(value: FormattingStateValue<Value> | null): ToolbarValueState {
+  if (value === null) {
+    return 'empty'
+  }
+
+  if (value.mixed) {
+    return 'mixed'
+  }
+
+  return value.value === undefined ? 'empty' : 'value'
+}
+
+function setAlignmentButtonState(
+  button: HTMLButtonElement,
+  state: ToolbarState,
+  alignment: ParagraphAlignment
+): void {
+  const pressed = state.alignmentState === 'mixed'
+    ? 'mixed'
+    : state.alignmentValue === alignment ? 'true' : 'false'
+
+  button.setAttribute('aria-pressed', pressed)
+  button.setAttribute('data-jword-state', state.alignmentState)
+}
+
+function normalizeHexColor(value: string): string | null {
+  const normalized = value.trim()
+
+  if (/^#[0-9a-fA-F]{6}$/.test(normalized)) {
+    return normalized.toLowerCase()
+  }
+
+  if (/^#[0-9a-fA-F]{3}$/.test(normalized)) {
+    const [one, two, three] = normalized.slice(1).split('')
+
+    return `#${one}${one}${two}${two}${three}${three}`.toLowerCase()
+  }
+
+  return null
+}
+
+function formatFontSizeTwips(value: number): string {
+  const points = value / 20
+
+  return Number.isInteger(points) ? `${points} pt` : `${points.toFixed(1)} pt`
+}
+
+function formatIndentTwips(value: number): string {
+  return `${(value / 20).toFixed(value % 20 === 0 ? 0 : 1)} pt`
 }

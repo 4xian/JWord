@@ -10,6 +10,7 @@ import type { Page } from '@playwright/test'
 
 interface Gate3PerfMetrics {
   readonly gate2ScrollMs: number
+  readonly largeDocumentInsertP95Ms: number
   readonly alphaLoadMs: number
   readonly selectionSummarySyncMs: number
   readonly toggleBoldP95Ms: number
@@ -19,6 +20,7 @@ interface Gate3PerfMetrics {
 
 const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
   gate2ScrollMs: 120,
+  largeDocumentInsertP95Ms: 140,
   alphaLoadMs: 80,
   selectionSummarySyncMs: 140,
   toggleBoldP95Ms: 140,
@@ -48,6 +50,7 @@ test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ 
   })
 
   expect(metrics.gate2ScrollMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.gate2ScrollMs)
+  expect(metrics.largeDocumentInsertP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.largeDocumentInsertP95Ms)
   expect(metrics.alphaLoadMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.alphaLoadMs)
   expect(metrics.selectionSummarySyncMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.selectionSummarySyncMs)
   expect(metrics.toggleBoldP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.toggleBoldP95Ms)
@@ -142,6 +145,36 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       return Number(sorted[rank]?.toFixed(2) ?? 0)
     }
 
+    const readFirstParagraphText = (): string => {
+      const firstBlock = demo.editor.getProjection().document.sections[0]?.blocks[0]
+
+      if (firstBlock === undefined || firstBlock.kind !== 'paragraph') {
+        throw new Error('缺少 Gate 3 perf 首段文本')
+      }
+
+      return firstBlock.runs
+        .flatMap((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []))
+        .join('')
+    }
+
+    const collapseLargeFixtureSelectionAtStart = (): void => {
+      const firstPage = demo.editor.getLayout().pages[0]
+      const firstLine = firstPage?.lines.find((line) => line.fragments.length > 0)
+      const firstFragment = firstLine?.fragments[0]
+
+      if (firstFragment === undefined) {
+        throw new Error('缺少 Gate 3 perf 大文档首个文本片段')
+      }
+
+      demo.selectTextRange({
+        sectionId: firstFragment.sectionId,
+        blockId: firstFragment.blockId,
+        runId: firstFragment.runId,
+        anchorGraphemeIndex: firstFragment.start.graphemeIndex,
+        focusGraphemeIndex: firstFragment.start.graphemeIndex
+      })
+    }
+
     const measureGate2Scroll = async (): Promise<number> => {
       const lastPageIndex = demo.editor.getLayout().pages.length - 1
       const readLastPageMounted = (): boolean => document.querySelector(`[data-jword-page="${lastPageIndex}"] canvas`) !== null
@@ -169,6 +202,41 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
     }
 
     const gate2ScrollMs = await measureGate2Scroll()
+    const largeDocumentInsertSamples: number[] = []
+    const originalFirstParagraphText = readFirstParagraphText()
+    const input = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
+
+    if (input === null) {
+      throw new Error('缺少 Gate 3 perf hidden textarea')
+    }
+
+    for (let index = 0; index < 8; index += 1) {
+      collapseLargeFixtureSelectionAtStart()
+
+      const duration = await runAndMeasure(
+        `大文档输入-${index + 1}`,
+        () => {
+          input.focus()
+          input.value = '热'
+          input.dispatchEvent(new Event('input', {
+            bubbles: true,
+            cancelable: true
+          }))
+        },
+        () => readFirstParagraphText() === `热${originalFirstParagraphText}`
+      )
+
+      largeDocumentInsertSamples.push(duration)
+
+      await runAndMeasure(
+        `大文档撤销-${index + 1}`,
+        () => {
+          demo.editor.undo()
+        },
+        () => readFirstParagraphText() === originalFirstParagraphText
+      )
+    }
+
     const alphaLoadMs = await runAndMeasure('加载 Alpha 样例', () => loadAlphaButton.click(), () => selectSampleButton.disabled === false)
 
     if (clearSelectionButton.disabled === false) {
@@ -227,6 +295,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
 
     return {
       gate2ScrollMs: Number(gate2ScrollMs.toFixed(2)),
+      largeDocumentInsertP95Ms: readP95(largeDocumentInsertSamples),
       alphaLoadMs: Number(alphaLoadMs.toFixed(2)),
       selectionSummarySyncMs: Number(selectionSummarySyncMs.toFixed(2)),
       toggleBoldP95Ms: readP95(toggleBoldSamples),

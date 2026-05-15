@@ -15,7 +15,7 @@
     "lint:comments": "node tools/lint/check-comments.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test examples/vanilla/tests/gate2.perf.e2e.ts --project=perf-chromium --pass-with-no-tests",
+    "test:e2e": "playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test --project=perf-chromium --pass-with-no-tests",
     "test:visual": "node tools/visual/run-visual.mjs",
     "build": "rollup -c",
     "dev": "node tools/dev/run-dev.mjs",

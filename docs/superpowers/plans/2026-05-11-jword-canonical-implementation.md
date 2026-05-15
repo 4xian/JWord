@@ -215,28 +215,30 @@
 
 ### 待办步骤
 
-- [ ] Step 3.1：实现 mount lifecycle，所有 DOM 创建都在 mount 后执行，destroy 能完整解绑事件和释放 canvas。
-- [ ] Step 3.2：实现 hidden textarea，位置跟随 caret，保证中文 IME 候选框位置可用。
+- [x] Step 3.1：实现 mount lifecycle，所有 DOM 创建都在 mount 后执行，destroy 能完整解绑事件和释放 canvas。
+- [x] Step 3.2：实现 hidden textarea，位置跟随 caret，保证中文 IME 候选框位置可用。
 - [ ] Step 3.3：实现 composition handler，覆盖 Chrome/Safari/Firefox 差异和 macOS/Windows 中文输入。
-- [ ] Step 3.4：实现 keyboard handler，覆盖输入、删除、回车、方向键、快捷键、撤销重做。
-- [ ] Step 3.5：实现 pointer selection，支持点击定位、拖拽选区、双击词选择的扩展边界。
-- [ ] Step 3.6：实现 clipboard plain text，复制、剪切、粘贴都走 safe text 路线和 transaction pipeline。
-- [ ] Step 3.7：实现基础 commands：加粗、斜体、下划线、删除线、字体、字号、颜色、背景色、对齐、缩进。
-- [ ] Step 3.8：实现 toolbar 第一版，原生 TS DOM API，使用 `jw-` BEM 类名，不引入框架。
-- [ ] Step 3.9：实现 toolbar 状态同步，selection 改变时显示当前 run/paragraph 状态。
-- [ ] Step 3.10：实现 aria-live 和隐藏文本镜像第一版，让 Canvas 编辑器有基础可访问性路径。
-- [ ] Step 3.11：实现基础错误恢复，输入异常时不破坏 Y.Doc 状态，用户可继续编辑。
-- [ ] Step 3.12：完善 Alpha E2E：IME、选择、键盘、toolbar、undo/redo、plain text clipboard。
-- [ ] Step 3.13：完成 Alpha 性能验证：1-2 万字编辑、50 页滚动、输入热路径 P95 指标。
+  完成 2026-05-14：当前宿主浏览器的 Chromium、Firefox、WebKit composition 事件链已由 `examples/vanilla/tests/gate3-input.e2e.ts` 验证；仍缺 Windows 中文输入实机证据，因此此项暂不勾选。
+- [x] Step 3.4：实现 keyboard handler，覆盖输入、删除、回车、方向键、快捷键、撤销重做。
+- [x] Step 3.5：实现 pointer selection，支持点击定位、拖拽选区、双击词选择的扩展边界。
+- [x] Step 3.6：实现 clipboard plain text，复制、剪切、粘贴都走 safe text 路线和 transaction pipeline。
+- [x] Step 3.7：实现基础 commands：加粗、斜体、下划线、删除线、字体、字号、颜色、背景色、对齐、缩进。
+- [x] Step 3.8：实现 toolbar 第一版，原生 TS DOM API，使用 `jw-` BEM 类名，不引入框架。
+- [x] Step 3.9：实现 toolbar 状态同步，selection 改变时显示当前 run/paragraph 状态。
+- [x] Step 3.10：实现 aria-live 和隐藏文本镜像第一版，让 Canvas 编辑器有基础可访问性路径。
+- [x] Step 3.11：实现基础错误恢复，输入异常时不破坏 Y.Doc 状态，用户可继续编辑。
+- [x] Step 3.12：完善 Alpha E2E：IME、选择、键盘、toolbar、undo/redo、plain text clipboard。
+- [x] Step 3.13：完成 Alpha 性能验证：1-2 万字编辑、50 页滚动、输入热路径 P95 指标。
 
 ### 验收
 
 - [ ] macOS 和 Windows 中文输入可用。
-- [ ] 输入、删除、回车、方向键、选择、复制粘贴可用。
-- [ ] 加粗、斜体、下划线、删除线、字体、字号、颜色、对齐、缩进可用。
-- [ ] undo/redo 覆盖基础编辑和格式。
-- [ ] 1-2 万字文档编辑不卡顿。
-- [ ] `0.1-alpha` 可由 vanilla demo 验证最终架构，不是临时 demo。
+  现状 2026-05-14：当前宿主浏览器的 composition 链已在 Chromium、Firefox、WebKit 上验证；仓库和当前环境都没有 Windows 实机或远程验证通道，因此此项暂不勾选。
+- [x] 输入、删除、回车、方向键、选择、复制粘贴可用。
+- [x] 加粗、斜体、下划线、删除线、字体、字号、颜色、对齐、缩进可用。
+- [x] undo/redo 覆盖基础编辑和格式。
+- [x] 1-2 万字文档编辑不卡顿。
+- [x] `0.1-alpha` 可由 vanilla demo 验证最终架构，不是临时 demo。
 
 ### 禁止事项
 
