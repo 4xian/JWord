@@ -54,4 +54,21 @@ describe('core public API', () => {
 
     editor.destroy()
   })
+
+  it('exposes Gate 3 facade formatting methods from the root entry editor contract', () => {
+    const editor: Editor = createEditor({ initialText: 'abc' })
+
+    expect(typeof editor.toggleBold).toBe('function')
+    expect(typeof editor.toggleItalic).toBe('function')
+    expect(typeof editor.toggleUnderline).toBe('function')
+    expect(typeof editor.toggleStrike).toBe('function')
+    expect(typeof editor.setFontFamily).toBe('function')
+    expect(typeof editor.setFontSize).toBe('function')
+    expect(typeof editor.setTextColor).toBe('function')
+    expect(typeof editor.setBackgroundColor).toBe('function')
+    expect(typeof editor.setParagraphAlignment).toBe('function')
+    expect(typeof editor.adjustParagraphIndent).toBe('function')
+
+    editor.destroy()
+  })
 })

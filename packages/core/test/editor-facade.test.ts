@@ -415,6 +415,95 @@ describe('Editor facade', () => {
     editor.destroy()
   })
 
+  it('exposes facade formatting APIs and keeps selection through transaction history metadata', () => {
+    const editor = createEditor({ initialText: 'abcdef' })
+    const commands: string[] = []
+    const anchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 1
+    })
+    const focus = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 5
+    })
+    const selection = createSelectionState(anchor, focus)
+    const unsubscribe = editor.subscribe((event) => {
+      if (event.kind === 'transaction') {
+        commands.push(event.transaction.commandName)
+      }
+    })
+
+    editor.setSelection(selection)
+    editor.toggleBold()
+
+    expect(readParagraphRunTexts(editor.getProjection())).toEqual([['a', 'bcde', 'f']])
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([[{}, { bold: true }, {}]])
+    expect(editor.getSelection()).toBe(selection)
+
+    editor.undo()
+    expect(readParagraphRunTexts(editor.getProjection())).toEqual([['abcdef']])
+    expect(editor.getSelection()).toBe(selection)
+
+    editor.redo()
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([[{}, { bold: true }, {}]])
+    expect(editor.getSelection()).toBe(selection)
+
+    unsubscribe()
+    editor.destroy()
+    expect(commands).toEqual(['setBold'])
+  })
+
+  it('applies paragraph facade formatting APIs through transactions', () => {
+    const editor = createEditor({ initialText: 'first\n\nsecond' })
+    const commands: string[] = []
+    const paragraphs = editor.getProjection().document.sections[0]?.blocks
+    const firstParagraph = paragraphs?.[0]
+    const secondParagraph = paragraphs?.[1]
+
+    expect(firstParagraph?.kind).toBe('paragraph')
+    expect(secondParagraph?.kind).toBe('paragraph')
+
+    const firstRunId = firstParagraph?.kind === 'paragraph' ? firstParagraph.runs[0]?.id : undefined
+    const secondRunId = secondParagraph?.kind === 'paragraph' ? secondParagraph.runs[0]?.id : undefined
+
+    const anchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: firstParagraph?.id ?? 'paragraph-1',
+      runId: firstRunId ?? 'run-1',
+      graphemeIndex: 1
+    })
+    const focus = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: secondParagraph?.id ?? 'paragraph-2',
+      runId: secondRunId ?? 'run-2',
+      graphemeIndex: 3
+    })
+    const selection = createSelectionState(anchor, focus)
+    const unsubscribe = editor.subscribe((event) => {
+      if (event.kind === 'transaction') {
+        commands.push(event.transaction.commandName)
+      }
+    })
+
+    editor.setSelection(selection)
+    editor.setParagraphAlignment('right')
+    editor.adjustParagraphIndent(240)
+
+    expect(readParagraphProperties(editor.getProjection())).toEqual([
+      { alignment: 'right', indentLeftTwips: 240 },
+      { alignment: 'right', indentLeftTwips: 240 }
+    ])
+    expect(editor.getSelection()).toBe(selection)
+
+    unsubscribe()
+    editor.destroy()
+    expect(commands).toEqual(['setParagraphAlignment', 'adjustParagraphIndent'])
+  })
+
   it('keeps hitTest -> AnchorRef -> caret rect stable at a shared fragment boundary in the same run', () => {
     const editor = createEditor({ initialText: 'abcdef' })
     const layout = editor.getLayout()
@@ -452,6 +541,14 @@ function readParagraphRunProperties(projection: ReturnType<ReturnType<typeof cre
   return projection.document.sections.flatMap((section) =>
     section.blocks.flatMap((block) => block.kind === 'paragraph'
       ? [block.runs.map((run) => run.properties ?? {})]
+      : [])
+  )
+}
+
+function readParagraphProperties(projection: ReturnType<ReturnType<typeof createEditor>['getProjection']>) {
+  return projection.document.sections.flatMap((section) =>
+    section.blocks.flatMap((block) => block.kind === 'paragraph'
+      ? [block.properties ?? {}]
       : [])
   )
 }

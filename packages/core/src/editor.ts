@@ -11,7 +11,17 @@ import * as Y from 'yjs'
 import { createCanvasPool } from './canvas-pool'
 import type { CanvasLike } from './canvas-pool'
 import { syncPageCanvases } from './canvas-renderer'
-import { buildSetBoldCommand, buildSetItalicCommand } from './command-builders'
+import {
+  buildSetBackgroundColorCommand,
+  buildSetBoldCommand,
+  buildSetFontFamilyCommand,
+  buildSetFontSizeCommand,
+  buildSetItalicCommand,
+  buildSetParagraphAlignmentCommand,
+  buildSetStrikeCommand,
+  buildSetTextColorCommand,
+  buildSetUnderlineCommand
+} from './command-builders'
 import {
   DOCUMENT_STORE_FIELDS,
   DOCUMENT_STORE_SCHEMA_VERSION,
@@ -30,7 +40,7 @@ import type { BlockRecord, DocumentStore, DocumentStoreJson, ResourceId, StyleId
 import { createJWordError } from './errors'
 import { createFontManager } from './font-manager'
 import { createSelectionFormattingState } from './formatting-state'
-import type { SelectionFormattingState } from './formatting-types'
+import type { ParagraphAlignment, SelectionFormattingState } from './formatting-types'
 import { countGraphemes } from './grapheme'
 import { splitGraphemes } from './grapheme'
 import { DEFAULT_HISTORY_ORIGIN, createHistoryManager } from './history'
@@ -338,6 +348,80 @@ export interface Editor {
   setSelection(selection: SelectionState | null): void
 
   /**
+   * 切换当前选择区的加粗状态。
+   *
+   * @remarks
+   * 只通过 facade 构造 command 并进入 transaction pipeline，不直接改写文档状态。
+   */
+  toggleBold(): void
+
+  /**
+   * 切换当前选择区的斜体状态。
+   *
+   * @remarks
+   * 只通过 facade 构造 command 并进入 transaction pipeline，不直接改写文档状态。
+   */
+  toggleItalic(): void
+
+  /**
+   * 切换当前选择区的下划线状态。
+   *
+   * @remarks
+   * 只通过 facade 构造 command 并进入 transaction pipeline，不直接改写文档状态。
+   */
+  toggleUnderline(): void
+
+  /**
+   * 切换当前选择区的删除线状态。
+   *
+   * @remarks
+   * 只通过 facade 构造 command 并进入 transaction pipeline，不直接改写文档状态。
+   */
+  toggleStrike(): void
+
+  /**
+   * 设置当前选择区的字体名称。
+   *
+   * @param value 目标字体名称。
+   */
+  setFontFamily(value: string): void
+
+  /**
+   * 设置当前选择区的字号 twips。
+   *
+   * @param value 目标字号 twips。
+   */
+  setFontSize(value: number): void
+
+  /**
+   * 设置当前选择区的文字颜色。
+   *
+   * @param value 目标颜色值。
+   */
+  setTextColor(value: string): void
+
+  /**
+   * 设置当前选择区的背景颜色。
+   *
+   * @param value 目标颜色值。
+   */
+  setBackgroundColor(value: string): void
+
+  /**
+   * 设置当前选择区段落的对齐方式。
+   *
+   * @param value 目标段落对齐值。
+   */
+  setParagraphAlignment(value: ParagraphAlignment): void
+
+  /**
+   * 按 twips 增量调整当前选择区段落缩进。
+   *
+   * @param deltaTwips 缩进增量，正数增加，负数减少。
+   */
+  adjustParagraphIndent(deltaTwips: number): void
+
+  /**
    * 执行编辑命令。
    *
    * @param command Command 语义和最小 Operation 列表。
@@ -493,6 +577,14 @@ interface TransientLayoutQuerySnapshot {
 type EditorPageElement = HTMLElement
 
 type RenderReason = 'mount' | 'document' | 'selection' | 'viewport'
+
+type SelectionUpdateSource =
+  | 'api'
+  | 'command'
+  | 'document'
+  | 'history'
+  | 'keyboard'
+  | 'pointer'
 
 class JWordEditor implements Editor {
   private readonly label: string
@@ -654,9 +746,130 @@ class JWordEditor implements Editor {
   setSelection(selection: SelectionState | null): void {
     this.assertActive()
 
-    this.currentSelection = selection
-    this.renderMountedLayout('selection')
-    this.emitSelectionChange()
+    this.commitSelection(selection, {
+      source: 'api'
+    })
+  }
+
+  toggleBold(): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetBoldCommand(
+      this.currentProjection,
+      this.currentSelection,
+      this.getSelectionFormattingState().run?.bold.value !== true
+    ))
+  }
+
+  toggleItalic(): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetItalicCommand(
+      this.currentProjection,
+      this.currentSelection,
+      this.getSelectionFormattingState().run?.italic.value !== true
+    ))
+  }
+
+  toggleUnderline(): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetUnderlineCommand(
+      this.currentProjection,
+      this.currentSelection,
+      this.getSelectionFormattingState().run?.underline.value !== true
+    ))
+  }
+
+  toggleStrike(): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetStrikeCommand(
+      this.currentProjection,
+      this.currentSelection,
+      this.getSelectionFormattingState().run?.strike.value !== true
+    ))
+  }
+
+  setFontFamily(value: string): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetFontFamilyCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  setFontSize(value: number): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetFontSizeCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  setTextColor(value: string): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetTextColorCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  setBackgroundColor(value: string): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetBackgroundColorCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  setParagraphAlignment(value: ParagraphAlignment): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphAlignmentCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  adjustParagraphIndent(deltaTwips: number): void {
+    this.assertActive()
+
+    if (deltaTwips === 0) {
+      return
+    }
+
+    const targets = collectSelectionTargets(this.currentProjection, this.currentSelection)
+
+    if (targets.paragraphs.length === 0) {
+      return
+    }
+
+    const command = {
+      name: 'adjustParagraphIndent',
+      operations: targets.paragraphs.flatMap((target) => {
+        const currentIndent = typeof target.paragraph.properties?.indentLeftTwips === 'number'
+          ? target.paragraph.properties.indentLeftTwips
+          : 0
+        const nextIndent = currentIndent + deltaTwips
+
+        return currentIndent === nextIndent
+          ? []
+          : [{
+              kind: 'setParagraphProperties' as const,
+              paragraphId: target.paragraph.id,
+              properties: { indentLeftTwips: nextIndent }
+            }]
+      })
+    }
+
+    if (command.operations.length === 0) {
+      return
+    }
+
+    this.executeCommand(command, {
+      selectionAfter: this.currentSelection
+    })
   }
 
   executeCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
@@ -688,7 +901,11 @@ class JWordEditor implements Editor {
 
     try {
       if (hasSelectionAfter) {
-        this.currentSelection = selectionAfter
+        this.commitSelection(selectionAfter, {
+          source: 'command',
+          render: false,
+          emit: false
+        })
       }
 
       const result = this.pipeline.run(command, metadata)
@@ -701,7 +918,11 @@ class JWordEditor implements Editor {
       return result
     } catch (error) {
       if (hasSelectionAfter) {
-        this.currentSelection = selectionBefore
+        this.commitSelection(selectionBefore, {
+          source: 'command',
+          render: false,
+          emit: false
+        })
       }
 
       if (shouldTrackHistory) {
@@ -727,7 +948,11 @@ class JWordEditor implements Editor {
     }
 
     if (result.metadata?.selectionBefore !== undefined) {
-      this.currentSelection = restoreSelection(result.metadata.selectionBefore)
+      this.commitSelection(restoreSelection(result.metadata.selectionBefore), {
+        source: 'history',
+        render: false,
+        emit: false
+      })
     }
 
     if (result.stackItem !== null) {
@@ -753,7 +978,11 @@ class JWordEditor implements Editor {
     }
 
     if (result.metadata?.selectionAfter !== undefined) {
-      this.currentSelection = restoreSelection(result.metadata.selectionAfter)
+      this.commitSelection(restoreSelection(result.metadata.selectionAfter), {
+        source: 'history',
+        render: false,
+        emit: false
+      })
     }
 
     if (result.stackItem !== null) {
@@ -957,11 +1186,45 @@ class JWordEditor implements Editor {
     })
 
     this.currentProjection = result.projection
-    this.currentSelection = null
-    this.refreshMountedSelectionRuntime(previousSelection)
-    this.emitSelectionChange()
+    this.commitSelection(null, {
+      source: 'document',
+      previousSelection,
+      render: true
+    })
 
     return result.projection
+  }
+
+  private executeFacadeFormattingCommand(command: Command | null): void {
+    if (command === null) {
+      return
+    }
+
+    this.executeCommand(command, {
+      selectionAfter: this.currentSelection
+    })
+  }
+
+  private commitSelection(
+    selection: SelectionState | null,
+    options: Readonly<{
+      source: SelectionUpdateSource
+      previousSelection?: SelectionState | null
+      render?: boolean
+      emit?: boolean
+    }>
+  ): void {
+    const previousSelection = options.previousSelection ?? this.currentSelection
+
+    this.currentSelection = selection
+
+    if (options.render !== false) {
+      this.refreshMountedSelectionRuntime(previousSelection)
+    }
+
+    if (options.emit !== false) {
+      this.emitSelectionChange()
+    }
   }
 
   private renderMountedLayout(reason: RenderReason): void {
@@ -1853,14 +2116,14 @@ class JWordEditor implements Editor {
     const selection = this.currentSelection
 
     if (selection !== null && !isSelectionCollapsed(selection)) {
-      if (!this.replaceSelectedTextFromRuntime(text)) {
+      if (!this.replaceSelectedTextFromRuntime(normalizePlainText(text))) {
         return
       }
 
       return
     }
 
-    this.insertTextFromRuntime(text)
+    this.insertTextFromRuntime(normalizePlainText(text))
   }
 
   private insertTextFromRuntime(text: string): void {
@@ -1870,35 +2133,20 @@ class JWordEditor implements Editor {
       return
     }
 
-    const position = this.resolveTextPosition(selection.focus)
-    const selectionAfter = createSelectionState(
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        sectionId: position.sectionId,
-        blockId: position.blockId,
-        runId: position.runId,
-        graphemeIndex: position.graphemeIndex + countGraphemes(text)
-      }),
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        sectionId: position.sectionId,
-        blockId: position.blockId,
-        runId: position.runId,
-        graphemeIndex: position.graphemeIndex + countGraphemes(text)
-      })
-    )
+    if (text.length === 0) {
+      return
+    }
 
-    this.executeCommand(
-      {
-        name: 'insertText',
-        operations: [{
-          kind: 'insertText',
-          at: position,
-          text
-        }]
-      },
-      { selectionAfter }
-    )
+    const position = this.resolveTextPosition(selection.focus)
+    const command = this.buildPlainTextInsertCommand(position, text)
+
+    if (command === undefined) {
+      return
+    }
+
+    this.executeCommand(command.command, {
+      selectionAfter: command.selectionAfter
+    })
   }
 
   private replaceSelectedTextFromRuntime(text: string): boolean {
@@ -1908,43 +2156,22 @@ class JWordEditor implements Editor {
       return false
     }
 
-    const selectionAfter = createSelectionState(
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        sectionId: range.start.sectionId,
-        blockId: range.start.blockId,
-        runId: range.start.runId,
-        graphemeIndex: range.start.graphemeIndex + countGraphemes(text)
-      }),
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        sectionId: range.start.sectionId,
-        blockId: range.start.blockId,
-        runId: range.start.runId,
-        graphemeIndex: range.start.graphemeIndex + countGraphemes(text)
-      })
-    )
+    const normalizedText = normalizePlainText(text)
+    const deletePlan = this.buildDeleteSelectionPlan(range)
 
-    this.executeCommand(
-      {
-        name: 'replaceText',
-        operations: [
-          {
-            kind: 'deleteRange',
-            range: {
-              anchor: range.start,
-              focus: range.end
-            }
-          },
-          {
-            kind: 'insertText',
-            at: range.start,
-            text
-          }
-        ]
-      },
-      { selectionAfter }
-    )
+    if (deletePlan === undefined) {
+      return false
+    }
+
+    const command = this.buildPlainTextInsertCommand(deletePlan.caret, normalizedText, deletePlan.operations)
+
+    if (command === undefined) {
+      return false
+    }
+
+    this.executeCommand(command.command, {
+      selectionAfter: command.selectionAfter
+    })
 
     return true
   }
@@ -1956,32 +2183,212 @@ class JWordEditor implements Editor {
       return false
     }
 
+    const deletePlan = this.buildDeleteSelectionPlan(range)
+
+    if (deletePlan === undefined) {
+      return false
+    }
+
     this.executeCommand(
       {
         name: 'deleteSelection',
-        operations: [{
-          kind: 'deleteRange',
-          range: {
-            anchor: range.start,
-            focus: range.end
-          }
-        }]
+        operations: deletePlan.operations
       },
       {
         selectionAfter: createSelectionState(
           createRuntimeAnchor({
             documentId: this.currentProjection.document.id,
-            ...range.start
+            ...deletePlan.caret
           }),
           createRuntimeAnchor({
             documentId: this.currentProjection.document.id,
-            ...range.start
+            ...deletePlan.caret
           })
         )
       }
     )
 
     return true
+  }
+
+  private buildPlainTextInsertCommand(
+    start: TextPosition,
+    text: string,
+    leadingOperations: readonly Operation[] = []
+  ): Readonly<{
+    command: Command
+    selectionAfter: SelectionState
+  }> | undefined {
+    const parts = text.split('\n')
+    const operations: Operation[] = [...leadingOperations]
+    let currentPosition: TextPosition = { ...start }
+    let currentRunId = start.runId
+    let currentBlockId = start.blockId
+
+    if (parts.length === 1 && parts[0]?.length === 0 && leadingOperations.length === 0) {
+      return undefined
+    }
+
+    for (let index = 0; index < parts.length; index += 1) {
+      const part = parts[index] ?? ''
+
+      if (part.length > 0) {
+        operations.push({
+          kind: 'insertText',
+          at: currentPosition,
+          text: part
+        })
+
+        currentPosition = {
+          ...currentPosition,
+          runId: currentRunId,
+          blockId: currentBlockId,
+          graphemeIndex: currentPosition.graphemeIndex + countGraphemes(part)
+        }
+      }
+
+      if (index >= parts.length - 1) {
+        continue
+      }
+
+      const identifiers = allocateParagraphSplitIds(this.currentProjection, operations)
+
+      operations.push({
+        kind: 'splitBlock',
+        at: currentPosition,
+        newBlockId: identifiers.blockId,
+        newRunId: identifiers.runId
+      })
+
+      currentBlockId = identifiers.blockId
+      currentRunId = identifiers.runId
+      currentPosition = {
+        sectionId: currentPosition.sectionId,
+        blockId: currentBlockId,
+        runId: currentRunId,
+        graphemeIndex: 0
+      }
+    }
+
+    const selectionAfter = createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...currentPosition
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...currentPosition
+      })
+    )
+
+    return {
+      command: {
+        name: leadingOperations.length > 0 ? 'replaceText' : 'insertText',
+        operations
+      },
+      selectionAfter
+    }
+  }
+
+  private buildDeleteSelectionPlan(range: Readonly<{
+    start: TextPosition
+    end: TextPosition
+  }>): Readonly<{
+    operations: readonly Operation[]
+    caret: TextPosition
+  }> | undefined {
+    const paragraphs = collectParagraphRuntimeContexts(this.currentProjection)
+    const startParagraphIndex = paragraphs.findIndex((paragraph) => paragraph.blockId === range.start.blockId)
+    const endParagraphIndex = paragraphs.findIndex((paragraph) => paragraph.blockId === range.end.blockId)
+
+    if (startParagraphIndex < 0 || endParagraphIndex < 0) {
+      return undefined
+    }
+
+    const startParagraph = paragraphs[startParagraphIndex]
+    const endParagraph = paragraphs[endParagraphIndex]
+
+    if (startParagraph === undefined || endParagraph === undefined) {
+      return undefined
+    }
+
+    const startRunIndex = startParagraph.runs.findIndex((run) => run.id === range.start.runId)
+    const endRunIndex = endParagraph.runs.findIndex((run) => run.id === range.end.runId)
+
+    if (startRunIndex < 0 || endRunIndex < 0) {
+      return undefined
+    }
+
+    const operations: Operation[] = []
+
+    for (let paragraphIndex = endParagraphIndex; paragraphIndex >= startParagraphIndex; paragraphIndex -= 1) {
+      const paragraph = paragraphs[paragraphIndex]
+
+      if (paragraph === undefined) {
+        continue
+      }
+
+      const paragraphStartRunIndex = paragraphIndex === startParagraphIndex ? startRunIndex : 0
+      const paragraphEndRunIndex = paragraphIndex === endParagraphIndex ? endRunIndex : paragraph.runs.length - 1
+
+      for (let runIndex = paragraphEndRunIndex; runIndex >= paragraphStartRunIndex; runIndex -= 1) {
+        const run = paragraph.runs[runIndex]
+
+        if (run === undefined) {
+          continue
+        }
+
+        const selectedStartGraphemeIndex = paragraphIndex === startParagraphIndex && runIndex === startRunIndex
+          ? range.start.graphemeIndex
+          : 0
+        const selectedEndGraphemeIndex = paragraphIndex === endParagraphIndex && runIndex === endRunIndex
+          ? range.end.graphemeIndex
+          : run.graphemeLength
+
+        if (selectedEndGraphemeIndex <= selectedStartGraphemeIndex) {
+          continue
+        }
+
+        operations.push({
+          kind: 'deleteRange',
+          range: {
+            anchor: {
+              sectionId: paragraph.sectionId,
+              blockId: paragraph.blockId,
+              runId: run.id,
+              graphemeIndex: selectedStartGraphemeIndex
+            },
+            focus: {
+              sectionId: paragraph.sectionId,
+              blockId: paragraph.blockId,
+              runId: run.id,
+              graphemeIndex: selectedEndGraphemeIndex
+            }
+          }
+        })
+      }
+    }
+
+    for (let paragraphIndex = endParagraphIndex; paragraphIndex > startParagraphIndex; paragraphIndex -= 1) {
+      const paragraph = paragraphs[paragraphIndex]
+
+      if (paragraph === undefined) {
+        continue
+      }
+
+      operations.push({
+        kind: 'mergeBlock',
+        targetBlockId: paragraphs[paragraphIndex - 1]!.blockId,
+        sourceBlockId: paragraph.blockId
+      })
+    }
+
+    return {
+      operations,
+      caret: {
+        ...range.start
+      }
+    }
   }
 
   private resolveSelectedTextRange(): Readonly<{
@@ -1997,17 +2404,13 @@ class JWordEditor implements Editor {
     const anchor = this.resolveTextPosition(selection.anchor)
     const focus = this.resolveTextPosition(selection.focus)
 
-    if (
-      anchor.sectionId !== focus.sectionId
-      || anchor.blockId !== focus.blockId
-      || anchor.runId !== focus.runId
-    ) {
-      return undefined
+    const order = compareRuntimeTextPositions(this.currentProjection, anchor, focus)
+
+    if (order <= 0) {
+      return { start: anchor, end: focus }
     }
 
-    return anchor.graphemeIndex <= focus.graphemeIndex
-      ? { start: anchor, end: focus }
-      : { start: focus, end: anchor }
+    return { start: focus, end: anchor }
   }
 
   private readSelectionPlainText(): string {
@@ -2895,7 +3298,10 @@ function moveTextPosition(
   }
 }
 
-function allocateParagraphSplitIds(projection: DocumentProjection): Readonly<{
+function allocateParagraphSplitIds(
+  projection: DocumentProjection,
+  plannedOperations: readonly Operation[] = []
+): Readonly<{
   blockId: string
   runId: string
 }> {
@@ -2903,10 +3309,45 @@ function allocateParagraphSplitIds(projection: DocumentProjection): Readonly<{
   const blockIds = new Set(paragraphs.map((paragraph) => paragraph.blockId))
   const runIds = new Set(paragraphs.flatMap((paragraph) => paragraph.runs.map((run) => run.id)))
 
+  for (const operation of plannedOperations) {
+    if (operation.kind === 'splitBlock') {
+      blockIds.add(operation.newBlockId)
+      runIds.add(operation.newRunId)
+    }
+  }
+
   return {
     blockId: allocateSequentialIdentifier(blockIds, 'paragraph'),
     runId: allocateSequentialIdentifier(runIds, 'run')
   }
+}
+
+function compareRuntimeTextPositions(
+  projection: DocumentProjection,
+  left: TextPosition,
+  right: TextPosition
+): number {
+  const paragraphs = collectParagraphRuntimeContexts(projection)
+  const leftParagraphIndex = paragraphs.findIndex((paragraph) => paragraph.blockId === left.blockId)
+  const rightParagraphIndex = paragraphs.findIndex((paragraph) => paragraph.blockId === right.blockId)
+
+  if (leftParagraphIndex !== rightParagraphIndex) {
+    return leftParagraphIndex - rightParagraphIndex
+  }
+
+  const paragraph = leftParagraphIndex >= 0 ? paragraphs[leftParagraphIndex] : undefined
+  const leftRunIndex = paragraph?.runs.findIndex((run) => run.id === left.runId) ?? -1
+  const rightRunIndex = paragraph?.runs.findIndex((run) => run.id === right.runId) ?? -1
+
+  if (leftRunIndex !== rightRunIndex) {
+    return leftRunIndex - rightRunIndex
+  }
+
+  return left.graphemeIndex - right.graphemeIndex
+}
+
+function normalizePlainText(text: string): string {
+  return text.replace(/\r\n?/gu, '\n')
 }
 
 function allocateSequentialIdentifier(ids: Set<string>, prefix: string): string {

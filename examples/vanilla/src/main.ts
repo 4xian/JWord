@@ -5,22 +5,9 @@
  * 性能/安全约束：只在 demo 入口访问 DOM，不用 innerHTML 构造 UI；完整选区格式化若缺 core 能力则只在 examples 层显式降级。
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md。
  */
-import {
-  buildSetBackgroundColorCommand,
-  buildSetBoldCommand,
-  buildSetFontFamilyCommand,
-  buildSetFontSizeCommand,
-  buildSetItalicCommand,
-  buildSetParagraphAlignmentCommand,
-  buildSetParagraphIndentCommand,
-  buildSetStrikeCommand,
-  buildSetTextColorCommand,
-  buildSetUnderlineCommand,
-  createEditor
-} from '@4xian/jword-core'
+import { createEditor } from '@4xian/jword-core'
 import type {
   Block,
-  Command,
   DocumentProjection,
   FormattingStateValue,
   Paragraph,
@@ -524,14 +511,23 @@ function toggleActiveRunBooleanFormat(property: RunBooleanFormatKey, label: stri
 
   const state = formattingState.run[property]
   const nextValue = readNextBooleanValue(state)
-  const command = buildRunBooleanCommand(property, selection, nextValue)
+  void selection
+  void nextValue
 
-  if (command === null) {
-    announceStatus(`${label} 已经处于目标状态。`)
-    return
+  switch (property) {
+    case 'bold':
+      editor.toggleBold()
+      return
+    case 'italic':
+      editor.toggleItalic()
+      return
+    case 'underline':
+      editor.toggleUnderline()
+      return
+    case 'strike':
+      editor.toggleStrike()
+      return
   }
-
-  executeToolbarCommand(command, `toolbar-${property}`, selection)
 }
 
 function applyRunStringFormat(property: RunStringFormatKey, label: string, value: string): void {
@@ -544,15 +540,25 @@ function applyRunStringFormat(property: RunStringFormatKey, label: string, value
     return
   }
 
-  const command = buildRunStringCommand(property, selection, value)
-
-  if (command === null) {
+  if (isRunStringFormatAlreadyApplied(formattingState, property, value)) {
     announceStatus(`${label} 已经处于目标状态。`)
     syncRuntimeState()
     return
   }
 
-  executeToolbarCommand(command, `toolbar-${property}`, selection)
+  void selection
+
+  switch (property) {
+    case 'fontFamily':
+      editor.setFontFamily(value)
+      return
+    case 'textColor':
+      editor.setTextColor(value)
+      return
+    case 'backgroundColor':
+      editor.setBackgroundColor(value)
+      return
+  }
 }
 
 function applyRunNumberFormat(property: RunNumberFormatKey, label: string, value: number): void {
@@ -565,15 +571,19 @@ function applyRunNumberFormat(property: RunNumberFormatKey, label: string, value
     return
   }
 
-  const command = buildRunNumberCommand(property, selection, value)
-
-  if (command === null) {
+  if (isRunNumberFormatAlreadyApplied(formattingState, property, value)) {
     announceStatus(`${label} 已经处于目标状态。`)
     syncRuntimeState()
     return
   }
 
-  executeToolbarCommand(command, `toolbar-${property}`, selection)
+  void selection
+
+  switch (property) {
+    case 'fontSize':
+      editor.setFontSize(value)
+      return
+  }
 }
 
 function applyParagraphAlignment(value: ParagraphAlignment, label: string): void {
@@ -585,14 +595,13 @@ function applyParagraphAlignment(value: ParagraphAlignment, label: string): void
     return
   }
 
-  const command = buildSetParagraphAlignmentCommand(editor.getProjection(), selection, value)
-
-  if (command === null) {
+  if (formattingState.paragraph.alignment.mixed !== true && formattingState.paragraph.alignment.value === value) {
     announceStatus(`${label} 已经处于目标状态。`)
     return
   }
 
-  executeToolbarCommand(command, `toolbar-align-${value}`, selection)
+  void selection
+  editor.setParagraphAlignment(value)
 }
 
 function adjustParagraphIndent(deltaTwips: number, label: string): void {
@@ -608,65 +617,51 @@ function adjustParagraphIndent(deltaTwips: number, label: string): void {
     ? 0
     : formattingState.paragraph.indentLeftTwips.value ?? 0
   const nextIndent = Math.max(0, currentIndent + deltaTwips)
-  const command = buildSetParagraphIndentCommand(editor.getProjection(), selection, nextIndent)
 
-  if (command === null) {
+  if (currentIndent === nextIndent) {
     announceStatus(`${label} 已经处于目标状态。`)
     return
   }
 
-  executeToolbarCommand(command, `toolbar-indent-${deltaTwips > 0 ? 'increase' : 'decrease'}`, selection)
+  void selection
+  editor.adjustParagraphIndent(deltaTwips)
 }
 
-function executeToolbarCommand(command: Command, label: string, selection: SelectionState): void {
-  editor.executeCommand(command, {
-    origin: 'local-user',
-    label,
-    selectionAfter: selection
-  })
-  syncRuntimeState()
-}
-
-function buildRunBooleanCommand(
-  property: RunBooleanFormatKey,
-  selection: SelectionState,
-  value: boolean
-): Command | null {
-  switch (property) {
-    case 'bold':
-      return buildSetBoldCommand(editor.getProjection(), selection, value)
-    case 'italic':
-      return buildSetItalicCommand(editor.getProjection(), selection, value)
-    case 'underline':
-      return buildSetUnderlineCommand(editor.getProjection(), selection, value)
-    case 'strike':
-      return buildSetStrikeCommand(editor.getProjection(), selection, value)
-  }
-}
-
-function buildRunStringCommand(
+function isRunStringFormatAlreadyApplied(
+  formattingState: SelectionFormattingState,
   property: RunStringFormatKey,
-  selection: SelectionState,
   value: string
-): Command | null {
+): boolean {
+  const state = formattingState.run
+
+  if (state === null) {
+    return false
+  }
+
   switch (property) {
     case 'fontFamily':
-      return buildSetFontFamilyCommand(editor.getProjection(), selection, value)
+      return state.fontFamily.mixed !== true && state.fontFamily.value === value
     case 'textColor':
-      return buildSetTextColorCommand(editor.getProjection(), selection, value)
+      return state.color.mixed !== true && state.color.value === value
     case 'backgroundColor':
-      return buildSetBackgroundColorCommand(editor.getProjection(), selection, value)
+      return state.backgroundColor.mixed !== true && state.backgroundColor.value === value
   }
 }
 
-function buildRunNumberCommand(
+function isRunNumberFormatAlreadyApplied(
+  formattingState: SelectionFormattingState,
   property: RunNumberFormatKey,
-  selection: SelectionState,
   value: number
-): Command | null {
+): boolean {
+  const state = formattingState.run
+
+  if (state === null) {
+    return false
+  }
+
   switch (property) {
     case 'fontSize':
-      return buildSetFontSizeCommand(editor.getProjection(), selection, value)
+      return state.fontSizeTwips.mixed !== true && state.fontSizeTwips.value === value
   }
 }
 
@@ -941,6 +936,7 @@ function readTransactionAnnouncement(commandName: string): string {
     case 'setParagraphAlignment':
       return `${summaryPrefix}已同步段落对齐。`
     case 'setParagraphIndent':
+    case 'adjustParagraphIndent':
       return `${summaryPrefix}已同步段落缩进。`
     default:
       return `已执行 ${commandName}。`

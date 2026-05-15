@@ -430,6 +430,53 @@ describe('Editor input runtime', () => {
     }
   })
 
+  it('routes keyboard and pointer selection changes through the same selectionChange facade stream', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'hello world' })
+    const snapshots: Array<readonly [number, number]> = []
+
+    try {
+      editor.subscribe((event) => {
+        if (event.kind !== 'selectionChange' || event.selection === null) {
+          return
+        }
+
+        const anchor = editor.resolveTextPosition(event.selection.anchor).graphemeIndex
+        const focus = editor.resolveTextPosition(event.selection.focus).graphemeIndex
+
+        snapshots.push([anchor, focus])
+      })
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+      const page = getPageElement(host, 0)
+
+      mockPageRect(page)
+
+      const caretAnchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 3
+      })
+
+      editor.setSelection(createSelectionState(caretAnchor, caretAnchor))
+      dispatchKey(textarea, 'ArrowLeft')
+
+      const dragStart = findPointerPointForGrapheme(editor, 0, 1)
+      const dragEnd = findPointerPointForGrapheme(editor, 0, 4)
+
+      dispatchMouse(page, 'mousedown', dragStart.clientX, dragStart.clientY)
+      dispatchMouse(page, 'mousemove', dragEnd.clientX, dragEnd.clientY)
+      dispatchMouse(page, 'mouseup', dragEnd.clientX, dragEnd.clientY)
+
+      expect(snapshots).toContainEqual([2, 2])
+      expect(snapshots).toContainEqual([1, 4])
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('supports plain text copy cut and paste through the transaction pipeline', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: 'abcdef' })
@@ -476,6 +523,149 @@ describe('Editor input runtime', () => {
       dispatchClipboard(textarea, 'paste', createClipboardTransfer({ 'text/plain': 'XYZ' }))
 
       expect(readParagraphTexts(editor)).toEqual(['aefXYZ'])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('supports cross-run plain text cut and paste through the transaction pipeline', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'abcdef' })
+
+    try {
+      editor.mount(host)
+      const formatAnchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 3
+      })
+      const formatFocus = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 6
+      })
+
+      editor.setSelection(createSelectionState(formatAnchor, formatFocus))
+      editor.toggleBold()
+
+      const paragraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+      expect(paragraph?.kind).toBe('paragraph')
+
+      const boldRunId = paragraph?.kind === 'paragraph'
+        ? paragraph.runs.find((run) => run.properties?.bold === true)?.id
+        : undefined
+      const plainTailRunId = paragraph?.kind === 'paragraph'
+        ? paragraph.runs[paragraph.runs.length - 1]?.id
+        : undefined
+
+      const boldEnd = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 3
+      })
+      const tailEnd = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: boldRunId ?? 'run-1',
+        graphemeIndex: 2
+      })
+      const textarea = getHiddenTextarea(host)
+
+      editor.setSelection(createSelectionState(boldEnd, tailEnd))
+
+      const cutTransfer = createClipboardTransfer()
+
+      dispatchClipboard(textarea, 'cut', cutTransfer)
+
+      expect(cutTransfer.getData('text/plain')).toBe('de')
+      expect(readParagraphTexts(editor)).toEqual(['abcf'])
+
+      const currentParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+      const insertRunId = currentParagraph?.kind === 'paragraph'
+        ? currentParagraph.runs[currentParagraph.runs.length - 1]?.id
+        : undefined
+      const insertRunTextLength = currentParagraph?.kind === 'paragraph'
+        ? currentParagraph.runs[currentParagraph.runs.length - 1]?.inlines
+          .flatMap((inline) => inline.kind === 'text' ? [inline.text] : [])
+          .join('')
+          .length ?? 0
+        : 0
+
+      const endAnchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: insertRunId ?? plainTailRunId ?? (boldRunId ?? 'run-1'),
+        graphemeIndex: insertRunTextLength
+      })
+
+      editor.setSelection(createSelectionState(endAnchor, endAnchor))
+      dispatchClipboard(textarea, 'paste', createClipboardTransfer({ 'text/plain': 'XY' }))
+
+      expect(readParagraphTexts(editor)).toEqual(['abcfXY'])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('supports cross-paragraph plain text cut and paste through the transaction pipeline', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'abc\n\ndef' })
+
+    try {
+      editor.mount(host)
+      const paragraphs = editor.getProjection().document.sections[0]?.blocks
+      const firstParagraph = paragraphs?.[0]
+      const secondParagraph = paragraphs?.[1]
+
+      expect(firstParagraph?.kind).toBe('paragraph')
+      expect(secondParagraph?.kind).toBe('paragraph')
+
+      const firstRunId = firstParagraph?.kind === 'paragraph' ? firstParagraph.runs[0]?.id : undefined
+      const secondRunId = secondParagraph?.kind === 'paragraph' ? secondParagraph.runs[0]?.id : undefined
+
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: firstParagraph?.id ?? 'paragraph-1',
+        runId: firstRunId ?? 'run-1',
+        graphemeIndex: 1
+      })
+      const focus = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: secondParagraph?.id ?? 'paragraph-2',
+        runId: secondRunId ?? 'run-2',
+        graphemeIndex: 2
+      })
+      const textarea = getHiddenTextarea(host)
+
+      editor.setSelection(createSelectionState(anchor, focus))
+
+      const cutTransfer = createClipboardTransfer()
+
+      dispatchClipboard(textarea, 'cut', cutTransfer)
+
+      expect(cutTransfer.getData('text/plain')).toBe('bc\nde')
+      expect(readParagraphTexts(editor)).toEqual(['af'])
+
+      const mergedParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+      const mergedRunId = mergedParagraph?.kind === 'paragraph'
+        ? mergedParagraph.runs[0]?.id
+        : undefined
+
+      const insertAnchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: mergedParagraph?.id ?? 'paragraph-1',
+        runId: mergedRunId ?? 'run-1',
+        graphemeIndex: 1
+      })
+
+      editor.setSelection(createSelectionState(insertAnchor, insertAnchor))
+      dispatchClipboard(textarea, 'paste', createClipboardTransfer({ 'text/plain': 'X\nY' }))
+
+      expect(readParagraphTexts(editor)).toEqual(['aX', 'Yf'])
     } finally {
       editor.destroy()
     }
