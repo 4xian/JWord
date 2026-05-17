@@ -274,6 +274,155 @@
 
 按“模型/operation -> layout/render -> input/UI -> undo/redo -> E2E”的顺序逐类能力落地。所有块级对象都必须有 anchor、selection、history 和 fixture，不允许只做视觉展示。
 
+### 当前基线（2026-05-17）
+
+- [x] Gate 3 已具备进入 Gate 4 的功能闭环证据；允许继续 Gate 4 开发，但不对外宣称 Alpha 已完全完成。
+- [x] `@4xian/jword-ui` 已作为 workspace 包落地，`examples/vanilla` 已退化为 host app 装配层，不再承载官方 toolbar 主逻辑。
+- [x] Gate 2 demo 宿主 viewport 回退已修复；50 页夹具重新回到 viewport virtualization 语义，不再在滚动后退化成 50 页 canvas 同时保留。
+- [x] 当前基线验证已通过：`pnpm lint`、`pnpm typecheck`、`pnpm build`、`pnpm test:e2e`、`pnpm test:visual`。
+- [ ] carry-over 仍保留：Windows 中文输入实机证据、Alpha 性能目标 `输入热路径 P95 < 50ms`、`INP P95 < 150ms`。
+
+### 推荐执行顺序
+
+1. 先冻结 Gate 4 fixtures、错误模型和目录落点，再进入第一个纵向能力。
+2. 先做图片纵线 `Step 4.1 -> 4.2 -> 4.3`，用它验证 `core` / `ui` 新边界、资源状态和失败恢复。
+3. 再做表格纵线 `Step 4.4 -> 4.5 -> 4.6 -> 4.7`，因为它会直接压到块级 model、layout、render 和 cell hit-test。
+4. 然后做批注与超链接 `Step 4.8 -> 4.9 -> 4.10`，验证非 toolbar UI 是否真正脱离 demo 主文件。
+5. 随后做结构与检索 `Step 4.11 -> 4.12`，确保目录 target、查找结果和替换事务都走稳定 anchor / RangeRef。
+6. 最后收企业文档补全 `Step 4.13 -> 4.16`，并用 `Step 4.17` 建立 Gate 4 的浏览器回归、视觉回归和 perf 护栏。
+
+### 迭代任务清单
+
+#### Iteration 0 - 冻结 Gate 4 起跑线
+
+- [ ] 建立 Gate 4 fixture 清单：`image-inline`、`image-block`、`table-basic`、`comment-thread`、`link-basic`、`find-replace`、`header-footer`、`paste-html`、`mobile-readonly`。
+- [ ] 明确每类 fixture 的最小可观察契约：anchor、selection、history、render、error recovery。
+- [ ] 为 Gate 4 新增目录预留明确落点，但不预创建空壳模块：
+  - `packages/ui/src/media/`
+  - `packages/ui/src/table/`
+  - `packages/ui/src/comments/`
+  - `packages/ui/src/link/`
+  - `packages/ui/src/find/`
+  - `packages/ui/src/header-footer/`
+- [ ] 约束新能力分层：
+  - `core` 负责 model / operation / layout / render / command / history
+  - `ui` 负责 panel / dialog / sidebar / toolbar entry / upload state
+  - `examples/vanilla` 只负责装配、fixture 切换和测试钩子
+
+#### Iteration 1 - 图片纵线（Step 4.1-4.3）
+
+- [ ] 定义资源表与 `ResourceAdapter` 公开边界：
+  - 资源 id、mime、source、status、error、retry token
+  - 上传、替换、删除、失败恢复、取消、进度事件
+  - 白名单 URL / protocol 策略
+- [ ] 为图片补 fixture 与错误场景：
+  - inline image
+  - block image
+  - upload pending / success / failed
+  - replace resource
+- [ ] 实现 inline image / block image 的 model、projection、selection target、anchor 映射。
+- [ ] 实现图片 operation：
+  - 插入 inline image
+  - 插入 block image
+  - 替换资源
+  - 删除图片
+  - resize
+- [ ] 实现图片 layout / render：
+  - 占位态
+  - 成功态
+  - 失败态
+  - resize handle
+  - page-local hit-test
+- [ ] 在 `packages/ui/src/media/` 实现图片插入 UI：
+  - 上传入口
+  - 进度态
+  - 失败重试
+  - 恢复提示
+- [ ] 为图片纵线补齐单测、layout/render 测试、Chromium E2E，再补三浏览器 focused smoke。
+
+#### Iteration 2 - 表格纵线（Step 4.4-4.7）
+
+- [ ] 定义 table / row / cell / grid / border / cell props / cell text content 的 model。
+- [ ] 明确 cell anchor、selection、caret、history 语义，禁止把表格当“一个大块文本”绕过去。
+- [ ] 实现表格 operation：
+  - 插入表格
+  - 插入 / 删除行列
+  - 合并单元格
+  - 更新边框
+  - 单元格文本编辑
+- [ ] 实现表格 layout / render：
+  - grid 几何
+  - cell content layout
+  - 跨页基础策略
+  - cell 内 hit-test
+- [ ] 在 `packages/ui/src/table/` 实现表格 UI：
+  - 行列选中
+  - 插入 / 删除菜单
+  - 边框基础控件
+- [ ] 补表格 fixture、Undo/Redo 回归、三浏览器 E2E 与 visual baseline。
+
+#### Iteration 3 - 批注与超链接（Step 4.8-4.10）
+
+- [ ] 实现批注 model / operation：
+  - 添加
+  - 回复
+  - 解决
+  - 重新打开
+  - 删除
+  - 定位
+- [ ] 批注 anchor 必须绑定稳定 anchor / RangeRef，禁止退回普通字符 offset。
+- [ ] 在 `packages/ui/src/comments/` 实现批注侧边栏：
+  - 线程列表
+  - 当前定位
+  - 解决 / 重开 / 删除
+  - 编辑后跟随文本移动
+- [ ] 实现超链接 model 与 protocol allowlist。
+- [ ] 在 `packages/ui/src/link/` 实现超链接编辑弹窗与打开行为。
+- [ ] 补 comment / link fixtures、文本编辑后 anchor 稳定性回归、focused E2E。
+
+#### Iteration 4 - 结构、检索与企业文档补全（Step 4.11-4.16）
+
+- [ ] 实现标题结构与基础目录生成，目录项点击跳转到稳定 anchor。
+- [ ] 实现查找替换：
+  - 结果位置使用 `RangeRef`
+  - 替换操作走 transaction pipeline
+  - 不允许直接改 projection
+- [ ] 实现页眉页脚与页码基础能力，要求 layout 结果可被后续 PDF/docx 复用。
+- [ ] 实现修订 metadata v1：记录插入、删除、格式变更。
+- [ ] 实现 DOMPurify 保格式粘贴 v1：
+  - 覆盖 Word HTML 常见片段
+  - 保留安全降级到纯文本能力
+  - 不产生 XSS
+- [ ] 在 `packages/ui/src/header-footer/` 与 `packages/ui/src/find/` 落控制 UI。
+- [ ] 实现移动 Web 只读分页预览，不承诺完整移动编辑。
+
+#### Iteration 5 - Gate 4 回归与基线（Step 4.17）
+
+- [ ] 建立 Gate 4 focused tests：
+  - resource adapter / image command
+  - table operation / layout
+  - comment anchor stability
+  - link allowlist
+  - find / replace pipeline
+  - paste sanitizer
+- [ ] 建立 Gate 4 E2E：
+  - 图片插入 / 替换 / 失败恢复
+  - 表格编辑 / 行列操作 / undo redo
+  - 批注定位 / 解决 / 重开
+  - 目录跳转
+  - 页眉页脚 / 页码
+  - 移动只读预览
+- [ ] 建立 Gate 4 visual baselines：
+  - 图片占位 / 成功 / 失败态
+  - 表格边框与跨页
+  - 批注高亮与侧栏
+  - 页眉页脚 / 页码
+- [ ] 建立 Gate 4 perf 护栏，至少记录：
+  - 表格大页滚动
+  - 图片混排文档滚动
+  - 查找替换结果量上升时的交互延迟
+- [ ] 验证新能力全部落在 `core` / `ui`，不回塞到 `examples/vanilla/src/main.ts`。
+
 ### 待办步骤
 
 - [ ] Step 4.1：实现资源表和 ResourceAdapter，定义图片上传、替换、失败恢复、白名单 URL 策略。

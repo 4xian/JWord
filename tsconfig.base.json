@@ -6,7 +6,9 @@
     "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
-      "@4xian/jword-core": ["./packages/core/src/index.ts"]
+      "@4xian/jword-core": ["./packages/core/src/index.ts"],
+      "@4xian/jword-ui": ["./packages/ui/src/index.ts"],
+      "@4xian/jword-ui/styles.css": ["./packages/ui/src/styles/toolbar.css"]
     },
     "ignoreDeprecations": "6.0",
     "resolveJsonModule": true,

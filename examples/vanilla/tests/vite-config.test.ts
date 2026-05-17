@@ -2,7 +2,7 @@
  * 职责：锁定 vanilla demo 在开发态与构建态对 @4xian/jword-core 的解析策略。
  * 边界：只验证 Vite 配置返回的 alias，不覆盖浏览器渲染与 bundle 内容。
  * 协作：examples/vanilla/vite.config.ts、packages/core/src/index.ts 和 packages/core/package.json。
- * 约束：开发态必须直连 src，构建态必须保留包导出默认行为。
+ * 约束：开发态与构建态都必须直连 workspace 源码 alias，避免 linked package 回落到不完整的声明图。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md。
  */
 import { existsSync } from 'node:fs'
@@ -12,28 +12,39 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 describe('vanilla demo vite config', () => {
-  it('serve 模式将 @4xian/jword-core 解析到 packages/core/src', async () => {
+  it('serve 模式将 @4xian/jword-core 与 @4xian/jword-ui 解析到 workspace 源码', async () => {
     const configModule = await loadViteConfigModule()
-    const config = configModule.createVanillaDemoViteConfig('serve')
+    const config = configModule.createVanillaDemoViteConfig()
     const aliasList = normalizeAliasList(config.resolve?.alias)
 
     expect(aliasList).toContainEqual({
       find: '@4xian/jword-core',
       replacement: resolve(process.cwd(), 'packages/core/src/index.ts')
     })
+    expect(aliasList).toContainEqual({
+      find: '@4xian/jword-ui',
+      replacement: resolve(process.cwd(), 'packages/ui/src/index.ts')
+    })
   })
 
-  it('build 模式不覆盖 @4xian/jword-core 的包导出入口', async () => {
+  it('build 模式继续使用 @4xian/jword-core 与 @4xian/jword-ui 的 workspace 源码 alias', async () => {
     const configModule = await loadViteConfigModule()
-    const config = configModule.createVanillaDemoViteConfig('build')
+    const config = configModule.createVanillaDemoViteConfig()
     const aliasList = normalizeAliasList(config.resolve?.alias)
 
-    expect(aliasList.some((entry) => entry.find === '@4xian/jword-core')).toBe(false)
+    expect(aliasList).toContainEqual({
+      find: '@4xian/jword-core',
+      replacement: resolve(process.cwd(), 'packages/core/src/index.ts')
+    })
+    expect(aliasList).toContainEqual({
+      find: '@4xian/jword-ui',
+      replacement: resolve(process.cwd(), 'packages/ui/src/index.ts')
+    })
   })
 })
 
 async function loadViteConfigModule(): Promise<{
-  createVanillaDemoViteConfig: (command: 'serve' | 'build') => {
+  createVanillaDemoViteConfig: () => {
     readonly resolve?: {
       readonly alias?: AliasEntry | readonly AliasEntry[]
     }
@@ -44,7 +55,7 @@ async function loadViteConfigModule(): Promise<{
   expect(existsSync(configPath)).toBe(true)
 
   return import(pathToFileURL(configPath).href) as Promise<{
-    createVanillaDemoViteConfig: (command: 'serve' | 'build') => {
+    createVanillaDemoViteConfig: () => {
       readonly resolve?: {
         readonly alias?: AliasEntry | readonly AliasEntry[]
       }

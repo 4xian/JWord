@@ -3,12 +3,16 @@ import { dirname, join, normalize } from 'node:path'
 
 const coreEntryPath = join('packages', 'core', 'dist', 'index.js')
 const coreSourceEntryPath = join('packages', 'core', 'src', 'index.ts')
+const uiSourceEntryPath = join('packages', 'ui', 'src', 'index.ts')
+const uiToolbarStylesPath = join('packages', 'ui', 'src', 'styles', 'toolbar.css')
 const demoEntrySourcePath = join('examples', 'vanilla', 'src', 'main.ts')
 const demoDistRoot = join('examples', 'vanilla', 'dist')
 const demoIndexPath = join(demoDistRoot, 'index.html')
 const demoAssetsDir = join(demoDistRoot, 'assets')
 const graphAliases = new Map([
-  ['@4xian/jword-core', coreSourceEntryPath]
+  ['@4xian/jword-core', coreSourceEntryPath],
+  ['@4xian/jword-ui', uiSourceEntryPath],
+  ['@4xian/jword-ui/styles.css', uiToolbarStylesPath]
 ])
 const forbiddenFirstScreenImports = [
   '@4xian/jword-docx',
