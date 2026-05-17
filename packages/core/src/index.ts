@@ -11,16 +11,16 @@ export type {
   CanvasPool,
   CanvasPoolOptions,
   CanvasRenderingContextLike
-} from './canvas-pool'
-export { createCanvasPool } from './canvas-pool'
+} from './canvas/pool'
+export { createCanvasPool } from './canvas/pool'
 export {
   renderPageCanvas,
   syncPageCanvases
-} from './canvas-renderer'
+} from './canvas/renderer'
 export type {
   RenderPageInput,
   SyncPageCanvasesInput
-} from './canvas-renderer'
+} from './canvas/renderer'
 export type {
   Editor,
   EditorCommandOptions,
@@ -31,10 +31,10 @@ export type {
   EditorHitTestPoint,
   EditorOptions,
   EditorTextAnchorInput
-} from './editor'
-export { createEditor } from './editor'
-export { JWordError } from './errors'
-export type { JWordErrorCode, JWordErrorDetails } from './errors'
+} from './editor/runtime'
+export { createEditor } from './editor/runtime'
+export { JWordError } from './shared/errors'
+export type { JWordErrorCode, JWordErrorDetails } from './shared/errors'
 export {
   buildSetBackgroundColorCommand,
   buildSetBoldCommand,
@@ -46,8 +46,8 @@ export {
   buildSetStrikeCommand,
   buildSetTextColorCommand,
   buildSetUnderlineCommand
-} from './command-builders'
-export { createFontManager } from './font-manager'
+} from './operations/command-builders'
+export { createFontManager } from './layout/font-manager'
 export type {
   FontAvailabilityStatus,
   FontCacheStats,
@@ -56,25 +56,25 @@ export type {
   ResolvedFontStyle,
   RunTextStyle,
   TextMeasurement
-} from './font-manager'
+} from './layout/font-manager'
 export type {
   HistoryEntryMetadata,
   HistoryOperationResult
-} from './history'
-export { createSelectionFormattingState } from './formatting-state'
+} from './operations/history'
+export { createSelectionFormattingState } from './model/formatting-state'
 export type {
   FormattingStateValue,
   ParagraphAlignment,
   ParagraphFormattingState,
   RunFormattingState,
   SelectionFormattingState
-} from './formatting-types'
+} from './model/formatting-types'
 export {
   getCaretRect,
   getSelectionRects,
   hitTestDocumentLayout,
   layoutDocument
-} from './layout'
+} from './layout/runtime'
 export type {
   DocumentLayout,
   InlineBox,
@@ -83,27 +83,28 @@ export type {
   LayoutDebugOverlay,
   LayoutDirtyRange,
   LayoutInput,
+  LayoutOptions,
   LayoutRect,
   LayoutViewport,
   LineBox,
   PageBox,
   ParagraphBox,
   TextFragment
-} from './layout'
-export { createLayoutSchedule } from './layout-scheduler'
-export type { LayoutSchedule, LayoutScheduleInput } from './layout-scheduler'
-export type { Block, Document, Paragraph, Run, Section } from './model'
+} from './layout/runtime'
+export { createLayoutSchedule } from './layout/scheduler'
+export type { LayoutSchedule, LayoutScheduleInput } from './layout/scheduler'
+export type { Block, Document, Paragraph, Run, Section } from './model/types'
 export {
   CSS_PX_PER_INCH,
   TWIPS_PER_INCH,
   createPageConfig,
   cssPxToTwips,
   twipsToCssPx
-} from './page-config'
-export type { PageConfig, PageConfigInput, PageMargins, PageOrientation, PagePreset } from './page-config'
-export type { AnchorRef, RangeRef } from './position'
-export type { DocumentProjection } from './projection'
-export type { SelectionState } from './selection'
+} from './layout/page-config'
+export type { PageConfig, PageConfigInput, PageMargins, PageOrientation, PagePreset } from './layout/page-config'
+export type { AnchorRef, RangeRef } from './model/position'
+export type { DocumentProjection } from './model/projection'
+export type { SelectionState } from './model/selection'
 export type {
   Command,
   Operation,
@@ -112,6 +113,6 @@ export type {
   TransactionEvent,
   TransactionMetadata,
   TransactionResult
-} from './transaction'
-export { computeViewportPages } from './viewport-virtualizer'
-export type { ViewportPages, ViewportPagesInput, VirtualizerPageBox } from './viewport-virtualizer'
+} from './operations/transaction'
+export { computeViewportPages } from './canvas/viewport-virtualizer'
+export type { ViewportPages, ViewportPagesInput, VirtualizerPageBox } from './canvas/viewport-virtualizer'

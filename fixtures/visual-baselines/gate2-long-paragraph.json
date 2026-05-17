@@ -4,10 +4,10 @@
   "case": "长段落 line breaking 和 page breaking 后续复查基线",
   "pageCount": 1,
   "lineCount": 3,
-  "fragmentCount": 601,
+  "fragmentCount": 217,
   "renderedPageCount": 1,
-  "drawCallCount": 2407,
-  "drawCallHash": "cbc37d099ffa2381a1378db1987f99dcf45360d7e22bb4ad9d34918f949cb40e",
+  "drawCallCount": 871,
+  "drawCallHash": "656e5558c727b0476fef324438fbff5f1633678a7ca889b15f291ce261a891df",
   "notes": [
     "记录长段落视觉输入基线",
     "真实分页和断行数量由 Gate 2 layout 单元测试覆盖"

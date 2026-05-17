@@ -4,10 +4,10 @@
   "case": "A4 纯文本长文，直接消费 50 页 fixture 的可复查基线",
   "pageCount": 50,
   "lineCount": 2400,
-  "fragmentCount": 124800,
+  "fragmentCount": 38400,
   "renderedPageCount": 50,
-  "drawCallCount": 499350,
-  "drawCallHash": "dee992add5ca8b0c5fd87bb72b343c7994d096bad05e7b1daae4fd87187713c8",
+  "drawCallCount": 153750,
+  "drawCallHash": "eee915193cf71b2bb6ccd53d212b1b9e7844c39a24d975b6a0a6771a90bebe47",
   "notes": [
     "fixture 非空行直接映射为段落输入，不再做 32 轮扩展",
     "用于复查 viewport virtualization 不应保留全部大 canvas"

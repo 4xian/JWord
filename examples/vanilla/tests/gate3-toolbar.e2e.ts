@@ -25,7 +25,12 @@ test('Gate 3 toolbar renders real controls and mirrors current selection state',
   )
 
   expect(mirrorLength).toBeGreaterThan(100)
-  await expect(page.getByRole('button', { name: '选择首页片段' })).toBeDisabled()
+  const textMirror = page.locator('[data-jword-text-mirror="true"]')
+
+  await expect(textMirror).toContainText('默认混排样例 2026')
+  await expect(textMirror).toContainText('English text')
+  await expect(textMirror).toContainText('13579')
+  await expect(page.getByRole('button', { name: '选择首页片段' })).toBeEnabled()
 
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await expect(page.getByRole('button', { name: '选择首页片段' })).toBeEnabled()
@@ -123,6 +128,170 @@ test('Gate 3 toolbar supports cross-run formatting through facade command builde
   ])
 })
 
+test('Gate 3 toolbar applies the remaining run formatting matrix through real browser controls', async ({ page }) => {
+  await page.goto('/')
+  await waitForDemoReady(page)
+  await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
+  await page.getByRole('button', { name: '选择首页片段' }).click()
+
+  const underlineButton = page.getByRole('button', { name: '下划线' })
+  const strikeButton = page.getByRole('button', { name: '删除线' })
+  const fontFamilySelect = page.locator('[data-jword-format-font-family]')
+  const fontSizeSelect = page.locator('[data-jword-format-font-size]')
+  const textColorInput = page.locator('[data-jword-format-text-color]')
+  const backgroundColorInput = page.locator('[data-jword-format-background-color]')
+  const runSummary = page.locator('[data-jword-run-summary]')
+
+  await underlineButton.click()
+  await expect(underlineButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(runSummary).toContainText('U 开')
+  expect(await readFirstRunStyle(page)).toEqual({ underline: true })
+
+  await strikeButton.click()
+  await expect(strikeButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(runSummary).toContainText('S 开')
+  expect(await readFirstRunStyle(page)).toEqual({
+    underline: true,
+    strike: true
+  })
+
+  await fontFamilySelect.selectOption('KaiTi')
+  await expect(fontFamilySelect).toHaveValue('KaiTi')
+  await expect(fontFamilySelect).toHaveAttribute('data-jword-state', 'value')
+  await expect(runSummary).toContainText('字体 KaiTi')
+  expect(await readFirstRunStyle(page)).toEqual({
+    underline: true,
+    strike: true,
+    fontFamily: 'KaiTi'
+  })
+
+  await fontSizeSelect.selectOption('360')
+  await expect(fontSizeSelect).toHaveValue('360')
+  await expect(fontSizeSelect).toHaveAttribute('data-jword-state', 'value')
+  await expect(runSummary).toContainText('字号 18 pt')
+  expect(await readFirstRunStyle(page)).toEqual({
+    underline: true,
+    strike: true,
+    fontFamily: 'KaiTi',
+    fontSizeTwips: 360
+  })
+
+  await applyColorValue(page, '[data-jword-format-text-color]', '#ff0000')
+  await expect(textColorInput).toHaveValue('#ff0000')
+  await expect(textColorInput).toHaveAttribute('data-jword-state', 'value')
+  await expect(runSummary).toContainText('字色 #ff0000')
+  expect(await readFirstRunStyle(page)).toEqual({
+    underline: true,
+    strike: true,
+    fontFamily: 'KaiTi',
+    fontSizeTwips: 360,
+    color: '#ff0000'
+  })
+
+  await applyColorValue(page, '[data-jword-format-background-color]', '#00ff88')
+  await expect(backgroundColorInput).toHaveValue('#00ff88')
+  await expect(backgroundColorInput).toHaveAttribute('data-jword-state', 'value')
+  await expect(runSummary).toContainText('底色 #00ff88')
+  expect(await readFirstRunStyle(page)).toEqual({
+    underline: true,
+    strike: true,
+    fontFamily: 'KaiTi',
+    fontSizeTwips: 360,
+    color: '#ff0000',
+    backgroundColor: '#00ff88'
+  })
+  expect(await readFirstRenderedFragment(page)).toMatchObject({
+    text: 'Alph',
+    style: {
+      underline: true,
+      strike: true,
+      color: '#ff0000',
+      backgroundColor: '#00ff88',
+      fontSizeTwips: 360
+    }
+  })
+})
+
+test('Gate 3 toolbar color picker keeps applying to the selection captured when the control was opened', async ({ page }) => {
+  await page.goto('/')
+  await waitForDemoReady(page)
+  await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
+  await page.getByRole('button', { name: '选择首页片段' }).click()
+
+  const textColorInput = page.locator('[data-jword-format-text-color]')
+
+  await textColorInput.click()
+  await collapseSelectionAtSecondParagraphStart(page)
+  await expect(page.locator('[data-jword-selection-summary]')).toContainText('paragraph-2')
+
+  await applyColorValue(page, '[data-jword-format-text-color]', '#3366ff')
+
+  expect(await readFirstRunStyle(page)).toMatchObject({
+    color: '#3366ff'
+  })
+  expect(await readSecondParagraphFirstRunStyle(page)).not.toHaveProperty('color')
+  await expect(textColorInput).toHaveValue('#3366ff')
+})
+
+test('Gate 3 toolbar applies paragraph alignment and indent across a multi-paragraph selection', async ({ page }) => {
+  await page.goto('/')
+  await waitForDemoReady(page)
+  await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
+
+  await selectFirstTwoParagraphs(page)
+
+  const alignRightButton = page.locator('[data-jword-format-align-right]')
+  const indentIncreaseButton = page.locator('[data-jword-format-indent-increase]')
+  const runSummary = page.locator('[data-jword-run-summary]')
+
+  await alignRightButton.click()
+  await expect(alignRightButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(alignRightButton).toHaveAttribute('data-jword-state', 'value')
+  await expect(runSummary).toContainText('对齐 right')
+  expect(await readFirstTwoParagraphProperties(page)).toEqual([
+    { alignment: 'right' },
+    { alignment: 'right' }
+  ])
+
+  await indentIncreaseButton.click()
+  await expect(runSummary).toContainText('缩进 36 pt')
+  expect(await readFirstTwoParagraphProperties(page)).toEqual([
+    { alignment: 'right', indentLeftTwips: 720 },
+    { alignment: 'right', indentLeftTwips: 720 }
+  ])
+  expect(await readFirstLineGeometry(page)).toMatchObject({
+    paragraphXGreaterThanContentLeft: true,
+    lineRightMatchesContentRight: true
+  })
+})
+
+test('Gate 3 toolbar switches paper size and updates real page geometry', async ({ page }) => {
+  await page.goto('/')
+  await waitForDemoReady(page)
+
+  const paperPresetSelect = page.locator('[data-jword-page-preset]')
+
+  await expect(paperPresetSelect).toBeVisible()
+
+  await paperPresetSelect.selectOption('a5')
+  await expect.poll(() => readPagePresetProbe(page)).toMatchObject({
+    preset: 'a5'
+  })
+
+  const a5Probe = await readPagePresetProbe(page)
+
+  await paperPresetSelect.selectOption('a3')
+  await expect.poll(() => readPagePresetProbe(page)).toMatchObject({
+    preset: 'a3'
+  })
+
+  const a3Probe = await readPagePresetProbe(page)
+
+  expect(a3Probe.pageWrapperWidthPx).toBeGreaterThan(a5Probe.pageWrapperWidthPx)
+  expect(a3Probe.pageWrapperHeightPx).toBeGreaterThan(a5Probe.pageWrapperHeightPx)
+  expect(a3Probe.firstPageLineCount).toBeLessThan(a5Probe.firstPageLineCount)
+})
+
 async function readFirstRunStyle(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
     const projection = window.__jwordDemo?.editor.getProjection()
@@ -146,6 +315,103 @@ async function readFirstParagraphRunStyles(page: Page): Promise<readonly Record<
     }
 
     return firstBlock.runs.map((run) => ({ ...(run.properties ?? {}) }))
+  })
+}
+
+async function readSecondParagraphFirstRunStyle(page: Page): Promise<Record<string, unknown>> {
+  return page.evaluate(() => {
+    const projection = window.__jwordDemo?.editor.getProjection()
+    const secondBlock = projection?.document.sections[0]?.blocks[1]
+
+    if (secondBlock === undefined || secondBlock.kind !== 'paragraph') {
+      throw new Error('缺少第二段')
+    }
+
+    return { ...(secondBlock.runs[0]?.properties ?? {}) }
+  })
+}
+
+async function readFirstTwoParagraphProperties(page: Page): Promise<readonly Record<string, unknown>[]> {
+  return page.evaluate(() => {
+    const projection = window.__jwordDemo?.editor.getProjection()
+    const firstBlock = projection?.document.sections[0]?.blocks[0]
+    const secondBlock = projection?.document.sections[0]?.blocks[1]
+
+    if (
+      firstBlock === undefined
+      || firstBlock.kind !== 'paragraph'
+      || secondBlock === undefined
+      || secondBlock.kind !== 'paragraph'
+    ) {
+      throw new Error('缺少前两段')
+    }
+
+    return [
+      { ...(firstBlock.properties ?? {}) },
+      { ...(secondBlock.properties ?? {}) }
+    ]
+  })
+}
+
+async function readFirstRenderedFragment(page: Page): Promise<Record<string, unknown>> {
+  return page.evaluate(() => {
+    const fragment = window.__jwordDemo?.editor.getLayout().pages[0]?.lines[0]?.fragments[0]
+
+    if (fragment === undefined) {
+      throw new Error('缺少首个渲染片段')
+    }
+
+    return {
+      text: fragment.text,
+      style: { ...fragment.style }
+    }
+  })
+}
+
+async function readFirstLineGeometry(page: Page): Promise<{
+  readonly paragraphXGreaterThanContentLeft: boolean
+  readonly lineRightMatchesContentRight: boolean
+}> {
+  return page.evaluate(() => {
+    const pageBox = window.__jwordDemo?.editor.getLayout().pages[0]
+    const paragraph = pageBox?.paragraphs[0]
+    const line = pageBox?.lines[0]
+
+    if (pageBox === undefined || paragraph === undefined || line === undefined) {
+      throw new Error('缺少首行布局几何')
+    }
+
+    return {
+      paragraphXGreaterThanContentLeft: paragraph.x > pageBox.contentRect.x,
+      lineRightMatchesContentRight: Math.abs((line.x + line.width) - (pageBox.contentRect.x + pageBox.contentRect.width)) < 1
+    }
+  })
+}
+
+async function readPagePresetProbe(page: Page): Promise<{
+  readonly preset: string
+  readonly pageWrapperWidthPx: number
+  readonly pageWrapperHeightPx: number
+  readonly firstPageLineCount: number
+}> {
+  return page.evaluate(() => {
+    const demo = window.__jwordDemo
+    const pageConfig = demo?.editor.getPageConfig()
+    const firstPage = demo?.editor.getLayout().pages[0]
+    const pageWrapper = document.querySelector<HTMLElement>('[data-jword-page="0"]')
+
+    if (demo === undefined || pageConfig === undefined || firstPage === undefined || pageWrapper === null) {
+      throw new Error('缺少纸张尺寸 probe')
+    }
+
+    const rect = pageWrapper.getBoundingClientRect()
+
+    return {
+      preset: pageConfig.preset,
+      pageWrapperWidthPx: rect.width,
+      pageWrapperHeightPx: rect.height,
+      firstPageLineCount: firstPage.lines.length
+    }
   })
 }
 
@@ -250,7 +516,105 @@ async function selectFirstParagraphAcrossRuns(page: Page): Promise<void> {
   })
 }
 
+async function selectFirstTwoParagraphs(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const demo = window.__jwordDemo
+
+    if (demo === undefined) {
+      throw new Error('缺少 Gate 3 demo 测试钩子')
+    }
+
+    const projection = demo.editor.getProjection()
+    const firstBlock = projection.document.sections[0]?.blocks[0]
+    const secondBlock = projection.document.sections[0]?.blocks[1]
+
+    if (
+      firstBlock === undefined
+      || firstBlock.kind !== 'paragraph'
+      || secondBlock === undefined
+      || secondBlock.kind !== 'paragraph'
+      || firstBlock.runs.length === 0
+      || secondBlock.runs.length === 0
+    ) {
+      throw new Error('缺少跨段格式测试目标')
+    }
+
+    const firstRun = firstBlock.runs[0]
+    const lastRun = secondBlock.runs[secondBlock.runs.length - 1]
+
+    if (firstRun === undefined || lastRun === undefined) {
+      throw new Error('缺少跨段选区目标')
+    }
+
+    const readRunLength = (run: typeof firstRun): number =>
+      run.inlines.flatMap((inline) => inline.kind === 'text' ? Array.from(inline.text) : []).length
+
+    const anchor = demo.editor.createTextAnchor({
+      sectionId: projection.document.sections[0]?.id ?? 'section-1',
+      blockId: firstBlock.id,
+      runId: firstRun.id,
+      graphemeIndex: 0
+    })
+    const focus = demo.editor.createTextAnchor({
+      sectionId: projection.document.sections[0]?.id ?? 'section-1',
+      blockId: secondBlock.id,
+      runId: lastRun.id,
+      graphemeIndex: readRunLength(lastRun)
+    })
+
+    demo.editor.setSelection({
+      anchor,
+      focus,
+      range: Object.freeze({ anchor, focus }) as RangeRef,
+      direction: 'forward',
+      affinity: 'none'
+    })
+  })
+}
+
+async function collapseSelectionAtSecondParagraphStart(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const demo = window.__jwordDemo
+
+    if (demo === undefined) {
+      throw new Error('缺少 Gate 3 demo 测试钩子')
+    }
+
+    const projection = demo.editor.getProjection()
+    const secondBlock = projection.document.sections[0]?.blocks[1]
+    const firstRun = secondBlock?.kind === 'paragraph' ? secondBlock.runs[0] : undefined
+
+    if (secondBlock === undefined || secondBlock.kind !== 'paragraph' || firstRun === undefined) {
+      throw new Error('缺少第二段折叠选区目标')
+    }
+
+    const anchor = demo.editor.createTextAnchor({
+      sectionId: projection.document.sections[0]?.id ?? 'section-1',
+      blockId: secondBlock.id,
+      runId: firstRun.id,
+      graphemeIndex: 0
+    })
+
+    demo.editor.setSelection({
+      anchor,
+      focus: anchor,
+      range: Object.freeze({ anchor, focus: anchor }) as RangeRef,
+      direction: 'none',
+      affinity: 'none'
+    })
+  })
+}
+
+async function applyColorValue(page: Page, selector: string, value: string): Promise<void> {
+  await page.locator(selector).evaluate((input, nextValue) => {
+    const node = input as HTMLInputElement
+
+    node.value = nextValue as string
+    node.dispatchEvent(new Event('change', { bubbles: true }))
+  }, value)
+}
+
 async function waitForDemoReady(page: Page): Promise<void> {
-  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
   await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
 }

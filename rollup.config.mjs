@@ -42,6 +42,18 @@ function isExternal(id) {
   return externalPrefixes.some((prefix) => id === prefix || id.startsWith(prefix))
 }
 
+function stripPreservedDocComments() {
+  return {
+    name: 'strip-preserved-doc-comments',
+    renderChunk(code) {
+      return {
+        code: code.replace(/\/\*\*[\s\S]*?\*\//gu, ''),
+        map: null
+      }
+    }
+  }
+}
+
 function createPackageConfig(pkg) {
   return {
     input: pkg.input,
@@ -55,11 +67,13 @@ function createPackageConfig(pkg) {
         declarationDir: join(pkg.dir, 'dist')
       }),
       nodeResolve({ browser: true, preferBuiltins: false }),
-      commonjs()
+      commonjs(),
+      stripPreservedDocComments()
     ],
     output: {
       file: join(pkg.dir, 'dist', 'index.js'),
       format: 'es',
+      compact: true,
       sourcemap: true
     },
     treeshake: {
@@ -79,6 +93,7 @@ function createWorkerConfigs(pkg) {
       output: {
         file: join(pkg.dir, 'dist', 'worker.js'),
         format: 'es',
+        compact: true,
         sourcemap: true
       }
     }

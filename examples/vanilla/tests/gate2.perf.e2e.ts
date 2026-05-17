@@ -26,7 +26,7 @@ interface Gate2PerfMetrics {
 test('Gate 2 fixture exposes real browser scroll metrics and virtualization bounds', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Gate 2 浏览器性能证据当前只固定在 Chromium。')
 
-  await page.goto('/')
+  await page.goto('/?fixture=gate2')
   await waitForGate2Ready(page)
 
   const metrics = await readGate2PerfMetrics(page)

@@ -37,6 +37,8 @@ interface MountedPageGeometryProbe {
   readonly wrapperHeightPx: number
   readonly canvasWidthPx: number
   readonly canvasHeightPx: number
+  readonly wrapperLeftFractionPx: number
+  readonly canvasLeftFractionPx: number
   readonly point: ClientPointProbe
   readonly pageOverlayBoxCount: number
   readonly fragmentOverlayBoxCount: number
@@ -54,7 +56,7 @@ interface MountedViewportProbe {
 }
 
 test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/?fixture=gate2')
 
   const container = page.locator('[data-jword-canvas-container]')
 
@@ -83,7 +85,7 @@ test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', asy
 })
 
 test('Gate 2 demo keeps mounted page geometry and debug overlay aligned on the 50-page fixture', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/?fixture=gate2')
 
   const container = page.locator('[data-jword-canvas-container]')
 
@@ -116,6 +118,8 @@ test('Gate 2 demo keeps mounted page geometry and debug overlay aligned on the 5
     expect(targetPage.wrapperHeightPx).toBeGreaterThan(0)
     expect(Math.abs(targetPage.canvasWidthPx - targetPage.wrapperWidthPx)).toBeLessThanOrEqual(1)
     expect(Math.abs(targetPage.canvasHeightPx - targetPage.wrapperHeightPx)).toBeLessThanOrEqual(1)
+    expect(targetPage.wrapperLeftFractionPx).toBeLessThanOrEqual(0.001)
+    expect(targetPage.canvasLeftFractionPx).toBeLessThanOrEqual(0.001)
     expect(targetPage.point.clientX).toBeGreaterThan(0)
     expect(targetPage.point.clientY).toBeGreaterThan(0)
     expect(targetPage.pageOverlayBoxCount).toBe(1)
@@ -243,6 +247,8 @@ async function readMountedViewportProbe(page: Page): Promise<MountedViewportProb
         wrapperHeightPx: wrapperRect.height,
         canvasWidthPx: canvasRect.width,
         canvasHeightPx: canvasRect.height,
+        wrapperLeftFractionPx: Math.abs(wrapperRect.left - Math.round(wrapperRect.left)),
+        canvasLeftFractionPx: Math.abs(canvasRect.left - Math.round(canvasRect.left)),
         point,
         pageOverlayBoxCount: overlayBoxes.filter((box) => box.kind === 'page' && box.pageIndex === pageIndex).length,
         fragmentOverlayBoxCount: overlayBoxes.filter((box) => box.kind === 'fragment' && box.pageIndex === pageIndex).length

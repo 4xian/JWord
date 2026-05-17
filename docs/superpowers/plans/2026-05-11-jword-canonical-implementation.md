@@ -182,6 +182,7 @@
 - [x] Step 2.12：实现 rect mapping：AnchorRef/RangeRef -> caret rect/selection rect。
 - [x] Step 2.13：实现 layout debug overlay，为 devtools 后续查看 page/line/fragment 边界提供数据。
 - [x] Step 2.14：建立 50 页纯文本 fixture、中文混排 fixture、emoji fixture、长段落 fixture 的视觉回归基线。
+  - 复核 2026-05-15：`TextFragment` 改为自然文本片段后，四个 Gate 2 visual baseline 已按新的 fragment/draw-call hash 刷新；`tests/gate2-fixture.test.ts` 与 `pnpm test:visual` 均确认 baseline 和 built core 渲染语义一致。
 - [x] Step 2.15：建立 render benchmark，记录滚动 FPS、layout 耗时、render 耗时、canvas 数量、显存相关指标。
   - 完成 2026-05-12：Gate 2 已落在 core 的 page config、font manager、layout、layout scheduler、canvas renderer、viewport virtualizer、canvas pool、Editor facade 桥接、fixtures、visual baseline 和 benchmark。
   - 复核修正 2026-05-12：补齐 scroll 后 viewport virtualizer 刷新、页面 DOM 尺寸占位、layout scheduler 接入 Editor render 路径、真实 core layout/render benchmark、真实 draw-call visual baseline 校验。
@@ -219,26 +220,42 @@
 - [x] Step 3.2：实现 hidden textarea，位置跟随 caret，保证中文 IME 候选框位置可用。
 - [ ] Step 3.3：实现 composition handler，覆盖 Chrome/Safari/Firefox 差异和 macOS/Windows 中文输入。
   完成 2026-05-14：当前宿主浏览器的 Chromium、Firefox、WebKit composition 事件链已由 `examples/vanilla/tests/gate3-input.e2e.ts` 验证；仍缺 Windows 中文输入实机证据，因此此项暂不勾选。
+  回写 2026-05-15：按当前阶段决策，Windows 中文输入实机证据暂作为进入 Gate 4 的豁免项保留到 Alpha 发布前补证；此步骤因此不再阻塞 Gate 4 开发，但仍不记为完全完成。
 - [x] Step 3.4：实现 keyboard handler，覆盖输入、删除、回车、方向键、快捷键、撤销重做。
 - [x] Step 3.5：实现 pointer selection，支持点击定位、拖拽选区、双击词选择的扩展边界。
+  - 复核 2026-05-15：E2E 命中点 helper 已支持自然文本片段内部 grapheme 边界，不再依赖逐字 fragment；三浏览器 pointer selection 和 Chromium 大夹具拖拽/双击回归已通过。
 - [x] Step 3.6：实现 clipboard plain text，复制、剪切、粘贴都走 safe text 路线和 transaction pipeline。
 - [x] Step 3.7：实现基础 commands：加粗、斜体、下划线、删除线、字体、字号、颜色、背景色、对齐、缩进。
+  - 复核 2026-05-15：`examples/vanilla/tests/gate3-toolbar.e2e.ts` 已补齐 `underline`、`strike`、`fontFamily`、`fontSize`、`textColor`、`backgroundColor`、`alignment`、`indent` 的三浏览器真实控件验收，并同时校验 toolbar DOM 状态与 `editor.getProjection()` 的实际属性落地。
 - [x] Step 3.8：实现 toolbar 第一版，原生 TS DOM API，使用 `jw-` BEM 类名，不引入框架。
 - [x] Step 3.9：实现 toolbar 状态同步，selection 改变时显示当前 run/paragraph 状态。
 - [x] Step 3.10：实现 aria-live 和隐藏文本镜像第一版，让 Canvas 编辑器有基础可访问性路径。
 - [x] Step 3.11：实现基础错误恢复，输入异常时不破坏 Y.Doc 状态，用户可继续编辑。
 - [x] Step 3.12：完善 Alpha E2E：IME、选择、键盘、toolbar、undo/redo、plain text clipboard。
-- [x] Step 3.13：完成 Alpha 性能验证：1-2 万字编辑、50 页滚动、输入热路径 P95 指标。
+- [ ] Step 3.13：完成 Alpha 性能验证：1-2 万字编辑、50 页滚动、输入热路径 P95 指标。
+  - 回写 2026-05-15：`examples/vanilla/tests/gate3.perf.e2e.ts` 已通过 warmup、起始态归一化和更稳定的 P95 采样，稳定表达当前 Chromium 端到端输入/滚动护栏；但现有阈值仍是 `largeDocumentInsertP95Ms <= 140ms`，不能等同于 Alpha 完成区要求的 `输入热路径 P95 < 50ms` 与 `INP P95 < 150ms`，因此此步骤改回未完成。
+  - 回写 2026-05-15：`packages/core/src/editor.ts` 与 `packages/core/src/layout.ts` 已将大夹具 pointer 交互从同步整页 selection/render 热路径中拆出一层缓存与延后 finalize，`examples/vanilla/tests/gate3-input.e2e.ts` 的 Chromium 大夹具拖拽/双击真实回归现已通过；但这只说明 Alpha 交互卡死缺陷已修复，不等同于 `输入热路径 P95 < 50ms` 或 `INP P95 < 150ms` 已达标，因此此步骤继续保持未完成。
+  - 回写 2026-05-15：当前 `gate3.perf.e2e.ts` 只证明 Chromium 下已建立端到端 perf 护栏，可用于阻止明显回退；它不是 Alpha 性能完成证明，因此 Gate 4 可继续推进，但 Alpha 发布条件仍保持未完成。
 
 ### 验收
 
 - [ ] macOS 和 Windows 中文输入可用。
   现状 2026-05-14：当前宿主浏览器的 composition 链已在 Chromium、Firefox、WebKit 上验证；仓库和当前环境都没有 Windows 实机或远程验证通道，因此此项暂不勾选。
+  - 阶段决策 2026-05-15：Windows 中文输入实机证据暂作为进入 Gate 4 的豁免项保留到 Alpha 发布前补证，不再阻塞下一阶段开发。
 - [x] 输入、删除、回车、方向键、选择、复制粘贴可用。
 - [x] 加粗、斜体、下划线、删除线、字体、字号、颜色、对齐、缩进可用。
+  - 复核 2026-05-15：三浏览器 toolbar E2E 已覆盖剩余 run/paragraph 格式矩阵，避免只靠 selector 存在或单一 bold case 判断“可用”。
 - [x] undo/redo 覆盖基础编辑和格式。
-- [x] 1-2 万字文档编辑不卡顿。
+- [x] 1-2 万字文档基础编辑链路可用。
+  - 回写 2026-05-15：当前说明的是 50 页大夹具上的输入、选择、撤销重做与 toolbar 闭环可运行，不等同于已达到 Alpha 性能门槛；性能是否达标仍以 Step 3.13 与 Alpha 完成区指标为准。
 - [x] `0.1-alpha` 可由 vanilla demo 验证最终架构，不是临时 demo。
+
+### Gate 4 准入说明
+
+- [x] 2026-05-15：按当前阶段决策，Gate 3 已具备进入 Gate 4 的功能闭环证据。
+  - 已验证范围：真实 DOM 输入、composition 事件链、pointer selection、plain text clipboard、toolbar/selection state sync、undo/redo、vanilla visual 验证、transaction pipeline 复核。
+  - 已知 carry-over：Windows 中文输入实机证据、Alpha 性能目标 `输入热路径 P95 < 50ms`、`INP P95 < 150ms`。
+  - 约束：允许继续 Gate 4 开发，不允许对外宣称 Gate 3 Alpha 已完全完成。
 
 ### 禁止事项
 
@@ -450,22 +467,27 @@
 - [x] `pnpm build`
 - [x] `pnpm test:e2e`
   - 回写 2026-05-14：当前命令覆盖三浏览器 `examples/vanilla/tests/gate2.e2e.ts`，并追加 `perf-chromium` 下的 `examples/vanilla/tests/gate2.perf.e2e.ts`；现有 Gate 2 证据只覆盖 50 页 fixture 的分页滚动、canvas 虚拟化、page geometry、page-local hit-test、caret/selection rect mapping 和 Chromium 浏览器 perf，不把 Gate 3 pointer selection 或 word selection 语义算作 Gate 2 已完成。
+  - 回写 2026-05-16：当前命令覆盖三浏览器 Gate 2/Gate 3 E2E 和 `perf-chromium`；本轮验证结果为 44 passed、4 skipped，随后 perf 2 passed。
 - [x] `pnpm test:visual`
   - 回写 2026-05-14：命令先校验 Gate 2 fixtures 的 `layoutDocument` + `renderPageCanvas` draw-call hash baseline，再跑 `visual-chromium` 下的 `examples/vanilla/tests/gate2.visual.ts`；当前浏览器视觉证据是 50 页 fixture 首/中/末页非空像素与 deterministic rect-mapping overlay 像素采样，不是跨平台截图基线。
 - [x] `pnpm bench`
 - [x] bundle size 检查
   - 回写 2026-05-14：当前命令先 fresh build core 与 vanilla demo，再检查 `packages/core/dist/index.js` 与 vanilla demo 首屏 JS/CSS 的 Gate 2 产物尺寸上限，同时阻止 spec 禁止的重依赖进入首屏 bundle，不再复用旧 dist。
+  - 回写 2026-05-16：`pnpm size` 已确认 core fresh artifact 为 257,109 bytes，vanilla 首屏 JS/CSS 为 216,624 bytes；50 页 fixture 改为独立懒加载 chunk，Rollup 产物移除保留文档注释但保留 source map。
 - [x] architecture boundary 检查
 - [x] 文档同步检查
   - 回写 2026-05-14：Gate 2 步骤、验收、验证与复核点 B 口径已按现有脚本与测试命名同步，避免把 Gate 3/4/5 能力写成 Gate 2 已完成。
 
 ### Alpha 完成
 
-- [ ] 1-2 万字编辑可用。
-- [ ] 50 页滚动可用。
+- [x] 1-2 万字编辑基础链路可用。
+  - 回写 2026-05-15：当前只说明 50 页大夹具上的基础编辑闭环成立，不等同于已满足 Alpha 性能门槛。
+- [x] 50 页滚动可用。
+  - 回写 2026-05-15：当前 Chromium 下 `gate3.perf.e2e.ts` 已给出 50 页滚动挂载闭环护栏；该证据不等同于整体 Alpha 性能已达标。
 - [ ] 输入热路径 P95 < 50ms。
 - [ ] INP P95 < 150ms。
-- [ ] vanilla demo 可视化验证通过。
+- [x] vanilla demo 可视化验证通过。
+  - 回写 2026-05-15：`examples/vanilla/tests/gate3.visual.ts` 已提供当前分页 canvas 选区高亮与 caret 渲染的最小浏览器视觉证据。
 
 ### Beta 完成
 
@@ -491,7 +513,9 @@
   - 完成 2026-05-12：边界已收口为 Operation adapter/replay 路径，raw Yjs structural update 非 Gate 1 保证；实现说明见 `docs/superpowers/implementation-notes/2026-05-12-gate-1-anchor-replay-boundary.md`。
 - [x] 复核点 B：Gate 2 完成后，确认 LayoutBox 当前边界是否足以继续承载 PDF、页眉页脚、表格、图片和 hit-test 的后续扩展；若不足，在进入 Gate 3 前修正。
   - 回写 2026-05-14：当前可执行证据只覆盖分页 text layout/render、viewport virtualization、hit-test 和 rect mapping。LayoutBox/PageBox/LineBox/TextFragment/InlineBox 已作为只读 layout/render/PDF 边界导出，未见会阻断 Gate 4/5 表格、图片、页眉页脚扩展的结构性缺口；但这些能力本身不算 Gate 2 已完成。
-- [ ] 复核点 C：Gate 3 完成后，确认输入系统、IME、selection、history 没有绕开 transaction pipeline；若绕开，不进入 Alpha。
+- [x] 复核点 C：进入 Alpha 前，确认输入系统、IME、selection、history 没有绕开 transaction pipeline；若绕开，不进入 Alpha。
+  - 完成 2026-05-15：`packages/core/test/editor-input.test.ts` 已补充 composition、keyboard、clipboard、pointer selection 的 runtime 证据，确认写入型行为会发出 facade `transaction` 事件并带 `commandName` / `operationKinds` / history metadata，而纯 selection 变化只走 `selectionChange`，不伪装成事务写入。
+  - 说明 2026-05-15：此复核只覆盖当前已实现并已验证的输入路径；Windows 中文输入实机证据按当前阶段决策另行补证。
 - [ ] 复核点 D：Gate 5 完成后，确认 OOXML mapping 的 warning、fixture diff、worker cancel/progress 可用；若不可用，不进入 Beta。
 - [ ] 复核点 E：Gate 6 完成后，确认 origin、undo scope、remote/AI/local 并发语义清晰；若不清晰，不进入 Stable。
 

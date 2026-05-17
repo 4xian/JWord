@@ -27,7 +27,7 @@ interface MountedWindowProbe {
 }
 
 test('Gate 2 demo paints first, middle, and last fixture pages on real canvases', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/?fixture=gate2')
 
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
 
@@ -65,7 +65,7 @@ test('Gate 2 demo paints first, middle, and last fixture pages on real canvases'
 })
 
 test('Gate 2 demo paints only the mounted middle-window pages after scrolling the 50-page fixture', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/?fixture=gate2')
 
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
 

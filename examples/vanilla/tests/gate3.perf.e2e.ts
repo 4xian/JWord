@@ -18,6 +18,9 @@ interface Gate3PerfMetrics {
   readonly redoP95Ms: number
 }
 
+const P95_SAMPLE_COUNT = 20
+const LARGE_DOCUMENT_INSERT_WARMUP_COUNT = 2
+
 const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
   gate2ScrollMs: 120,
   largeDocumentInsertP95Ms: 140,
@@ -31,7 +34,7 @@ const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
 test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', '当前 Gate 3 Alpha perf 门槛只固定 Chromium。')
 
-  await page.goto('/')
+  await page.goto('/?fixture=gate2')
   await waitForDemoReady(page)
 
   const metrics = await readGate3PerfMetrics(page)
@@ -40,6 +43,10 @@ test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ 
   await testInfo.attach('gate3-alpha-perf', {
     body: JSON.stringify(
       {
+        sampling: {
+          p95SampleCount: P95_SAMPLE_COUNT,
+          largeDocumentInsertWarmupCount: LARGE_DOCUMENT_INSERT_WARMUP_COUNT
+        },
         thresholds: GATE3_ALPHA_THRESHOLDS,
         metrics
       },
@@ -59,7 +66,7 @@ test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ 
 })
 
 async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
-  return page.evaluate(async () => {
+  return page.evaluate(async ({ p95SampleCount, largeDocumentInsertWarmupCount }) => {
     const demo = window.__jwordDemo
     const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
     const selectionSummaryNode = document.querySelector<HTMLElement>('[data-jword-selection-summary]')
@@ -118,6 +125,12 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
         tick()
       })
 
+    const waitForSettledFrames = async (frameCount = 2): Promise<void> => {
+      for (let index = 0; index < frameCount; index += 1) {
+        await nextFrame()
+      }
+    }
+
     const runAndMeasure = async (
       label: string,
       action: () => void,
@@ -157,7 +170,12 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
         .join('')
     }
 
-    const collapseLargeFixtureSelectionAtStart = (): void => {
+    const readLargeFixtureSelectionStart = (): Readonly<{
+      sectionId: string
+      blockId: string
+      runId: string
+      graphemeIndex: number
+    }> => {
       const firstPage = demo.editor.getLayout().pages[0]
       const firstLine = firstPage?.lines.find((line) => line.fragments.length > 0)
       const firstFragment = firstLine?.fragments[0]
@@ -166,13 +184,29 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
         throw new Error('缺少 Gate 3 perf 大文档首个文本片段')
       }
 
-      demo.selectTextRange({
+      return {
         sectionId: firstFragment.sectionId,
         blockId: firstFragment.blockId,
         runId: firstFragment.runId,
-        anchorGraphemeIndex: firstFragment.start.graphemeIndex,
-        focusGraphemeIndex: firstFragment.start.graphemeIndex
+        graphemeIndex: firstFragment.start.graphemeIndex
+      }
+    }
+
+    const largeFixtureSelectionStart = readLargeFixtureSelectionStart()
+    const largeFixtureSelectionSummary = `选区：${largeFixtureSelectionStart.blockId} / ${largeFixtureSelectionStart.runId} / ${largeFixtureSelectionStart.graphemeIndex}→${largeFixtureSelectionStart.graphemeIndex}`
+
+    const collapseLargeFixtureSelectionAtStart = (): void => {
+      demo.selectTextRange({
+        sectionId: largeFixtureSelectionStart.sectionId,
+        blockId: largeFixtureSelectionStart.blockId,
+        runId: largeFixtureSelectionStart.runId,
+        anchorGraphemeIndex: largeFixtureSelectionStart.graphemeIndex,
+        focusGraphemeIndex: largeFixtureSelectionStart.graphemeIndex
       })
+    }
+
+    const readLargeFixtureSelectionReady = (): boolean => {
+      return selectionSummaryNode.textContent === largeFixtureSelectionSummary
     }
 
     const measureGate2Scroll = async (): Promise<number> => {
@@ -210,13 +244,54 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       throw new Error('缺少 Gate 3 perf hidden textarea')
     }
 
-    for (let index = 0; index < 8; index += 1) {
+    const prepareLargeDocumentInsertState = async (): Promise<void> => {
       collapseLargeFixtureSelectionAtStart()
+      input.value = ''
+
+      if (document.activeElement !== input) {
+        input.focus()
+      }
+
+      await waitForCondition(
+        '大文档输入起点归一化',
+        () => {
+          return readFirstParagraphText() === originalFirstParagraphText
+            && readLargeFixtureSelectionReady()
+            && document.activeElement === input
+        }
+      )
+      await waitForSettledFrames()
+    }
+
+    for (let index = 0; index < largeDocumentInsertWarmupCount; index += 1) {
+      await prepareLargeDocumentInsertState()
+      await runAndMeasure(
+        `大文档输入预热-${index + 1}`,
+        () => {
+          input.value = '热'
+          input.dispatchEvent(new Event('input', {
+            bubbles: true,
+            cancelable: true
+          }))
+        },
+        () => readFirstParagraphText() === `热${originalFirstParagraphText}`
+      )
+      await runAndMeasure(
+        `大文档撤销预热-${index + 1}`,
+        () => {
+          demo.editor.undo()
+        },
+        () => readFirstParagraphText() === originalFirstParagraphText
+      )
+      await waitForSettledFrames()
+    }
+
+    for (let index = 0; index < p95SampleCount; index += 1) {
+      await prepareLargeDocumentInsertState()
 
       const duration = await runAndMeasure(
         `大文档输入-${index + 1}`,
         () => {
-          input.focus()
           input.value = '热'
           input.dispatchEvent(new Event('input', {
             bubbles: true,
@@ -235,9 +310,14 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
         },
         () => readFirstParagraphText() === originalFirstParagraphText
       )
+      await waitForSettledFrames()
     }
 
-    const alphaLoadMs = await runAndMeasure('加载 Alpha 样例', () => loadAlphaButton.click(), () => selectSampleButton.disabled === false)
+    const alphaLoadMs = await runAndMeasure(
+      '加载 Alpha 样例',
+      () => loadAlphaButton.click(),
+      () => container.getAttribute('data-jword-page-count') === '1' && selectSampleButton.disabled === false
+    )
 
     if (clearSelectionButton.disabled === false) {
       await runAndMeasure(
@@ -257,8 +337,10 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       await runAndMeasure('重置加粗状态', () => boldButton.click(), () => boldButton.getAttribute('aria-pressed') === 'false')
     }
 
+    await waitForSettledFrames()
+
     const toggleBoldSamples: number[] = []
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < p95SampleCount; index += 1) {
       const nextPressed = boldButton.getAttribute('aria-pressed') !== 'true'
       const duration = await runAndMeasure(
         `切换加粗-${index + 1}`,
@@ -270,7 +352,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
     }
 
     const undoSamples: number[] = []
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < p95SampleCount; index += 1) {
       const nextPressed = boldButton.getAttribute('aria-pressed') !== 'true'
       const duration = await runAndMeasure(
         `撤销-${index + 1}`,
@@ -282,7 +364,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
     }
 
     const redoSamples: number[] = []
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < p95SampleCount; index += 1) {
       const nextPressed = boldButton.getAttribute('aria-pressed') !== 'true'
       const duration = await runAndMeasure(
         `重做-${index + 1}`,
@@ -302,10 +384,17 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       undoP95Ms: readP95(undoSamples),
       redoP95Ms: readP95(redoSamples)
     }
+  }, {
+    p95SampleCount: P95_SAMPLE_COUNT,
+    largeDocumentInsertWarmupCount: LARGE_DOCUMENT_INSERT_WARMUP_COUNT
   })
 }
 
 async function waitForDemoReady(page: Page): Promise<void> {
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
   await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
+  await expect.poll(async () => {
+    return page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)
+  }).toBeGreaterThan(0)
 }

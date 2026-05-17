@@ -5,11 +5,17 @@
  * 性能/安全约束：只在 demo 入口访问 DOM，不用 innerHTML 构造 UI；完整选区格式化若缺 core 能力则只在 examples 层显式降级。
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md。
  */
-import { createEditor } from '@4xian/jword-core'
+import {
+  buildSetBackgroundColorCommand,
+  buildSetTextColorCommand,
+  createSelectionFormattingState,
+  createEditor
+} from '@4xian/jword-core'
 import type {
   Block,
   DocumentProjection,
   FormattingStateValue,
+  PagePreset,
   Paragraph,
   ParagraphAlignment,
   RangeRef,
@@ -19,7 +25,6 @@ import type {
 } from '@4xian/jword-core'
 import { createGate2FixtureEditorText } from '../../../fixtures/plain-text/gate2-fixture.mjs'
 import type { JWordDemoSelectionInput } from './vite-env'
-import gate2FixtureText from '../../../fixtures/plain-text/gate2-50-pages.txt?raw'
 import './styles.css'
 
 type RunBooleanFormatKey = 'bold' | 'italic' | 'underline' | 'strike'
@@ -36,6 +41,7 @@ interface ToolbarElements {
   readonly clearSelectionButton: HTMLButtonElement
   readonly undoButton: HTMLButtonElement
   readonly redoButton: HTMLButtonElement
+  readonly pagePresetSelect: HTMLSelectElement
   readonly boldButton: HTMLButtonElement
   readonly italicButton: HTMLButtonElement
   readonly underlineButton: HTMLButtonElement
@@ -68,6 +74,7 @@ interface ToolbarState {
   readonly clearSelectionEnabled: boolean
   readonly runFormatEnabled: boolean
   readonly paragraphFormatEnabled: boolean
+  readonly pagePresetValue: PagePreset
   readonly boldPressed: ToolbarPressedState
   readonly italicPressed: ToolbarPressedState
   readonly underlinePressed: ToolbarPressedState
@@ -111,6 +118,7 @@ const FONT_SIZE_MIXED_VALUE = '__mixed__'
 const DEFAULT_TEXT_COLOR = '#111111'
 const DEFAULT_BACKGROUND_COLOR = '#fff59d'
 const INDENT_STEP_TWIPS = 720
+const DEFERRED_TEXT_MIRROR_SYNC_DELAY_MS = 40
 const FONT_FAMILY_OPTIONS: readonly ToolbarOption[] = [
   { value: FONT_FAMILY_EMPTY_VALUE, label: '字体' },
   { value: FONT_FAMILY_MIXED_VALUE, label: '混合' },
@@ -133,6 +141,12 @@ const FONT_SIZE_OPTIONS: readonly ToolbarOption[] = [
   { value: '360', label: '18 pt' },
   { value: '420', label: '21 pt' }
 ] as const
+const PAGE_PRESET_OPTIONS: readonly ToolbarOption[] = [
+  { value: 'a3', label: 'A3' },
+  { value: 'a4', label: 'A4' },
+  { value: 'a5', label: 'A5' },
+  { value: 'letter', label: 'Letter' }
+] as const
 
 const editorHost = document.querySelector<HTMLElement>('#jword-editor')
 const statusNode = document.querySelector<HTMLElement>('#jword-status')
@@ -146,15 +160,25 @@ if (toolbarHost === null) {
   throw new Error('JWord vanilla demo requires .jw-demo__toolbar.')
 }
 
+const initialDemoText = await loadInitialDemoText()
 const editor = createEditor({
-  initialText: createGate2DemoText(gate2FixtureText)
+  initialText: initialDemoText,
+  layout: {
+    keepLatinWordWholeOnWrap: true
+  }
 })
 const toolbar = createToolbar(toolbarHost)
 const textMirror = createTextMirror()
 let lastLiveMessage = ''
 let lastMirrorText = ''
 let lastToolbarStateKey = ''
+let currentPageCount = editor.getLayout().pages.length
+let deferredTextMirrorSyncId: ReturnType<typeof setTimeout> | undefined
 const alphaDemoText = createAlphaDemoText()
+const frozenColorSelections = {
+  text: null as SelectionState | null,
+  background: null as SelectionState | null
+}
 
 statusNode?.setAttribute('data-jword-live-region', 'true')
 statusNode?.setAttribute('role', 'status')
@@ -169,8 +193,9 @@ const unsubscribeEditor = editor.subscribe((event) => {
   }
 
   if (event.kind === 'transaction') {
-    renderRuntimeState(editor.getSelection(), editor.getSelectionFormattingState())
-    announceStatus(readTransactionAnnouncement(event.transaction.commandName), true)
+    if (shouldAnnounceTransaction(event.transaction.commandName)) {
+      announceStatus(readTransactionAnnouncement(event.transaction.commandName), true)
+    }
     return
   }
 
@@ -207,9 +232,7 @@ toolbar.loadAlphaSampleButton.addEventListener('click', () => {
 })
 
 toolbar.restoreGate2FixtureButton.addEventListener('click', () => {
-  editor.createDocument({ text: createGate2DemoText(gate2FixtureText) })
-  syncRuntimeState()
-  announceStatus('已恢复 Gate 2 50 页夹具。', true)
+  void restoreGate2Fixture()
 })
 
 toolbar.clearSelectionButton.addEventListener('click', () => {
@@ -230,6 +253,25 @@ toolbar.redoButton.addEventListener('click', () => {
 
   syncRuntimeState()
   announceStatus(result.stackItem === null ? '没有可重做的本地操作。' : '已重做最近一次本地操作。', result.stackItem !== null)
+})
+
+toolbar.pagePresetSelect.addEventListener('change', () => {
+  const nextPreset = toolbar.pagePresetSelect.value as PagePreset
+  const currentPreset = editor.getPageConfig().preset
+
+  if (currentPreset === nextPreset) {
+    syncRuntimeState()
+    return
+  }
+
+  const nextPageConfig = editor.setPageConfig({
+    preset: nextPreset
+  })
+
+  syncRuntimeState()
+  announceStatus(
+    `已切换纸张为 ${readPagePresetLabel(nextPreset)}，页面尺寸 ${Math.round(nextPageConfig.widthCssPx)} × ${Math.round(nextPageConfig.heightCssPx)} px，已重新分页。`
+  )
 })
 
 toolbar.boldButton.addEventListener('click', () => {
@@ -279,11 +321,19 @@ toolbar.fontSizeSelect.addEventListener('change', () => {
 })
 
 toolbar.textColorInput.addEventListener('change', () => {
-  applyRunStringFormat('textColor', '文字颜色', toolbar.textColorInput.value.toLowerCase())
+  applyColorFormatFromFrozenSelection('textColor', '文字颜色', toolbar.textColorInput.value.toLowerCase())
 })
 
 toolbar.backgroundColorInput.addEventListener('change', () => {
-  applyRunStringFormat('backgroundColor', '背景色', toolbar.backgroundColorInput.value.toLowerCase())
+  applyColorFormatFromFrozenSelection('backgroundColor', '背景色', toolbar.backgroundColorInput.value.toLowerCase())
+})
+
+toolbar.textColorInput.addEventListener('click', () => {
+  frozenColorSelections.text = cloneCurrentSelection()
+})
+
+toolbar.backgroundColorInput.addEventListener('click', () => {
+  frozenColorSelections.background = cloneCurrentSelection()
 })
 
 toolbar.alignLeftButton.addEventListener('click', () => {
@@ -320,6 +370,7 @@ announceStatus(
 window.addEventListener(
   'beforeunload',
   () => {
+    cancelDeferredTextMirrorSync()
     unsubscribeEditor()
     delete window.__jwordDemo
     editor.destroy()
@@ -329,6 +380,22 @@ window.addEventListener(
 
 function createGate2DemoText(fixtureText: string): string {
   return createGate2FixtureEditorText(fixtureText)
+}
+
+function createDefaultDemoText(): string {
+  return [
+    '默认混排样例 2026：中文段落用于检查字形宽度，English text checks proportional spacing, 数字 13579 与 24680 交替出现。',
+    '第二段随机组合：排版引擎 layout engine 需要同时处理中文、Latin words、SKU-2026-AX19、百分比 38.5% 和标点。',
+    '第三段输入验证：请在这里继续输入 abcdefghijklmnopqrstuvwxyz，观察英文光标、鼠标命中点和 canvas 文本是否保持一致。'
+  ].join('\n\n')
+}
+
+async function loadInitialDemoText(): Promise<string> {
+  if (new URLSearchParams(window.location.search).get('fixture') === 'gate2') {
+    return createGate2DemoText(await loadGate2FixtureText())
+  }
+
+  return createDefaultDemoText()
 }
 
 function selectTextRange(input: JWordDemoSelectionInput): SelectionState {
@@ -376,6 +443,7 @@ function announceStatus(message?: string, refreshMirror = false): void {
 }
 
 function syncRuntimeState(): void {
+  updateRuntimePageCount()
   renderRuntimeState(editor.getSelection(), editor.getSelectionFormattingState())
 }
 
@@ -383,6 +451,7 @@ function renderRuntimeState(
   selection: SelectionState | null,
   formattingState: SelectionFormattingState
 ): void {
+  updateRuntimePageCount()
   const state = buildToolbarState(selection, formattingState)
   const nextStateKey = JSON.stringify(state)
 
@@ -395,6 +464,12 @@ function renderRuntimeState(
 }
 
 function syncTextMirror(): void {
+  if (currentPageCount > 4) {
+    scheduleDeferredTextMirrorSync()
+    return
+  }
+
+  cancelDeferredTextMirrorSync()
   const nextText = readProjectionPlainText(editor.getProjection())
 
   if (nextText === lastMirrorText) {
@@ -413,7 +488,7 @@ function buildToolbarState(
   const canUndo = editor.canUndo()
   const canRedo = editor.canRedo()
   const clearSelectionEnabled = selection !== null
-  const selectSampleEnabled = editor.getLayout().pages.length <= 4
+  const selectSampleEnabled = currentPageCount <= 4
   const runFormatEnabled = formattingState.run !== null
   const paragraphFormatEnabled = formattingState.paragraph !== null
   const fontFamily = readSelectState(formattingState.run?.fontFamily ?? null, FONT_FAMILY_EMPTY_VALUE, FONT_FAMILY_MIXED_VALUE)
@@ -432,6 +507,7 @@ function buildToolbarState(
     clearSelectionEnabled,
     runFormatEnabled,
     paragraphFormatEnabled,
+    pagePresetValue: readToolbarPagePresetValue(),
     boldPressed: readPressedState(formattingState.run?.bold ?? null),
     italicPressed: readPressedState(formattingState.run?.italic ?? null),
     underlinePressed: readPressedState(formattingState.run?.underline ?? null),
@@ -473,6 +549,7 @@ function renderToolbarState(elements: ToolbarElements, state: ToolbarState): voi
   elements.indentDecreaseButton.disabled = !state.paragraphFormatEnabled
   elements.indentIncreaseButton.disabled = !state.paragraphFormatEnabled
 
+  elements.pagePresetSelect.value = state.pagePresetValue
   elements.boldButton.setAttribute('aria-pressed', state.boldPressed)
   elements.italicButton.setAttribute('aria-pressed', state.italicPressed)
   elements.underlineButton.setAttribute('aria-pressed', state.underlinePressed)
@@ -561,6 +638,49 @@ function applyRunStringFormat(property: RunStringFormatKey, label: string, value
   }
 }
 
+function applyColorFormatFromFrozenSelection(
+  property: Extract<RunStringFormatKey, 'textColor' | 'backgroundColor'>,
+  label: string,
+  value: string
+): void {
+  const selection = property === 'textColor'
+    ? frozenColorSelections.text ?? editor.getSelection()
+    : frozenColorSelections.background ?? editor.getSelection()
+  const formattingState = selection === null
+    ? null
+    : readSelectionFormattingState(selection)
+
+  if (selection === null || formattingState === null || formattingState.run === null) {
+    announceStatus(`BLOCKED: ${label} 需要当前有可格式化的文本选区。`)
+    syncRuntimeState()
+    clearFrozenColorSelection(property)
+    return
+  }
+
+  if (isRunStringFormatAlreadyApplied(formattingState, property, value)) {
+    announceStatus(`${label} 已经处于目标状态。`)
+    syncRuntimeState()
+    clearFrozenColorSelection(property)
+    return
+  }
+
+  const command = property === 'textColor'
+    ? buildSetTextColorCommand(editor.getProjection(), selection, value)
+    : buildSetBackgroundColorCommand(editor.getProjection(), selection, value)
+
+  if (command === null) {
+    announceStatus(`BLOCKED: ${label} 当前没有可应用的文本目标。`)
+    syncRuntimeState()
+    clearFrozenColorSelection(property)
+    return
+  }
+
+  editor.executeCommand(command, {
+    selectionAfter: selection
+  })
+  clearFrozenColorSelection(property)
+}
+
 function applyRunNumberFormat(property: RunNumberFormatKey, label: string, value: number): void {
   const selection = editor.getSelection()
   const formattingState = editor.getSelectionFormattingState()
@@ -646,6 +766,46 @@ function isRunStringFormatAlreadyApplied(
     case 'backgroundColor':
       return state.backgroundColor.mixed !== true && state.backgroundColor.value === value
   }
+}
+
+/**
+ * 基于指定选区读取格式状态，避免颜色控件提交时依赖已变化的当前选区。
+ */
+function readSelectionFormattingState(selection: SelectionState): SelectionFormattingState {
+  return createSelectionFormattingState(editor.getProjection(), selection)
+}
+
+/**
+ * 冻结颜色控件打开瞬间的选区，后续 change 统一使用这份快照。
+ */
+function cloneCurrentSelection(): SelectionState | null {
+  const selection = editor.getSelection()
+
+  if (selection === null) {
+    return null
+  }
+
+  return {
+    anchor: selection.anchor,
+    focus: selection.focus,
+    range: selection.range,
+    direction: selection.direction,
+    affinity: selection.affinity
+  }
+}
+
+/**
+ * 颜色控件完成一次提交后立刻丢弃冻结快照，避免污染下一次操作。
+ */
+function clearFrozenColorSelection(
+  property: Extract<RunStringFormatKey, 'textColor' | 'backgroundColor'>
+): void {
+  if (property === 'textColor') {
+    frozenColorSelections.text = null
+    return
+  }
+
+  frozenColorSelections.background = null
 }
 
 function isRunNumberFormatAlreadyApplied(
@@ -802,6 +962,31 @@ function readRunSummary(formattingState: SelectionFormattingState): string {
   ].join(' / ')
 }
 
+/**
+ * 职责：把 runtime page preset 规范化到 demo 工具栏可显示的预设值。
+ */
+function readToolbarPagePresetValue(): PagePreset {
+  const preset = editor.getPageConfig().preset
+
+  return preset === 'custom' ? 'a4' : preset
+}
+
+/**
+ * 职责：把 page preset 映射成 demo 状态提示里的可读标签。
+ */
+function readPagePresetLabel(value: PagePreset): string {
+  switch (value) {
+    case 'a3':
+      return 'A3'
+    case 'a4':
+      return 'A4'
+    case 'a5':
+      return 'A5'
+    case 'letter':
+      return 'Letter'
+  }
+}
+
 function readPressedState(value: FormattingStateValue<boolean> | null): ToolbarPressedState {
   if (value === null) {
     return 'false'
@@ -869,7 +1054,7 @@ function readBlockedSummary(
   context: SelectionContext | null,
   formattingState: SelectionFormattingState
 ): string {
-  if (editor.getLayout().pages.length > 4) {
+  if (currentPageCount > 4) {
     return 'Gate 2 的 50 页夹具仍用于分页验证；toolbar 交互请先切到 Alpha 样例。最小缺口是 core 需要把大文档 selection/render 热路径降到可交互级别。'
   }
 
@@ -881,7 +1066,72 @@ function readBlockedSummary(
     return '当前选区已覆盖多个 run 或段落；toolbar 会直接显示 mixed，并把下一次格式命令统一归一到整个选区上。'
   }
 
-  return '当前已可通过 facade 事件和 command builder 执行基础格式化、颜色、对齐和缩进；键盘/IME、剪贴板与真实 pointer selection 仍待 Gate 3 后续步骤。'
+  return '当前已可通过同一 Editor Facade 执行键盘输入、IME 合成、纯文本剪贴板、真实 pointer selection 与基础格式命令；剩余缺口主要在跨平台实机输入证据与 Alpha 性能达标。'
+}
+
+/**
+ * 职责：跳过高频输入事务的 live region 刷新，避免大文档输入时重复刷屏和占用热路径。
+ */
+function shouldAnnounceTransaction(commandName: string): boolean {
+  switch (commandName) {
+    case 'insertText':
+    case 'replaceText':
+    case 'deleteSelection':
+    case 'deleteBackward':
+    case 'deleteForward':
+    case 'mergeParagraphBackward':
+    case 'mergeParagraphForward':
+    case 'splitParagraph':
+      return false
+    default:
+      return true
+  }
+}
+
+/**
+ * 职责：读取当前 mounted canvas page-count，避免在大文档状态同步里反复触发 layout 查询。
+ */
+function updateRuntimePageCount(): void {
+  const mountedPageCount = Number(
+    editorHost?.querySelector<HTMLElement>('[data-jword-canvas-container]')?.getAttribute('data-jword-page-count') ?? NaN
+  )
+
+  if (Number.isFinite(mountedPageCount) && mountedPageCount > 0) {
+    currentPageCount = mountedPageCount
+  }
+}
+
+/**
+ * 职责：把大文档 demo text mirror 的全文串联延后到输入热路径之后。
+ */
+function scheduleDeferredTextMirrorSync(): void {
+  if (deferredTextMirrorSyncId !== undefined) {
+    return
+  }
+
+  deferredTextMirrorSyncId = setTimeout(() => {
+    deferredTextMirrorSyncId = undefined
+    const nextText = readProjectionPlainText(editor.getProjection())
+
+    if (nextText === lastMirrorText) {
+      return
+    }
+
+    textMirror.textContent = nextText
+    lastMirrorText = nextText
+  }, DEFERRED_TEXT_MIRROR_SYNC_DELAY_MS)
+}
+
+/**
+ * 职责：在切回小文档或销毁前取消未执行的 demo text mirror 延后同步。
+ */
+function cancelDeferredTextMirrorSync(): void {
+  if (deferredTextMirrorSyncId === undefined) {
+    return
+  }
+
+  clearTimeout(deferredTextMirrorSyncId)
+  deferredTextMirrorSyncId = undefined
 }
 
 function hasMixedFormattingState(formattingState: SelectionFormattingState): boolean {
@@ -962,30 +1212,54 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   const selectionSummaryNode = document.createElement('span')
   const runSummaryNode = document.createElement('span')
   const blockedSummaryNode = document.createElement('span')
-  const loadAlphaSampleButton = createToolbarButton('加载 Alpha 样例', 'jw-toolbar__button--secondary')
-  const restoreGate2FixtureButton = createToolbarButton('恢复 Gate 2 夹具')
-  const selectSampleButton = createToolbarButton('选择首页片段', 'jw-toolbar__button--primary')
-  const clearSelectionButton = createToolbarButton('清除选区')
-  const undoButton = createToolbarButton('撤销')
-  const redoButton = createToolbarButton('重做')
-  const boldButton = createToolbarButton('加粗')
-  const italicButton = createToolbarButton('斜体')
-  const underlineButton = createToolbarButton('下划线')
-  const strikeButton = createToolbarButton('删除线')
+  const dividerAfterAction = createToolbarDivider()
+  const dividerAfterHistory = createToolbarDivider()
+  const dividerAfterInline = createToolbarDivider()
+  const dividerAfterRunValue = createToolbarDivider()
+  const loadAlphaSampleButton = createToolbarButton({
+    label: '加载 Alpha 样例',
+    icon: 'sample',
+    visibleLabel: 'Alpha',
+    extraClassName: 'jw-toolbar__button--secondary'
+  })
+  const restoreGate2FixtureButton = createToolbarButton({
+    label: '恢复 Gate 2 夹具',
+    icon: 'document',
+    visibleLabel: '50 页'
+  })
+  const selectSampleButton = createToolbarButton({
+    label: '选择首页片段',
+    icon: 'select',
+    visibleLabel: '片段',
+    extraClassName: 'jw-toolbar__button--primary'
+  })
+  const clearSelectionButton = createToolbarButton({
+    label: '清除选区',
+    icon: 'clear',
+    visibleLabel: '清空'
+  })
+  const undoButton = createToolbarButton({ label: '撤销', icon: 'undo', compact: true })
+  const redoButton = createToolbarButton({ label: '重做', icon: 'redo', compact: true })
+  const pagePresetSelect = createToolbarSelect(PAGE_PRESET_OPTIONS, '选择纸张大小')
+  const boldButton = createToolbarButton({ label: '加粗', icon: 'bold', compact: true })
+  const italicButton = createToolbarButton({ label: '斜体', icon: 'italic', compact: true })
+  const underlineButton = createToolbarButton({ label: '下划线', icon: 'underline', compact: true })
+  const strikeButton = createToolbarButton({ label: '删除线', icon: 'strike', compact: true })
   const fontFamilySelect = createToolbarSelect(FONT_FAMILY_OPTIONS, '选择字体')
   const fontSizeSelect = createToolbarSelect(FONT_SIZE_OPTIONS, '选择字号')
   const textColorInput = createToolbarColorInput('选择文字颜色')
   const textColorValueNode = document.createElement('span')
   const backgroundColorInput = createToolbarColorInput('选择背景色')
   const backgroundColorValueNode = document.createElement('span')
-  const alignLeftButton = createToolbarButton('左')
-  const alignCenterButton = createToolbarButton('中')
-  const alignRightButton = createToolbarButton('右')
-  const alignJustifyButton = createToolbarButton('两端')
-  const indentDecreaseButton = createToolbarButton('缩进-')
-  const indentIncreaseButton = createToolbarButton('缩进+')
+  const alignLeftButton = createToolbarButton({ label: '左对齐', icon: 'alignLeft', compact: true })
+  const alignCenterButton = createToolbarButton({ label: '居中对齐', icon: 'alignCenter', compact: true })
+  const alignRightButton = createToolbarButton({ label: '右对齐', icon: 'alignRight', compact: true })
+  const alignJustifyButton = createToolbarButton({ label: '两端对齐', icon: 'alignJustify', compact: true })
+  const indentDecreaseButton = createToolbarButton({ label: '减少缩进', icon: 'indentDecrease', compact: true })
+  const indentIncreaseButton = createToolbarButton({ label: '增加缩进', icon: 'indentIncrease', compact: true })
   const indentValueNode = document.createElement('span')
 
+  const pagePresetField = createToolbarField('纸张', pagePresetSelect)
   const fontFamilyField = createToolbarField('字体', fontFamilySelect)
   const fontSizeField = createToolbarField('字号', fontSizeSelect)
   const textColorField = createToolbarField('字色', textColorInput, textColorValueNode)
@@ -993,11 +1267,11 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   const paragraphLabel = document.createElement('span')
 
   brandGroup.className = 'jw-toolbar__group jw-toolbar__group--brand'
-  actionGroup.className = 'jw-toolbar__group'
+  actionGroup.className = 'jw-toolbar__group jw-toolbar__group--actions'
   historyGroup.className = 'jw-toolbar__group'
   inlineFormatGroup.className = 'jw-toolbar__group'
-  runValueGroup.className = 'jw-toolbar__group'
-  paragraphGroup.className = 'jw-toolbar__group jw-toolbar__group--stack'
+  runValueGroup.className = 'jw-toolbar__group jw-toolbar__group--fields'
+  paragraphGroup.className = 'jw-toolbar__group jw-toolbar__group--paragraph'
   summaryGroup.className = 'jw-toolbar__summary'
   titleNode.className = 'jw-toolbar__title'
   subtitleNode.className = 'jw-toolbar__subtitle'
@@ -1007,9 +1281,9 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   runSummaryNode.setAttribute('data-jword-run-summary', 'true')
   blockedSummaryNode.className = 'jw-toolbar__note'
   blockedSummaryNode.setAttribute('data-jword-blocked-summary', 'true')
-  textColorValueNode.className = 'jw-toolbar__field-value'
-  backgroundColorValueNode.className = 'jw-toolbar__field-value'
-  indentValueNode.className = 'jw-toolbar__field-value'
+  textColorValueNode.className = 'jw-toolbar__field-value jw-toolbar__field-value--color'
+  backgroundColorValueNode.className = 'jw-toolbar__field-value jw-toolbar__field-value--color'
+  indentValueNode.className = 'jw-toolbar__field-value jw-toolbar__field-value--inline'
   paragraphLabel.className = 'jw-toolbar__field-label'
 
   loadAlphaSampleButton.setAttribute('data-jword-load-alpha', 'true')
@@ -1018,6 +1292,7 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   clearSelectionButton.setAttribute('data-jword-clear-selection', 'true')
   undoButton.setAttribute('data-jword-history-undo', 'true')
   redoButton.setAttribute('data-jword-history-redo', 'true')
+  pagePresetSelect.setAttribute('data-jword-page-preset', 'true')
   boldButton.setAttribute('data-jword-format-bold', 'true')
   italicButton.setAttribute('data-jword-format-italic', 'true')
   underlineButton.setAttribute('data-jword-format-underline', 'true')
@@ -1033,20 +1308,21 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   indentDecreaseButton.setAttribute('data-jword-format-indent-decrease', 'true')
   indentIncreaseButton.setAttribute('data-jword-format-indent-increase', 'true')
 
-  alignLeftButton.setAttribute('aria-label', '左对齐')
-  alignCenterButton.setAttribute('aria-label', '居中对齐')
-  alignRightButton.setAttribute('aria-label', '右对齐')
-  alignJustifyButton.setAttribute('aria-label', '两端对齐')
-
   titleNode.textContent = 'JWord'
-  subtitleNode.textContent = 'Gate 3 vanilla toolbar'
+  subtitleNode.textContent = 'Demo'
   paragraphLabel.textContent = '段落'
+  selectionSummaryNode.setAttribute('aria-label', '当前选区状态')
+  runSummaryNode.setAttribute('aria-label', '当前格式状态')
+  blockedSummaryNode.setAttribute('aria-label', '当前阻塞提示')
+  textColorValueNode.setAttribute('aria-hidden', 'true')
+  backgroundColorValueNode.setAttribute('aria-hidden', 'true')
+  indentValueNode.setAttribute('aria-hidden', 'true')
 
   brandGroup.append(titleNode, subtitleNode)
   actionGroup.append(loadAlphaSampleButton, restoreGate2FixtureButton, selectSampleButton, clearSelectionButton)
   historyGroup.append(undoButton, redoButton)
   inlineFormatGroup.append(boldButton, italicButton, underlineButton, strikeButton)
-  runValueGroup.append(fontFamilyField, fontSizeField, textColorField, backgroundColorField)
+  runValueGroup.append(pagePresetField, fontFamilyField, fontSizeField, textColorField, backgroundColorField)
   paragraphGroup.append(
     paragraphLabel,
     alignLeftButton,
@@ -1058,7 +1334,19 @@ function createToolbar(host: HTMLElement): ToolbarElements {
     indentValueNode
   )
   summaryGroup.append(selectionSummaryNode, runSummaryNode, blockedSummaryNode)
-  host.append(brandGroup, actionGroup, historyGroup, inlineFormatGroup, runValueGroup, paragraphGroup, summaryGroup)
+  host.append(
+    brandGroup,
+    actionGroup,
+    dividerAfterAction,
+    historyGroup,
+    dividerAfterHistory,
+    inlineFormatGroup,
+    dividerAfterInline,
+    runValueGroup,
+    dividerAfterRunValue,
+    paragraphGroup,
+    summaryGroup
+  )
 
   return {
     host,
@@ -1068,6 +1356,7 @@ function createToolbar(host: HTMLElement): ToolbarElements {
     clearSelectionButton,
     undoButton,
     redoButton,
+    pagePresetSelect,
     boldButton,
     italicButton,
     underlineButton,
@@ -1091,16 +1380,158 @@ function createToolbar(host: HTMLElement): ToolbarElements {
   }
 }
 
-function createToolbarButton(label: string, extraClassName?: string): HTMLButtonElement {
+interface ToolbarButtonDefinition {
+  readonly label: string
+  readonly icon?: ToolbarIconName
+  readonly visibleLabel?: string
+  readonly extraClassName?: string
+  readonly compact?: boolean
+}
+
+type ToolbarIconName =
+  | 'sample'
+  | 'document'
+  | 'select'
+  | 'clear'
+  | 'undo'
+  | 'redo'
+  | 'bold'
+  | 'italic'
+  | 'underline'
+  | 'strike'
+  | 'alignLeft'
+  | 'alignCenter'
+  | 'alignRight'
+  | 'alignJustify'
+  | 'indentDecrease'
+  | 'indentIncrease'
+
+/**
+ * 职责：创建 toolbar 按钮，并在不改变 selector 与语义的前提下支持图标化展示。
+ */
+function createToolbarButton(input: ToolbarButtonDefinition): HTMLButtonElement {
   const button = document.createElement('button')
+  const classNames = ['jw-toolbar__button']
 
   button.type = 'button'
-  button.className = extraClassName === undefined ? 'jw-toolbar__button' : `jw-toolbar__button ${extraClassName}`
-  button.textContent = label
+  button.setAttribute('aria-label', input.label)
+
+  if (input.compact) {
+    classNames.push('jw-toolbar__button--compact')
+  }
+
+  if (input.extraClassName !== undefined) {
+    classNames.push(input.extraClassName)
+  }
+
+  button.className = classNames.join(' ')
+
+  if (input.icon !== undefined) {
+    button.append(createToolbarIcon(input.icon))
+  }
+
+  if (input.visibleLabel !== undefined) {
+    button.append(createToolbarLabel(input.visibleLabel))
+  }
 
   return button
 }
 
+/**
+ * 职责：创建按钮图标节点，使用内联 SVG 保持视觉一致性且不引入额外依赖。
+ */
+function createToolbarIcon(icon: ToolbarIconName): SVGElement {
+  const svgNamespace = 'http://www.w3.org/2000/svg'
+  const iconNode = document.createElementNS(svgNamespace, 'svg')
+
+  iconNode.classList.add('jw-toolbar__button-icon')
+  iconNode.setAttribute('aria-hidden', 'true')
+  iconNode.setAttribute('viewBox', '0 0 20 20')
+  iconNode.setAttribute('focusable', 'false')
+
+  for (const path of readToolbarIconPaths(icon)) {
+    const pathNode = document.createElementNS(svgNamespace, 'path')
+
+    pathNode.setAttribute('d', path)
+    pathNode.setAttribute('fill', 'currentColor')
+    pathNode.setAttribute('stroke', 'currentColor')
+    pathNode.setAttribute('stroke-width', '1.1')
+    pathNode.setAttribute('stroke-linecap', 'round')
+    pathNode.setAttribute('stroke-linejoin', 'round')
+    iconNode.append(pathNode)
+  }
+
+  return iconNode
+}
+
+/**
+ * 职责：为需要少量可见文字的按钮补充标签，避免动作按钮完全失去语义提示。
+ */
+function createToolbarLabel(label: string): HTMLElement {
+  const labelNode = document.createElement('span')
+
+  labelNode.className = 'jw-toolbar__button-label'
+  labelNode.setAttribute('aria-hidden', 'true')
+  labelNode.textContent = label
+
+  return labelNode
+}
+
+/**
+ * 职责：在一行工具栏里提供轻量视觉分隔，不改变已有按钮结构与 selector。
+ */
+function createToolbarDivider(): HTMLElement {
+  const divider = document.createElement('span')
+
+  divider.className = 'jw-toolbar__divider'
+  divider.setAttribute('aria-hidden', 'true')
+
+  return divider
+}
+
+/**
+ * 职责：集中维护 toolbar 图标路径，方便只在 examples 层迭代文档编辑器风格。
+ */
+function readToolbarIconPaths(icon: ToolbarIconName): readonly string[] {
+  switch (icon) {
+    case 'sample':
+      return ['M4 3.5h8l4 4V17H4V3.5zm7.2 1.7V8H14']
+    case 'document':
+      return ['M4 3.5h8l4 4V17H4V3.5zm2.3 5h7.4v1.2H6.3V8.5zm0 2.8h7.4v1.2H6.3v-1.2zm0 2.8h5.2v1.2H6.3v-1.2z']
+    case 'select':
+      return ['M4 4.2l7.1 5.8-3.2.6 1.8 4.2-1.8.8-1.8-4.2-2.1 2V4.2z']
+    case 'clear':
+      return ['M6 6.2h8l-.8 9H6.8L6 6.2zm2-2.2h4l.7 1H7.3l.7-1zm.7 3.6l2.6 2.6m0-2.6l-2.6 2.6']
+    case 'undo':
+      return ['M7.3 6L4 9.1l3.3 3v-2h3.8c2.3 0 3.9 1.1 4.8 3-.4-4.4-3.3-7-6.7-7H7.3V6z']
+    case 'redo':
+      return ['M12.7 6L16 9.1l-3.3 3v-2H8.9c-2.3 0-3.9 1.1-4.8 3 .4-4.4 3.3-7 6.7-7h1.9V6z']
+    case 'bold':
+      return ['M6 3.6h5.3c2.4 0 3.8 1.1 3.8 3 0 1.3-.7 2.3-1.9 2.8 1.7.4 2.7 1.7 2.7 3.5 0 2.5-1.8 4-4.8 4H6V3.6zm2.4 1.9v3.2H11c1.2 0 1.8-.6 1.8-1.6s-.6-1.6-1.8-1.6H8.4zm0 5v3.5h3c1.4 0 2.2-.7 2.2-1.8 0-1.2-.8-1.8-2.2-1.8h-3z']
+    case 'italic':
+      return ['M8.2 3.8H15v1.8h-2.2L10 14.4h2.2v1.8H5v-1.8h2.2L10 5.6H8.2V3.8z']
+    case 'underline':
+      return ['M6.2 4v5c0 2.3 1.5 3.8 3.8 3.8s3.8-1.5 3.8-3.8V4h-2v4.9c0 1.3-.7 2.1-1.8 2.1s-1.8-.8-1.8-2.1V4h-2zM4.2 15.8h11.6V17H4.2v-1.2z']
+    case 'strike':
+      return ['M10 3.8c2.8 0 4.6 1.1 5.1 3.2h-2.2c-.4-.8-1.3-1.2-2.7-1.2-1.4 0-2.2.4-2.2 1.3 0 .7.6 1.1 2 1.3l2 .3c2.7.4 4 1.5 4 3.5 0 2.4-2.2 4-5.4 4-3.1 0-5.2-1.4-5.6-3.7H7c.3 1 1.4 1.6 3.1 1.6 1.5 0 2.5-.5 2.5-1.4 0-.7-.5-1.1-1.9-1.3l-2-.3c-2.6-.4-4-1.6-4-3.6 0-2.2 2-3.7 5.3-3.7z', 'M3.8 9.4h12.4v1.2H3.8V9.4z']
+    case 'alignLeft':
+      return ['M4 5h12v1.2H4V5zm0 3.1h8.2v1.2H4V8.1zm0 3.1h12v1.2H4v-1.2zm0 3.1h8.2v1.2H4v-1.2z']
+    case 'alignCenter':
+      return ['M4.5 5h11v1.2h-11V5zm2.2 3.1h6.6v1.2H6.7V8.1zm-2.2 3.1h11v1.2h-11v-1.2zm2.2 3.1h6.6v1.2H6.7v-1.2z']
+    case 'alignRight':
+      return ['M5 5h11v1.2H5V5zm4.8 3.1H16v1.2H9.8V8.1zM5 11.2h11v1.2H5v-1.2zm4.8 3.1H16v1.2H9.8v-1.2z']
+    case 'alignJustify':
+      return ['M4 5h12v1.2H4V5zm0 3.1h12v1.2H4V8.1zm0 3.1h12v1.2H4v-1.2zm0 3.1h12v1.2H4v-1.2z']
+    case 'indentDecrease':
+      return ['M4 5h12v1.2H4V5zm4 3.1h8v1.2H8V8.1zm4 3.1h4v1.2h-4v-1.2zm-4 3.1h8v1.2H8v-1.2z', 'M4.2 9.8l2.8 1.9V7.9L4.2 9.8z']
+    case 'indentIncrease':
+      return ['M4 5h12v1.2H4V5zm8 3.1h4v1.2h-4V8.1zM8 11.2h8v1.2H8v-1.2zm8 3.1h-4v1.2h4v-1.2z', 'M6.8 9.8L4 7.9v3.8l2.8-1.9z']
+  }
+}
+
+/**
+ * 职责：创建 toolbar 下拉框，保持现有选项值与测试可见性不变。
+ */
 function createToolbarSelect(
   options: readonly ToolbarOption[],
   ariaLabel: string
@@ -1126,6 +1557,9 @@ function createToolbarSelect(
   return select
 }
 
+/**
+ * 职责：创建 toolbar 颜色选择器，保留浏览器原生控件行为。
+ */
 function createToolbarColorInput(ariaLabel: string): HTMLInputElement {
   const input = document.createElement('input')
 
@@ -1136,6 +1570,9 @@ function createToolbarColorInput(ariaLabel: string): HTMLInputElement {
   return input
 }
 
+/**
+ * 职责：把下拉框与颜色控件包装成紧凑字段，贴近常见文档编辑器工具栏布局。
+ */
 function createToolbarField(
   label: string,
   control: HTMLElement,
@@ -1172,6 +1609,18 @@ function createAlphaDemoText(): string {
     'Alpha toolbar sample 第一段：用于验证单 run 选区、撤销重做以及基础格式、颜色与字体状态同步。',
     '第二段：保持分页 canvas 路线，但把交互样例收敛到小文档，避免大夹具的 selection 热路径拖慢体验。'
   ].join('\n\n')
+}
+
+async function loadGate2FixtureText(): Promise<string> {
+  const fixture = await import('../../../fixtures/plain-text/gate2-50-pages.txt?raw')
+
+  return fixture.default
+}
+
+async function restoreGate2Fixture(): Promise<void> {
+  editor.createDocument({ text: createGate2DemoText(await loadGate2FixtureText()) })
+  syncRuntimeState()
+  announceStatus('已恢复 Gate 2 50 页夹具。', true)
 }
 
 function readProjectionPlainText(projection: DocumentProjection): string {

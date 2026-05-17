@@ -4,10 +4,10 @@
   "case": "emoji、ZWJ family 和组合音标基线",
   "pageCount": 1,
   "lineCount": 4,
-  "fragmentCount": 210,
+  "fragmentCount": 76,
   "renderedPageCount": 1,
-  "drawCallCount": 843,
-  "drawCallHash": "fc594c66e4d3e47d4be280575dba36defa9bdbc5255e973cbe3d0dc61cde3a7f",
+  "drawCallCount": 307,
+  "drawCallHash": "6f61832f456dce66f6cd7b1588d33b68c905e02f3fb8b9a3e80f7e883790158b",
   "notes": [
     "用于复查 emoji 不被渲染层拆成不可审阅输入",
     "字素感知断行由 Gate 2 layout 单元测试覆盖"
