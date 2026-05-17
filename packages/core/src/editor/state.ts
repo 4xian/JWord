@@ -17,6 +17,7 @@ import type { DocumentProjection } from '../model/projection'
 import type { SelectionState } from '../model/selection'
 import { createTransactionPipeline } from '../operations/transaction'
 import type { TextPosition } from '../operations/transaction'
+import type { ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
 import { DEFAULT_EDITOR_LABEL, DOCUMENT_CREATE_ORIGIN } from './constants'
 import type { EditorDocumentInput, EditorEvent, EditorEventListener, EditorOptions, MountedEditorDom, RenderReason } from './types'
 
@@ -25,6 +26,8 @@ export abstract class JWordEditorState {
   protected readonly store: DocumentStore
   protected readonly pipeline: ReturnType<typeof createTransactionPipeline>
   protected readonly history: ReturnType<typeof createHistoryManager>
+  protected readonly resourceAdapter: ResourceAdapter | undefined
+  protected readonly resourceUrlPolicy: ResourceUrlPolicy | undefined
   protected pageConfig: PageConfig
   protected readonly fontManager = createFontManager()
   protected readonly layoutOptions: LayoutOptions
@@ -57,11 +60,15 @@ export abstract class JWordEditorState {
   constructor(options?: EditorOptions) {
     this.label = options?.label ?? DEFAULT_EDITOR_LABEL
     this.pageConfig = createPageConfig(options?.page)
+    this.resourceAdapter = options?.resourceAdapter
+    this.resourceUrlPolicy = options?.resourceUrlPolicy
     this.layoutOptions = Object.freeze({
       keepLatinWordWholeOnWrap: options?.layout?.keepLatinWordWholeOnWrap ?? false
     })
     this.store = createDocumentStore()
-    this.pipeline = createTransactionPipeline(this.store.doc)
+    this.pipeline = createTransactionPipeline(this.store.doc, {
+      ...(this.resourceUrlPolicy === undefined ? {} : { resourceUrlPolicy: this.resourceUrlPolicy })
+    })
     this.history = createHistoryManager(this.store)
     this.unsubscribePipeline = this.pipeline.subscribe((event) => {
       this.currentProjection = event.projection
@@ -73,7 +80,10 @@ export abstract class JWordEditorState {
       this.emit({ kind: 'transaction', transaction: event })
     })
     this.replaceDocument(
-      options?.initialText === undefined ? {} : { text: options.initialText },
+      {
+        ...(options?.initialText === undefined ? {} : { text: options.initialText }),
+        ...(options?.resources === undefined ? {} : { resources: options.resources })
+      },
       'createDocument',
       DOCUMENT_CREATE_ORIGIN
     )

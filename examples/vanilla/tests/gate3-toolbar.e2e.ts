@@ -21,11 +21,11 @@ test('Gate 3 toolbar renders real controls and mirrors current selection state',
   await expect(page.locator('[data-jword-selection-summary]')).toContainText('无选区')
 
   const mirrorLength = await page.evaluate(() =>
-    document.querySelector<HTMLElement>('[data-jword-text-mirror]')?.textContent?.length ?? 0
+    document.querySelector<HTMLElement>('[data-jword-ui-text-mirror]')?.textContent?.length ?? 0
   )
 
   expect(mirrorLength).toBeGreaterThan(100)
-  const textMirror = page.locator('[data-jword-text-mirror="true"]')
+  const textMirror = page.locator('[data-jword-ui-text-mirror="true"]')
 
   await expect(textMirror).toContainText('默认混排样例 2026')
   await expect(textMirror).toContainText('English text')

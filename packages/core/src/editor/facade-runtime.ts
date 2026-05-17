@@ -18,6 +18,7 @@ import {
 } from '../operations/command-builders'
 import { createCanvasPool } from '../canvas/pool'
 import { createDocumentProjection } from '../model/projection'
+import { createMountedCanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 import { createJWordError } from '../shared/errors'
 import { createSelectionFormattingState } from '../model/formatting-state'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
@@ -556,6 +557,16 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
       }),
       pageWrappers: new Map(),
       baseCanvases: new Map(),
+      imageResourceResolver: createMountedCanvasImageResourceResolver({
+        ownerDocument,
+        onInvalidate: () => {
+          if (this.isDestroyed || this.mountedDom === undefined) {
+            return
+          }
+
+          this.renderMountedLayout('resource')
+        }
+      }),
       inputState: {
         isComposing: false,
         compositionText: '',
@@ -598,6 +609,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
       this.mountedDom.hiddenTextarea.removeEventListener('compositionstart', this.mountedDom.handleCompositionStart)
       this.mountedDom.hiddenTextarea.removeEventListener('compositionupdate', this.mountedDom.handleCompositionUpdate)
       this.mountedDom.hiddenTextarea.removeEventListener('compositionend', this.mountedDom.handleCompositionEnd)
+      this.mountedDom.imageResourceResolver?.dispose()
 
       for (const canvas of this.mountedDom.canvases.values()) {
         this.mountedDom.pool.release(canvas)

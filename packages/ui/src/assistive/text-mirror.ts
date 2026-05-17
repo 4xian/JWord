@@ -137,6 +137,7 @@ export function createTextMirror(options: CreateTextMirrorOptions): TextMirrorCo
  */
 function configureTextMirrorElement(element: HTMLElement): void {
   element.setAttribute('data-jword-text-mirror', 'true')
+  element.setAttribute('data-jword-ui-text-mirror', 'true')
   element.setAttribute('role', 'document')
   element.setAttribute('aria-label', 'JWord plain text mirror')
   applyVisuallyHiddenStyle(element)

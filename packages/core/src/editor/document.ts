@@ -7,7 +7,7 @@
  */
 import * as Y from 'yjs'
 
-import { DOCUMENT_STORE_FIELDS, DOCUMENT_STORE_SCHEMA_VERSION, createParagraphRecord, createRunRecord, createSectionRecord, getParagraphRuns, getRunText, getSectionBlocks, getTableCellBlocks, getTableRowCells, getTableRows } from '../model/document-store'
+import { DOCUMENT_STORE_FIELDS, DOCUMENT_STORE_SCHEMA_VERSION, createParagraphRecord, createResourceRecord, createRunRecord, createSectionRecord, getParagraphRuns, getRunText, getSectionBlocks, getTableCellBlocks, getTableRowCells, getTableRows } from '../model/document-store'
 import type { BlockRecord, DocumentStore, DocumentStoreJson, ResourceId, StyleId } from '../model/document-store'
 import { createJWordError } from '../shared/errors'
 import type { BlockId, CommentId, DocumentId, RevisionId, RunId, SectionId } from '../model/position'
@@ -24,6 +24,8 @@ export function replaceStoreDocument(store: DocumentStore, input: EditorDocument
   initializeDocumentRoot(store, documentId, sectionId)
   store.sections.push([section])
   const sectionBlocks = getSectionBlocks(section)
+  const resourceIds = (store.document.get(DOCUMENT_STORE_FIELDS.document.resourceIds) as Y.Array<ResourceId> | undefined)
+    ?? createIdArray<ResourceId>([])
 
   for (const [index, text] of paragraphs.entries()) {
     const paragraph = createParagraphRecord(`paragraph-${index + 1}` as BlockId)
@@ -38,6 +40,11 @@ export function replaceStoreDocument(store: DocumentStore, input: EditorDocument
     const typedBlockIds = blockIds as Y.Array<BlockId>
 
     typedBlockIds.push(paragraphs.map((_, index) => `paragraph-${index + 1}` as BlockId))
+  }
+
+  for (const resource of input.resources ?? []) {
+    store.resources.set(resource.id as ResourceId, createResourceRecord(resource))
+    resourceIds.push([resource.id as ResourceId])
   }
 }
 

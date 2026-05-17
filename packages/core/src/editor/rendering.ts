@@ -227,7 +227,10 @@ export function renderPageBatch(input: Readonly<{
       ? {}
       : { caretRect: input.selectionRender.caretRect }),
     scale: input.scale,
-    pixelRatio: input.pixelRatio
+    pixelRatio: input.pixelRatio,
+    ...(input.mountedDom.imageResourceResolver === undefined
+      ? {}
+      : { imageResourceResolver: input.mountedDom.imageResourceResolver })
   })
 
   input.mountedDom.canvases = nextCanvases
@@ -355,6 +358,20 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
       return findBlockPageIndexes(layout, operation.placement.blockId)
     case 'deleteBlock':
       return findBlockPageIndexes(layout, operation.blockId)
+    case 'insertImage':
+      return operation.mode === 'block'
+        ? mergePageIndexes(
+            findTextPositionPageIndexes(layout, operation.at),
+            operation.blockId === undefined ? [] : findBlockPageIndexes(layout, operation.blockId)
+          )
+        : findTextPositionPageIndexes(layout, operation.at)
+    case 'replaceImageResource':
+    case 'deleteImage':
+    case 'resizeImage':
+      return findRunPageIndexes(layout, operation.runId)
+    case 'upsertResource':
+    case 'deleteResource':
+      return []
   }
 }
 

@@ -18,7 +18,7 @@ import {
   layoutDocument
 } from '../../src/layout/runtime'
 import type { Inline } from '../../src/model/types'
-import { createPageConfig } from '../../src/layout/page-config'
+import { createPageConfig, cssPxToTwips } from '../../src/layout/page-config'
 import type { DocumentProjection } from '../../src/model/projection'
 
 describe('Gate 2 命中测试 and 矩形映射', () => {
@@ -200,6 +200,208 @@ describe('Gate 2 命中测试 and 矩形映射', () => {
       y: firstPageTail?.y
     })
   })
+
+  it('keeps image hit-test on the bitmap and routes right-side whitespace to the trailing text run', () => {
+    const layout = layoutDocument({
+      projection: createImageOnlyProjection(),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const line = layout.pages[0]?.lines[0]
+    const beforeInline = line?.inlines.find((inline) => inline.runId === 'run-before')
+    const afterInline = line?.inlines.find((inline) => inline.runId === 'run-after')
+    const imageInline = line?.inlines.find((inline) => inline.runId === 'run-image-only')
+
+    expect(beforeInline).toBeDefined()
+    expect(afterInline).toBeDefined()
+    expect(imageInline).toBeDefined()
+    expect(imageInline?.width).toBe(cssPxToTwips(48))
+    expect(imageInline?.height).toBe(cssPxToTwips(32))
+
+    const imagePosition = hitTestDocumentLayout(layout, {
+      pageIndex: 0,
+      x: ((imageInline?.x ?? 0) - (layout.pages[0]?.x ?? 0)) + ((imageInline?.width ?? 0) / 2),
+      y: ((imageInline?.y ?? 0) - (layout.pages[0]?.y ?? 0)) + 1
+    })
+    const afterPosition = hitTestDocumentLayout(layout, {
+      pageIndex: 0,
+      x: ((imageInline?.x ?? 0) - (layout.pages[0]?.x ?? 0)) + (imageInline?.width ?? 0) + 24,
+      y: ((imageInline?.y ?? 0) - (layout.pages[0]?.y ?? 0)) + 1
+    })
+
+    expect(imagePosition).toEqual({
+      sectionId: 'section-image-only',
+      blockId: 'paragraph-image-only',
+      runId: 'run-image-only',
+      graphemeIndex: 0
+    })
+    expect(afterPosition).toEqual({
+      sectionId: 'section-image-only',
+      blockId: 'paragraph-image-only',
+      runId: 'run-after',
+      graphemeIndex: 0
+    })
+
+    expect(getSelectionRects(layout, {
+      anchor: imagePosition!,
+      focus: imagePosition!
+    })).toEqual([
+      {
+        pageIndex: imageInline?.pageIndex ?? 0,
+        x: imageInline?.x ?? 0,
+        y: imageInline?.y ?? 0,
+        width: imageInline?.width ?? 0,
+        height: imageInline?.height ?? 0
+      }
+    ])
+    expect(getSelectionRects(layout, {
+      anchor: afterPosition!,
+      focus: afterPosition!
+    })).toEqual([])
+    expect(getCaretRect(layout, afterPosition!)).toMatchObject({
+      x: (imageInline?.x ?? 0) + (imageInline?.width ?? 0)
+    })
+    expect((getCaretRect(layout, afterPosition!)?.height ?? 0)).toBeLessThan(imageInline?.height ?? Number.POSITIVE_INFINITY)
+  })
+
+  it('aligns inline images to the line baseline by bottom edge instead of top edge', () => {
+    const layout = layoutDocument({
+      projection: createImageProjection(),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const line = layout.pages[0]?.lines[0]
+    const beforeFragment = line?.fragments.find((fragment) => fragment.runId === 'run-before')
+    const afterFragment = line?.fragments.find((fragment) => fragment.runId === 'run-after')
+    const imageInline = line?.inlines.find((inline) => inline.runId === 'run-image')
+    const afterCaret = getCaretRect(layout, {
+      sectionId: 'section-image',
+      blockId: 'paragraph-image',
+      runId: 'run-after',
+      graphemeIndex: 0
+    })
+
+    expect(beforeFragment).toBeDefined()
+    expect(afterFragment).toBeDefined()
+    expect(imageInline).toBeDefined()
+    expect(line?.baseline).toBe((imageInline?.y ?? 0) + (imageInline?.height ?? 0))
+    expect(beforeFragment?.baseline).toBe(line?.baseline)
+    expect(afterFragment?.baseline).toBe(line?.baseline)
+    expect(beforeFragment?.y ?? 0).toBeGreaterThan(imageInline?.y ?? Number.NEGATIVE_INFINITY)
+    expect(afterFragment?.y ?? 0).toBeGreaterThan(imageInline?.y ?? Number.NEGATIVE_INFINITY)
+    expect(afterCaret?.y).toBe(afterFragment?.y)
+  })
+
+  it('maps whitespace after an image-only line to a trailing caret boundary instead of reselecting the image', () => {
+    const layout = layoutDocument({
+      projection: createImageOnlyProjection(),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const line = layout.pages[0]?.lines[0]
+    const imageInline = line?.inlines.find((inline) => inline.runId === 'run-image-only')
+
+    expect(imageInline).toBeDefined()
+
+    const position = hitTestDocumentLayout(layout, {
+      pageIndex: 0,
+      x: ((imageInline?.x ?? 0) - (layout.pages[0]?.x ?? 0)) + (imageInline?.width ?? 0) + 24,
+      y: ((imageInline?.y ?? 0) - (layout.pages[0]?.y ?? 0)) + 1
+    })
+
+    expect(position).toEqual({
+      sectionId: 'section-image-only',
+      blockId: 'paragraph-image-only',
+      runId: 'run-after',
+      graphemeIndex: 0
+    })
+    expect(getSelectionRects(layout, {
+      anchor: position!,
+      focus: position!
+    })).toEqual([])
+    expect(getCaretRect(layout, position!)).toMatchObject({
+      x: (imageInline?.x ?? 0) + (imageInline?.width ?? 0)
+    })
+    expect((getCaretRect(layout, position!)?.height ?? 0)).toBeLessThan(imageInline?.height ?? Number.POSITIVE_INFINITY)
+  })
+
+  it('maps clicks after an end-of-text inline image to the trailing empty text run', () => {
+    const layout = layoutDocument({
+      projection: createImageTrailingEmptyProjection(),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const line = layout.pages[0]?.lines[0]
+    const imageInline = line?.inlines.find((inline) => inline.runId === 'run-image-tail')
+
+    expect(imageInline).toBeDefined()
+
+    const position = hitTestDocumentLayout(layout, {
+      pageIndex: 0,
+      x: ((imageInline?.x ?? 0) - (layout.pages[0]?.x ?? 0)) + (imageInline?.width ?? 0) + 24,
+      y: ((imageInline?.y ?? 0) - (layout.pages[0]?.y ?? 0)) + 1
+    })
+
+    expect(position).toEqual({
+      sectionId: 'section-image-tail',
+      blockId: 'paragraph-image-tail',
+      runId: 'run-after-tail',
+      graphemeIndex: 0
+    })
+    expect(getSelectionRects(layout, {
+      anchor: position!,
+      focus: position!
+    })).toEqual([])
+    expect((getCaretRect(layout, position!)?.height ?? 0)).toBeLessThan(imageInline?.height ?? Number.POSITIVE_INFINITY)
+  })
 })
 
 function createSingleLineLayout() {
@@ -270,4 +472,215 @@ function createProjection(text: string, secondPageText?: string): DocumentProjec
   }
 
   return projection
+}
+
+function createImageProjection(): DocumentProjection {
+  return {
+    document: {
+      kind: 'document',
+      id: 'document-image',
+      resourceIds: ['image-1'],
+      resources: [
+        {
+          kind: 'resource',
+          id: 'image-1',
+          mime: 'image/png',
+          source: {
+            kind: 'dataUrl',
+            url: 'data:image/png;base64,AAAA'
+          },
+          status: 'success'
+        }
+      ],
+      sections: [
+        {
+          kind: 'section',
+          id: 'section-image',
+          blocks: [
+            {
+              kind: 'paragraph',
+              id: 'paragraph-image',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-before',
+                  properties: {
+                    fontSizePx: 16
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: '前'
+                    }
+                  ]
+                },
+                {
+                  kind: 'run',
+                  id: 'run-image',
+                  inlines: [
+                    {
+                      kind: 'image',
+                      resourceId: 'image-1',
+                      alt: '占位图',
+                      widthTwips: cssPxToTwips(48),
+                      heightTwips: cssPxToTwips(32)
+                    }
+                  ]
+                },
+                {
+                  kind: 'run',
+                  id: 'run-after',
+                  properties: {
+                    fontSizePx: 16
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: '后'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+function createImageOnlyProjection(): DocumentProjection {
+  return {
+    document: {
+      kind: 'document',
+      id: 'document-image-only',
+      resourceIds: ['image-only-1'],
+      resources: [
+        {
+          kind: 'resource',
+          id: 'image-only-1',
+          mime: 'image/png',
+          source: {
+            kind: 'dataUrl',
+            url: 'data:image/png;base64,AAAA'
+          },
+          status: 'success'
+        }
+      ],
+      sections: [
+        {
+          kind: 'section',
+          id: 'section-image-only',
+          blocks: [
+            {
+              kind: 'paragraph',
+              id: 'paragraph-image-only',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-before',
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: ''
+                    }
+                  ]
+                },
+                {
+                  kind: 'run',
+                  id: 'run-image-only',
+                  inlines: [
+                    {
+                      kind: 'image',
+                      resourceId: 'image-only-1',
+                      widthTwips: cssPxToTwips(48),
+                      heightTwips: cssPxToTwips(32)
+                    }
+                  ]
+                },
+                {
+                  kind: 'run',
+                  id: 'run-after',
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: ''
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+function createImageTrailingEmptyProjection(): DocumentProjection {
+  return {
+    document: {
+      kind: 'document',
+      id: 'document-image-tail',
+      resourceIds: ['image-tail-1'],
+      resources: [
+        {
+          kind: 'resource',
+          id: 'image-tail-1',
+          mime: 'image/png',
+          source: {
+            kind: 'dataUrl',
+            url: 'data:image/png;base64,AAAA'
+          },
+          status: 'success'
+        }
+      ],
+      sections: [
+        {
+          kind: 'section',
+          id: 'section-image-tail',
+          blocks: [
+            {
+              kind: 'paragraph',
+              id: 'paragraph-image-tail',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-before-tail',
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: '前'
+                    }
+                  ]
+                },
+                {
+                  kind: 'run',
+                  id: 'run-image-tail',
+                  inlines: [
+                    {
+                      kind: 'image',
+                      resourceId: 'image-tail-1',
+                      widthTwips: cssPxToTwips(48),
+                      heightTwips: cssPxToTwips(32)
+                    }
+                  ]
+                },
+                {
+                  kind: 'run',
+                  id: 'run-after-tail',
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: ''
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
 }

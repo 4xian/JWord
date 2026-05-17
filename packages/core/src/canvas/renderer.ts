@@ -8,7 +8,8 @@
 
 import type { CanvasLike, CanvasPool } from './pool'
 import { twipsToCssPx } from '../layout/page-config'
-import type { LayoutBox, LayoutRect, TextFragment } from '../layout/runtime'
+import type { ImageInlineLayoutPayload, InlineBox, LayoutBox, LayoutRect, TextFragment } from '../layout/runtime'
+import type { CanvasImageResourceResolution, CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 
 export interface RenderPageInput {
   readonly canvas: CanvasLike
@@ -20,6 +21,7 @@ export interface RenderPageInput {
   readonly caretColor?: string
   readonly scale?: number
   readonly pixelRatio?: number
+  readonly imageResourceResolver?: CanvasImageResourceResolver
 }
 
 export interface SyncPageCanvasesInput {
@@ -32,12 +34,18 @@ export interface SyncPageCanvasesInput {
   readonly caretRect?: LayoutRect
   readonly scale?: number
   readonly pixelRatio?: number
+  readonly imageResourceResolver?: CanvasImageResourceResolver
 }
 
 const MAX_CANVAS_SIDE_PX = 4096
 const MAX_CANVAS_AREA_PX = 16777216
 const DEFAULT_CANVAS_TEXT_COLOR = '#374151'
 const DEFAULT_CANVAS_CARET_COLOR = '#111827'
+const IMAGE_STATUS_COLORS = Object.freeze({
+  pending: { fill: '#fff7ed', border: '#f59e0b', text: '#92400e' },
+  success: { fill: '#eff6ff', border: '#2563eb', text: '#1d4ed8' },
+  failed: { fill: '#fef2f2', border: '#dc2626', text: '#991b1b' }
+})
 
 export function renderPageCanvas(input: RenderPageInput): void {
   const context = input.canvas.getContext('2d')
@@ -72,6 +80,7 @@ export function renderPageCanvas(input: RenderPageInput): void {
   renderTextBackgrounds(context, input.page, drawingScale)
   renderSelectionRects(context, input, drawingScale)
   renderTextFragments(context, input.page, drawingScale)
+  renderInlineObjects(context, input.page, drawingScale, input.imageResourceResolver)
 
   if (input.caretRect?.pageIndex === input.page.pageIndex) {
     context.fillStyle = input.caretColor ?? DEFAULT_CANVAS_CARET_COLOR
@@ -144,6 +153,112 @@ function renderTextFragments(
   }
 }
 
+function renderInlineObjects(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  drawingScale: number,
+  imageResourceResolver?: CanvasImageResourceResolver
+): void {
+  for (const line of page.lines) {
+    for (const inline of line.inlines) {
+      if (inline.kind !== 'inlineObject' || inline.inlineKind !== 'image') {
+        continue
+      }
+
+      renderImageInlineBox(context, page, inline, drawingScale, imageResourceResolver)
+    }
+  }
+}
+
+/**
+ * 职责：优先绘制已解码图片，无法绘制时回退到状态占位图。
+ */
+function renderImageInlineBox(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  inline: Extract<InlineBox, { readonly kind: 'inlineObject' }>,
+  drawingScale: number,
+  imageResourceResolver?: CanvasImageResourceResolver
+): void {
+  const payload = inline.payload as ImageInlineLayoutPayload
+  const x = toCanvasX(page, inline.x, drawingScale)
+  const y = toCanvasY(page, inline.y, drawingScale)
+  const width = Math.max(1, twipsToCssPx(inline.width, drawingScale))
+  const height = Math.max(1, twipsToCssPx(inline.height, drawingScale))
+  const resolution = resolveImageInlineResource(imageResourceResolver, payload)
+
+  if (resolution?.status === 'ready' && typeof context.drawImage === 'function') {
+    context.drawImage(resolution.image.source, x, y, width, height)
+    return
+  }
+
+  const status = resolveImagePlaceholderStatus(payload, resolution)
+  const palette = IMAGE_STATUS_COLORS[status]
+  const label = status === 'failed'
+    ? 'Image failed'
+    : status === 'success'
+      ? 'Image ready'
+      : 'Image uploading'
+  const detail = status === 'failed'
+    ? payload.resourceErrorMessage ?? payload.alt ?? payload.resourceMime ?? payload.resourceId
+    : payload.alt ?? payload.resourceMime ?? payload.resourceId
+  const textX = x + 10
+  const textBaseline = y + Math.max(20, height / 2)
+  const handleSize = Math.max(6, Math.min(8, Math.round(Math.min(width, height) / 4)))
+  const handleX = x + Math.max(0, width - handleSize - 4)
+  const handleY = y + Math.max(0, height - handleSize - 4)
+
+  context.fillStyle = palette.fill
+  context.fillRect(x, y, width, height)
+  context.fillStyle = palette.border
+  context.fillRect(x, y, width, 2)
+  context.fillRect(x, y + height - 2, width, 2)
+  context.fillRect(x, y, 2, height)
+  context.fillRect(x + width - 2, y, 2, height)
+  context.fillStyle = palette.text
+  context.font = `${Math.max(11, Math.round(12 * drawingScale))}px sans-serif`
+  context.textBaseline = 'alphabetic'
+  context.fillText(label, textX, textBaseline)
+  context.fillText(detail.slice(0, 28), textX, Math.min(y + height - 8, textBaseline + 16))
+  context.fillStyle = palette.border
+  context.fillRect(handleX, handleY, handleSize, handleSize)
+  context.fillStyle = palette.fill
+  context.fillRect(handleX + 1, handleY + 1, handleSize - 2, handleSize - 2)
+}
+
+/**
+ * 职责：根据资源状态和浏览器解码结果推导当前应显示的占位态。
+ */
+function resolveImagePlaceholderStatus(
+  payload: ImageInlineLayoutPayload,
+  resolution: CanvasImageResourceResolution | undefined
+): keyof typeof IMAGE_STATUS_COLORS {
+  if (resolution?.status === 'failed') {
+    return 'failed'
+  }
+
+  return payload.resourceStatus ?? 'pending'
+}
+
+/**
+ * 职责：仅在 success 态且存在可用 URL 时查询浏览器图片缓存。
+ */
+function resolveImageInlineResource(
+  resolver: CanvasImageResourceResolver | undefined,
+  payload: ImageInlineLayoutPayload
+): CanvasImageResourceResolution | undefined {
+  if (
+    resolver === undefined
+    || payload.resourceStatus !== 'success'
+    || typeof payload.resourceSourceUrl !== 'string'
+    || payload.resourceSourceUrl.length === 0
+  ) {
+    return undefined
+  }
+
+  return resolver.resolve(payload.resourceId, payload.resourceSourceUrl)
+}
+
 function renderTextDecoration(
   context: NonNullable<ReturnType<CanvasLike['getContext']>>,
   fragment: TextFragment,
@@ -196,7 +311,10 @@ export function syncPageCanvases(input: SyncPageCanvasesInput): Map<number, Canv
         ...(input.selectionRects === undefined ? {} : { selectionRects: input.selectionRects }),
         ...(input.caretRect === undefined ? {} : { caretRect: input.caretRect }),
         ...(input.scale === undefined ? {} : { scale: input.scale }),
-        ...(input.pixelRatio === undefined ? {} : { pixelRatio: input.pixelRatio })
+        ...(input.pixelRatio === undefined ? {} : { pixelRatio: input.pixelRatio }),
+        ...(input.imageResourceResolver === undefined
+          ? {}
+          : { imageResourceResolver: input.imageResourceResolver })
       }
 
       renderPageCanvas(renderInput)

@@ -8,11 +8,12 @@
 
 import * as Y from 'yjs'
 
-import type { Block, ModelProperties } from '../model/types'
+import type { Block, ImageInline, ModelProperties } from '../model/types'
 import { createDocumentProjection } from '../model/projection'
 import { createOperationAdapter } from './operation-adapter'
 import { createJWordError } from '../shared/errors'
 import type { DocumentProjection } from '../model/projection'
+import type { Resource, ResourceUrlPolicy } from '../resources/types'
 
 /**
  * Gate 1.4 首批操作名称。
@@ -26,6 +27,12 @@ export type OperationKind =
   | 'mergeBlock'
   | 'insertBlock'
   | 'deleteBlock'
+  | 'upsertResource'
+  | 'deleteResource'
+  | 'insertImage'
+  | 'replaceImageResource'
+  | 'deleteImage'
+  | 'resizeImage'
 
 const OPERATION_KINDS = new Set<OperationKind>([
   'insertText',
@@ -35,7 +42,13 @@ const OPERATION_KINDS = new Set<OperationKind>([
   'splitBlock',
   'mergeBlock',
   'insertBlock',
-  'deleteBlock'
+  'deleteBlock',
+  'upsertResource',
+  'deleteResource',
+  'insertImage',
+  'replaceImageResource',
+  'deleteImage',
+  'resizeImage'
 ])
 
 /**
@@ -135,6 +148,44 @@ export interface DeleteBlockOperation extends OperationBase<'deleteBlock'> {
   readonly blockId: string
 }
 
+/** 新增或覆盖资源表中的资源快照。 */
+export interface UpsertResourceOperation extends OperationBase<'upsertResource'> {
+  readonly resource: Resource
+}
+
+/** 从资源表中删除资源快照。 */
+export interface DeleteResourceOperation extends OperationBase<'deleteResource'> {
+  readonly resourceId: string
+}
+
+/** 在当前文本位置插入图片，支持 inline 与 image-only paragraph 两种第一版模式。 */
+export interface InsertImageOperation extends OperationBase<'insertImage'> {
+  readonly at: TextPosition
+  readonly imageRunId: string
+  readonly trailingRunId?: string
+  readonly blockId?: string
+  readonly mode: 'inline' | 'block'
+  readonly image: ImageInline
+}
+
+/** 替换当前图片 run 指向的资源。 */
+export interface ReplaceImageResourceOperation extends OperationBase<'replaceImageResource'> {
+  readonly runId: string
+  readonly resourceId: string
+}
+
+/** 删除当前图片 run。 */
+export interface DeleteImageOperation extends OperationBase<'deleteImage'> {
+  readonly runId: string
+}
+
+/** 调整当前图片 run 的尺寸。 */
+export interface ResizeImageOperation extends OperationBase<'resizeImage'> {
+  readonly runId: string
+  readonly widthTwips: number
+  readonly heightTwips: number
+}
+
 /**
  * Gate 1.4 首批可序列化操作边界。
  */
@@ -147,6 +198,12 @@ export type Operation =
   | MergeBlockOperation
   | InsertBlockOperation
   | DeleteBlockOperation
+  | UpsertResourceOperation
+  | DeleteResourceOperation
+  | InsertImageOperation
+  | ReplaceImageResourceOperation
+  | DeleteImageOperation
+  | ResizeImageOperation
 
 /**
  * 最小命令描述。
@@ -218,6 +275,10 @@ export interface TransactionPipeline {
   ): TransactionResult
 }
 
+export interface TransactionPipelineOptions {
+  readonly resourceUrlPolicy?: ResourceUrlPolicy
+}
+
 /**
  * 创建最小事务管线。
  *
@@ -233,8 +294,13 @@ export interface TransactionPipeline {
  * )
  * ```
  */
-export function createTransactionPipeline(doc = new Y.Doc()): TransactionPipeline {
-  const adapter = createOperationAdapter(doc)
+export function createTransactionPipeline(
+  doc = new Y.Doc(),
+  options: TransactionPipelineOptions = {}
+): TransactionPipeline {
+  const adapter = createOperationAdapter(doc, {
+    ...(options.resourceUrlPolicy === undefined ? {} : { resourceUrlPolicy: options.resourceUrlPolicy })
+  })
   const listeners = new Set<TransactionListener>()
 
   return {

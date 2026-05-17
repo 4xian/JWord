@@ -6,12 +6,34 @@
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md#5-4xianjword-ui-的目标公开面。
  */
 export { createJWordUi } from './create-ui'
+export { createCoreMediaCommandAdapter } from './media/core-command-adapter'
 export type {
   CreateJWordUiOptions,
+  JWordMediaAdapter,
+  JWordMediaCommandAdapter,
+  JWordMediaCommandResult,
+  JWordMediaErrorState,
+  JWordMediaInsertMode,
+  JWordMediaOptions,
+  JWordMediaPanelElements,
+  JWordMediaResource,
+  JWordMediaSource,
+  JWordMediaStatus,
+  JWordMediaUploadFile,
+  JWordMediaUploadOptions,
+  JWordMediaUploadProgressEvent,
+  JWordMediaUploadRequest,
+  JWordMediaUploadResult,
+  JWordMediaUploadSource,
+  JWordMediaUrlPolicy,
+  JWordMediaInsertRequest,
+  JWordSelectedImageTarget,
   JWordToolbarControlElement,
   JWordToolbarElements,
   JWordToolbarOptions,
   JWordToolbarToolId,
+  JWordUiElements,
   JWordUiInstance
 } from './types'
 export { BUILTIN_TOOL_IDS as BUILTIN_JWORD_TOOL_IDS } from './toolbar/builtin-tools'
+export { DEFAULT_JWORD_MEDIA_URL_POLICY, isAllowedJWordMediaUrl } from './media/policy'

@@ -1,11 +1,11 @@
 /**
  * 职责：定义 @4xian/jword-ui 的最小公开类型，不承载 DOM 构造或业务逻辑。
  * 边界：只描述装配参数、工具栏配置和返回句柄，不创建任何运行时对象。
- * 协作模块：create-ui 入口、toolbar controller/dom 与外部宿主通过这些类型对齐。
+ * 协作模块：create-ui 入口、toolbar controller/dom、media panel 与外部宿主通过这些类型对齐。
  * 性能/安全约束：纯类型模块，无副作用，可在非浏览器环境安全导入。
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
  */
-import type { Editor } from '@4xian/jword-core'
+import type { DocumentProjection, Editor, SelectionState } from '@4xian/jword-core'
 
 /** 当前 UI 包内建的 Gate 3 工具 ID。 */
 export type JWordToolbarToolId =
@@ -37,6 +37,174 @@ export interface JWordToolbarOptions {
   readonly showSummaries?: boolean
 }
 
+/** Gate 4 第一版图片插入模式。 */
+export type JWordMediaInsertMode = 'inline' | 'block'
+
+/** Gate 4 第一版图片资源状态。 */
+export type JWordMediaStatus = 'pending' | 'success' | 'failed'
+
+/** 图片资源来源。 */
+export type JWordMediaSource =
+  | {
+      readonly kind: 'dataUrl'
+      readonly url: string
+    }
+  | {
+      readonly kind: 'blobUrl'
+      readonly url: string
+    }
+  | {
+      readonly kind: 'externalUrl'
+      readonly url: string
+    }
+
+/** 图片资源错误快照。 */
+export interface JWordMediaErrorState {
+  readonly code: string
+  readonly message: string
+}
+
+/** 图片资源 metadata。 */
+export type JWordMediaMetadata = Readonly<Record<string, unknown>>
+
+/** 图片资源最小快照。 */
+export interface JWordMediaResource {
+  readonly kind: 'resource'
+  readonly id: string
+  readonly mime: string
+  readonly source: JWordMediaSource
+  readonly status: JWordMediaStatus
+  readonly error?: JWordMediaErrorState
+  readonly retryToken?: string
+  readonly metadata?: JWordMediaMetadata
+}
+
+/** 上传进度事件。 */
+export interface JWordMediaUploadProgressEvent {
+  readonly loaded: number
+  readonly total?: number
+}
+
+/** 上传文件边界。 */
+export interface JWordMediaUploadFile {
+  readonly name: string
+  readonly type: string
+  readonly size: number
+  arrayBuffer(): Promise<ArrayBuffer>
+}
+
+/** 上传输入来源。 */
+export type JWordMediaUploadSource =
+  | {
+      readonly kind: 'file'
+      readonly file: JWordMediaUploadFile
+    }
+  | {
+      readonly kind: 'url'
+      readonly url: string
+    }
+
+/** 上传请求。 */
+export interface JWordMediaUploadRequest {
+  readonly resourceId: string
+  readonly source: JWordMediaUploadSource
+  readonly previousResource?: JWordMediaResource
+  readonly retryToken?: string
+}
+
+/** 上传选项。 */
+export interface JWordMediaUploadOptions {
+  readonly signal?: AbortSignal
+  readonly onProgress?: (event: JWordMediaUploadProgressEvent) => void
+}
+
+/** 上传结果。 */
+export interface JWordMediaUploadResult {
+  readonly resource: JWordMediaResource
+}
+
+/** 图片资源上传适配器。 */
+export interface JWordMediaAdapter {
+  upload(
+    request: JWordMediaUploadRequest,
+    options?: JWordMediaUploadOptions
+  ): Promise<JWordMediaUploadResult>
+  delete?(resource: JWordMediaResource): Promise<void>
+}
+
+/** URL allowlist。 */
+export interface JWordMediaUrlPolicy {
+  readonly allowDataUrl?: boolean
+  readonly allowBlobUrl?: boolean
+  readonly allowExternalUrl?: (url: URL) => boolean
+}
+
+/** 当前选中的图片目标快照。 */
+export interface JWordSelectedImageTarget {
+  readonly resourceId: string
+  readonly display?: JWordMediaInsertMode
+  readonly widthTwips?: number
+  readonly heightTwips?: number
+}
+
+/** 图片命令执行请求。 */
+export interface JWordMediaInsertRequest {
+  readonly editor: Editor
+  readonly projection: DocumentProjection
+  readonly selection: SelectionState | null
+  readonly resource: JWordMediaResource
+}
+
+/** 图片命令执行结果。 */
+export interface JWordMediaCommandResult {
+  readonly kind: 'applied' | 'deferred'
+  readonly message?: string
+}
+
+/** 图片 command 对接边界。 */
+export interface JWordMediaCommandAdapter {
+  resolveSelectedImageTarget?(
+    projection: DocumentProjection,
+    selection: SelectionState | null
+  ): JWordSelectedImageTarget | null
+  insertInlineImage?(
+    request: JWordMediaInsertRequest
+  ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
+  insertBlockImage?(
+    request: JWordMediaInsertRequest
+  ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
+  replaceSelectedImageResource?(
+    request: JWordMediaInsertRequest & { readonly target: JWordSelectedImageTarget }
+  ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
+  resizeSelectedImage?(
+    input: {
+      readonly editor: Editor
+      readonly projection: DocumentProjection
+      readonly selection: SelectionState | null
+      readonly target: JWordSelectedImageTarget
+      readonly widthTwips?: number
+      readonly heightTwips?: number
+    }
+  ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
+  deleteSelectedImage?(
+    input: {
+      readonly editor: Editor
+      readonly projection: DocumentProjection
+      readonly selection: SelectionState | null
+      readonly target: JWordSelectedImageTarget
+    }
+  ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
+}
+
+/** Gate 4 第一版官方图片 UI 配置。 */
+export interface JWordMediaOptions {
+  readonly adapter: JWordMediaAdapter
+  readonly commands?: JWordMediaCommandAdapter
+  readonly urlPolicy?: JWordMediaUrlPolicy
+  readonly title?: string
+  readonly description?: string
+}
+
 /** createJWordUi 的装配输入。 */
 export interface CreateJWordUiOptions {
   /** 已创建并可供 UI 调用的 core editor facade。 */
@@ -51,6 +219,8 @@ export interface CreateJWordUiOptions {
   readonly assistiveMirrorHost?: HTMLElement | null
   /** toolbar 的最小显隐配置。 */
   readonly toolbar?: JWordToolbarOptions
+  /** Gate 4 第一版图片 panel。 */
+  readonly media?: JWordMediaOptions
 }
 
 /** live region 控制器的最小协作边界。 */
@@ -93,10 +263,42 @@ export interface JWordToolbarElements {
   readonly blockedSummary: HTMLElement | null
 }
 
+/** 图片 panel 暴露给宿主和浏览器测试的节点。 */
+export interface JWordMediaPanelElements {
+  /** toolbar 内图片入口宿主。 */
+  readonly host: HTMLElement
+  /** toolbar 上的图片触发按钮。 */
+  readonly triggerButton: HTMLButtonElement
+  /** 下拉菜单宿主。 */
+  readonly menu: HTMLElement
+  /** 本地上传动作按钮。 */
+  readonly fileActionButton: HTMLButtonElement
+  /** 网络地址动作按钮。 */
+  readonly urlActionButton: HTMLButtonElement
+  /** 隐藏文件输入。 */
+  readonly fileInput: HTMLInputElement
+  /** URL 输入弹框遮罩。 */
+  readonly urlDialog: HTMLElement
+  /** URL 输入框。 */
+  readonly urlDialogInput: HTMLInputElement
+  /** URL 确认按钮。 */
+  readonly urlDialogConfirmButton: HTMLButtonElement
+  /** URL 取消按钮。 */
+  readonly urlDialogCancelButton: HTMLButtonElement
+  /** URL 错误提示。 */
+  readonly urlDialogError: HTMLElement
+}
+
+/** createJWordUi 返回的完整 DOM 句柄。 */
+export interface JWordUiElements extends JWordToolbarElements {
+  /** Gate 4 第一版图片 panel；未启用时为 null。 */
+  readonly mediaPanel: JWordMediaPanelElements | null
+}
+
 /** UI 装配实例的最小返回值。 */
 export interface JWordUiInstance {
   /** 供宿主或测试读取的 DOM 句柄。 */
-  readonly elements: JWordToolbarElements
+  readonly elements: JWordUiElements
   /** 在宿主外部更新 editor 状态后手动刷新 UI。 */
   refresh(): void
   /** 销毁 toolbar 订阅与 DOM。 */

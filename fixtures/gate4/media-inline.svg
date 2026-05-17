@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120" role="img" aria-labelledby="title desc">
+  <title id="title">JWord Gate 4 Inline Image Fixture</title>
+  <desc id="desc">用于 Gate 4 图片上传、替换和尺寸调整 smoke 的最小 SVG fixture。</desc>
+  <rect width="240" height="120" rx="16" fill="#f5f9ff" stroke="#2f6fed" stroke-width="4" />
+  <rect x="20" y="20" width="56" height="56" rx="12" fill="#d7e6ff" />
+  <circle cx="48" cy="48" r="12" fill="#2f6fed" />
+  <path d="M92 38h112" stroke="#2f6fed" stroke-width="8" stroke-linecap="round" />
+  <path d="M92 60h86" stroke="#4b5563" stroke-width="8" stroke-linecap="round" />
+  <path d="M92 82h64" stroke="#94a3b8" stroke-width="8" stroke-linecap="round" />
+</svg>

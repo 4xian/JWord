@@ -84,7 +84,7 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
       this.selectionPageIndexes
     )
     const rerenderPageIndexes = mergePageIndexes(
-      reason === 'mount' ? viewport.retainedPageIndexes : [],
+      reason === 'mount' || reason === 'resource' ? viewport.retainedPageIndexes : [],
       scheduledImmediatePageIndexes,
       selectionRender.pageIndexes,
       this.selectionPageIndexes
@@ -501,7 +501,7 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
         focus: this.resolveTextPosition(this.currentSelection.focus)
       }
       const selectionRects = getLayoutSelectionRects(layout, range)
-      const caretRect = isSelectionCollapsed(this.currentSelection) && this.caretBlinkVisible
+      const caretRect = isSelectionCollapsed(this.currentSelection) && this.caretBlinkVisible && selectionRects.length === 0
         ? getLayoutCaretRect(layout, range.focus)
         : undefined
       const pageIndexes = mergePageIndexes(

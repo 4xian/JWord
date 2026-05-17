@@ -11,6 +11,7 @@ import type { Inline, Section } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { DocumentProjection } from '../model/projection'
 import type { TextPosition } from '../operations/transaction'
+import type { ResourceSource, ResourceStatus } from '../resources/types'
 
 export interface LayoutOptions {
   /**
@@ -146,6 +147,7 @@ export interface EmptyTextAnchorBox extends LayoutRect {
   readonly blockId: string
   readonly runId: string
   readonly at: TextPosition
+  readonly baseline: number
 }
 
 export interface NonTextInlineBox extends LayoutRect {
@@ -158,13 +160,35 @@ export interface NonTextInlineBox extends LayoutRect {
   readonly at: TextPosition
 }
 
-export type InlineObjectPayload = Inline extends infer Candidate
-  ? Candidate extends { readonly kind: 'text' | 'break' }
-    ? never
-    : Candidate extends { readonly kind: string }
-      ? Omit<Candidate, 'kind'>
-      : never
-  : never
+export interface BookmarkInlinePayload {
+  readonly id: string
+  readonly name: string
+  readonly edge: 'start' | 'end'
+}
+
+export interface CommentRangeInlinePayload {
+  readonly commentId: string
+  readonly edge: 'start' | 'end'
+}
+
+export interface ImageInlineLayoutPayload {
+  readonly resourceId: string
+  readonly alt?: string
+  readonly display?: 'inline' | 'block'
+  readonly widthTwips?: number
+  readonly heightTwips?: number
+  readonly resourceStatus?: ResourceStatus
+  readonly resourceMime?: string
+  readonly resourceSourceKind?: ResourceSource['kind']
+  readonly resourceSourceUrl?: string
+  readonly resourceErrorMessage?: string
+  readonly retryToken?: string
+}
+
+export type InlineObjectPayload =
+  | BookmarkInlinePayload
+  | CommentRangeInlinePayload
+  | ImageInlineLayoutPayload
 
 export interface LayoutDebugOverlay {
   readonly boxes: readonly LayoutDebugBox[]

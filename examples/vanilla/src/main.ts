@@ -9,6 +9,7 @@ import { createEditor } from '@4xian/jword-core'
 import { createJWordUi } from '@4xian/jword-ui'
 
 import { createDemoControls, loadInitialDemoText } from './demo-controls'
+import { createDemoMediaSupport } from './demo-media'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
 
@@ -31,6 +32,7 @@ const editor = createEditor({
     keepLatinWordWholeOnWrap: true
   }
 })
+const demoMedia = createDemoMediaSupport()
 
 editor.mount(editorHost)
 
@@ -38,7 +40,8 @@ const jwordUi = createJWordUi({
   editor,
   toolbarHost,
   liveRegionHost: statusHost,
-  assistiveMirrorHost
+  assistiveMirrorHost,
+  media: demoMedia.media
 })
 const demoControls = createDemoControls({
   editor,
@@ -51,13 +54,15 @@ const demoControls = createDemoControls({
 
 window.__jwordDemo = Object.freeze({
   editor,
-  selectTextRange: demoControls.selectTextRange
+  selectTextRange: demoControls.selectTextRange,
+  media: demoMedia.hooks
 })
 
 window.addEventListener(
   'beforeunload',
   () => {
     demoControls.destroy()
+    demoMedia.destroy()
     jwordUi.destroy()
     delete window.__jwordDemo
     editor.destroy()

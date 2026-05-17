@@ -11,6 +11,7 @@ import * as Y from 'yjs'
 import { createJWordError } from '../shared/errors'
 import type { Inline, RunField, RunLink } from './types'
 import type { BlockId, CommentId, DocumentId, RevisionId, RunId, SectionId } from './position'
+import type { Resource, ResourceErrorState, ResourceSource, ResourceStatus } from '../resources/types'
 
 declare const documentStoreIdBrand: unique symbol
 
@@ -109,8 +110,11 @@ export const DOCUMENT_STORE_FIELDS = {
   resource: {
     kind: 'kind',
     id: 'id',
-    mediaType: 'mediaType',
-    dataRef: 'dataRef',
+    mime: 'mime',
+    source: 'source',
+    status: 'status',
+    error: 'error',
+    retryToken: 'retryToken',
     metadata: 'metadata'
   },
   style: {
@@ -450,6 +454,31 @@ export function createTableCellRecord(id: string): TableCellRecord {
 }
 
 /**
+ * 创建资源记录。
+ *
+ * @param resource 资源快照。
+ * @returns 可放入 resources 表的资源记录。
+ */
+export function createResourceRecord(resource: Resource): ResourceRecord {
+  const record = new Y.Map<ResourceRecordValue>() as ResourceRecord
+
+  record.set(DOCUMENT_STORE_FIELDS.resource.kind, 'resource')
+  record.set(DOCUMENT_STORE_FIELDS.resource.id, resource.id as ResourceId)
+  record.set(DOCUMENT_STORE_FIELDS.resource.mime, resource.mime)
+  record.set(DOCUMENT_STORE_FIELDS.resource.source, toDocumentStoreJson(resource.source))
+  record.set(DOCUMENT_STORE_FIELDS.resource.status, resource.status)
+  if (resource.error !== undefined) {
+    record.set(DOCUMENT_STORE_FIELDS.resource.error, toDocumentStoreJson(resource.error))
+  }
+  if (resource.retryToken !== undefined) {
+    record.set(DOCUMENT_STORE_FIELDS.resource.retryToken, resource.retryToken)
+  }
+  record.set(DOCUMENT_STORE_FIELDS.resource.metadata, createJsonMap(resource.metadata))
+
+  return record
+}
+
+/**
  * 读取节内有序块容器。
  *
  * @param section 节记录。
@@ -574,6 +603,39 @@ export function getRunInlines(run: RunRecord): readonly Inline[] | undefined {
 }
 
 /**
+ * 读取资源记录并投影为只读资源快照。
+ *
+ * @param resource 资源记录。
+ * @returns 资源快照。
+ */
+export function projectResourceRecord(resource: ResourceRecord): Resource {
+  const source = readResourceSource(resource)
+  const status = readResourceStatus(resource)
+  const error = readResourceError(resource)
+  const retryToken = readOptionalString(resource.get(DOCUMENT_STORE_FIELDS.resource.retryToken))
+  const metadata = projectProperties(resource.get(DOCUMENT_STORE_FIELDS.resource.metadata))
+
+  return {
+    kind: 'resource',
+    id: readString(resource.get(DOCUMENT_STORE_FIELDS.resource.id), 'resource'),
+    mime: readString(resource.get(DOCUMENT_STORE_FIELDS.resource.mime), 'resource mime'),
+    source,
+    status,
+    ...(error === undefined ? {} : { error }),
+    ...(retryToken === undefined ? {} : { retryToken }),
+    ...(metadata === undefined ? {} : { metadata })
+  }
+}
+
+function projectProperties(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  if (!(value instanceof Y.Map) || value.size === 0) {
+    return undefined
+  }
+
+  return Object.freeze(Object.fromEntries(value.entries()))
+}
+
+/**
  * 写入或覆盖 run 的结构化元数据。
  *
  * @param run run 记录。
@@ -670,9 +732,14 @@ function projectInlineFromJson(value: unknown): Inline {
         break
       }
 
-      return typeof value.alt === 'string'
-        ? { kind: 'image', resourceId: value.resourceId, alt: value.alt }
-        : { kind: 'image', resourceId: value.resourceId }
+      return {
+        kind: 'image',
+        resourceId: value.resourceId,
+        ...(typeof value.alt === 'string' ? { alt: value.alt } : {}),
+        ...(value.display === 'inline' || value.display === 'block' ? { display: value.display } : {}),
+        ...(typeof value.widthTwips === 'number' ? { widthTwips: value.widthTwips } : {}),
+        ...(typeof value.heightTwips === 'number' ? { heightTwips: value.heightTwips } : {})
+      }
     case 'break':
       if (value.breakType === 'line' || value.breakType === 'page' || value.breakType === 'column') {
         return { kind: 'break', breakType: value.breakType }
@@ -731,6 +798,68 @@ function toDocumentStoreJson(value: unknown): DocumentStoreJson {
   }
 
   throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', 'run 结构化数据必须是 JSON 兼容数据')
+}
+
+function readResourceSource(resource: ResourceRecord): ResourceSource {
+  const value = resource.get(DOCUMENT_STORE_FIELDS.resource.source)
+
+  if (!isRecord(value) || typeof value.kind !== 'string' || typeof value.url !== 'string') {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'resource source 结构非法')
+  }
+
+  if (value.kind === 'dataUrl' || value.kind === 'blobUrl' || value.kind === 'externalUrl') {
+    return {
+      kind: value.kind,
+      url: value.url
+    }
+  }
+
+  throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'resource source 类型非法', {
+    kind: String(value.kind)
+  })
+}
+
+function readResourceStatus(resource: ResourceRecord): ResourceStatus {
+  const value = resource.get(DOCUMENT_STORE_FIELDS.resource.status)
+
+  if (value === 'pending' || value === 'success' || value === 'failed') {
+    return value as ResourceStatus
+  }
+
+  throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'resource status 结构非法', {
+    status: String(value)
+  })
+}
+
+function readResourceError(resource: ResourceRecord): ResourceErrorState | undefined {
+  const value = resource.get(DOCUMENT_STORE_FIELDS.resource.error)
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (!isRecord(value) || typeof value.code !== 'string' || typeof value.message !== 'string') {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'resource error 结构非法')
+  }
+
+  return {
+    code: value.code,
+    message: value.message
+  }
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function readString(value: unknown, label: string): string {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  throw createJWordError('PROJECTION_INVALID_DOCUMENT', `${label} 缺少字符串值`, {
+    label
+  })
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

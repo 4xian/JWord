@@ -15,7 +15,7 @@ import {
 import type {
   CreateJWordUiOptions,
   JWordToolbarControlElement,
-  JWordUiInstance
+  JWordToolbarElements
 } from '../types'
 import type { LiveRegionController } from '../assistive/live-region'
 import type { TextMirrorController } from '../assistive/text-mirror'
@@ -54,10 +54,20 @@ interface CreateToolbarControllerOptions extends CreateJWordUiOptions {
   readonly assistive: ToolbarControllerAssistive
 }
 
+interface ToolbarControllerHandle {
+  readonly elements: JWordToolbarElements
+  readonly mediaHost: HTMLElement | null
+  refresh(): void
+  destroy(): void
+}
+
 /** 创建并接管官方 toolbar。 */
-export function createToolbarController(options: CreateToolbarControllerOptions): JWordUiInstance {
+export function createToolbarController(options: CreateToolbarControllerOptions): ToolbarControllerHandle {
   const toolbarConfig = resolveToolbarConfig(options.toolbar)
   const dom = createToolbarDom(options.toolbarHost, toolbarConfig)
+  const mediaHost = options.media === undefined
+    ? null
+    : createToolbarMediaHost(dom.bar)
   const assistive = options.assistive
   const editor = options.editor
   let suppressSelectionAnnouncementsUntil = 0
@@ -460,6 +470,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
   return {
     elements: dom,
+    mediaHost,
     refresh,
     destroy(): void {
       unsubscribeEditor()
@@ -468,6 +479,17 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       destroyToolbarDom(dom)
     }
   }
+}
+
+/** 为图片入口补一个挂到 toolbar bar 末尾的独立分组。 */
+function createToolbarMediaHost(bar: HTMLElement): HTMLElement {
+  const group = document.createElement('div')
+
+  group.className = 'jw-toolbar__group'
+  group.setAttribute('data-jword-media-host', 'true')
+  bar.append(group)
+
+  return group
 }
 
 /** 在按钮上绑定点击事件。 */

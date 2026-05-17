@@ -18,8 +18,10 @@ import type { ResolvedFontStyle } from './font-manager'
 import type { Inline, Paragraph, Section } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { TextPosition } from '../operations/transaction'
+import type { Resource } from '../resources/types'
 import type {
   EmptyTextAnchorBox,
+  InlineBox,
   LayoutCursor,
   MutableLineBox,
   MutablePageBox,
@@ -35,13 +37,15 @@ export function appendNonTextInlineBox(
   runId: string,
   graphemeIndex: number,
   cursor: LayoutCursor,
-  pageConfig: PageConfig
+  pageConfig: PageConfig,
+  resourceById?: ReadonlyMap<string, Resource>
 ): void {
   const line = ensureLine(cursor, sectionId, {
     kind: 'paragraph',
     id: blockId,
     runs: []
   }, pageConfig)
+  const geometry = resolveInlineObjectGeometry(inline, pageConfig, line.height)
   const at = {
     sectionId,
     blockId,
@@ -51,7 +55,7 @@ export function appendNonTextInlineBox(
   const inlineBox: NonTextInlineBox = Object.freeze({
     kind: 'inlineObject',
     inlineKind: inline.kind,
-    payload: createInlineObjectPayload(inline),
+    payload: createInlineObjectPayload(inline, resourceById),
     pageIndex: cursor.page.pageIndex,
     sectionId,
     blockId,
@@ -59,13 +63,40 @@ export function appendNonTextInlineBox(
     at,
     x: cursor.x,
     y: line.y,
-    width: 0,
-    height: Math.max(line.height, cssPxToTwips(16))
+    width: geometry.width,
+    height: geometry.height
   })
 
   line.inlines.push(inlineBox)
   line.height = Math.max(line.height, inlineBox.height)
   cursor.x += inlineBox.width
+}
+
+function resolveInlineObjectGeometry(
+  inline: Exclude<Inline, { readonly kind: 'text' | 'break' }>,
+  pageConfig: PageConfig,
+  lineHeight: number
+): Readonly<{
+  width: number
+  height: number
+}> {
+  if (inline.kind !== 'image') {
+    return Object.freeze({
+      width: 0,
+      height: Math.max(lineHeight, cssPxToTwips(16))
+    })
+  }
+
+  const fallbackWidth = inline.display === 'block'
+    ? Math.min(pageConfig.contentWidthTwips, cssPxToTwips(320))
+    : Math.min(pageConfig.contentWidthTwips, cssPxToTwips(160))
+  const width = inline.widthTwips ?? fallbackWidth
+  const height = inline.heightTwips ?? Math.max(cssPxToTwips(64), Math.round(width * 0.56))
+
+  return Object.freeze({
+    width,
+    height
+  })
 }
 
 /**
@@ -100,7 +131,8 @@ export function appendEmptyTextAnchor(input: Readonly<{
     x: input.cursor.x,
     y: line.y,
     width: 0,
-    height: Math.max(line.height, input.height)
+    height: input.height,
+    baseline: line.y + input.baseline
   })
 
   line.inlines.push(inlineBox)
@@ -259,6 +291,7 @@ export function flushLine(cursor: LayoutCursor): void {
   const line = cursor.line
 
   if (line.fragments.length > 0 || line.inlines.length > 0) {
+    alignLineContentToBaseline(line)
     alignLineToParagraph(line, cursor)
     const frozenLine = freezeLine(line)
 
@@ -274,6 +307,104 @@ export function flushLine(cursor: LayoutCursor): void {
 
   cursor.line = undefined
   cursor.x = cursor.paragraph?.x ?? cursor.page.contentRect.x
+}
+
+/**
+ * 行内图片默认按底部参与基线，这里在冻结前统一重排文本/图片纵向位置。
+ */
+function alignLineContentToBaseline(line: MutableLineBox): void {
+  const targetBaseline = resolveTargetBaseline(line)
+  let maxBottom = line.y
+
+  line.baseline = targetBaseline
+
+  for (let index = 0; index < line.fragments.length; index += 1) {
+    const fragment = line.fragments[index]
+
+    if (fragment === undefined) {
+      continue
+    }
+
+    const offsetY = targetBaseline - fragment.baseline
+    const nextFragment = offsetY === 0
+      ? fragment
+      : Object.freeze({
+          ...fragment,
+          y: fragment.y + offsetY,
+          baseline: fragment.baseline + offsetY
+        })
+
+    line.fragments[index] = nextFragment
+    maxBottom = Math.max(maxBottom, nextFragment.y + nextFragment.height)
+  }
+
+  for (let index = 0; index < line.inlines.length; index += 1) {
+    const inline = line.inlines[index]
+
+    if (inline === undefined) {
+      continue
+    }
+
+    const nextInline = alignInlineBoxToBaseline(inline, targetBaseline)
+
+    line.inlines[index] = nextInline
+    maxBottom = Math.max(maxBottom, nextInline.y + nextInline.height)
+  }
+
+  line.height = Math.max(1, maxBottom - line.y)
+}
+
+function resolveTargetBaseline(line: MutableLineBox): number {
+  let baseline = line.baseline
+
+  for (const inline of line.inlines) {
+    baseline = Math.max(baseline, readInlineBoxBaseline(inline))
+  }
+
+  return baseline
+}
+
+function readInlineBoxBaseline(inline: InlineBox): number {
+  if (inline.kind === 'emptyTextAnchor') {
+    return inline.baseline
+  }
+
+  if (inline.kind === 'inlineObject' && inline.inlineKind === 'image') {
+    return inline.y + inline.height
+  }
+
+  return inline.y + inline.height
+}
+
+function alignInlineBoxToBaseline(inline: InlineBox, targetBaseline: number): InlineBox {
+  if (inline.kind === 'emptyTextAnchor') {
+    const offsetY = targetBaseline - inline.baseline
+
+    if (offsetY === 0) {
+      return inline
+    }
+
+    return Object.freeze({
+      ...inline,
+      y: inline.y + offsetY,
+      baseline: inline.baseline + offsetY
+    })
+  }
+
+  if (inline.kind === 'inlineObject' && inline.inlineKind === 'image') {
+    const offsetY = targetBaseline - (inline.y + inline.height)
+
+    if (offsetY === 0) {
+      return inline
+    }
+
+    return Object.freeze({
+      ...inline,
+      y: inline.y + offsetY
+    })
+  }
+
+  return inline
 }
 
 export function startNewPage(

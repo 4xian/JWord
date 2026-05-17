@@ -10,12 +10,16 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { createEditor } from '../../src/index'
+import {
+  buildInsertInlineImageCommand,
+  createEditor
+} from '../../src/index'
 import type { LineBox } from '../../src/layout/runtime'
 import { twipsToCssPx } from '../../src/layout/page-config'
 import type { DocumentId, RunId, SectionId, BlockId } from '../../src/model/position'
 import { createAnchorRef, createGraphemeIndex } from '../../src/model/position'
 import { createSelectionState } from '../../src/model/selection'
+import type { Resource } from '../../src/resources/types'
 
 interface RecordedTransaction {
   readonly commandName: string
@@ -493,6 +497,287 @@ describe('Editor input runtime', () => {
       })
       expect(caretRect).toBeDefined()
       expect(caretRect?.height ?? 0).toBeGreaterThan(0)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('keeps Backspace deleting inline images one by one from the paragraph tail', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+    const transactions = captureTransactions(editor)
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+
+      insertInlineImageAtSelection(editor, createResource('image-inline-1'), {
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+      insertInlineImageAtSelection(editor, createResource('image-inline-2'), readParagraphTailAnchor(editor))
+      const tailAnchor = readParagraphTailAnchor(editor)
+
+      editor.setSelection(createSelectionState(
+        editor.createTextAnchor(tailAnchor),
+        editor.createTextAnchor(tailAnchor)
+      ))
+
+      dispatchKey(textarea, 'Backspace')
+      expect(readInlineImageResourceIds(editor)).toEqual(['image-inline-1'])
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject(tailAnchor)
+
+      dispatchKey(textarea, 'Backspace')
+      expect(readInlineImageResourceIds(editor)).toEqual([])
+      expect(readParagraphTexts(editor)).toEqual(['ab'])
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject(tailAnchor)
+      expect(transactions.slice(-2)).toEqual([
+        {
+          commandName: 'deleteImage',
+          origin: 'local-user',
+          operationKinds: ['deleteImage', 'deleteResource'],
+          dirty: true
+        },
+        {
+          commandName: 'deleteImage',
+          origin: 'local-user',
+          operationKinds: ['deleteImage', 'deleteResource'],
+          dirty: true
+        }
+      ])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('keeps Delete deleting inline images one by one from the text boundary', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+    const transactions = captureTransactions(editor)
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+
+      insertInlineImageAtSelection(editor, createResource('image-inline-1'), {
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+      insertInlineImageAtSelection(editor, createResource('image-inline-2'), readParagraphTailAnchor(editor))
+
+      const endAnchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      editor.setSelection(createSelectionState(endAnchor, endAnchor))
+
+      dispatchKey(textarea, 'Delete')
+      expect(readInlineImageResourceIds(editor)).toEqual(['image-inline-2'])
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      dispatchKey(textarea, 'Delete')
+      expect(readInlineImageResourceIds(editor)).toEqual([])
+      expect(readParagraphTexts(editor)).toEqual(['ab'])
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+      expect(transactions.slice(-2)).toEqual([
+        {
+          commandName: 'deleteImage',
+          origin: 'local-user',
+          operationKinds: ['deleteImage', 'deleteResource'],
+          dirty: true
+        },
+        {
+          commandName: 'deleteImage',
+          origin: 'local-user',
+          operationKinds: ['deleteImage', 'deleteResource'],
+          dirty: true
+        }
+      ])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('selects an inline image when clicking on the image body', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+
+    try {
+      editor.mount(host)
+
+      insertInlineImageAtSelection(editor, createResource('image-inline-click'), {
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      const paragraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+      expect(paragraph?.kind).toBe('paragraph')
+      if (paragraph?.kind !== 'paragraph') {
+        throw new Error('expected paragraph block')
+      }
+
+      const imageRunId = paragraph.runs.find((run) => run.inlines.some((inline) => inline.kind === 'image'))?.id
+
+      expect(imageRunId).toBeDefined()
+
+      const page = getPageElement(host, 0)
+
+      mockPageRect(page)
+
+      const hitPoint = findPointerPointForImageRun(editor, 0, imageRunId!)
+
+      dispatchMouse(page, 'mousedown', hitPoint.clientX, hitPoint.clientY)
+      dispatchMouse(page, 'mouseup', hitPoint.clientX, hitPoint.clientY)
+
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject({
+        blockId: 'paragraph-1',
+        runId: imageRunId,
+        graphemeIndex: 0
+      })
+      expect(editor.getSelectionRects(editor.getSelection()!.range)).toHaveLength(1)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('continues Backspace into previous text after deleting the last trailing inline image', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+
+      insertInlineImageAtSelection(editor, createResource('image-inline-tail'), {
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      const tailAnchor = readParagraphTailAnchor(editor)
+
+      editor.setSelection(createSelectionState(
+        editor.createTextAnchor(tailAnchor),
+        editor.createTextAnchor(tailAnchor)
+      ))
+
+      dispatchKey(textarea, 'Backspace')
+      expect(readInlineImageResourceIds(editor)).toEqual([])
+
+      dispatchKey(textarea, 'Backspace')
+      expect(readParagraphTexts(editor)).toEqual(['a'])
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('deletes a mixed text and inline-image range with Backspace in one step', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+
+      insertInlineImageAtSelection(editor, createResource('image-inline-range-backspace'), {
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      const tailAnchor = readParagraphTailAnchor(editor)
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+      const focus = editor.createTextAnchor(tailAnchor)
+
+      editor.setSelection(createSelectionState(anchor, focus))
+      dispatchKey(textarea, 'Backspace')
+
+      expect(readParagraphTexts(editor)).toEqual(['a'])
+      expect(readInlineImageResourceIds(editor)).toEqual([])
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('deletes a mixed text and inline-image range with Delete in one step', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+
+      insertInlineImageAtSelection(editor, createResource('image-inline-range-delete'), {
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      const tailAnchor = readParagraphTailAnchor(editor)
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+      const focus = editor.createTextAnchor(tailAnchor)
+
+      editor.setSelection(createSelectionState(anchor, focus))
+      dispatchKey(textarea, 'Delete')
+
+      expect(readParagraphTexts(editor)).toEqual(['a'])
+      expect(readInlineImageResourceIds(editor)).toEqual([])
+      expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
     } finally {
       editor.destroy()
     }
@@ -1225,12 +1510,100 @@ function findPointerPointForGrapheme(
   throw new Error(`找不到 grapheme ${graphemeIndex} 的命中点`)
 }
 
+function findPointerPointForImageRun(
+  editor: ReturnType<typeof createEditor>,
+  pageIndex: number,
+  runId: string
+) {
+  const page = editor.getLayout().pages[pageIndex]
+
+  if (page === undefined) {
+    throw new Error(`page ${pageIndex} 不存在`)
+  }
+
+  for (const line of page.lines) {
+    const inline = line.inlines.find((candidate) => candidate.runId === runId)
+
+    if (inline !== undefined) {
+      return {
+        clientX: twipsToCssPx((inline.x - page.x) + (inline.width / 2)),
+        clientY: twipsToCssPx((inline.y - page.y) + Math.max(1, inline.height / 2))
+      }
+    }
+  }
+
+  throw new Error(`找不到 image run ${runId} 的命中点`)
+}
+
 function readParagraphTexts(editor: ReturnType<typeof createEditor>) {
   return editor.getProjection().document.sections.flatMap((section) =>
     section.blocks.flatMap((block) => block.kind === 'paragraph'
       ? [block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')).join('')]
       : [])
   )
+}
+
+function readInlineImageResourceIds(editor: ReturnType<typeof createEditor>) {
+  return editor.getProjection().document.sections.flatMap((section) =>
+    section.blocks.flatMap((block) => block.kind === 'paragraph'
+      ? block.runs.flatMap((run) => run.inlines.flatMap((inline) => inline.kind === 'image' ? [inline.resourceId] : []))
+      : [])
+  )
+}
+
+function createResource(id: string): Resource {
+  return {
+    kind: 'resource',
+    id,
+    mime: 'image/png',
+    source: {
+      kind: 'dataUrl',
+      url: 'data:image/png;base64,AAAA'
+    },
+    status: 'success'
+  }
+}
+
+function insertInlineImageAtSelection(
+  editor: ReturnType<typeof createEditor>,
+  resource: Resource,
+  anchor: Readonly<{
+    sectionId: string
+    blockId: string
+    runId: string
+    graphemeIndex: number
+  }>
+) {
+  const runtimeAnchor = editor.createTextAnchor(anchor)
+  const selection = createSelectionState(runtimeAnchor, runtimeAnchor)
+  const command = buildInsertInlineImageCommand(editor.getProjection(), selection, resource, {
+    widthTwips: 1440,
+    heightTwips: 960
+  })
+
+  expect(command).not.toBeNull()
+  editor.executeCommand(command!)
+}
+
+function readParagraphTailAnchor(editor: ReturnType<typeof createEditor>) {
+  const paragraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+  if (paragraph?.kind !== 'paragraph') {
+    throw new Error('expected paragraph block')
+  }
+
+  const tailRun = paragraph.runs[paragraph.runs.length - 1]
+
+  if (tailRun === undefined) {
+    throw new Error('expected tail run')
+  }
+
+  return {
+    sectionId: 'section-1',
+    blockId: paragraph.id,
+    runId: tailRun.id,
+    graphemeIndex: 0
+  }
 }
 
 function captureTransactions(editor: ReturnType<typeof createEditor>) {

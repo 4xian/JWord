@@ -14,6 +14,8 @@ import type { AnchorRef, RangeRef } from '../model/position'
 import type { DocumentProjection } from '../model/projection'
 import type { SelectionState } from '../model/selection'
 import type { Command, TextPosition, TransactionEvent, TransactionResult } from '../operations/transaction'
+import type { Resource, ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
+import type { CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 
 export interface EditorOptions {
   /**
@@ -39,6 +41,21 @@ export interface EditorOptions {
    * 初始化时传入的页面尺寸配置。
    */
   readonly page?: PageConfigInput
+
+  /**
+   * 初始化文档资源表。
+   */
+  readonly resources?: readonly Resource[]
+
+  /**
+   * 资源 URL allowlist 策略。
+   */
+  readonly resourceUrlPolicy?: ResourceUrlPolicy
+
+  /**
+   * 资源上传适配器。
+   */
+  readonly resourceAdapter?: ResourceAdapter
 }
 
 /**
@@ -56,6 +73,8 @@ export interface EditorFixture {
   readonly documentId?: string
   /** 可选节 ID；未提供时使用稳定默认值。 */
   readonly sectionId?: string
+  /** 可选资源表快照。 */
+  readonly resources?: readonly Resource[]
 }
 
 /**
@@ -68,6 +87,8 @@ export interface EditorDocumentInput {
   readonly sectionId?: string
   /** 初始纯文本内容，空行会被切分为段落。 */
   readonly text?: string
+  /** 可选资源表快照。 */
+  readonly resources?: readonly Resource[]
 }
 
 /**
@@ -497,6 +518,7 @@ export interface MountedEditorDom {
   readonly pool: ReturnType<typeof createCanvasPool>
   readonly pageWrappers: Map<number, HTMLElement>
   readonly baseCanvases: Map<number, HTMLCanvasElement>
+  readonly imageResourceResolver?: CanvasImageResourceResolver
   readonly inputState: {
     isComposing: boolean
     compositionText: string
@@ -533,7 +555,7 @@ export interface TransientLayoutQuerySnapshot {
 
 export type EditorPageElement = HTMLElement
 
-export type RenderReason = 'mount' | 'document' | 'selection' | 'viewport'
+export type RenderReason = 'mount' | 'document' | 'selection' | 'viewport' | 'resource'
 
 export type SelectionUpdateSource =
   | 'api'

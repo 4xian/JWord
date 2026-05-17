@@ -13,6 +13,7 @@ import {
   DOCUMENT_STORE_FIELDS,
   createDocumentStore,
   getParagraphRuns,
+  projectResourceRecord,
   getRunField,
   getRunInlines,
   getRunLink,
@@ -26,6 +27,7 @@ import {
 import type {
   BlockRecord,
   DocumentStore,
+  ResourceRecord,
   RunRecord,
   SectionRecord,
   TableCellRecord,
@@ -66,9 +68,15 @@ export function createDocumentProjection(input: DocumentStore | Y.Doc): Document
     store.document.get(DOCUMENT_STORE_FIELDS.document.id),
     'document'
   )
+  const styleIds = projectStringList(store.document.get(DOCUMENT_STORE_FIELDS.document.styleIds))
+  const resourceIds = projectStringList(store.document.get(DOCUMENT_STORE_FIELDS.document.resourceIds))
+  const resources = projectDocumentResources(store, resourceIds)
   const document: Document = {
     kind: 'document',
     id: documentId,
+    ...(styleIds === undefined ? {} : { styleIds }),
+    ...(resourceIds === undefined ? {} : { resourceIds }),
+    ...(resources === undefined ? {} : { resources }),
     sections: deepFreezeArray(store.sections.toArray().map(projectSection))
   }
 
@@ -240,6 +248,28 @@ function projectStringList(value: unknown): readonly string[] | undefined {
   }
 
   return deepFreezeArray(items)
+}
+
+function projectDocumentResources(
+  store: DocumentStore,
+  resourceIds: readonly string[] | undefined
+): Document['resources'] | undefined {
+  const ids = resourceIds ?? Array.from(store.resources.keys())
+
+  if (ids.length === 0) {
+    return undefined
+  }
+
+  const resources = ids
+    .map((resourceId) => store.resources.get(resourceId))
+    .filter((resource): resource is ResourceRecord => resource !== undefined)
+    .map(projectResourceRecord)
+
+  if (resources.length === 0) {
+    return undefined
+  }
+
+  return deepFreezeArray(resources)
 }
 
 function readString(value: unknown, label: string): string {

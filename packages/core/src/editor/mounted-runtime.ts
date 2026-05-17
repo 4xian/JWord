@@ -324,7 +324,10 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
         canvas,
         page,
         scale: this.pageConfig.scale,
-        pixelRatio
+        pixelRatio,
+        ...(mountedDom.imageResourceResolver === undefined
+          ? {}
+          : { imageResourceResolver: mountedDom.imageResourceResolver })
       })
       mountedDom.baseCanvases.set(pageIndex, canvas)
     }

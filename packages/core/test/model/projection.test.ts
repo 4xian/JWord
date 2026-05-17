@@ -13,6 +13,7 @@ import * as Y from 'yjs'
 
 import {
   DOCUMENT_STORE_FIELDS,
+  createResourceRecord,
   createDocumentStore,
   createParagraphRecord,
   createRunRecord,
@@ -27,6 +28,7 @@ import {
   getTableRowCells,
   getTableRows
 } from '../../src/model/document-store'
+import type { ResourceId } from '../../src/model/document-store'
 import { createDocumentProjection } from '../../src/model/projection'
 import type { BlockId, DocumentId, RunId, SectionId } from '../../src/model/position'
 import type { Inline, Paragraph, Table } from '../../src/model/types'
@@ -84,6 +86,49 @@ describe('createDocumentProjection', () => {
       kind: 'text',
       text: '来自 Y.Doc'
     })
+  })
+
+  it('按 document resourceIds 顺序投影资源表快照', () => {
+    const store = createDocumentStore()
+    const resourceIds = new Y.Array<ResourceId>()
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-resources' as DocumentId)
+    resourceIds.push(['resource-image-1' as ResourceId])
+    store.document.set(DOCUMENT_STORE_FIELDS.document.resourceIds, resourceIds)
+    store.resources.set('resource-image-1', createResourceRecord({
+      kind: 'resource',
+      id: 'resource-image-1',
+      mime: 'image/png',
+      source: {
+        kind: 'dataUrl',
+        url: 'data:image/png;base64,AAAA'
+      },
+      status: 'success',
+      metadata: {
+        widthPx: 320,
+        heightPx: 180
+      }
+    }))
+
+    const projection = createDocumentProjection(store)
+
+    expect(projection.document.resourceIds).toEqual(['resource-image-1'])
+    expect(projection.document.resources).toEqual([
+      {
+        kind: 'resource',
+        id: 'resource-image-1',
+        mime: 'image/png',
+        source: {
+          kind: 'dataUrl',
+          url: 'data:image/png;base64,AAAA'
+        },
+        status: 'success',
+        metadata: {
+          widthPx: 320,
+          heightPx: 180
+        }
+      }
+    ])
   })
 
   it('读取表格块和单元格内的嵌套段落', () => {

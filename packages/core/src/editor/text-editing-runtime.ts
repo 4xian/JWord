@@ -5,11 +5,16 @@
  * 性能/安全约束：所有编辑命令统一进入 transaction pipeline，不直接改 projection，不访问 top-level DOM。
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md#gate-3---输入与基础编辑。
  */
-import { buildSetBoldCommand, buildSetItalicCommand } from '../operations/command-builders'
+import {
+  buildDeleteSelectedImageCommand,
+  buildSetBoldCommand,
+  buildSetItalicCommand
+} from '../operations/command-builders'
 import { countGraphemes, splitGraphemes } from '../shared/grapheme'
 import { getCaretRect as getLayoutCaretRect } from '../layout/runtime'
 import { createSelectionState, isSelectionCollapsed } from '../model/selection'
 import { collectSelectionTargets } from '../model/selection-targets'
+import type { Paragraph, Run } from '../model/types'
 import type { Command, Operation, TextPosition } from '../operations/transaction'
 import { createAllTextSelection, readSelectionHtmlFromProjection } from './clipboard-runtime'
 import { flattenLayoutLines, hitTestLineAtAbsoluteX, resolveLineBoundaryPosition } from './rendering'
@@ -232,53 +237,61 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
     }
 
     const operations: Operation[] = []
+    const selection = createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...range.start
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...range.end
+      })
+    )
+    const targets = collectSelectionTargets(this.currentProjection, selection)
 
-    for (let paragraphIndex = endParagraphIndex; paragraphIndex >= startParagraphIndex; paragraphIndex -= 1) {
-      const paragraph = paragraphs[paragraphIndex]
+    for (let targetIndex = targets.runs.length - 1; targetIndex >= 0; targetIndex -= 1) {
+      const target = targets.runs[targetIndex]
 
-      if (paragraph === undefined) {
+      if (target === undefined) {
         continue
       }
 
-      const paragraphStartRunIndex = paragraphIndex === startParagraphIndex ? startRunIndex : 0
-      const paragraphEndRunIndex = paragraphIndex === endParagraphIndex ? endRunIndex : paragraph.runs.length - 1
-
-      for (let runIndex = paragraphEndRunIndex; runIndex >= paragraphStartRunIndex; runIndex -= 1) {
-        const run = paragraph.runs[runIndex]
-
-        if (run === undefined) {
-          continue
-        }
-
-        const selectedStartGraphemeIndex = paragraphIndex === startParagraphIndex && runIndex === startRunIndex
-          ? range.start.graphemeIndex
-          : 0
-        const selectedEndGraphemeIndex = paragraphIndex === endParagraphIndex && runIndex === endRunIndex
-          ? range.end.graphemeIndex
-          : run.graphemeLength
-
-        if (selectedEndGraphemeIndex <= selectedStartGraphemeIndex) {
-          continue
-        }
-
+      if (this.readSingleImageResourceId(target.run) !== undefined) {
         operations.push({
-          kind: 'deleteRange',
-          range: {
-            anchor: {
-              sectionId: paragraph.sectionId,
-              blockId: paragraph.blockId,
-              runId: run.id,
-              graphemeIndex: selectedStartGraphemeIndex
-            },
-            focus: {
-              sectionId: paragraph.sectionId,
-              blockId: paragraph.blockId,
-              runId: run.id,
-              graphemeIndex: selectedEndGraphemeIndex
-            }
-          }
+          kind: 'deleteImage',
+          runId: target.run.id
         })
+        continue
       }
+
+      if (target.selectedEndGraphemeIndex <= target.selectedStartGraphemeIndex) {
+        continue
+      }
+
+      operations.push({
+        kind: 'deleteRange',
+        range: {
+          anchor: {
+            sectionId: range.start.sectionId,
+            blockId: target.paragraphId,
+            runId: target.run.id,
+            graphemeIndex: target.selectedStartGraphemeIndex
+          },
+          focus: {
+            sectionId: range.start.sectionId,
+            blockId: target.paragraphId,
+            runId: target.run.id,
+            graphemeIndex: target.selectedEndGraphemeIndex
+          }
+        }
+      })
+    }
+
+    for (const resourceId of this.collectFullyDeletedImageResourceIds(targets.runs)) {
+      operations.push({
+        kind: 'deleteResource',
+        resourceId
+      })
     }
 
     for (let paragraphIndex = endParagraphIndex; paragraphIndex > startParagraphIndex; paragraphIndex -= 1) {
@@ -293,6 +306,10 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
         targetBlockId: paragraphs[paragraphIndex - 1]!.blockId,
         sourceBlockId: paragraph.blockId
       })
+    }
+
+    if (operations.length === 0) {
+      return undefined
     }
 
     return {
@@ -372,10 +389,302 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
     this.setSelection(selection)
   }
 
+  /**
+   * 当前位置如果紧邻图片 run，则优先复用现有图片删除命令。
+   */
+  protected tryDeleteAdjacentImageFromRuntime(
+    position: TextPosition,
+    direction: 'backward' | 'forward'
+  ): boolean {
+    const paragraph = this.findProjectionParagraph(position.blockId)
+
+    if (paragraph === undefined) {
+      return false
+    }
+
+    const imageRun = this.resolveAdjacentImageRun(paragraph, position, direction)
+
+    if (imageRun === undefined) {
+      return false
+    }
+
+    const imageSelection = createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: position.sectionId,
+        blockId: position.blockId,
+        runId: imageRun.id,
+        graphemeIndex: 0
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: position.sectionId,
+        blockId: position.blockId,
+        runId: imageRun.id,
+        graphemeIndex: 0
+      })
+    )
+    const command = buildDeleteSelectedImageCommand(this.currentProjection, imageSelection)
+
+    if (command === null) {
+      return false
+    }
+
+    const selectionAfter = createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...position
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...position
+      })
+    )
+
+    this.executeCommand(command, { selectionAfter })
+
+    return true
+  }
+
+  /**
+   * 把当前光标边界解析成“可直接删除的相邻图片 run”。
+   */
+  protected resolveAdjacentImageRun(
+    paragraph: Paragraph,
+    position: TextPosition,
+    direction: 'backward' | 'forward'
+  ): Run | undefined {
+    const runIndex = paragraph.runs.findIndex((candidate) => candidate.id === position.runId)
+
+    if (runIndex < 0) {
+      return undefined
+    }
+
+    const currentRun = paragraph.runs[runIndex]
+
+    if (currentRun === undefined) {
+      return undefined
+    }
+
+    const currentRunLength = this.readProjectionRunGraphemeLength(currentRun)
+
+    if (direction === 'backward') {
+      if (
+        position.assoc !== undefined
+        && position.assoc < 0
+        && position.graphemeIndex === currentRunLength
+      ) {
+        return this.findAdjacentImageRunThroughEmptyText(paragraph.runs, runIndex + 1, 1)
+      }
+
+      if (position.graphemeIndex === 0) {
+        return this.findAdjacentImageRunThroughEmptyText(paragraph.runs, runIndex - 1, -1)
+      }
+
+      return undefined
+    }
+
+    if (position.graphemeIndex !== currentRunLength) {
+      return undefined
+    }
+
+    return this.findAdjacentImageRunThroughEmptyText(paragraph.runs, runIndex + 1, 1)
+  }
+
+  /**
+   * 连续图片之间可能夹着多个空文本尾 run，这里要跨过去找到真正可删的图片。
+   */
+  protected findAdjacentImageRunThroughEmptyText(
+    runs: readonly Run[],
+    startIndex: number,
+    step: -1 | 1
+  ): Run | undefined {
+    for (let index = startIndex; index >= 0 && index < runs.length; index += step) {
+      const run = runs[index]
+
+      if (this.isSingleImageRun(run)) {
+        return run
+      }
+
+      if (!this.isEmptyTextRun(run)) {
+        return undefined
+      }
+    }
+
+    return undefined
+  }
+
+  /**
+   * 只把“单一 image inline 的 run”视为第一版图片目标。
+   */
+  protected isSingleImageRun(run: Run | undefined): run is Run {
+    return run?.inlines.length === 1 && run.inlines[0]?.kind === 'image'
+  }
+
+  /**
+   * 多图连续插入后，空文本尾 run 只是 caret 占位，不应阻断继续删图。
+   */
+  protected isEmptyTextRun(run: Run | undefined): boolean {
+    return run !== undefined
+      && run.inlines.every((inline) => inline.kind === 'text')
+      && this.readProjectionRunText(run).length === 0
+  }
+
+  /**
+   * 读取 projection run 里的纯文本内容。
+   */
+  protected readProjectionRunText(run: Run): string {
+    return run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')
+  }
+
+  /**
+   * 读取 projection run 的 grapheme 长度，避免把图片 run 误判成可删文本。
+   */
+  protected readProjectionRunGraphemeLength(run: Run): number {
+    return countGraphemes(this.readProjectionRunText(run))
+  }
+
+  /**
+   * 从当前只读 projection 里找到目标段落，兼容未来表格单元格内图片。
+   */
+  protected findProjectionParagraph(blockId: string): Paragraph | undefined {
+    for (const section of this.currentProjection.document.sections) {
+      const paragraph = this.findProjectionParagraphInBlocks(section.blocks, blockId)
+
+      if (paragraph !== undefined) {
+        return paragraph
+      }
+    }
+
+    return undefined
+  }
+
+  /**
+   * 递归遍历块树，返回匹配 blockId 的段落。
+   */
+  protected findProjectionParagraphInBlocks(
+    blocks: readonly import('../model/types').Block[],
+    blockId: string
+  ): Paragraph | undefined {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph' && block.id === blockId) {
+        return block
+      }
+
+      if (block.kind === 'table') {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            const paragraph = this.findProjectionParagraphInBlocks(cell.blocks, blockId)
+
+            if (paragraph !== undefined) {
+              return paragraph
+            }
+          }
+        }
+      }
+    }
+
+    return undefined
+  }
+
+  /**
+   * 选区一次删掉多张图片时，只有资源在文档内不再被任何图片引用时才清理资源表。
+   */
+  protected collectFullyDeletedImageResourceIds(
+    runs: readonly Readonly<{
+      run: Run
+    }>[]
+  ): readonly string[] {
+    const selectedCounts = new Map<string, number>()
+
+    for (const target of runs) {
+      const resourceId = this.readSingleImageResourceId(target.run)
+
+      if (resourceId === undefined) {
+        continue
+      }
+
+      selectedCounts.set(resourceId, (selectedCounts.get(resourceId) ?? 0) + 1)
+    }
+
+    const resourceIds: string[] = []
+
+    for (const [resourceId, selectedCount] of selectedCounts) {
+      if (this.countImageResourceReferences(resourceId) <= selectedCount) {
+        resourceIds.push(resourceId)
+      }
+    }
+
+    return Object.freeze(resourceIds)
+  }
+
+  /**
+   * 统计当前 projection 里某个图片资源还被多少 image inline 引用。
+   */
+  protected countImageResourceReferences(resourceId: string): number {
+    let count = 0
+
+    for (const section of this.currentProjection.document.sections) {
+      count += this.countImageResourceReferencesInBlocks(section.blocks, resourceId)
+    }
+
+    return count
+  }
+
+  /**
+   * 递归统计段落/表格内的图片资源引用数。
+   */
+  protected countImageResourceReferencesInBlocks(
+    blocks: readonly import('../model/types').Block[],
+    resourceId: string
+  ): number {
+    let count = 0
+
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        for (const run of block.runs) {
+          const imageResourceId = this.readSingleImageResourceId(run)
+
+          if (imageResourceId === resourceId) {
+            count += 1
+          }
+        }
+
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          count += this.countImageResourceReferencesInBlocks(cell.blocks, resourceId)
+        }
+      }
+    }
+
+    return count
+  }
+
+  /**
+   * 只在第一版单图片 run 上读取资源 id，避免把普通文本 run 混进图片删除计划。
+   */
+  protected readSingleImageResourceId(run: Run | undefined): string | undefined {
+    if (run === undefined || run.inlines.length !== 1) {
+      return undefined
+    }
+
+    const inline = run.inlines[0]
+
+    return inline?.kind === 'image' ? inline.resourceId : undefined
+  }
+
   protected deleteBackwardFromRuntime(): void {
     const selection = this.currentSelection
 
-    if (selection === null || !isSelectionCollapsed(selection)) {
+    if (selection === null) {
+      return
+    }
+
+    if (!isSelectionCollapsed(selection)) {
+      this.deleteSelectedTextFromRuntime()
       return
     }
 
@@ -384,6 +693,10 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
     const paragraph = paragraphs.find((candidate) => candidate.blockId === position.blockId)
 
     if (paragraph === undefined) {
+      return
+    }
+
+    if (this.tryDeleteAdjacentImageFromRuntime(position, 'backward')) {
       return
     }
 
@@ -421,6 +734,10 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
         },
         { selectionAfter }
       )
+      return
+    }
+
+    if (this.tryDeleteAcrossRunTextFromRuntime(position, 'backward')) {
       return
     }
 
@@ -516,7 +833,12 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
   protected deleteForwardFromRuntime(): void {
     const selection = this.currentSelection
 
-    if (selection === null || !isSelectionCollapsed(selection)) {
+    if (selection === null) {
+      return
+    }
+
+    if (!isSelectionCollapsed(selection)) {
+      this.deleteSelectedTextFromRuntime()
       return
     }
 
@@ -531,6 +853,10 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
     const currentRun = paragraph.runs.find((candidate) => candidate.id === position.runId)
 
     if (currentRun === undefined) {
+      return
+    }
+
+    if (this.tryDeleteAdjacentImageFromRuntime(position, 'forward')) {
       return
     }
 
@@ -562,6 +888,10 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
         },
         { selectionAfter }
       )
+      return
+    }
+
+    if (this.tryDeleteAcrossRunTextFromRuntime(position, 'forward')) {
       return
     }
 
@@ -649,6 +979,110 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
       runId: paragraph.runs[0]!.id,
       graphemeIndex: 0
     }
+  }
+
+  /**
+   * 光标卡在 run 边界时，继续跨过空文本占位 run，删除真正相邻的文本字符。
+   */
+  protected tryDeleteAcrossRunTextFromRuntime(
+    position: TextPosition,
+    direction: 'backward' | 'forward'
+  ): boolean {
+    const paragraph = this.findProjectionParagraph(position.blockId)
+
+    if (paragraph === undefined) {
+      return false
+    }
+
+    const runIndex = paragraph.runs.findIndex((candidate) => candidate.id === position.runId)
+
+    if (runIndex < 0) {
+      return false
+    }
+
+    const startIndex = direction === 'backward' ? runIndex - 1 : runIndex + 1
+    const step = direction === 'backward' ? -1 : 1
+
+    for (let index = startIndex; index >= 0 && index < paragraph.runs.length; index += step) {
+      const run = paragraph.runs[index]
+
+      if (run === undefined) {
+        continue
+      }
+
+      if (this.readSingleImageResourceId(run) !== undefined) {
+        return false
+      }
+
+      if (this.isEmptyTextRun(run)) {
+        continue
+      }
+
+      const graphemeLength = this.readProjectionRunGraphemeLength(run)
+
+      if (graphemeLength <= 0) {
+        continue
+      }
+
+      const anchor = direction === 'backward'
+        ? {
+            sectionId: position.sectionId,
+            blockId: position.blockId,
+            runId: run.id,
+            graphemeIndex: graphemeLength - 1
+          }
+        : {
+            sectionId: position.sectionId,
+            blockId: position.blockId,
+            runId: run.id,
+            graphemeIndex: 0
+          }
+      const focus = direction === 'backward'
+        ? {
+            sectionId: position.sectionId,
+            blockId: position.blockId,
+            runId: run.id,
+            graphemeIndex: graphemeLength
+          }
+        : {
+            sectionId: position.sectionId,
+            blockId: position.blockId,
+            runId: run.id,
+            graphemeIndex: 1
+          }
+      const selectionAfterPosition = direction === 'backward'
+        ? anchor
+        : position
+
+      this.executeCommand(
+        {
+          name: direction === 'backward' ? 'deleteBackward' : 'deleteForward',
+          operations: [{
+            kind: 'deleteRange',
+            range: {
+              anchor,
+              focus
+            }
+          }]
+        },
+        {
+          selectionAfter: createSelectionState(
+            createRuntimeAnchor({
+              documentId: this.currentProjection.document.id,
+              ...selectionAfterPosition
+            }),
+            createRuntimeAnchor({
+              documentId: this.currentProjection.document.id,
+              ...selectionAfterPosition
+            })
+          )
+        }
+      )
+
+      return true
+    }
+
+    return false
   }
 
   protected splitParagraphFromRuntime(): void {

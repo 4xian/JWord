@@ -165,6 +165,49 @@ describe('renderPageCanvas', () => {
     expect(canvas.width).toBeLessThanOrEqual(4096)
     expect(canvas.height).toBeLessThanOrEqual(4096)
   })
+
+  it('draws image placeholders from inline object geometry and resource status', () => {
+    const canvas = createMockCanvas()
+    const page = createImagePageLayout(0) satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page
+    })
+
+    expect(canvas.calls).toContain('fillStyle:#eff6ff')
+    expect(canvas.calls).toContain('fillRect:72,96,48,32')
+    expect(canvas.calls).toContain('font:12px sans-serif')
+    expect(canvas.calls).toContain('fillText:Image ready,82,116')
+    expect(canvas.calls).toContain('fillRect:108,116,8,8')
+    expect(canvas.calls.indexOf('fillText:Image ready,82,116')).toBeLessThan(
+      canvas.calls.indexOf('fillRect:108,116,8,8')
+    )
+  })
+
+  it('draws decoded image content when success resource resolver returns ready image', () => {
+    const canvas = createMockCanvas()
+    const page = createImagePageLayout(0) satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page,
+      imageResourceResolver: {
+        resolve: () => ({
+          status: 'ready',
+          image: {
+            source: 'decoded-image',
+            width: 48,
+            height: 32
+          }
+        }),
+        dispose: () => {}
+      }
+    })
+
+    expect(canvas.calls).toContain('drawImage:decoded-image,72,96,48,32')
+    expect(canvas.calls).not.toContain('fillText:Image ready,82,116')
+  })
 })
 
 describe('syncPageCanvases', () => {
@@ -228,7 +271,7 @@ interface MockCanvas extends CanvasLike {
 
 function createMockCanvas(): MockCanvas {
   const calls: string[] = []
-  const context: CanvasRenderingContextLike = {
+  const context = {
     set fillStyle(value: string) {
       calls.push(`fillStyle:${value}`)
     },
@@ -249,7 +292,12 @@ function createMockCanvas(): MockCanvas {
     },
     fillText: (text, x, y) => {
       calls.push(`fillText:${text},${x},${y}`)
+    },
+    drawImage: (image, x, y, width, height) => {
+      calls.push(`drawImage:${String(image)},${x},${y},${width},${height}`)
     }
+  } satisfies CanvasRenderingContextLike & {
+    drawImage(image: unknown, x: number, y: number, width: number, height: number): void
   }
 
   return {
@@ -331,6 +379,78 @@ function createPageLayout(
               graphemeIndex: text.length
             },
             advanceTwips: [0, cssPxToTwips(120)]
+          }
+        ]
+      }
+    ],
+    paragraphs: [],
+    blocks: [],
+    contentRect: {
+      pageIndex,
+      x: cssPxToTwips(72),
+      y: lineTop,
+      width: cssPxToTwips(456),
+      height: cssPxToTwips(620)
+    }
+  }
+}
+
+function createImagePageLayout(pageIndex: number): LayoutBox {
+  const pageTop = cssPxToTwips(pageIndex * 820)
+  const lineTop = pageTop + cssPxToTwips(96)
+
+  return {
+    kind: 'page',
+    pageIndex,
+    x: 0,
+    y: pageTop,
+    width: cssPxToTwips(600),
+    height: cssPxToTwips(800),
+    sectionBoundary: 'single',
+    sectionIds: ['section-render'],
+    sectionId: 'section-render',
+    headerIds: [],
+    footerIds: [],
+    lines: [
+      {
+        kind: 'line',
+        pageIndex,
+        sectionId: 'section-render',
+        paragraphId: 'paragraph-render',
+        x: cssPxToTwips(72),
+        y: lineTop,
+        width: cssPxToTwips(456),
+        height: cssPxToTwips(32),
+        baseline: pageTop + cssPxToTwips(118),
+        fragments: [],
+        inlines: [
+          {
+            kind: 'inlineObject',
+            inlineKind: 'image',
+            pageIndex,
+            sectionId: 'section-render',
+            blockId: 'paragraph-render',
+            runId: 'run-image',
+            at: {
+              sectionId: 'section-render',
+              blockId: 'paragraph-render',
+              runId: 'run-image',
+              graphemeIndex: 0
+            },
+            x: cssPxToTwips(72),
+            y: lineTop,
+            width: cssPxToTwips(48),
+            height: cssPxToTwips(32),
+            payload: {
+              resourceId: 'image-1',
+              alt: '占位图',
+              widthTwips: cssPxToTwips(48),
+              heightTwips: cssPxToTwips(32),
+              resourceStatus: 'success',
+              resourceMime: 'image/png',
+              resourceSourceKind: 'dataUrl',
+              resourceSourceUrl: 'data:image/png;base64,AAAA'
+            }
           }
         ]
       }

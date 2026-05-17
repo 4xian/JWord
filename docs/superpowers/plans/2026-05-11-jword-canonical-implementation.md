@@ -237,6 +237,13 @@
   - 回写 2026-05-15：`packages/core/src/editor.ts` 与 `packages/core/src/layout.ts` 已将大夹具 pointer 交互从同步整页 selection/render 热路径中拆出一层缓存与延后 finalize，`examples/vanilla/tests/gate3-input.e2e.ts` 的 Chromium 大夹具拖拽/双击真实回归现已通过；但这只说明 Alpha 交互卡死缺陷已修复，不等同于 `输入热路径 P95 < 50ms` 或 `INP P95 < 150ms` 已达标，因此此步骤继续保持未完成。
   - 回写 2026-05-15：当前 `gate3.perf.e2e.ts` 只证明 Chromium 下已建立端到端 perf 护栏，可用于阻止明显回退；它不是 Alpha 性能完成证明，因此 Gate 4 可继续推进，但 Alpha 发布条件仍保持未完成。
 
+### Gate 3 补充收尾（不阻塞 Gate 4 主线）
+
+- [ ] Step 3.14：补齐 run format v1：上标、下标；要求 command、toolbar 状态、undo/redo 与 projection 落地一致。
+- [ ] Step 3.15：补齐 paragraph format v1：行距、段前、段后、首行缩进、悬挂缩进；要求 command -> projection -> layout -> toolbar 状态闭环。
+- [ ] Step 3.16：补齐 structure/style baseline：有序列表、无序列表、基础多级列表、Heading 1-3；目录与 docx numbering/outline 后续只消费这套稳定语义，不直接从纯文本猜测结构。
+- [ ] 补充说明：以上三项不回滚 Gate 4 准入结论，但在 Gate 4 `Step 4.11` 目录闭环和 Gate 5 docx T1 列表/标题 fixture 进入稳定验证前应完成。
+
 ### 验收
 
 - [ ] macOS 和 Windows 中文输入可用。
@@ -245,6 +252,9 @@
 - [x] 输入、删除、回车、方向键、选择、复制粘贴可用。
 - [x] 加粗、斜体、下划线、删除线、字体、字号、颜色、对齐、缩进可用。
   - 复核 2026-05-15：三浏览器 toolbar E2E 已覆盖剩余 run/paragraph 格式矩阵，避免只靠 selector 存在或单一 bold case 判断“可用”。
+- [ ] 上标、下标可用。
+- [ ] 行距、段前段后、首行缩进、悬挂缩进可用。
+- [ ] 有序/无序/基础多级列表与 Heading 1-3 可用。
 - [x] undo/redo 覆盖基础编辑和格式。
 - [x] 1-2 万字文档基础编辑链路可用。
   - 回写 2026-05-15：当前说明的是 50 页大夹具上的输入、选择、撤销重做与 toolbar 闭环可运行，不等同于已达到 Alpha 性能门槛；性能是否达标仍以 Step 3.13 与 Alpha 完成区指标为准。
@@ -295,50 +305,88 @@
 
 #### Iteration 0 - 冻结 Gate 4 起跑线
 
-- [ ] 建立 Gate 4 fixture 清单：`image-inline`、`image-block`、`table-basic`、`comment-thread`、`link-basic`、`find-replace`、`header-footer`、`paste-html`、`mobile-readonly`。
-- [ ] 明确每类 fixture 的最小可观察契约：anchor、selection、history、render、error recovery。
-- [ ] 为 Gate 4 新增目录预留明确落点，但不预创建空壳模块：
+- [x] 建立 Gate 4 fixture 清单：`image-inline`、`image-block`、`table-basic`、`comment-thread`、`link-basic`、`find-replace`、`header-footer`、`paste-html`、`mobile-readonly`。
+  - 完成 2026-05-17：已新增 `fixtures/gate4/README.md`，把 Gate 4 fixture registry 固定为可复查清单，并补入首个图片 smoke 资产 `fixtures/gate4/media-inline.svg`。
+- [x] 明确每类 fixture 的最小可观察契约：anchor、selection、history、render、error recovery。
+  - 完成 2026-05-17：`fixtures/gate4/README.md` 已逐项写明五类最小可观察契约，避免后续图片、表格、批注各自定义一套验收口径。
+- [x] 为 Gate 4 新增目录预留明确落点，但不预创建空壳模块：
   - `packages/ui/src/media/`
   - `packages/ui/src/table/`
   - `packages/ui/src/comments/`
   - `packages/ui/src/link/`
   - `packages/ui/src/find/`
   - `packages/ui/src/header-footer/`
-- [ ] 约束新能力分层：
+- [x] 约束新能力分层：
   - `core` 负责 model / operation / layout / render / command / history
   - `ui` 负责 panel / dialog / sidebar / toolbar entry / upload state
   - `examples/vanilla` 只负责装配、fixture 切换和测试钩子
+  - 完成 2026-05-17：当前分层规则已同时落到 `fixtures/gate4/README.md` 与 `examples/vanilla/README.md`，并纠正了 vanilla demo 仍停留在 Gate 0 空壳描述的过期文档。
 
 #### Iteration 1 - 图片纵线（Step 4.1-4.3）
 
-- [ ] 定义资源表与 `ResourceAdapter` 公开边界：
+- [x] 定义资源表与 `ResourceAdapter` 公开边界：
   - 资源 id、mime、source、status、error、retry token
   - 上传、替换、删除、失败恢复、取消、进度事件
   - 白名单 URL / protocol 策略
+  - 完成 2026-05-17：`packages/core/src/resources/types.ts`、`packages/core/src/index.ts` 与 `packages/ui/src/types.ts` 已把资源快照、`previousResource` / `retryToken`、`signal` / `onProgress` 和 URL allowlist 边界固定成公开接口；`packages/core/test/model/projection.test.ts`、`packages/core/test/operations/image-command-builders.test.ts`、`packages/ui/test/media-state.test.ts` 已覆盖资源投影、allowlist 与 retry token 语义。
 - [ ] 为图片补 fixture 与错误场景：
   - inline image
   - block image
   - upload pending / success / failed
   - replace resource
-- [ ] 实现 inline image / block image 的 model、projection、selection target、anchor 映射。
-- [ ] 实现图片 operation：
+  - 回写 2026-05-17：`fixtures/gate4/README.md` 与 `fixtures/gate4/media-inline.svg` 已建立图片 registry 和最小 smoke 资产，demo adapter / browser case 也覆盖了 pending、success、failed 意图；但还没有独立的 `replace resource` fixture，块级图片也仍复用同一图片资产，因此先保留未完成。
+- [x] 实现 inline image / block image 的 model、projection、selection target、anchor 映射。
+  - 完成 2026-05-17：`packages/core/src/model/projection.ts`、`packages/core/src/model/image-target.ts`、`packages/core/src/operations/command-builders.ts` 已把 inline / block image 接到 projection、selected target 和稳定 anchor 上；`packages/core/test/model/projection.test.ts`、`packages/core/test/operations/image-command-builders.test.ts`、`packages/core/test/layout/query.test.ts` 已验证图片 run 投影、折叠选区命中图片 target，以及 page-local hit-test 回到对应图片 run。
+- [x] 实现图片 operation：
   - 插入 inline image
   - 插入 block image
   - 替换资源
   - 删除图片
   - resize
-- [ ] 实现图片 layout / render：
+  - 完成 2026-05-17：`packages/core/test/operations/image-command-builders.test.ts` 已补成执行级闭环，`inline image insert`、`block image insert`、`replace selected image resource`、`resize selected image`、`delete selected image` 现都通过 `editor.executeCommand(...)` 后验 `projection`；为支撑块级插入，`packages/core/src/operations/operation-adapter.ts` 还修正了 `insertBlockImage` 先挂载段落再写 runs 的容器时序问题。
+- [x] 实现图片 layout / render：
   - 占位态
   - 成功态
   - 失败态
   - resize handle
   - page-local hit-test
-- [ ] 在 `packages/ui/src/media/` 实现图片插入 UI：
+  - 完成 2026-05-17：`packages/core/src/layout/internal.ts`、`packages/core/src/layout/engine.ts`、`packages/core/src/layout/query.ts`、`packages/core/src/canvas/renderer.ts` 已支持图片 payload、pending / success / failed 占位绘制和 page-local hit-test；当前又补上了右下角 resize handle 视觉提示，失败态 detail 也会优先显示 `resourceErrorMessage`。相关验证见 `packages/core/test/layout/query.test.ts`、`packages/core/test/canvas/renderer.test.ts` 与真实浏览器 smoke。
+  - 回写 2026-05-17：`packages/core/src/resources/canvas-image-resolver.ts`、`packages/core/src/editor/facade-runtime.ts`、`packages/core/src/editor/layout-runtime.ts`、`packages/core/src/editor/mounted-runtime.ts` 与 `packages/core/src/canvas/renderer.ts` 现已补上 mounted 浏览器路径下的真实图片解码与 `drawImage(...)` 渲染；`success` 态不再只画 placeholder，而是在解码成功后真正绘制 bitmap，解码前保留 placeholder，解码失败回退 failed placeholder。`examples/vanilla/tests/gate4-media.e2e.ts` 也新增了 page canvas 像素采样，明确区分真实 fixture 像素与 success placeholder 浅蓝底框。
+- [x] 在 `packages/ui/src/media/` 实现图片插入 UI：
   - 上传入口
   - 进度态
   - 失败重试
   - 恢复提示
-- [ ] 为图片纵线补齐单测、layout/render 测试、Chromium E2E，再补三浏览器 focused smoke。
+  - 完成 2026-05-17：`packages/ui/src/media/` 下的 controller / dom / state / policy / core-command-adapter 与 `packages/ui/src/styles/toolbar.css` 已落地；`examples/vanilla/tests/gate4-media.e2e.ts` 现已在 Chromium / Firefox / WebKit 通过，成功态进入 `applied`，失败后 retry 也能回到 `applied`，因此图片插入 UI 最小闭环已经闭合。
+- [x] 为图片纵线补齐单测、layout/render 测试、Chromium E2E，再补三浏览器 focused smoke。
+  - 完成 2026-05-17：`pnpm vitest run packages/core/test/operations/image-command-builders.test.ts packages/core/test/model/projection.test.ts packages/core/test/layout/query.test.ts packages/core/test/canvas/renderer.test.ts packages/ui/test/media-state.test.ts` 已通过（5 files / 28 tests）；`pnpm playwright test examples/vanilla/tests/gate4-media.e2e.ts --project=chromium --project=firefox --project=webkit` 已通过（6 tests）；主进程随后复核 `pnpm typecheck`、`pnpm build`、`pnpm test`（`33 files / 206 tests passed`）以及 Chromium 下的 `gate3-input.e2e.ts`、`gate3-toolbar.e2e.ts` 回归，确认真实图片渲染没有带坏既有 Gate 3 输入与工具栏路径。
+
+##### Iteration 1 后续收尾（最新 UI 问题）
+
+- `docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md` 仅作为辅助参考，不作为主计划；Gate 4 主计划仍以本文件为准。
+- [ ] 收口选区浮动工具栏、右键菜单、失焦消失的联动行为：
+  - 实现子项：
+    - 浮动工具栏只在有效选区存在且编辑器保持聚焦时显示
+    - 右键菜单只绑定当前稳定选区，不沿用旧选区状态
+    - 编辑器失焦后，浮动工具栏和右键菜单都要收起
+  - 验收子项：
+    - 真实浏览器里覆盖“选区出现 -> 打开工具栏 -> 右键 -> 点击编辑器外部失焦”四条路径
+    - 验证浮动工具栏、右键菜单的显示与隐藏一致
+    - 验证失焦后两者都立即收起，不残留旧状态
+- [ ] 收口图片原始尺寸、6 点缩放、顶部工具栏、旋转、拖拽鬼影的交互行为：
+  - 实现子项：
+    - 图片默认按原始尺寸进入文档视图
+    - 缩放手柄固定为 6 点位
+    - 顶部工具栏保留图片操作入口，并从这里触发旋转
+    - 拖拽时保留鬼影反馈，不直接破坏原图定位
+  - 验收子项：
+    - 真实浏览器里覆盖原始尺寸、6 点缩放、顶部工具栏、旋转、拖拽鬼影五条路径
+    - 验证图片进入视图后的默认尺寸就是原始尺寸
+    - 验证缩放、旋转、拖拽时的视觉反馈与状态同步一致
+- [ ] 收尾现有图片路径的真实 bug：
+  - 这一项只在计划里标记为待修复 / 待验收，不在本轮展开代码细节
+  - 以现有图片路径修复闭环为完成条件，修复后再回填实现与验证记录
+  - 验收：真实浏览器复测现有图片路径，不再出现已知 bug 的回退表现
 
 #### Iteration 2 - 表格纵线（Step 4.4-4.7）
 
@@ -382,13 +430,14 @@
 
 #### Iteration 4 - 结构、检索与企业文档补全（Step 4.11-4.16）
 
-- [ ] 实现标题结构与基础目录生成，目录项点击跳转到稳定 anchor。
+- [ ] 基于稳定 heading 语义实现标题结构与基础目录生成，目录项点击跳转到稳定 anchor。
+- [ ] 若 Gate 3 `Step 3.16` 的 Heading baseline 仍未闭环，先补 heading source 与 toolbar/command 入口，再接目录 block，禁止目录阶段临时扫描纯文本猜测标题层级。
 - [ ] 实现查找替换：
   - 结果位置使用 `RangeRef`
   - 替换操作走 transaction pipeline
   - 不允许直接改 projection
-- [ ] 实现页眉页脚与页码基础能力，要求 layout 结果可被后续 PDF/docx 复用。
-- [ ] 实现修订 metadata v1：记录插入、删除、格式变更。
+- [ ] 实现分节模型、分节符、页眉页脚与页码基础能力，要求支持最小 section-aware 分页：`next-page` / `continuous` 分节、`same as previous`、页码 `restart` / `continue`，并确保 layout 结果可被后续 PDF/docx 复用。
+- [ ] 实现修订 metadata 与最小 markup v1：记录插入、删除、格式变更，并提供文内或侧栏可见化；接受/拒绝深度流程保留到 post-1.0。
 - [ ] 实现 DOMPurify 保格式粘贴 v1：
   - 覆盖 Word HTML 常见片段
   - 保留安全降级到纯文本能力
@@ -425,9 +474,9 @@
 
 ### 待办步骤
 
-- [ ] Step 4.1：实现资源表和 ResourceAdapter，定义图片上传、替换、失败恢复、白名单 URL 策略。
-- [ ] Step 4.2：实现 inline image 和 block image 的 model、operation、layout、render、resize handle。
-- [ ] Step 4.3：实现图片插入 UI 和上传状态 UI，失败时保留用户可恢复状态。
+- [x] Step 4.1：实现资源表和 ResourceAdapter，定义图片上传、替换、失败恢复、白名单 URL 策略。
+- [x] Step 4.2：实现 inline image 和 block image 的 model、operation、layout、render、resize handle。
+- [x] Step 4.3：实现图片插入 UI 和上传状态 UI，失败时保留用户可恢复状态。
 - [ ] Step 4.4：实现简单表格 model：table、row、cell、grid、border、cell props、cell text content。
 - [ ] Step 4.5：实现表格 operation：插入表格、插入/删除行列、合并单元格、更新边框、单元格文本编辑。
 - [ ] Step 4.6：实现表格 layout/render，支持跨页基础策略和 cell 内 hit-test。
@@ -435,10 +484,10 @@
 - [ ] Step 4.8：实现批注 model 和 operation：添加、回复、解决、重新打开、删除、定位。
 - [ ] Step 4.9：实现批注侧边栏，批注 anchor 随文本编辑稳定移动。
 - [ ] Step 4.10：实现超链接 model、protocol allowlist、编辑弹窗、打开行为。
-- [ ] Step 4.11：实现标题结构和基础目录生成，目录点击能跳转到对应 anchor。
+- [ ] Step 4.11：基于稳定 heading 语义实现标题结构和基础目录生成，目录点击能跳转到对应 anchor。
 - [ ] Step 4.12：实现查找替换，结果位置使用 RangeRef，替换操作走 transaction pipeline。
-- [ ] Step 4.13：实现页眉页脚和页码基础能力，排版结果可被 PDF/docx 后续复用。
-- [ ] Step 4.14：实现修订 metadata 第一版，记录插入、删除、格式变更；接受/拒绝深度流程保留到 post-1.0。
+- [ ] Step 4.13：实现分节模型、分节符、页眉页脚和页码基础能力，支持最小 `same as previous` 与页码 `restart` / `continue` 规则，排版结果可被 PDF/docx 后续复用。
+- [ ] Step 4.14：实现修订 metadata 与最小 markup 第一版，记录插入、删除、格式变更并提供可见化；接受/拒绝深度流程保留到 post-1.0。
 - [ ] Step 4.15：实现 DOMPurify 保格式粘贴 v1，覆盖 Word HTML 常见片段并保留安全降级到纯文本能力。
 - [ ] Step 4.16：实现移动 Web 只读分页预览，不支持完整移动编辑。
 - [ ] Step 4.17：完善 Beta 前半段 E2E 和视觉回归：表格、图片、批注、目录、页眉页脚、移动预览。
@@ -450,6 +499,7 @@
 - [ ] 批注 anchor 在文本编辑后仍定位正确。
 - [ ] 查找替换不会绕过 transaction pipeline。
 - [ ] 页眉页脚和页码参与分页布局。
+- [ ] 修订插入、删除、格式变更至少可查看、可定位、可解释。
 - [ ] 粘贴 HTML 不产生 XSS。
 - [ ] 移动端只读分页预览可阅读。
 
@@ -468,6 +518,98 @@
 ### 实现方案
 
 互通能力独立包、独立 worker、lazy load。docx 主路径为 JSZip + DOMParser/XMLSerializer + 自研 OOXML mapping。PDF 主路径为 LayoutBox -> PDF，不使用浏览器打印作为主导出方案。
+
+### 当前基线（2026-05-17）
+
+- [x] Gate 4 已验证首个图片纵线闭环，证明 `core -> ui -> host app -> browser` 的交付方式可继续复用到互通层。
+- [x] 当前 repo 已正式落地 `packages/core`、`packages/ui` 与 `examples/vanilla`；`packages/docx`、`packages/pdf`、`examples/docx` 尚未创建，符合“不写无法验证空包”的约束。
+- [x] canonical model、projection 与 LayoutBox 边界已经存在，docx import/export 与 PDF 导出都应复用这套只读/可写中介，不重新引入第二套状态模型。
+- [ ] 当前仍没有 docx/PDF worker、fixture diff、兼容矩阵、字体配置和截图对比的可执行证据。
+
+### 推荐执行顺序
+
+1. 先冻结 Gate 5 fixture registry、worker message contract 和目录落点，再启动任一互通包。
+2. 先做 docx import foundation `Step 5.1 -> 5.7`，因为 export 与 PDF 都必须建立在同一 canonical model 上。
+3. 再做 docx export 与人工兼容矩阵 `Step 5.8 -> 5.10`，避免只在导入侧闭环。
+4. 随后做 PDF 主路径 `Step 5.11 -> 5.14`，直接复用 LayoutBox，不允许并行长出第二套排版。
+5. 最后收 T2 fixture、benchmark 与 lazy-load 验证 `Step 5.15 -> 5.16`。
+
+### 迭代任务清单
+
+#### Iteration 0 - 冻结 Gate 5 起跑线
+
+- [ ] 建立 Gate 5 fixture registry：
+  - `docx-t1-paragraphs`
+  - `docx-t1-run-styles`
+  - `docx-t1-lists`
+  - `docx-t1-table-basic`
+  - `docx-t1-inline-image`
+  - `pdf-basic-text`
+  - `pdf-chinese-font`
+  - `pdf-missing-font`
+  - `docx-t2-header-footer`
+  - `docx-t2-comments-links`
+- [ ] 为 Gate 5 明确目录落点，但不预创建空壳包：
+  - `packages/docx/src/`
+  - `packages/pdf/src/`
+  - `fixtures/docx/`
+  - `fixtures/pdf/`
+  - `examples/docx/`
+- [ ] 冻结互通分层：
+  - `core` 只提供 canonical model / projection / LayoutBox / command 接入点
+  - `docx` 负责 OOXML parsing / mapping / export / fixture diff
+  - `pdf` 负责 LayoutBox -> PDF 与字体配置
+  - `examples` 只负责 host 装配、fixture 切换和人工检查入口
+
+#### Iteration 1 - worker bridge 与验证基座（Step 5.1 / 5.9 / 5.10）
+
+- [ ] 先定义 import/export worker message contract：
+  - `requestId`
+  - `progress`
+  - `warning`
+  - `result`
+  - `error`
+  - `cancel`
+- [ ] 建立 docx/PDF 统一 warning 结构，要求未知节点、缺字体、外链资源、安全降级都能被 host 看到。
+- [ ] 建立人工兼容检查模板：
+  - Word
+  - WPS
+  - LibreOffice
+  - 打开结果
+  - 视觉差异
+  - 阻断级问题
+
+#### Iteration 2 - docx import foundation（Step 5.2-5.7）
+
+- [ ] 实现 docx 解包与 manifest 校验，先识别 `document`、`styles`、`numbering`、`rels`、`media`。
+- [ ] 建立 style / numbering / relationship / media 索引，禁止把解析逻辑散落到多个入口。
+- [ ] 将 T1 import 统一落到 canonical model，再经 transaction pipeline 写入 Y.Doc，不允许直接替换内部状态。
+- [ ] 对未知 OOXML 节点、未知样式、外链图片和不支持对象产生明确 warning，不静默吞掉。
+
+#### Iteration 3 - docx export 与 roundtrip（Step 5.8-5.10）
+
+- [ ] 从 JWord canonical model 生成 T1 OOXML，先闭合段落、run 样式、列表、简单表格、inline 图片。
+- [ ] 建立导出后重新导入 roundtrip，对核心结构和样式映射做差异比对。
+- [ ] 建立 Word/WPS/LibreOffice 打开检查流程，输出可复查的人工记录，不用单一“兼容度百分比”。
+
+#### Iteration 4 - PDF 主路径（Step 5.11-5.14）
+
+- [ ] 实现 PDF worker 与字体配置 API，支持 `URL`、`File`、`ArrayBuffer`。
+- [ ] 实现 LayoutBox -> PDF：文本、图片、表格线、页眉页脚、页码按页输出。
+- [ ] 缺字体必须返回明确可恢复错误，禁止输出乱码 PDF。
+- [ ] 建立 PDF 截图对比流程，输出和 Canvas baseline 的可解释差异报告。
+
+#### Iteration 5 - T2 种子与 Gate 5 回归（Step 5.15-5.16）
+
+- [ ] 推进第一批 T2 fixture：
+  - 页眉页脚
+  - 分页符
+  - 超链接
+  - 批注
+  - 简单浮动对象
+- [ ] 未支持的 T2 能力必须输出明确 warning，不把缺失隐藏在 roundtrip 结果里。
+- [ ] 建立 import/export benchmark，按 fixture 大小、页数、图片数记录耗时和内存。
+- [ ] 验证 `docx` / `pdf` 走 lazy load，不进入首屏 bundle。
 
 ### 待办步骤
 
@@ -514,6 +656,78 @@
 
 协同不是后补功能，因为 Gate 1 已经以 Y.Doc 为真源。此阶段接入 provider、awareness、offline、snapshot 和 createInserter。重点验证 origin、undo scope、anchor 稳定和并发场景。
 
+### 当前基线（2026-05-17）
+
+- [x] Gate 1/3 已经把 Y.Doc 真源、transaction pipeline、origin 与 history metadata 落到本地单人路径；协同和自动插入只能在这条主干上继续扩展。
+- [x] 当前 repo 尚无 `packages/collab`、`packages/persistence`、`examples/collab`，符合“不写无法验证空包”的约束。
+- [ ] 当前仍没有 provider adapter、awareness、offline recovery、snapshot adapter、版本历史最小闭环和 `createInserter()` 的可执行证据。
+- [ ] remote / AI / local 三类写入的并发语义还没有被真实双窗口或断网场景验证。
+
+### 推荐执行顺序
+
+1. 先冻结 origin、undo scope、版本历史的语义边界，再接入任一 provider。
+2. 先做 provider demo 与 remote render path `Step 6.1 -> 6.4`，确保协同更新仍走同一 transaction trunk。
+3. 再做 offline、snapshot 与历史版本闭环 `Step 6.5 -> 6.6 -> 6.13`。
+4. 随后做 `createInserter()` 与 undo scope 策略 `Step 6.7 -> 6.9`。
+5. 最后做并发、断网恢复和失败诊断 `Step 6.10 -> 6.12`。
+
+### 迭代任务清单
+
+#### Iteration 0 - 冻结 Gate 6 语义边界
+
+- [ ] 冻结 origin matrix：
+  - `local-user`
+  - `remote-user`
+  - `auto-inserter`
+  - `system-recovery`
+- [ ] 冻结 undo scope 规则：
+  - 本地用户默认进入用户 undo
+  - remote 默认不进入用户 undo
+  - auto inserter 默认不进入用户 undo
+  - 可配置独立 undo scope
+- [ ] 为 Gate 6 明确目录落点，但不预创建空壳包：
+  - `packages/collab/src/`
+  - `packages/persistence/src/`
+  - `examples/collab/`
+- [ ] 冻结版本历史的最小可观察契约：版本列表、只读预览、恢复、失败诊断都必须基于 update log / snapshot，而不是 docx 覆盖真源。
+
+#### Iteration 1 - provider / awareness / remote render（Step 6.1-6.4）
+
+- [ ] 实现 collab provider adapter，让宿主负责 `roomId`、鉴权、生产存储与 reconnect 策略。
+- [ ] 实现 hocuspocus 示例服务和本地双窗口 demo，先证明 remote update 能进入 projection / layout / render。
+- [ ] 实现 awareness：在线用户、远端光标、远端选区，禁止额外保存第二份编辑状态。
+
+#### Iteration 2 - offline / snapshot / 版本历史（Step 6.5 / 6.6 / 6.13）
+
+- [ ] 接入 `y-indexeddb` 或等价离线恢复能力，断网编辑后可恢复并同步。
+- [ ] 定义 snapshot adapter：update log、snapshot 保存、snapshot 加载、版本列表。
+- [ ] 实现历史版本最小闭环：
+  - 版本列表
+  - 只读预览
+  - 恢复
+  - 恢复失败诊断
+
+#### Iteration 3 - auto inserter 主通道（Step 6.7-6.9）
+
+- [ ] 实现 `createInserter()` API，支持 stable anchor、throttle、flush、abort、progress、error。
+- [ ] 实现 auto inserter origin 策略，默认不进入用户 undo 栈。
+- [ ] 实现可配置 undo scope，允许 AI/程序化写入进入独立 undo scope。
+
+#### Iteration 4 - 并发矩阵（Step 6.10-6.11）
+
+- [ ] 建立 remote/local 并发测试：
+  - 双用户同段不同位置输入
+  - 双用户同位置输入
+  - 删除与格式化冲突
+  - 批注 anchor 远端编辑稳定
+- [ ] 建立 AI 自动插入与手动编辑并发测试，确认不重复、不丢失、不阻塞输入。
+
+#### Iteration 5 - 失败恢复与 Gate 6 回归（Step 6.12）
+
+- [ ] 建立断网恢复测试，失败时保留本地未同步变更并给出诊断事件。
+- [ ] 补齐 reconnect、版本恢复、auto inserter abort / retry 的 focused tests。
+- [ ] 验证协同、离线、版本历史、自动插入都没有绕开 `Editor` transaction。
+
 ### 待办步骤
 
 - [ ] Step 6.1：定义 collab provider adapter 接口，宿主负责 room id、auth、生产存储。
@@ -528,6 +742,7 @@
 - [ ] Step 6.10：实现并发测试：双用户同段输入、同位置输入、删除与格式化冲突、批注 anchor 远端编辑稳定。
 - [ ] Step 6.11：实现 AI 自动插入与用户手动编辑并发测试，确认不重复、不丢失、不阻塞输入。
 - [ ] Step 6.12：实现断网恢复测试，失败时保留本地未同步变更并给出诊断事件。
+- [ ] Step 6.13：实现历史版本最小闭环：版本列表、只读预览、恢复、失败诊断；基于 update log / snapshot，不以 docx 覆盖真源。
 
 ### 验收
 
@@ -537,6 +752,7 @@
 - [ ] AI 自动插入不阻塞本地输入。
 - [ ] 用户 undo 默认不撤销 remote/AI 内容。
 - [ ] 批注 anchor 在远端编辑后稳定。
+- [ ] 历史版本可查看、可恢复、可解释。
 
 ### 禁止事项
 
@@ -553,6 +769,71 @@
 ### 实现方案
 
 先冻结公开 API，再补 wrapper、plugin、theme/i18n、devtools、文档站、bundle size、发布 dry-run。任何公开 API 必须有类型、TSDoc、类型测试、示例和兼容策略。
+
+### 当前基线（2026-05-17）
+
+- [x] `packages/ui` 与 `examples/vanilla` 已形成当前 SDK 宿主基线；后续 wrapper、plugin、文档站都应以这条集成路径为对照，而不是回塞 demo 主文件。
+- [x] 当前 repo 仍只有 `core` / `ui` 两个正式包；`react` / `vue` / `devtools` 及相关 examples 尚未落地，符合“不写无法验证空包”的约束。
+- [ ] 公开 API、TSDoc、类型测试、bundle gate、release dry-run 仍未闭环。
+- [ ] plugin、wrapper、theme / i18n、diagnostics 还没有稳定对外 contract。
+
+### 推荐执行顺序
+
+1. 先冻结 Public API、包边界和 example matrix，再开始 wrapper 或 plugin 任何一条支线。
+2. 先做 API 文档与类型测试 `Step 7.1 -> 7.2`，避免后续对外接口边写边漂移。
+3. 再做 Plugin API 与错误隔离 `Step 7.3 -> 7.4`，因为 wrapper、docx、collab 都会复用这些扩展点。
+4. 随后做 wrappers 与 examples `Step 7.5 -> 7.6 -> 7.10`。
+5. 最后收 theme / i18n、devtools、文档站、size-limit、release dry-run 与 Stable E2E `Step 7.7 -> 7.14`。
+
+### 迭代任务清单
+
+#### Iteration 0 - 冻结 SDK 对外面向
+
+- [ ] 冻结导出分级：
+  - `stable`
+  - `experimental`
+  - `internal`
+- [ ] 冻结 package / example 落点，但不预创建空壳：
+  - `packages/react/src/`
+  - `packages/vue/src/`
+  - `packages/devtools/src/`
+  - `examples/react/`
+  - `examples/vue/`
+  - `examples/collab/`
+  - `examples/docx/`
+  - `examples/performance/`
+- [ ] 冻结事件 payload、错误码、feature flags 和 diagnostics contract，后续 wrappers / plugins / docs 都只复用这套公开命名。
+
+#### Iteration 1 - Public API / TSDoc / 类型测试（Step 7.1-7.2）
+
+- [ ] 整理 Public API 清单，明确哪些符号可对外承诺，哪些仍留在 `experimental`。
+- [ ] 为稳定 API 补齐 TSDoc、类型测试和最小示例，确保外部 TypeScript 项目能直接消费。
+- [ ] 确保导出符号、事件 payload、错误码命名稳定，不暴露内部 Yjs 细节。
+
+#### Iteration 2 - Plugin API 与 diagnostics（Step 7.3-7.4 / 7.8-7.9）
+
+- [ ] 实现 Plugin API：commands、menus、decorations、resource upload、persistence、collab provider、import/export adapter、diagnostics。
+- [ ] 实现插件错误隔离，插件异常触发 error event，不破坏 core 状态。
+- [ ] 实现 Devtools 面板与 diagnostics export，保证 operation、selection/anchor、layout/perf 指标可复查。
+
+#### Iteration 3 - wrappers 与 example matrix（Step 7.5-7.6 / 7.10）
+
+- [ ] 实现 React wrapper，只负责生命周期、props 到 EditorOptions、事件桥接。
+- [ ] 实现 Vue 3 wrapper，只负责生命周期和事件桥接，SSR 阶段输出空壳。
+- [ ] 完善 vanilla / react / vue / collab / docx / performance examples，确保 examples 只做 host 装配与测试钩子。
+
+#### Iteration 4 - theme / i18n / devtools polish（Step 7.7-7.9）
+
+- [ ] 实现主题系统与 i18n，保证 `jw-` BEM 类名与 WCAG AA 对比度约束。
+- [ ] 收口 Devtools 面板的 operation log、layout overlay、selection/anchor inspect、performance counters。
+- [ ] 收口 diagnostics export，保证版本、包信息、feature flags、错误、operation 摘要、layout 指标可直接打包给集成方。
+
+#### Iteration 5 - 文档站 / bundle / release / Stable matrix（Step 7.11-7.14）
+
+- [ ] 建立文档站：快速开始、核心概念、API、插件、协同、docx/PDF、迁移指南、故障排查。
+- [ ] 建立 size-limit 和 bundle 分析，保证 docx/PDF/collab/hocuspocus/React/Vue wrapper/大字体不进入默认首屏。
+- [ ] 建立 release dry-run：changeset 草稿、构建产物检查、`npm pack` 检查、示例安装检查；不自动 publish。
+- [ ] 完成 Stable E2E 矩阵：vanilla、React、Vue、collab、docx、PDF、插件错误隔离。
 
 ### 待办步骤
 
@@ -641,7 +922,7 @@
 ### Beta 完成
 
 - [ ] 10 万字、200 页 fixture 有性能报告。
-- [ ] 表格、图片、批注、查找替换、页眉页脚可用。
+- [ ] 表格、图片、批注、查找替换、页眉页脚、修订 v1 可用。
 - [ ] docx T1 import/export 通过 fixture diff。
 - [ ] PDF 基础导出通过截图对比。
 - [ ] 保格式粘贴通过安全验收。

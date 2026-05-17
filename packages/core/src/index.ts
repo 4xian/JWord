@@ -36,6 +36,12 @@ export { createEditor } from './editor/runtime'
 export { JWordError } from './shared/errors'
 export type { JWordErrorCode, JWordErrorDetails } from './shared/errors'
 export {
+  buildDeleteResourceCommand,
+  buildDeleteSelectedImageCommand,
+  buildInsertBlockImageCommand,
+  buildInsertInlineImageCommand,
+  buildReplaceSelectedImageResourceCommand,
+  buildResizeSelectedImageCommand,
   buildSetBackgroundColorCommand,
   buildSetBoldCommand,
   buildSetFontFamilyCommand,
@@ -45,7 +51,9 @@ export {
   buildSetParagraphIndentCommand,
   buildSetStrikeCommand,
   buildSetTextColorCommand,
-  buildSetUnderlineCommand
+  buildSetUnderlineCommand,
+  buildUpsertResourceCommand,
+  buildUpsertResourceCommandWithPolicy
 } from './operations/command-builders'
 export { createFontManager } from './layout/font-manager'
 export type {
@@ -62,6 +70,7 @@ export type {
   HistoryOperationResult
 } from './operations/history'
 export { createSelectionFormattingState } from './model/formatting-state'
+export { resolveSelectedImageTarget } from './model/image-target'
 export type {
   FormattingStateValue,
   ParagraphAlignment,
@@ -69,6 +78,7 @@ export type {
   RunFormattingState,
   SelectionFormattingState
 } from './model/formatting-types'
+export type { SelectedImageTarget } from './model/image-target'
 export {
   getCaretRect,
   getSelectionRects,
@@ -94,6 +104,7 @@ export type {
 export { createLayoutSchedule } from './layout/scheduler'
 export type { LayoutSchedule, LayoutScheduleInput } from './layout/scheduler'
 export type { Block, Document, Paragraph, Run, Section } from './model/types'
+export type { ImageInline } from './model/types'
 export {
   CSS_PX_PER_INCH,
   TWIPS_PER_INCH,
@@ -104,7 +115,28 @@ export {
 export type { PageConfig, PageConfigInput, PageMargins, PageOrientation, PagePreset } from './layout/page-config'
 export type { AnchorRef, RangeRef } from './model/position'
 export type { DocumentProjection } from './model/projection'
+export type {
+  AbortSignalLike,
+  Resource,
+  ResourceAdapter,
+  ResourceAdapterUploadOptions,
+  ResourceAdapterUploadRequest,
+  ResourceAdapterUploadResult,
+  ResourceErrorState,
+  ResourceMetadata,
+  ResourceSource,
+  ResourceStatus,
+  ResourceUploadFile,
+  ResourceUploadProgressEvent,
+  ResourceUploadSource,
+  ResourceUrlPolicy
+} from './resources/types'
+export {
+  DEFAULT_RESOURCE_URL_POLICY,
+  isAllowedResourceUrl
+} from './resources/types'
 export type { SelectionState } from './model/selection'
+export { createSelectionState } from './model/selection'
 export type {
   Command,
   Operation,
@@ -112,6 +144,7 @@ export type {
   TextRange,
   TransactionEvent,
   TransactionMetadata,
+  TransactionPipelineOptions,
   TransactionResult
 } from './operations/transaction'
 export { computeViewportPages } from './canvas/viewport-virtualizer'

@@ -10,6 +10,7 @@ import { twipsToCssPx } from './page-config'
 import type { RunTextStyle } from './font-manager'
 import type { Inline, ModelProperties, Paragraph, Section } from '../model/types'
 import type { PageConfig } from './page-config'
+import type { Resource } from '../resources/types'
 import type {
   InlineObjectPayload,
   LayoutDebugBox,
@@ -145,7 +146,8 @@ export function assignPageSectionBoundary(page: MutablePageBox, section: Section
 }
 
 export function createInlineObjectPayload(
-  inline: Exclude<Inline, { readonly kind: 'text' | 'break' }>
+  inline: Exclude<Inline, { readonly kind: 'text' | 'break' }>,
+  resourceById?: ReadonlyMap<string, Resource>
 ): InlineObjectPayload {
   switch (inline.kind) {
     case 'bookmark':
@@ -155,9 +157,24 @@ export function createInlineObjectPayload(
         edge: inline.edge
       })
     case 'image':
+      const resource = resourceById?.get(inline.resourceId)
+
       return Object.freeze({
         resourceId: inline.resourceId,
-        ...(inline.alt === undefined ? {} : { alt: inline.alt })
+        ...(inline.alt === undefined ? {} : { alt: inline.alt }),
+        ...(inline.display === undefined ? {} : { display: inline.display }),
+        ...(inline.widthTwips === undefined ? {} : { widthTwips: inline.widthTwips }),
+        ...(inline.heightTwips === undefined ? {} : { heightTwips: inline.heightTwips }),
+        ...(resource === undefined
+          ? {}
+          : {
+              resourceStatus: resource.status,
+              resourceMime: resource.mime,
+              resourceSourceKind: resource.source.kind,
+              resourceSourceUrl: resource.source.url,
+              ...(resource.error === undefined ? {} : { resourceErrorMessage: resource.error.message }),
+              ...(resource.retryToken === undefined ? {} : { retryToken: resource.retryToken })
+            })
       })
     case 'commentRangeMarker':
       return Object.freeze({

@@ -12,6 +12,7 @@ import {
   DOCUMENT_STORE_FIELDS,
   createDocumentStore,
   createParagraphRecord,
+  createResourceRecord,
   createRunRecord,
   getRunField,
   getRunInlines,
@@ -25,6 +26,7 @@ import {
   getTableRowCells,
   getTableRows
 } from '../model/document-store'
+import { isAllowedResourceUrl } from '../resources/types'
 import { createJWordError } from '../shared/errors'
 import {
   countGraphemes,
@@ -56,6 +58,7 @@ import {
 } from '../model/position'
 import type { BlockId, CommentId, GraphemeIndex, RevisionId, RunId, SectionId } from '../model/position'
 import { createGraphemeIndex } from '../model/position'
+import type { ResourceUrlPolicy } from '../resources/types'
 
 /**
  * Operation 到 Y.Doc 的最小 adapter。
@@ -66,23 +69,30 @@ export interface OperationAdapter {
   applyAll(operations: readonly Operation[]): void
 }
 
+export interface OperationAdapterOptions {
+  readonly resourceUrlPolicy?: ResourceUrlPolicy
+}
+
 /**
  * 创建 Operation adapter。
  *
  * @param input 文档状态壳或 Y.Doc。
  * @returns 可应用 operation 的 adapter。
  */
-export function createOperationAdapter(input: DocumentStore | Y.Doc): OperationAdapter {
+export function createOperationAdapter(
+  input: DocumentStore | Y.Doc,
+  options: OperationAdapterOptions = {}
+): OperationAdapter {
   const store = input instanceof Y.Doc ? createDocumentStore(input) : input
 
   return {
     store,
     apply(operation) {
-      applyOperation(store, operation)
+      applyOperation(store, operation, options)
     },
     applyAll(operations) {
       for (const operation of operations) {
-        applyOperation(store, operation)
+        applyOperation(store, operation, options)
       }
     }
   }
@@ -94,7 +104,11 @@ export function createOperationAdapter(input: DocumentStore | Y.Doc): OperationA
  * @param store 文档状态壳。
  * @param operation 待应用操作。
  */
-export function applyOperation(store: DocumentStore, operation: Operation): void {
+export function applyOperation(
+  store: DocumentStore,
+  operation: Operation,
+  options: OperationAdapterOptions = {}
+): void {
   switch (operation.kind) {
     case 'insertText':
       insertText(store, operation.at, operation.text)
@@ -120,7 +134,52 @@ export function applyOperation(store: DocumentStore, operation: Operation): void
     case 'deleteBlock':
       deleteBlock(store, operation.blockId)
       break
+    case 'upsertResource':
+      upsertResource(store, operation.resource, options.resourceUrlPolicy)
+      break
+    case 'deleteResource':
+      deleteResource(store, operation.resourceId)
+      break
+    case 'insertImage':
+      insertImage(store, operation)
+      break
+    case 'replaceImageResource':
+      replaceImageResource(store, operation.runId, operation.resourceId)
+      break
+    case 'deleteImage':
+      deleteImage(store, operation.runId)
+      break
+    case 'resizeImage':
+      resizeImage(store, operation.runId, operation.widthTwips, operation.heightTwips)
+      break
   }
+}
+
+function upsertResource(
+  store: DocumentStore,
+  resource: Extract<Operation, { kind: 'upsertResource' }>['resource'],
+  resourceUrlPolicy?: ResourceUrlPolicy
+): void {
+  if (!isAllowedResourceUrl(resource.source.url, resourceUrlPolicy)) {
+    throw createJWordError('OPERATION_RESOURCE_URL_DISALLOWED', '资源 URL 不在 allowlist 内', {
+      resourceId: resource.id,
+      url: resource.source.url
+    })
+  }
+
+  store.resources.set(resource.id as ResourceId, createResourceRecord(resource))
+  appendIdIfMissing(
+    readRequiredArray<ResourceId>(store.document, DOCUMENT_STORE_FIELDS.document.resourceIds, 'document resourceIds'),
+    resource.id as ResourceId
+  )
+}
+
+function deleteResource(store: DocumentStore, resourceId: string): void {
+  store.resources.delete(resourceId as ResourceId)
+  removeId(
+    readRequiredArray<ResourceId>(store.document, DOCUMENT_STORE_FIELDS.document.resourceIds, 'document resourceIds'),
+    resourceId as ResourceId
+  )
 }
 
 function setRunProperties(
@@ -344,6 +403,144 @@ function deleteBlock(store: DocumentStore, blockId: string): void {
   const location = findBlockLocation(store, blockId as BlockId)
 
   location.container.delete(location.index, 1)
+}
+
+function insertImage(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'insertImage' }>
+): void {
+  assertRunIdUnused(store, operation.imageRunId as RunId)
+  assertResourceExists(store, operation.image.resourceId)
+
+  if (operation.mode === 'block') {
+    insertBlockImage(store, operation)
+    return
+  }
+
+  insertInlineImage(store, operation)
+}
+
+function insertInlineImage(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'insertImage' }>
+): void {
+  const snapshot = resolveOperationPosition(store, operation.at)
+  const runText = getRunText(snapshot.runLocation.run).toString()
+  const graphemeLength = countGraphemes(runText)
+  let insertIndex = snapshot.runLocation.index
+
+  if (snapshot.graphemeIndex > 0 && snapshot.graphemeIndex < graphemeLength) {
+    if (operation.trailingRunId === undefined) {
+      throw createJWordError('OPERATION_RUN_FORMAT_RANGE_INVALID', '行内图片插入缺少 trailingRunId', {
+        runId: operation.at.runId
+      })
+    }
+
+    assertRunIdUnused(store, operation.trailingRunId as RunId)
+    const tailLocation = splitRunAtGraphemeIndex(
+      store,
+      snapshot.runLocation,
+      Number(snapshot.graphemeIndex),
+      operation.trailingRunId as RunId
+    )
+
+    insertIndex = tailLocation.index
+  } else if (snapshot.graphemeIndex === graphemeLength) {
+    insertIndex = snapshot.runLocation.index + 1
+  }
+
+  const trailingRun = operation.trailingRunId !== undefined
+    && snapshot.graphemeIndex === graphemeLength
+    && shouldInsertTrailingTextRun(snapshot.runLocation.container, insertIndex)
+    ? createTrailingTextRunRecord(operation.trailingRunId as RunId, snapshot.runLocation.run)
+    : undefined
+
+  if (trailingRun !== undefined) {
+    assertRunIdUnused(store, operation.trailingRunId as RunId)
+  }
+
+  snapshot.runLocation.container.insert(insertIndex, [
+    createImageRunRecord(operation.imageRunId as RunId, {
+      ...operation.image,
+      ...(operation.image.display === undefined ? { display: 'inline' } : {})
+    }),
+    ...(trailingRun === undefined ? [] : [trailingRun])
+  ])
+
+  if (trailingRun !== undefined && snapshot.graphemeIndex === graphemeLength) {
+    migrateTextAnchorsAfterSplit(getRunText(snapshot.runLocation.run), store.doc, snapshot.utf16Index, {
+      sectionId: snapshot.sectionId,
+      blockId: snapshot.blockId,
+      runId: operation.trailingRunId as RunId,
+      text: getRunText(trailingRun)
+    })
+  }
+}
+
+function insertBlockImage(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'insertImage' }>
+): void {
+  if (operation.blockId === undefined) {
+    throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', '块级图片插入缺少 blockId')
+  }
+
+  const snapshot = resolveOperationPosition(store, operation.at)
+  const location = findBlockLocation(store, snapshot.blockId)
+  const paragraph = createParagraphRecord(operation.blockId as BlockId)
+
+  location.container.insert(location.index + 1, [paragraph])
+  getParagraphRuns(paragraph).push([
+    createImageRunRecord(operation.imageRunId as RunId, {
+      ...operation.image,
+      display: 'block'
+    })
+  ])
+}
+
+function replaceImageResource(store: DocumentStore, runId: string, resourceId: string): void {
+  assertResourceExists(store, resourceId)
+
+  updateImageRun(store, runId as RunId, (image) => ({
+    ...image,
+    resourceId
+  }))
+}
+
+function resizeImage(store: DocumentStore, runId: string, widthTwips: number, heightTwips: number): void {
+  if (!Number.isFinite(widthTwips) || !Number.isFinite(heightTwips) || widthTwips <= 0 || heightTwips <= 0) {
+    throw createJWordError('OPERATION_IMAGE_DIMENSIONS_INVALID', '图片尺寸必须是正数', {
+      runId,
+      widthTwips,
+      heightTwips
+    })
+  }
+
+  updateImageRun(store, runId as RunId, (image) => ({
+    ...image,
+    widthTwips,
+    heightTwips
+  }))
+}
+
+function deleteImage(store: DocumentStore, runId: string): void {
+  const runLocation = findRunLocation(store, runId as RunId)
+  const blockLocation = findBlockLocation(store, runLocation.blockId)
+
+  assertBlockKind(blockLocation.block, 'paragraph')
+
+  if (!runContainsSingleImage(runLocation.run)) {
+    throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', 'deleteImage 目标 run 不是第一版 image run', {
+      runId
+    })
+  }
+
+  if (runLocation.container.length === 1) {
+    blockLocation.container.delete(blockLocation.index, 1)
+    return
+  }
+
+  runLocation.container.delete(runLocation.index, 1)
 }
 
 interface ResolvedTextPosition {
@@ -633,6 +830,39 @@ function cloneRunRecord(run: RunRecord): RunRecord {
   return createSplitRunRecord(id, text, run)
 }
 
+function createImageRunRecord(runId: RunId, image: Extract<Run['inlines'][number], { kind: 'image' }>): RunRecord {
+  const record = createRunRecord(runId, '', {
+    inlines: [image]
+  })
+
+  syncRunResourceIds(record, [image])
+
+  return record
+}
+
+/**
+ * 图片尾侧缺少文本容器时，补一个最小空 run 作为后续输入落点。
+ */
+function createTrailingTextRunRecord(runId: RunId, source: RunRecord): RunRecord {
+  return runSupportsTextContainer(source)
+    ? createSplitRunRecord(runId, '', source)
+    : createRunRecord(runId, '')
+}
+
+function shouldInsertTrailingTextRun(container: RunContainer, insertIndex: number): boolean {
+  return !runSupportsTextContainer(container.get(insertIndex))
+}
+
+function runSupportsTextContainer(run: RunRecord | undefined): boolean {
+  if (run === undefined) {
+    return false
+  }
+
+  const inlines = getRunInlines(run)
+
+  return inlines === undefined || inlines.some((inline) => inline.kind === 'text')
+}
+
 function createSplitRunRecord(runId: RunId, textValue: string, source: RunRecord): RunRecord {
   const field = getRunField(source)
   const link = getRunLink(source)
@@ -649,6 +879,7 @@ function createSplitRunRecord(runId: RunId, textValue: string, source: RunRecord
   const properties = clonePropertyMap(readPropertyMap(source, DOCUMENT_STORE_FIELDS.run.properties))
 
   clone.set(DOCUMENT_STORE_FIELDS.run.properties, properties)
+  syncRunResourceIds(clone, inlines ?? [])
 
   return clone
 }
@@ -690,6 +921,50 @@ function collectText(run: Run): string {
     .join('')
 }
 
+function updateImageRun(
+  store: DocumentStore,
+  runId: RunId,
+  updater: (image: Extract<Run['inlines'][number], { kind: 'image' }>) => Extract<Run['inlines'][number], { kind: 'image' }>
+): void {
+  const runLocation = findRunLocation(store, runId)
+  const inlines = getRunInlines(runLocation.run)
+
+  if (inlines === undefined || inlines.length !== 1 || inlines[0]?.kind !== 'image') {
+    throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', '目标 run 不是第一版 image run', {
+      runId: String(runId)
+    })
+  }
+
+  const field = getRunField(runLocation.run)
+  const link = getRunLink(runLocation.run)
+  const revisionId = getRunRevisionId(runLocation.run)
+  const nextImage = updater(inlines[0])
+
+  setRunStructure(runLocation.run, {
+    ...(field === undefined ? {} : { field }),
+    ...(link === undefined ? {} : { link }),
+    ...(revisionId === undefined ? {} : { revisionId }),
+    inlines: [nextImage]
+  })
+  syncRunResourceIds(runLocation.run, [nextImage])
+}
+
+function assertResourceExists(store: DocumentStore, resourceId: string): void {
+  if (!store.resources.has(resourceId as ResourceId)) {
+    throw createJWordError('OPERATION_RESOURCE_NOT_FOUND', '图片引用的资源不存在', {
+      resourceId
+    })
+  }
+}
+
+function runContainsSingleImage(run: RunRecord): boolean {
+  const inlines = getRunInlines(run)
+
+  return inlines !== undefined
+    && inlines.length === 1
+    && inlines[0]?.kind === 'image'
+}
+
 interface SharedMapReader {
   get(fieldName: string): unknown
 }
@@ -700,6 +975,19 @@ function setProperties(record: SharedMapReader, fieldName: string, properties: R
   for (const [key, value] of Object.entries(properties)) {
     target.set(key, toDocumentStoreJson(value))
   }
+}
+
+function syncRunResourceIds(run: RunRecord, inlines: readonly Run['inlines'][number][]): void {
+  const nextIds = inlines
+    .filter((inline): inline is Extract<Run['inlines'][number], { kind: 'image' }> => inline.kind === 'image')
+    .map((inline) => inline.resourceId as ResourceId)
+  const resourceIds = new Y.Array<ResourceId>()
+
+  if (nextIds.length > 0) {
+    resourceIds.push(nextIds)
+  }
+
+  run.set(DOCUMENT_STORE_FIELDS.run.resourceIds, resourceIds)
 }
 
 function copyProperties(source: SharedMapReader, target: SharedMapReader, fieldName: string): void {
@@ -719,6 +1007,32 @@ function createPropertyMap(properties: Readonly<Record<string, unknown>>): Y.Map
   }
 
   return map
+}
+
+function readRequiredArray<Item>(record: SharedMapReader, fieldName: string, label: string): Y.Array<Item> {
+  const value = record.get(fieldName)
+
+  if (value instanceof Y.Array) {
+    return value as Y.Array<Item>
+  }
+
+  throw createJWordError('DOCUMENT_STORE_ARRAY_CONTAINER_MISSING', `${label} 缺失`, {
+    label
+  })
+}
+
+function appendIdIfMissing<Id extends string>(array: Y.Array<Id>, id: Id): void {
+  if (!array.toArray().includes(id)) {
+    array.push([id])
+  }
+}
+
+function removeId<Id extends string>(array: Y.Array<Id>, id: Id): void {
+  const index = array.toArray().indexOf(id)
+
+  if (index >= 0) {
+    array.delete(index, 1)
+  }
 }
 
 function clonePropertyMap(properties: Y.Map<DocumentStoreJson>): Y.Map<DocumentStoreJson> {

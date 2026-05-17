@@ -442,7 +442,7 @@ async function waitForGate3LargeFixtureReady(page: Page): Promise<void> {
 
 async function readPlainText(page: Page): Promise<string> {
   return page.evaluate(() => {
-    return document.querySelector<HTMLElement>('[data-jword-text-mirror]')?.textContent ?? ''
+    return document.querySelector<HTMLElement>('[data-jword-ui-text-mirror]')?.textContent ?? ''
   })
 }
 
@@ -921,7 +921,7 @@ async function runCompositionSequence(
 }>> {
   return page.evaluate(({ firstData, finalData }) => {
     const input = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
-    const readText = (): string => document.querySelector<HTMLElement>('[data-jword-text-mirror]')?.textContent ?? ''
+    const readText = (): string => document.querySelector<HTMLElement>('[data-jword-ui-text-mirror]')?.textContent ?? ''
     const readSummary = (): string => document.querySelector<HTMLElement>('[data-jword-selection-summary]')?.textContent ?? ''
     const createCompositionEvent = (type: string, data: string): Event => {
       const event = new Event(type, {

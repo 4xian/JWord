@@ -17,11 +17,24 @@ export interface JWordDemoSelectionInput {
   readonly focusGraphemeIndex: number
 }
 
+export interface JWordDemoMediaUploadLogEntry {
+  readonly resourceId: string
+  readonly sourceKind: 'file' | 'url'
+  readonly sourceLabel: string
+  readonly outcome: 'success' | 'failed'
+  readonly retryToken?: string
+}
+
 declare global {
   interface Window {
     __jwordDemo?: Readonly<{
       readonly editor: Editor
       readonly selectTextRange: (input: JWordDemoSelectionInput) => SelectionState
+      readonly media: {
+        getFixtureUrl(): string
+        buildScenarioUrl(scenario: 'success' | 'retry-once' | 'always-fail'): string
+        readUploadLog(): readonly JWordDemoMediaUploadLogEntry[]
+      }
     }>
   }
 }

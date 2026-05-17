@@ -14,6 +14,7 @@ export type ToolbarIconName =
   | 'italic'
   | 'underline'
   | 'strike'
+  | 'image'
   | 'textColor'
   | 'backgroundColor'
   | 'alignLeft'
@@ -63,6 +64,8 @@ function readToolbarIconPaths(icon: ToolbarIconName): readonly string[] {
       return ['M6.2 4v5c0 2.3 1.5 3.8 3.8 3.8s3.8-1.5 3.8-3.8V4h-2v4.9c0 1.3-.7 2.1-1.8 2.1s-1.8-.8-1.8-2.1V4h-2zM4.2 15.8h11.6V17H4.2v-1.2z']
     case 'strike':
       return ['M10 3.8c2.8 0 4.6 1.1 5.1 3.2h-2.2c-.4-.8-1.3-1.2-2.7-1.2-1.4 0-2.2.4-2.2 1.3 0 .7.6 1.1 2 1.3l2 .3c2.7.4 4 1.5 4 3.5 0 2.4-2.2 4-5.4 4-3.1 0-5.2-1.4-5.6-3.7H7c.3 1 1.4 1.6 3.1 1.6 1.5 0 2.5-.5 2.5-1.4 0-.7-.5-1.1-1.9-1.3l-2-.3c-2.6-.4-4-1.6-4-3.6 0-2.2 2-3.7 5.3-3.7z', 'M3.8 9.4h12.4v1.2H3.8V9.4z']
+    case 'image':
+      return ['M4.6 4.4h10.8c.6 0 1 .4 1 1v9.2c0 .6-.4 1-1 1H4.6c-.6 0-1-.4-1-1V5.4c0-.6.4-1 1-1zm.4 1.8v7.6h10V6.2H5zm2 6.1 1.8-2 1.6 1.5 2.2-2.8 1.8 3.3H7zm1-3.8a1.2 1.2 0 1 1 2.4 0 1.2 1.2 0 0 1-2.4 0z']
     case 'textColor':
       return ['M10.1 3.6l4.8 12.7h-2.3l-1-3H7.5l-1 3H4.2l4.8-12.7h1.1zm.8 7.9-1.4-4.2-1.4 4.2h2.8z', 'M4.4 17.2h11.2v-1.6H4.4v1.6z']
     case 'backgroundColor':

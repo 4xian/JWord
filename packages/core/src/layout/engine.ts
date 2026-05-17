@@ -11,6 +11,7 @@ import { measureLayoutTextSegment, measureTextSegmentForLayout, segmentTextForLa
 import type { Block, Inline, Paragraph, Run, Section, Table } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { TextPosition } from '../operations/transaction'
+import type { Resource } from '../resources/types'
 import {
   createDerivedLayoutInput,
   createIncrementalLayoutContext,
@@ -150,7 +151,7 @@ function layoutBlock(
   startParagraph(cursor, section.id, block, input.pageConfig)
 
   for (const run of block.runs) {
-    if (layoutRun(run, section, block, input, cursor, pages, incremental)) {
+    if (layoutRun(run, section, block, input, cursor, pages, incremental, input.projection.document.resources)) {
       return true
     }
   }
@@ -168,10 +169,13 @@ function layoutRun(
   input: LayoutInput,
   cursor: LayoutCursor,
   pages: MutablePageBox[],
-  incremental?: IncrementalLayoutContext
+  incremental?: IncrementalLayoutContext,
+  resources?: readonly Resource[]
 ): boolean {
   const sectionId = section.id
   const style = readRunStyle(run.properties)
+  const resourceById = new Map((resources ?? []).map((resource) => [resource.id, resource] as const))
+  const shouldEmitCollapsedTextAnchor = shouldEmitCollapsedTextRunAnchor(paragraph, run)
   let runGraphemeIndex = resolveRunStartGraphemeIndex(incremental, sectionId, paragraph.id, run.id)
 
   for (const inline of run.inlines) {
@@ -241,8 +245,12 @@ function layoutRun(
         runGraphemeIndex = segment.endGraphemeIndex
       }
     } else {
-      layoutInlineBoundary(inline, section, paragraph, run.id, runGraphemeIndex, cursor, pages, input.pageConfig)
+      layoutInlineBoundary(inline, section, paragraph, run.id, runGraphemeIndex, cursor, pages, input.pageConfig, resourceById)
     }
+  }
+
+  if (shouldEmitCollapsedTextAnchor) {
+    appendCollapsedTextRunAnchor(run, section, paragraph, input, cursor, pages)
   }
 
   return false
@@ -286,6 +294,42 @@ function ensureEmptyParagraphVisible(
     baseline,
     pageConfig: input.pageConfig
   })
+}
+
+/**
+ * 图片前后这种空文本 run 也要保留零宽 anchor，否则 pointer hit-test 无法落到真实文本 run。
+ */
+function appendCollapsedTextRunAnchor(
+  run: Run,
+  section: Section,
+  paragraph: Paragraph,
+  input: LayoutInput,
+  cursor: LayoutCursor,
+  pages: MutablePageBox[]
+): void {
+  const measurement = input.fontManager.measureText('', readRunStyle(run.properties))
+  const height = cssPxToTwips(measurement.heightCssPx)
+  const baseline = cssPxToTwips(measurement.baselineCssPx)
+
+  ensureLineFits(0, height, cursor, pages, input.pageConfig, section, paragraph)
+  appendEmptyTextAnchor({
+    cursor,
+    sectionId: section.id,
+    paragraphId: paragraph.id,
+    runId: run.id,
+    height,
+    baseline,
+    pageConfig: input.pageConfig
+  })
+}
+
+/**
+ * 非纯空段落里的零长度文本 run 仍然需要 anchor，典型场景是图片前后的空文本落点。
+ */
+function shouldEmitCollapsedTextRunAnchor(paragraph: Paragraph, run: Run): boolean {
+  return !isVisuallyEmptyParagraph(paragraph)
+    && run.inlines.length > 0
+    && run.inlines.every((inline) => inline.kind === 'text' && inline.text.length === 0)
 }
 
 /**
@@ -392,13 +436,25 @@ function layoutInlineBoundary(
   graphemeIndex: number,
   cursor: LayoutCursor,
   pages: MutablePageBox[],
-  pageConfig: PageConfig
+  pageConfig: PageConfig,
+  resourceById?: ReadonlyMap<string, Resource>
 ): void {
   const sectionId = section.id
 
   if (inline.kind !== 'break') {
     if (inline.kind !== 'text') {
-      appendNonTextInlineBox(inline, sectionId, paragraph.id, runId, graphemeIndex, cursor, pageConfig)
+      if (inline.kind === 'image' && inline.display === 'block') {
+        flushLine(cursor)
+        const blockSize = resolveImageInlineSize(inline, pageConfig)
+
+        ensureLineFits(blockSize.width, blockSize.height, cursor, pages, pageConfig, section, paragraph)
+      }
+
+      appendNonTextInlineBox(inline, sectionId, paragraph.id, runId, graphemeIndex, cursor, pageConfig, resourceById)
+
+      if (inline.kind === 'image' && inline.display === 'block') {
+        flushLine(cursor)
+      }
     }
     return
   }
@@ -436,6 +492,25 @@ function layoutInlineBoundary(
   startNewPage(cursor, pages, pageConfig)
   assignPageSectionBoundary(cursor.page, section)
   startParagraph(cursor, sectionId, paragraph, pageConfig)
+}
+
+function resolveImageInlineSize(
+  inline: Extract<Inline, { readonly kind: 'image' }>,
+  pageConfig: PageConfig
+): Readonly<{
+  width: number
+  height: number
+}> {
+  const fallbackWidth = inline.display === 'block'
+    ? Math.min(pageConfig.contentWidthTwips, cssPxToTwips(320))
+    : Math.min(pageConfig.contentWidthTwips, cssPxToTwips(160))
+  const width = inline.widthTwips ?? fallbackWidth
+  const height = inline.heightTwips ?? Math.max(cssPxToTwips(64), Math.round(width * 0.56))
+
+  return Object.freeze({
+    width,
+    height
+  })
 }
 
 function layoutTable(

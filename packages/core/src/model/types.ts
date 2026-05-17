@@ -6,6 +6,8 @@
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/02-technical-decisions.md#25-文档模型决策。
  */
 
+import type { Resource } from '../resources/types'
+
 export const DOCUMENT_MODEL_SCHEMA_VERSION = 1
 
 export type ModelProperties = Readonly<Record<string, unknown>>
@@ -18,6 +20,7 @@ export interface Document {
   readonly metadata?: DocumentMetadata
   readonly styleIds?: readonly string[]
   readonly resourceIds?: readonly string[]
+  readonly resources?: readonly Resource[]
   readonly sections: readonly Section[]
   readonly comments?: readonly Comment[]
   readonly revisions?: readonly RevisionMetadata[]
@@ -98,6 +101,9 @@ export interface ImageInline {
   readonly kind: 'image'
   readonly resourceId: string
   readonly alt?: string
+  readonly display?: 'inline' | 'block'
+  readonly widthTwips?: number
+  readonly heightTwips?: number
 }
 
 export interface BreakInline {

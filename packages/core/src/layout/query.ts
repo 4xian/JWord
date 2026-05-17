@@ -7,6 +7,7 @@
  */
 
 import type { TextPosition, TextRange } from '../operations/transaction'
+import { cssPxToTwips } from './page-config'
 import type {
   DocumentLayout,
   InlineBox,
@@ -17,6 +18,7 @@ import type {
 } from './types'
 
 const layoutLookupCache = new WeakMap<DocumentLayout, LayoutLookupCache>()
+const DEFAULT_CARET_HEIGHT_TWIPS = cssPxToTwips(16 * 1.2)
 
 export function hitTestDocumentLayout(
   layout: DocumentLayout,
@@ -44,8 +46,15 @@ export function hitTestDocumentLayout(
     return undefined
   }
 
+  const inlineHit = hitTestInlineBoxes(line.inlines, absolutePoint.x, absolutePoint.y)
+
+  if (inlineHit !== undefined) {
+    return resolveInlineHitPosition(line, inlineHit, absolutePoint.x)
+      ?? inlineHit.at
+  }
+
   if (line.fragments.length === 0) {
-    return line.inlines[0]?.at
+    return resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x)
   }
 
   const firstFragment = line.fragments[0]
@@ -56,7 +65,7 @@ export function hitTestDocumentLayout(
   }
 
   if (absolutePoint.x <= firstFragment.x) {
-    return firstFragment.start
+    return resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x) ?? firstFragment.start
   }
 
   for (const fragment of line.fragments) {
@@ -65,7 +74,7 @@ export function hitTestDocumentLayout(
     }
   }
 
-  return lastFragment.end
+  return resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x) ?? lastFragment.end
 }
 
 /**
@@ -113,10 +122,12 @@ export function getCaretRect(layout: DocumentLayout, position: TextPosition): La
 
   return {
     pageIndex: target.pageIndex,
-    x: located.fragment === undefined ? target.x : offsetInFragment(located.fragment, position),
-    y: located.line.y,
+    x: located.fragment === undefined
+      ? offsetInInline(located.inline, position)
+      : offsetInFragment(located.fragment, position),
+    y: located.fragment?.y ?? located.inline?.y ?? located.line.y,
     width: 0,
-    height: located.line.height
+    height: located.fragment?.height ?? DEFAULT_CARET_HEIGHT_TWIPS
   }
 }
 
@@ -130,7 +141,23 @@ export function getCaretRect(layout: DocumentLayout, position: TextPosition): La
 export function getSelectionRects(layout: DocumentLayout, range: TextRange): readonly LayoutRect[] {
   const ordered = orderRange(layout, range)
 
-  if (ordered === undefined || isSamePosition(ordered.anchor, ordered.focus)) {
+  if (ordered === undefined) {
+    return Object.freeze([])
+  }
+
+  if (isSamePosition(ordered.anchor, ordered.focus)) {
+    const located = locatePosition(layout, ordered.anchor)
+
+    if (located?.inline?.kind === 'inlineObject' && !isTrailingInlineBoundary(ordered.anchor)) {
+      return Object.freeze([{
+        pageIndex: located.inline.pageIndex,
+        x: located.inline.x,
+        y: located.inline.y,
+        width: located.inline.width,
+        height: located.inline.height
+      }])
+    }
+
     return Object.freeze([])
   }
 
@@ -267,6 +294,123 @@ function offsetInFragment(fragment: TextFragment, position: TextPosition): numbe
   return fragment.x + advance
 }
 
+function hitTestInlineBoxes(
+  inlines: readonly InlineBox[],
+  absoluteX: number,
+  absoluteY: number
+): InlineBox | undefined {
+  return inlines.find((inline) =>
+    inline.width > 0
+    && absoluteX >= inline.x
+    && absoluteX <= inline.x + inline.width
+    && absoluteY >= inline.y
+    && absoluteY <= inline.y + inline.height
+  )
+}
+
+/**
+ * 根据图片点击的左右位置，返回更贴近文本编辑语义的边界位置。
+ */
+function resolveInlineHitPosition(
+  line: LineBox,
+  inline: InlineBox,
+  absoluteX: number
+): TextPosition | undefined {
+  if (inline.kind === 'inlineObject' && inline.inlineKind === 'image') {
+    return inline.at
+  }
+
+  let beforeFragment: TextFragment | undefined
+  let afterFragment: TextFragment | undefined
+
+  for (const fragment of line.fragments) {
+    if (fragment.x + fragment.width <= inline.x) {
+      beforeFragment = fragment
+      continue
+    }
+
+    if (afterFragment === undefined && fragment.x >= inline.x + inline.width) {
+      afterFragment = fragment
+    }
+  }
+
+  const midpoint = inline.x + (inline.width / 2)
+
+  if (absoluteX < midpoint) {
+    if (beforeFragment !== undefined) {
+      return {
+        ...beforeFragment.end,
+        assoc: -1
+      }
+    }
+
+    if (afterFragment !== undefined) {
+      return afterFragment.start
+    }
+
+    return inline.at
+  }
+
+  if (afterFragment !== undefined) {
+    return afterFragment.start
+  }
+
+  if (beforeFragment !== undefined) {
+    return {
+      ...beforeFragment.end,
+      assoc: -1
+    }
+  }
+
+  return inline.at
+}
+
+function offsetInInline(inline: InlineBox | undefined, position: TextPosition): number {
+  if (inline === undefined) {
+    return 0
+  }
+
+  return position.assoc !== undefined && position.assoc < 0
+    ? inline.x + inline.width
+    : inline.x
+}
+
+function resolveOuterInlineBoundaryPosition(
+  inlines: readonly InlineBox[],
+  absoluteX: number
+): TextPosition | undefined {
+  const firstInline = inlines[0]
+  const lastInline = inlines[inlines.length - 1]
+
+  if (firstInline === undefined || lastInline === undefined) {
+    return undefined
+  }
+
+  if (absoluteX <= firstInline.x) {
+    return resolveAdjacentEmptyTextAnchor(firstInline) ?? firstInline.at
+  }
+
+  if (absoluteX >= lastInline.x + lastInline.width) {
+    return resolveAdjacentEmptyTextAnchor(lastInline) ?? {
+      ...lastInline.at,
+      assoc: -1
+    }
+  }
+
+  return lastInline.at
+}
+
+/**
+ * 零宽空文本锚点代表真实可输入的文本 run，命中后应直接回到该文本位置。
+ */
+function resolveAdjacentEmptyTextAnchor(inline: InlineBox | undefined): TextPosition | undefined {
+  if (inline?.kind !== 'emptyTextAnchor') {
+    return undefined
+  }
+
+  return inline.at
+}
+
 function getLineSelectionRect(
   layout: DocumentLayout,
   line: LineBox,
@@ -275,6 +419,8 @@ function getLineSelectionRect(
 ): LayoutRect | undefined {
   let startX: number | undefined
   let endX: number | undefined
+  let topY: number | undefined
+  let bottomY: number | undefined
 
   for (const fragment of line.fragments) {
     const overlap = getFragmentOverlap(layout, fragment, anchor, focus)
@@ -288,18 +434,27 @@ function getLineSelectionRect(
 
     startX = Math.min(startX ?? fragmentStartX, fragmentStartX)
     endX = Math.max(endX ?? fragmentEndX, fragmentEndX)
+    topY = Math.min(topY ?? fragment.y, fragment.y)
+    bottomY = Math.max(bottomY ?? (fragment.y + fragment.height), fragment.y + fragment.height)
   }
 
-  if (startX === undefined || endX === undefined || endX <= startX) {
+  if (
+    startX === undefined ||
+    endX === undefined ||
+    endX <= startX ||
+    topY === undefined ||
+    bottomY === undefined ||
+    bottomY <= topY
+  ) {
     return undefined
   }
 
   return {
     pageIndex: line.pageIndex,
     x: startX,
-    y: line.y,
+    y: topY,
     width: endX - startX,
-    height: line.height
+    height: bottomY - topY
   }
 }
 
@@ -465,4 +620,8 @@ function isSameTextContainer(left: TextPosition, right: TextPosition): boolean {
 
 export function isSamePosition(left: TextPosition, right: TextPosition): boolean {
   return isSameTextContainer(left, right) && left.graphemeIndex === right.graphemeIndex
+}
+
+function isTrailingInlineBoundary(position: TextPosition): boolean {
+  return position.assoc !== undefined && position.assoc < 0
 }

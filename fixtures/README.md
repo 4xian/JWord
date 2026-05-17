@@ -11,6 +11,8 @@ Current fixture files:
 - `plain-text/gate2-emoji.txt`: Gate 2 emoji and grapheme visual fixture.
 - `plain-text/gate2-long-paragraph.txt`: Gate 2 long paragraph visual fixture.
 - `operation-fixtures/gate1-minimal-edit.json`: Gate 1.12 serialized operation replay fixture.
+- `gate4/README.md`: Gate 4 fixture registry and observable contract baseline.
+- `gate4/media-inline.svg`: Gate 4 image upload and render smoke fixture.
 
 Rules:
 

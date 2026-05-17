@@ -11,11 +11,16 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildDeleteSelectedImageCommand,
+  buildInsertInlineImageCommand,
+  buildUpsertResourceCommand,
   JWordError,
   createEditor,
   createFontManager,
   createPageConfig,
-  layoutDocument
+  isAllowedResourceUrl,
+  layoutDocument,
+  resolveSelectedImageTarget
 } from '../src/index'
 import type { DocumentLayout, Editor, HistoryOperationResult, JWordErrorCode } from '../src/index'
 
@@ -68,6 +73,44 @@ describe('core public API', () => {
     expect(typeof editor.setBackgroundColor).toBe('function')
     expect(typeof editor.setParagraphAlignment).toBe('function')
     expect(typeof editor.adjustParagraphIndent).toBe('function')
+
+    editor.destroy()
+  })
+
+  it('exports Gate 4 resource helpers and lets the editor project seeded resources', () => {
+    const editor = createEditor({
+      initialText: 'abc',
+      resources: [
+        {
+          kind: 'resource',
+          id: 'image-1',
+          mime: 'image/png',
+          source: {
+            kind: 'dataUrl',
+            url: 'data:image/png;base64,AAAA'
+          },
+          status: 'success'
+        }
+      ]
+    })
+
+    expect(typeof buildUpsertResourceCommand).toBe('function')
+    expect(typeof buildInsertInlineImageCommand).toBe('function')
+    expect(typeof buildDeleteSelectedImageCommand).toBe('function')
+    expect(typeof resolveSelectedImageTarget).toBe('function')
+    expect(isAllowedResourceUrl('data:image/png;base64,AAAA')).toBe(true)
+    expect(editor.getProjection().document.resources).toEqual([
+      {
+        kind: 'resource',
+        id: 'image-1',
+        mime: 'image/png',
+        source: {
+          kind: 'dataUrl',
+          url: 'data:image/png;base64,AAAA'
+        },
+        status: 'success'
+      }
+    ])
 
     editor.destroy()
   })

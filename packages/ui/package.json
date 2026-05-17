@@ -22,7 +22,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run --root ../.. packages/ui/test/toolbar-config.test.ts",
+    "test": "vitest run --root ../.. packages/ui/test",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
