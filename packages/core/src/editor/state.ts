@@ -13,6 +13,7 @@ import { createHistoryManager } from '../operations/history'
 import type { PageConfig, PageConfigInput, PageMargins, PagePreset } from '../layout/page-config'
 import type { DocumentLayout, LayoutDirtyRange, LayoutOptions } from '../layout/runtime'
 import { createPageConfig } from '../layout/page-config'
+import type { ModelProperties } from '../model/types'
 import type { DocumentProjection } from '../model/projection'
 import type { SelectionState } from '../model/selection'
 import { createTransactionPipeline } from '../operations/transaction'
@@ -52,7 +53,9 @@ export abstract class JWordEditorState {
   protected deferredPointerSelectionRenderId: ReturnType<typeof setTimeout> | undefined
   protected caretBlinkIntervalId: ReturnType<typeof setInterval> | undefined
   protected caretBlinkVisible = true
+  protected isInputFocused = false
   protected currentSelection: SelectionState | null = null
+  protected pendingCollapsedRunProperties: ModelProperties | undefined
   protected selectionPageIndexes: readonly number[] = []
   protected mountedTextMirrorNeedsRefresh = true
   protected isDestroyed = false

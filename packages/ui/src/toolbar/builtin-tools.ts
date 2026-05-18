@@ -5,6 +5,7 @@
  * 性能/安全约束：模块初始化只创建常量映射，无浏览器副作用。
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md#64-第一阶段内建工具-id。
  */
+import type { ParagraphAlignment, ParagraphList } from '@4xian/jword-core'
 import type { JWordToolbarToolId } from '../types'
 import type { ToolbarIconName } from './icons'
 
@@ -12,6 +13,7 @@ import type { ToolbarIconName } from './icons'
 export interface ToolbarOption {
   readonly value: string
   readonly label: string
+  readonly icon?: ToolbarIconName
 }
 
 /** toolbar 内建分组。 */
@@ -19,6 +21,15 @@ export type ToolbarGroupId = 'history' | 'document' | 'format' | 'paragraph'
 
 /** toolbar 内建控件种类。 */
 export type ToolbarControlKind = 'button' | 'select' | 'color'
+
+/** toolbar select / trigger 的视觉变体。 */
+export type ToolbarTriggerVariant = 'plain' | 'icon' | 'boxed'
+
+/** toolbar select 菜单项的视觉布局。 */
+export type ToolbarMenuLayout = 'text' | 'icon'
+
+/** toolbar 纯文本菜单项的对齐方式。 */
+export type ToolbarMenuTextAlign = 'start' | 'center'
 
 /** 单个内建工具的静态定义。 */
 export interface BuiltinToolDefinition {
@@ -30,20 +41,36 @@ export interface BuiltinToolDefinition {
   readonly dataAttribute: string
   readonly icon?: ToolbarIconName
   readonly fieldLabel?: string
+  readonly triggerVariant?: ToolbarTriggerVariant
+  readonly triggerIcon?: ToolbarIconName
+  readonly menuLayout?: ToolbarMenuLayout
+  readonly menuTextAlign?: ToolbarMenuTextAlign
+  readonly triggerMinWidthPx?: number
+  readonly menuMinWidthPx?: number
+  readonly menuMaxWidthPx?: number
   readonly options?: readonly ToolbarOption[]
 }
 
 /** 字体字段的空态占位值。 */
-export const FONT_FAMILY_EMPTY_VALUE = ''
+export const TOOLBAR_SELECT_EMPTY_VALUE = ''
 
 /** 字体字段的 mixed 占位值。 */
-export const FONT_FAMILY_MIXED_VALUE = '__mixed__'
+export const TOOLBAR_SELECT_MIXED_VALUE = '__mixed__'
+
+/** 字体字段的空态占位值。 */
+export const FONT_FAMILY_EMPTY_VALUE = TOOLBAR_SELECT_EMPTY_VALUE
+
+/** 字体字段的 mixed 占位值。 */
+export const FONT_FAMILY_MIXED_VALUE = TOOLBAR_SELECT_MIXED_VALUE
 
 /** 字号字段的空态占位值。 */
-export const FONT_SIZE_EMPTY_VALUE = ''
+export const FONT_SIZE_EMPTY_VALUE = TOOLBAR_SELECT_EMPTY_VALUE
 
 /** 字号字段的 mixed 占位值。 */
-export const FONT_SIZE_MIXED_VALUE = '__mixed__'
+export const FONT_SIZE_MIXED_VALUE = TOOLBAR_SELECT_MIXED_VALUE
+
+/** 字号步进按钮沿用的固定档位。 */
+export const FONT_SIZE_TWIPS_STEPS = [180, 200, 220, 240, 280, 300, 320, 360, 420, 480] as const
 
 /** 颜色字段的默认字色。 */
 export const DEFAULT_TEXT_COLOR = '#111111'
@@ -51,8 +78,12 @@ export const DEFAULT_TEXT_COLOR = '#111111'
 /** 颜色字段的默认底色。 */
 export const DEFAULT_BACKGROUND_COLOR = '#fff59d'
 
-/** 缩进按钮沿用 Gate 3 的 twips 步进。 */
-export const INDENT_STEP_TWIPS = 720
+/** 列表字段中“无列表”的稳定值。 */
+export const PARAGRAPH_LIST_NONE_VALUE = 'none'
+
+interface ParagraphListOptionDefinition extends ToolbarOption {
+  readonly list: ParagraphList | null
+}
 
 /** 所有内建工具 ID。 */
 export const BUILTIN_TOOL_IDS = [
@@ -63,20 +94,55 @@ export const BUILTIN_TOOL_IDS = [
   'format.italic',
   'format.underline',
   'format.strike',
+  'format.superscript',
+  'format.subscript',
   'format.fontFamily',
   'format.fontSize',
+  'format.fontSizeDecrease',
+  'format.fontSizeIncrease',
   'format.textColor',
   'format.backgroundColor',
-  'paragraph.alignLeft',
-  'paragraph.alignCenter',
-  'paragraph.alignRight',
-  'paragraph.alignJustify',
+  'paragraph.alignment',
   'paragraph.indentDecrease',
-  'paragraph.indentIncrease'
+  'paragraph.indentIncrease',
+  'paragraph.indentLeft',
+  'paragraph.lineHeight',
+  'paragraph.spacingBefore',
+  'paragraph.spacingAfter',
+  'paragraph.firstLineIndent',
+  'paragraph.hangingIndent',
+  'paragraph.style',
+  'paragraph.list'
 ] as const satisfies readonly JWordToolbarToolId[]
 
-/** 默认显示顺序直接沿用全部内建工具顺序。 */
-export const DEFAULT_VISIBLE_TOOL_IDS = [...BUILTIN_TOOL_IDS]
+/** 默认显示顺序采用新的 icon toolbar 布局，并隐藏旧的左缩进下拉。 */
+export const DEFAULT_VISIBLE_TOOL_IDS = [
+  'history.undo',
+  'history.redo',
+  'document.pagePreset',
+  'format.fontFamily',
+  'format.fontSize',
+  'paragraph.style',
+  'format.fontSizeIncrease',
+  'format.fontSizeDecrease',
+  'format.bold',
+  'format.italic',
+  'format.underline',
+  'format.strike',
+  'format.superscript',
+  'format.subscript',
+  'format.textColor',
+  'format.backgroundColor',
+  'paragraph.list',
+  'paragraph.alignment',
+  'paragraph.indentDecrease',
+  'paragraph.indentIncrease',
+  'paragraph.lineHeight',
+  'paragraph.spacingBefore',
+  'paragraph.spacingAfter',
+  'paragraph.firstLineIndent',
+  'paragraph.hangingIndent'
+] as const satisfies readonly JWordToolbarToolId[]
 
 const PAGE_PRESET_OPTIONS: readonly ToolbarOption[] = [
   { value: 'a3', label: 'A3' },
@@ -104,10 +170,172 @@ const FONT_SIZE_OPTIONS: readonly ToolbarOption[] = [
   { value: '220', label: '11 pt' },
   { value: '240', label: '12 pt' },
   { value: '280', label: '14 pt' },
+  { value: '300', label: '15 pt' },
   { value: '320', label: '16 pt' },
   { value: '360', label: '18 pt' },
-  { value: '420', label: '21 pt' }
+  { value: '420', label: '21 pt' },
+  { value: '480', label: '24 pt' }
 ] as const
+
+const PARAGRAPH_ALIGNMENT_LABEL_MAP = Object.freeze<Record<ParagraphAlignment, string>>({
+  left: '左对齐',
+  center: '居中对齐',
+  right: '右对齐',
+  justify: '两端对齐'
+})
+
+const PARAGRAPH_STYLE_LABEL_MAP = Object.freeze({
+  Normal: '正文',
+  Heading1: '标题 1',
+  Heading2: '标题 2',
+  Heading3: '标题 3'
+} as const)
+
+const PARAGRAPH_LIST_KIND_LABEL_MAP = Object.freeze<Record<string, string>>({
+  'jword-list-bullet': '项目符号列表',
+  'jword-list-ordered': '编号列表'
+})
+
+const PARAGRAPH_ALIGNMENT_OPTIONS = createToolbarSelectOptions('对齐', [
+  { value: 'left', label: PARAGRAPH_ALIGNMENT_LABEL_MAP.left, icon: 'alignLeft' },
+  { value: 'center', label: PARAGRAPH_ALIGNMENT_LABEL_MAP.center, icon: 'alignCenter' },
+  { value: 'right', label: PARAGRAPH_ALIGNMENT_LABEL_MAP.right, icon: 'alignRight' },
+  { value: 'justify', label: PARAGRAPH_ALIGNMENT_LABEL_MAP.justify, icon: 'alignJustify' }
+])
+
+const PARAGRAPH_INDENT_LEFT_OPTIONS = createToolbarSelectOptions('左缩进', [
+  { value: '0', label: formatTwipsOptionLabel(0) },
+  { value: '360', label: formatTwipsOptionLabel(360) },
+  { value: '720', label: formatTwipsOptionLabel(720) },
+  { value: '1080', label: formatTwipsOptionLabel(1080) },
+  { value: '1440', label: formatTwipsOptionLabel(1440) },
+  { value: '1800', label: formatTwipsOptionLabel(1800) },
+  { value: '2160', label: formatTwipsOptionLabel(2160) },
+  { value: '2880', label: formatTwipsOptionLabel(2880) }
+])
+
+const PARAGRAPH_LINE_HEIGHT_OPTIONS = createToolbarSelectOptions('行距', [
+  { value: '1', label: '1' },
+  { value: '1.15', label: '1.15' },
+  { value: '1.25', label: '1.25' },
+  { value: '1.5', label: '1.5' },
+  { value: '1.75', label: '1.75' },
+  { value: '1.8', label: '1.8' },
+  { value: '2', label: '2' },
+  { value: '2.5', label: '2.5' },
+  { value: '3', label: '3' }
+])
+
+const PARAGRAPH_SPACING_OPTIONS = createToolbarSelectOptions('段前', [
+  { value: '0', label: formatTwipsOptionLabel(0) },
+  { value: '120', label: formatTwipsOptionLabel(120) },
+  { value: '240', label: formatTwipsOptionLabel(240) },
+  { value: '360', label: formatTwipsOptionLabel(360) },
+  { value: '480', label: formatTwipsOptionLabel(480) },
+  { value: '600', label: formatTwipsOptionLabel(600) },
+  { value: '720', label: formatTwipsOptionLabel(720) }
+])
+
+const PARAGRAPH_SPACING_AFTER_OPTIONS = createToolbarSelectOptions('段后', [
+  { value: '0', label: formatTwipsOptionLabel(0) },
+  { value: '120', label: formatTwipsOptionLabel(120) },
+  { value: '240', label: formatTwipsOptionLabel(240) },
+  { value: '360', label: formatTwipsOptionLabel(360) },
+  { value: '480', label: formatTwipsOptionLabel(480) },
+  { value: '600', label: formatTwipsOptionLabel(600) },
+  { value: '720', label: formatTwipsOptionLabel(720) }
+])
+
+const PARAGRAPH_FIRST_LINE_INDENT_OPTIONS = createToolbarSelectOptions('首行', [
+  { value: '0', label: formatTwipsOptionLabel(0) },
+  { value: '240', label: formatTwipsOptionLabel(240) },
+  { value: '360', label: formatTwipsOptionLabel(360) },
+  { value: '480', label: formatTwipsOptionLabel(480) },
+  { value: '720', label: formatTwipsOptionLabel(720) },
+  { value: '960', label: formatTwipsOptionLabel(960) }
+])
+
+const PARAGRAPH_HANGING_INDENT_OPTIONS = createToolbarSelectOptions('悬挂', [
+  { value: '0', label: formatTwipsOptionLabel(0) },
+  { value: '240', label: formatTwipsOptionLabel(240) },
+  { value: '360', label: formatTwipsOptionLabel(360) },
+  { value: '480', label: formatTwipsOptionLabel(480) },
+  { value: '720', label: formatTwipsOptionLabel(720) },
+  { value: '960', label: formatTwipsOptionLabel(960) }
+])
+
+const PARAGRAPH_STYLE_OPTIONS = createToolbarSelectOptions('样式', [
+  { value: 'Normal', label: PARAGRAPH_STYLE_LABEL_MAP.Normal },
+  { value: 'Heading1', label: PARAGRAPH_STYLE_LABEL_MAP.Heading1 },
+  { value: 'Heading2', label: PARAGRAPH_STYLE_LABEL_MAP.Heading2 },
+  { value: 'Heading3', label: PARAGRAPH_STYLE_LABEL_MAP.Heading3 }
+])
+
+const PARAGRAPH_LIST_OPTIONS = createToolbarSelectOptions('列表', [
+  { value: PARAGRAPH_LIST_NONE_VALUE, label: '无列表', icon: 'listBullet' },
+  { value: 'bullet-l1', label: '项目符号列表 1 级', icon: 'listBullet' },
+  { value: 'bullet-l2', label: '项目符号列表 2 级', icon: 'listBullet' },
+  { value: 'bullet-l3', label: '项目符号列表 3 级', icon: 'listBullet' },
+  { value: 'ordered-l1', label: '编号列表 1 级', icon: 'listOrdered' },
+  { value: 'ordered-l2', label: '编号列表 2 级', icon: 'listOrdered' },
+  { value: 'ordered-l3', label: '编号列表 3 级', icon: 'listOrdered' }
+])
+
+const PARAGRAPH_LIST_OPTION_DEFINITIONS = [
+  {
+    value: PARAGRAPH_LIST_NONE_VALUE,
+    label: '无列表',
+    list: null
+  },
+  {
+    value: 'bullet-l1',
+    label: '项目符号列表 1 级',
+    list: {
+      numberingId: 'jword-list-bullet',
+      level: 1
+    }
+  },
+  {
+    value: 'bullet-l2',
+    label: '项目符号列表 2 级',
+    list: {
+      numberingId: 'jword-list-bullet',
+      level: 2
+    }
+  },
+  {
+    value: 'bullet-l3',
+    label: '项目符号列表 3 级',
+    list: {
+      numberingId: 'jword-list-bullet',
+      level: 3
+    }
+  },
+  {
+    value: 'ordered-l1',
+    label: '编号列表 1 级',
+    list: {
+      numberingId: 'jword-list-ordered',
+      level: 1
+    }
+  },
+  {
+    value: 'ordered-l2',
+    label: '编号列表 2 级',
+    list: {
+      numberingId: 'jword-list-ordered',
+      level: 2
+    }
+  },
+  {
+    value: 'ordered-l3',
+    label: '编号列表 3 级',
+    list: {
+      numberingId: 'jword-list-ordered',
+      level: 3
+    }
+  }
+] as const satisfies readonly ParagraphListOptionDefinition[]
 
 const BUILTIN_TOOL_DEFINITIONS = [
   {
@@ -135,6 +363,12 @@ const BUILTIN_TOOL_DEFINITIONS = [
     label: '纸张',
     tooltip: '纸张大小',
     dataAttribute: 'data-jword-page-preset',
+    fieldLabel: '纸张',
+    triggerVariant: 'boxed',
+    menuLayout: 'text',
+    triggerMinWidthPx: 52,
+    menuMinWidthPx: 72,
+    menuMaxWidthPx: 104,
     options: PAGE_PRESET_OPTIONS
   },
   {
@@ -174,12 +408,36 @@ const BUILTIN_TOOL_DEFINITIONS = [
     icon: 'strike'
   },
   {
+    id: 'format.superscript',
+    group: 'format',
+    kind: 'button',
+    label: '上标',
+    tooltip: '上标',
+    dataAttribute: 'data-jword-format-superscript',
+    icon: 'superscript'
+  },
+  {
+    id: 'format.subscript',
+    group: 'format',
+    kind: 'button',
+    label: '下标',
+    tooltip: '下标',
+    dataAttribute: 'data-jword-format-subscript',
+    icon: 'subscript'
+  },
+  {
     id: 'format.fontFamily',
     group: 'format',
     kind: 'select',
     label: '字体',
     tooltip: '字体',
     dataAttribute: 'data-jword-format-font-family',
+    fieldLabel: '字体',
+    triggerVariant: 'boxed',
+    menuLayout: 'text',
+    triggerMinWidthPx: 92,
+    menuMinWidthPx: 116,
+    menuMaxWidthPx: 148,
     options: FONT_FAMILY_OPTIONS
   },
   {
@@ -189,7 +447,31 @@ const BUILTIN_TOOL_DEFINITIONS = [
     label: '字号',
     tooltip: '字号',
     dataAttribute: 'data-jword-format-font-size',
+    fieldLabel: '字号',
+    triggerVariant: 'boxed',
+    menuLayout: 'text',
+    triggerMinWidthPx: 54,
+    menuMinWidthPx: 76,
+    menuMaxWidthPx: 104,
     options: FONT_SIZE_OPTIONS
+  },
+  {
+    id: 'format.fontSizeDecrease',
+    group: 'format',
+    kind: 'button',
+    label: '减小字号',
+    tooltip: '减小字号',
+    dataAttribute: 'data-jword-format-font-size-decrease',
+    icon: 'fontSizeDecrease'
+  },
+  {
+    id: 'format.fontSizeIncrease',
+    group: 'format',
+    kind: 'button',
+    label: '增大字号',
+    tooltip: '增大字号',
+    dataAttribute: 'data-jword-format-font-size-increase',
+    icon: 'fontSizeIncrease'
   },
   {
     id: 'format.textColor',
@@ -210,40 +492,19 @@ const BUILTIN_TOOL_DEFINITIONS = [
     dataAttribute: 'data-jword-format-background-color'
   },
   {
-    id: 'paragraph.alignLeft',
+    id: 'paragraph.alignment',
     group: 'paragraph',
-    kind: 'button',
-    label: '左对齐',
-    tooltip: '左对齐',
-    dataAttribute: 'data-jword-format-align-left',
-    icon: 'alignLeft'
-  },
-  {
-    id: 'paragraph.alignCenter',
-    group: 'paragraph',
-    kind: 'button',
-    label: '居中对齐',
-    tooltip: '居中对齐',
-    dataAttribute: 'data-jword-format-align-center',
-    icon: 'alignCenter'
-  },
-  {
-    id: 'paragraph.alignRight',
-    group: 'paragraph',
-    kind: 'button',
-    label: '右对齐',
-    tooltip: '右对齐',
-    dataAttribute: 'data-jword-format-align-right',
-    icon: 'alignRight'
-  },
-  {
-    id: 'paragraph.alignJustify',
-    group: 'paragraph',
-    kind: 'button',
-    label: '两端对齐',
-    tooltip: '两端对齐',
-    dataAttribute: 'data-jword-format-align-justify',
-    icon: 'alignJustify'
+    kind: 'select',
+    label: '段落对齐',
+    tooltip: '段落对齐',
+    dataAttribute: 'data-jword-paragraph-alignment',
+    fieldLabel: '对齐',
+    triggerVariant: 'icon',
+    triggerIcon: 'alignLeft',
+    menuLayout: 'icon',
+    menuMinWidthPx: 124,
+    menuMaxWidthPx: 156,
+    options: PARAGRAPH_ALIGNMENT_OPTIONS
   },
   {
     id: 'paragraph.indentDecrease',
@@ -251,7 +512,7 @@ const BUILTIN_TOOL_DEFINITIONS = [
     kind: 'button',
     label: '减少缩进',
     tooltip: '减少缩进',
-    dataAttribute: 'data-jword-format-indent-decrease',
+    dataAttribute: 'data-jword-paragraph-indent-decrease',
     icon: 'indentDecrease'
   },
   {
@@ -260,8 +521,127 @@ const BUILTIN_TOOL_DEFINITIONS = [
     kind: 'button',
     label: '增加缩进',
     tooltip: '增加缩进',
-    dataAttribute: 'data-jword-format-indent-increase',
+    dataAttribute: 'data-jword-paragraph-indent-increase',
     icon: 'indentIncrease'
+  },
+  {
+    id: 'paragraph.indentLeft',
+    group: 'paragraph',
+    kind: 'select',
+    label: '左缩进',
+    tooltip: '左缩进',
+    dataAttribute: 'data-jword-paragraph-indent-left',
+    fieldLabel: '左缩进',
+    menuLayout: 'text',
+    triggerMinWidthPx: 78,
+    menuMinWidthPx: 92,
+    menuMaxWidthPx: 112,
+    options: PARAGRAPH_INDENT_LEFT_OPTIONS
+  },
+  {
+    id: 'paragraph.lineHeight',
+    group: 'paragraph',
+    kind: 'select',
+    label: '行距',
+    tooltip: '行距',
+    dataAttribute: 'data-jword-paragraph-line-height',
+    fieldLabel: '行距',
+    triggerVariant: 'icon',
+    triggerIcon: 'lineHeight',
+    menuLayout: 'text',
+    menuMinWidthPx: 72,
+    menuMaxWidthPx: 96,
+    options: PARAGRAPH_LINE_HEIGHT_OPTIONS
+  },
+  {
+    id: 'paragraph.spacingBefore',
+    group: 'paragraph',
+    kind: 'select',
+    label: '段前间距',
+    tooltip: '段前间距',
+    dataAttribute: 'data-jword-paragraph-spacing-before',
+    fieldLabel: '段前',
+    triggerVariant: 'icon',
+    triggerIcon: 'spacingBefore',
+    menuLayout: 'text',
+    menuMinWidthPx: 84,
+    menuMaxWidthPx: 108,
+    options: PARAGRAPH_SPACING_OPTIONS
+  },
+  {
+    id: 'paragraph.spacingAfter',
+    group: 'paragraph',
+    kind: 'select',
+    label: '段后间距',
+    tooltip: '段后间距',
+    dataAttribute: 'data-jword-paragraph-spacing-after',
+    fieldLabel: '段后',
+    triggerVariant: 'icon',
+    triggerIcon: 'spacingAfter',
+    menuLayout: 'text',
+    menuMinWidthPx: 84,
+    menuMaxWidthPx: 108,
+    options: PARAGRAPH_SPACING_AFTER_OPTIONS
+  },
+  {
+    id: 'paragraph.firstLineIndent',
+    group: 'paragraph',
+    kind: 'select',
+    label: '首行缩进',
+    tooltip: '首行缩进',
+    dataAttribute: 'data-jword-paragraph-first-line-indent',
+    fieldLabel: '首行',
+    triggerVariant: 'icon',
+    triggerIcon: 'firstLineIndent',
+    menuLayout: 'text',
+    menuMinWidthPx: 84,
+    menuMaxWidthPx: 108,
+    options: PARAGRAPH_FIRST_LINE_INDENT_OPTIONS
+  },
+  {
+    id: 'paragraph.hangingIndent',
+    group: 'paragraph',
+    kind: 'select',
+    label: '悬挂缩进',
+    tooltip: '悬挂缩进',
+    dataAttribute: 'data-jword-paragraph-hanging-indent',
+    fieldLabel: '悬挂',
+    triggerVariant: 'icon',
+    triggerIcon: 'hangingIndent',
+    menuLayout: 'text',
+    menuMinWidthPx: 84,
+    menuMaxWidthPx: 108,
+    options: PARAGRAPH_HANGING_INDENT_OPTIONS
+  },
+  {
+    id: 'paragraph.style',
+    group: 'format',
+    kind: 'select',
+    label: '段落样式',
+    tooltip: '段落样式',
+    dataAttribute: 'data-jword-paragraph-style',
+    fieldLabel: '样式',
+    triggerVariant: 'boxed',
+    menuLayout: 'text',
+    triggerMinWidthPx: 74,
+    menuMinWidthPx: 94,
+    menuMaxWidthPx: 118,
+    options: PARAGRAPH_STYLE_OPTIONS
+  },
+  {
+    id: 'paragraph.list',
+    group: 'paragraph',
+    kind: 'select',
+    label: '列表样式',
+    tooltip: '段落列表',
+    dataAttribute: 'data-jword-paragraph-list',
+    fieldLabel: '列表',
+    triggerVariant: 'icon',
+    triggerIcon: 'listBullet',
+    menuLayout: 'icon',
+    menuMinWidthPx: 160,
+    menuMaxWidthPx: 192,
+    options: PARAGRAPH_LIST_OPTIONS
   }
 ] as const satisfies readonly BuiltinToolDefinition[]
 
@@ -283,4 +663,73 @@ export function getBuiltinToolDefinition(id: JWordToolbarToolId): BuiltinToolDef
   }
 
   return definition
+}
+
+/** 判断当前选项值是否只是 toolbar 的空态占位。 */
+export function isToolbarPlaceholderSelectValue(value: string): boolean {
+  return value === TOOLBAR_SELECT_EMPTY_VALUE || value === TOOLBAR_SELECT_MIXED_VALUE
+}
+
+/** 把列表 select 值解析成稳定列表语义。 */
+export function parseParagraphListSelectValue(value: string): ParagraphList | null | undefined {
+  const option = PARAGRAPH_LIST_OPTION_DEFINITIONS.find((item) => item.value === value)
+
+  return option?.list
+}
+
+/** 把稳定列表语义映射回 select 值。 */
+export function stringifyParagraphListSelectValue(value: ParagraphList | null | undefined): string {
+  if (value === undefined) {
+    return PARAGRAPH_LIST_NONE_VALUE
+  }
+
+  if (value === null) {
+    return PARAGRAPH_LIST_NONE_VALUE
+  }
+
+  const option = PARAGRAPH_LIST_OPTION_DEFINITIONS.find((item) => (
+    item.list !== null
+      && item.list.numberingId === value.numberingId
+      && item.list.level === value.level
+  ))
+
+  return option?.value ?? TOOLBAR_SELECT_EMPTY_VALUE
+}
+
+/** 为自绘 select 生成统一的空态与 mixed 占位。 */
+function createToolbarSelectOptions(
+  emptyLabel: string,
+  options: readonly ToolbarOption[]
+): readonly ToolbarOption[] {
+  return [
+    { value: TOOLBAR_SELECT_EMPTY_VALUE, label: emptyLabel },
+    { value: TOOLBAR_SELECT_MIXED_VALUE, label: '混合' },
+    ...options
+  ]
+}
+
+/** 把 twips 选项文案稳定转换成 pt。 */
+function formatTwipsOptionLabel(value: number): string {
+  return `${value / 20} pt`
+}
+
+/** 读取段落对齐的中文文案。 */
+export function readParagraphAlignmentLabel(value: ParagraphAlignment | undefined): string | undefined {
+  return value === undefined ? undefined : PARAGRAPH_ALIGNMENT_LABEL_MAP[value]
+}
+
+/** 读取段落样式的中文文案。 */
+export function readParagraphStyleLabel(value: string | null | undefined): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+
+  return value in PARAGRAPH_STYLE_LABEL_MAP
+    ? PARAGRAPH_STYLE_LABEL_MAP[value as keyof typeof PARAGRAPH_STYLE_LABEL_MAP]
+    : value
+}
+
+/** 读取列表 numbering id 对应的中文种类文案。 */
+export function readParagraphListKindLabel(value: string): string {
+  return PARAGRAPH_LIST_KIND_LABEL_MAP[value] ?? value
 }

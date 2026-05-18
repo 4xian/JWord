@@ -405,6 +405,13 @@ export interface Editor {
   setParagraphAlignment(value: ParagraphAlignment): void
 
   /**
+   * 设置当前选择区段落的左缩进。
+   *
+   * @param value 目标左缩进 twips。
+   */
+  setParagraphIndent(value: number): void
+
+  /**
    * 设置当前选择区段落的行距。
    *
    * @param value 目标行距值。
@@ -449,9 +456,9 @@ export interface Editor {
   /**
    * 设置当前选择区段落的稳定列表语义。
    *
-   * @param value 目标列表语义，包含 numberingId 与 level。
+   * @param value 目标列表语义；传入 `null` 表示清空为 none。
    */
-  setParagraphList(value: ParagraphList): void
+  setParagraphList(value: ParagraphList | null): void
 
   /**
    * 按 twips 增量调整当前选择区段落缩进。
@@ -527,6 +534,34 @@ export interface Editor {
    * ```
    */
   subscribe(listener: EditorEventListener): () => void
+
+  /**
+   * 聚焦当前已挂载的编辑器输入层。
+   *
+   * @returns 无返回值。
+   * @remarks
+   * 副作用：把隐藏输入框设为活动元素；当前没有 selection 时，会在文档首个可编辑位置放置折叠光标。
+   *
+   * @example
+   * ```ts
+   * editor.focus();
+   * ```
+   */
+  focus(): void
+
+  /**
+   * 让当前已挂载的编辑器输入层失焦。
+   *
+   * @returns 无返回值。
+   * @remarks
+   * 副作用：把隐藏输入框移出活动焦点；不会清空当前 selection。
+   *
+   * @example
+   * ```ts
+   * editor.blur();
+   * ```
+   */
+  blur(): void
 
   /**
    * 将编辑器外壳挂载到 host 元素。

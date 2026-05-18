@@ -151,6 +151,52 @@ describe('selection formatting state', () => {
       mixed: false
     })
   })
+
+  it('resolves fallback font family and default body font size when run properties are absent', () => {
+    const fixture = createDefaultRunFormattingStateFixture()
+    const selection = createCollapsedSelection(fixture.createAnchor('paragraph-1', 'run-1', 1))
+
+    expect(createSelectionFormattingState(fixture.projection, selection)).toMatchObject({
+      run: {
+        fontFamily: { value: 'Arial', mixed: false },
+        fontSizeTwips: { value: 240, mixed: false }
+      },
+      paragraph: {
+        lineHeight: { value: 1.25, mixed: false }
+      }
+    })
+  })
+
+  it('resolves paragraph style default font sizes and avoids false mixed states for equal effective values', () => {
+    const fixture = createEffectiveFontFormattingStateFixture()
+    const collapsedSelection = createCollapsedSelection(fixture.createAnchor('paragraph-1', 'run-1', 1))
+    const rangeSelection = createSelectionState(
+      fixture.createAnchor('paragraph-1', 'run-1', 0),
+      fixture.createAnchor('paragraph-1', 'run-2', 1)
+    )
+
+    expect(createSelectionFormattingState(fixture.projection, collapsedSelection).run).toMatchObject({
+      fontFamily: { value: 'Arial', mixed: false },
+      fontSizeTwips: { value: 480, mixed: false }
+    })
+    expect(createSelectionFormattingState(fixture.projection, rangeSelection).run).toMatchObject({
+      fontFamily: { value: 'Arial', mixed: false },
+      fontSizeTwips: { value: 480, mixed: false }
+    })
+  })
+
+  it('treats implicit and explicit default line heights as the same effective paragraph value', () => {
+    const fixture = createEffectiveLineHeightFormattingStateFixture()
+    const selection = createSelectionState(
+      fixture.createAnchor('paragraph-1', 'run-1', 0),
+      fixture.createAnchor('paragraph-1', 'run-2', 1)
+    )
+
+    expect(createSelectionFormattingState(fixture.projection, selection).paragraph?.lineHeight).toEqual({
+      value: 1.25,
+      mixed: false
+    })
+  })
 })
 
 function createFormattingStateFixture() {
@@ -255,6 +301,101 @@ function createUniformListFormattingStateFixture() {
   setRecordProperties(paragraphTwo, DOCUMENT_STORE_FIELDS.block.properties, {
     listNumberingId: 'jword-list-bullet',
     listLevel: 0
+  })
+
+  const projection = createDocumentProjection(store)
+
+  return {
+    projection,
+    createAnchor(blockId: string, runId: string, graphemeIndex: number) {
+      return createAnchorRef({
+        documentId: 'document-1' as DocumentId,
+        sectionId: 'section-1' as SectionId,
+        blockId: blockId as BlockId,
+        runId: runId as RunId,
+        graphemeIndex: createGraphemeIndex(graphemeIndex)
+      })
+    }
+  }
+}
+
+function createDefaultRunFormattingStateFixture() {
+  const store = createDocumentStore()
+  const section = createSectionRecord('section-1' as SectionId)
+  const paragraph = createParagraphRecord('paragraph-1' as BlockId)
+  const run = createRunRecord('run-1' as RunId, '正文')
+
+  store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-1' as DocumentId)
+  store.sections.push([section])
+  getSectionBlocks(section).push([paragraph])
+  getParagraphRuns(paragraph).push([run])
+
+  const projection = createDocumentProjection(store)
+
+  return {
+    projection,
+    createAnchor(blockId: string, runId: string, graphemeIndex: number) {
+      return createAnchorRef({
+        documentId: 'document-1' as DocumentId,
+        sectionId: 'section-1' as SectionId,
+        blockId: blockId as BlockId,
+        runId: runId as RunId,
+        graphemeIndex: createGraphemeIndex(graphemeIndex)
+      })
+    }
+  }
+}
+
+function createEffectiveFontFormattingStateFixture() {
+  const store = createDocumentStore()
+  const section = createSectionRecord('section-1' as SectionId)
+  const paragraph = createParagraphRecord('paragraph-1' as BlockId)
+  const runOne = createRunRecord('run-1' as RunId, '标题')
+  const runTwo = createRunRecord('run-2' as RunId, '一')
+
+  store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-1' as DocumentId)
+  store.sections.push([section])
+  getSectionBlocks(section).push([paragraph])
+  getParagraphRuns(paragraph).push([runOne, runTwo])
+
+  setRecordProperties(paragraph, DOCUMENT_STORE_FIELDS.block.properties, {
+    styleId: 'Heading1'
+  })
+  setRecordProperties(runTwo, DOCUMENT_STORE_FIELDS.run.properties, {
+    fontSizeTwips: 480,
+    fontFamily: 'Arial'
+  })
+
+  const projection = createDocumentProjection(store)
+
+  return {
+    projection,
+    createAnchor(blockId: string, runId: string, graphemeIndex: number) {
+      return createAnchorRef({
+        documentId: 'document-1' as DocumentId,
+        sectionId: 'section-1' as SectionId,
+        blockId: blockId as BlockId,
+        runId: runId as RunId,
+        graphemeIndex: createGraphemeIndex(graphemeIndex)
+      })
+    }
+  }
+}
+
+function createEffectiveLineHeightFormattingStateFixture() {
+  const store = createDocumentStore()
+  const section = createSectionRecord('section-1' as SectionId)
+  const paragraph = createParagraphRecord('paragraph-1' as BlockId)
+  const runOne = createRunRecord('run-1' as RunId, '甲')
+  const runTwo = createRunRecord('run-2' as RunId, '乙')
+
+  store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-1' as DocumentId)
+  store.sections.push([section])
+  getSectionBlocks(section).push([paragraph])
+  getParagraphRuns(paragraph).push([runOne, runTwo])
+
+  setRecordProperties(runTwo, DOCUMENT_STORE_FIELDS.run.properties, {
+    lineHeight: 1.25
   })
 
   const projection = createDocumentProjection(store)

@@ -8,6 +8,7 @@
 
 import { twipsToCssPx } from './page-config'
 import type { RunTextStyle } from './font-manager'
+import { resolveParagraphRunStyleDefaults } from './paragraph-semantics'
 import type { Inline, ModelProperties, Paragraph, Section } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { Resource } from '../resources/types'
@@ -210,7 +211,8 @@ export function resolveParagraphPageBreakPolicy(paragraph: Paragraph): Paragraph
   })
 }
 
-export function readRunStyle(properties: ModelProperties | undefined): RunTextStyle {
+export function readRunStyle(paragraph: Paragraph, properties: ModelProperties | undefined): RunTextStyle {
+  const defaults = resolveParagraphRunStyleDefaults(paragraph)
   const fontFamily = readStringProperty(properties, 'fontFamily')
   const fontSizePx = readNumberProperty(properties, 'fontSizePx')
   const fontSizeTwips = readNumberProperty(properties, 'fontSizeTwips')
@@ -218,11 +220,17 @@ export function readRunStyle(properties: ModelProperties | undefined): RunTextSt
   const italic = readBooleanProperty(properties, 'italic')
   const underline = readBooleanProperty(properties, 'underline')
   const strike = readBooleanProperty(properties, 'strike')
+  const superscript = readBooleanProperty(properties, 'superscript')
+  const subscript = readBooleanProperty(properties, 'subscript')
   const color = readStringProperty(properties, 'color')
   const backgroundColor = readStringProperty(properties, 'backgroundColor')
   const lineHeight = readNumberProperty(properties, 'lineHeight')
+  const resolvedFontSizePx = fontSizePx === undefined
+    ? (fontSizeTwips === undefined ? undefined : twipsToCssPx(fontSizeTwips))
+    : fontSizePx
   const style: RunTextStyle = {
-    fontSizePx: fontSizePx ?? (fontSizeTwips === undefined ? 16 : twipsToCssPx(fontSizeTwips))
+    ...defaults,
+    ...(resolvedFontSizePx === undefined ? {} : { fontSizePx: resolvedFontSizePx })
   }
 
   return {
@@ -233,6 +241,8 @@ export function readRunStyle(properties: ModelProperties | undefined): RunTextSt
     ...(italic === undefined ? {} : { italic }),
     ...(underline === undefined ? {} : { underline }),
     ...(strike === undefined ? {} : { strike }),
+    ...(superscript === undefined ? {} : { superscript }),
+    ...(subscript === undefined ? {} : { subscript }),
     ...(color === undefined ? {} : { color }),
     ...(backgroundColor === undefined ? {} : { backgroundColor }),
     ...(lineHeight === undefined ? {} : { lineHeight })

@@ -18,13 +18,105 @@ export function wrapWithTooltip(control: HTMLElement, text: string): ToolbarTool
   const tooltip = document.createElement('span')
 
   anchor.className = 'jw-toolbar__tooltip-anchor'
+  anchor.setAttribute('data-jword-tooltip-visible', 'false')
   tooltip.className = 'jw-toolbar__tooltip'
   tooltip.setAttribute('role', 'tooltip')
   tooltip.textContent = text
   anchor.append(control, tooltip)
+  bindToolbarTooltipVisibility(anchor)
 
   return {
     anchor,
     tooltip
   }
+}
+
+/**
+ * 只在鼠标/焦点停留在工具本体时显示 tooltip；点击后立即隐藏，直到指针离开当前工具。
+ */
+function bindToolbarTooltipVisibility(anchor: HTMLElement): void {
+  const dismiss = () => {
+    hideToolbarTooltip(anchor)
+    anchor.setAttribute('data-jword-tooltip-dismissed', 'true')
+  }
+  const maybeShow = (target: EventTarget | null) => {
+    if (!(target instanceof Element) || readTooltipDismissed(anchor)) {
+      return
+    }
+
+    if (resolveTooltipClosest(anchor, target, '[data-jword-tooltip-skip=\"true\"]') !== null) {
+      hideToolbarTooltip(anchor)
+      return
+    }
+
+    if (resolveTooltipClosest(anchor, target, '[data-jword-tooltip-surface=\"true\"]') === null) {
+      return
+    }
+
+    showToolbarTooltip(anchor)
+  }
+  const reset = (relatedTarget: EventTarget | null) => {
+    if (relatedTarget instanceof Node && anchor.contains(relatedTarget)) {
+      if (
+        relatedTarget instanceof Element
+        && resolveTooltipClosest(anchor, relatedTarget, '[data-jword-tooltip-skip=\"true\"]') !== null
+      ) {
+        hideToolbarTooltip(anchor)
+      }
+
+      return
+    }
+
+    hideToolbarTooltip(anchor)
+    anchor.removeAttribute('data-jword-tooltip-dismissed')
+  }
+
+  anchor.addEventListener('mouseover', (event) => {
+    maybeShow(event.target)
+  })
+  anchor.addEventListener('focusin', (event) => {
+    maybeShow(event.target)
+  })
+  anchor.addEventListener('mouseout', (event) => {
+    reset(event.relatedTarget)
+  })
+  anchor.addEventListener('focusout', (event) => {
+    reset(event.relatedTarget)
+  })
+  anchor.addEventListener('mousedown', dismiss)
+  anchor.addEventListener('click', dismiss)
+}
+
+/**
+ * 标记 tooltip 可见。
+ */
+function showToolbarTooltip(anchor: HTMLElement): void {
+  anchor.setAttribute('data-jword-tooltip-visible', 'true')
+}
+
+/**
+ * 标记 tooltip 隐藏。
+ */
+function hideToolbarTooltip(anchor: HTMLElement): void {
+  anchor.setAttribute('data-jword-tooltip-visible', 'false')
+}
+
+/**
+ * 判断当前 tooltip 是否处于点击后的暂时抑制态。
+ */
+function readTooltipDismissed(anchor: HTMLElement): boolean {
+  return anchor.getAttribute('data-jword-tooltip-dismissed') === 'true'
+}
+
+/**
+ * 在当前 tooltip 锚点范围内查找目标最近的命中节点。
+ */
+function resolveTooltipClosest(
+  anchor: HTMLElement,
+  target: Element,
+  selector: string
+): Element | null {
+  const matched = target.closest(selector)
+
+  return matched !== null && anchor.contains(matched) ? matched : null
 }

@@ -147,6 +147,51 @@ describe('renderPageCanvas', () => {
     expect(canvas.calls).toContain('fillRect:72,105.2,120,1')
   })
 
+  it('renders superscript and subscript with a shifted baseline and reduced font size', () => {
+    const superscriptCanvas = createMockCanvas()
+    const subscriptCanvas = createMockCanvas()
+    const superscriptPage = createPageLayout(0, 'x2', {
+      superscript: true,
+      fontSizePx: 10.4,
+      baseFontSizePx: 16
+    }) satisfies LayoutBox
+    const subscriptPage = createPageLayout(0, 'H2O', {
+      subscript: true,
+      fontSizePx: 10.4,
+      baseFontSizePx: 16
+    }) satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas: superscriptCanvas,
+      page: superscriptPage
+    })
+    renderPageCanvas({
+      canvas: subscriptCanvas,
+      page: subscriptPage
+    })
+
+    expect(superscriptCanvas.calls).toContain('font:10px sans-serif')
+    expect(subscriptCanvas.calls).toContain('font:10px sans-serif')
+    expect(findFillTextY(superscriptCanvas.calls, 'x2')).toBeLessThan(110)
+    expect(findFillTextY(subscriptCanvas.calls, 'H2O')).toBeGreaterThan(110)
+  })
+
+  it('draws paragraph list markers before the paragraph text', () => {
+    const canvas = createMockCanvas()
+    const page = createListPageLayout(0, '列表项', '1.') satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page
+    })
+
+    expect(canvas.calls).toContain('fillText:1.,56,110')
+    expect(canvas.calls).toContain('fillText:列表项,72,110')
+    expect(canvas.calls.indexOf('fillText:1.,56,110')).toBeLessThan(
+      canvas.calls.indexOf('fillText:列表项,72,110')
+    )
+  })
+
   it('限制异常大页面的 canvas 尺寸，避免保留超大画布', () => {
     const canvas = createMockCanvas()
     const basePage = createPageLayout(0, '大页面')
@@ -395,6 +440,16 @@ function createPageLayout(
   }
 }
 
+function findFillTextY(calls: readonly string[], text: string): number {
+  const call = calls.find((entry) => entry.startsWith(`fillText:${text},`))
+
+  if (call === undefined) {
+    throw new Error(`missing fillText call for ${text}`)
+  }
+
+  return Number.parseFloat(call.split(',').at(-1) ?? 'NaN')
+}
+
 function createImagePageLayout(pageIndex: number): LayoutBox {
   const pageTop = cssPxToTwips(pageIndex * 820)
   const lineTop = pageTop + cssPxToTwips(96)
@@ -464,5 +519,43 @@ function createImagePageLayout(pageIndex: number): LayoutBox {
       width: cssPxToTwips(456),
       height: cssPxToTwips(620)
     }
+  }
+}
+
+function createListPageLayout(pageIndex: number, text: string, markerText: string): LayoutBox {
+  const page = createPageLayout(pageIndex, text)
+  const line = page.lines[0]!
+
+  return {
+    ...page,
+    paragraphs: [
+      {
+        kind: 'paragraph',
+        pageIndex,
+        sectionId: 'section-render',
+        paragraphId: 'paragraph-render',
+        pageBreakPolicy: {
+          widowControl: true,
+          orphanLines: 2,
+          widowLines: 2
+        },
+        x: line.x,
+        y: line.y,
+        width: line.width,
+        height: line.height,
+        lines: [line],
+        listMarker: {
+          kind: 'ordered',
+          label: markerText,
+          text: markerText,
+          level: 1,
+          gapTwips: cssPxToTwips(4),
+          list: {
+            numberingId: 'jword-list-ordered',
+            level: 0
+          }
+        }
+      }
+    ]
   }
 }

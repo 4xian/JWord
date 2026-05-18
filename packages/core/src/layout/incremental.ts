@@ -142,7 +142,7 @@ function collectFontManagerProbeStyles(projection: DocumentProjection): readonly
       }
 
       for (const run of block.runs) {
-        const style = Object.freeze(readRunStyle(run.properties))
+        const style = Object.freeze(readRunStyle(block, run.properties))
         const key = createRunStyleSignature(style)
 
         if (!styles.has(key)) {
@@ -162,6 +162,8 @@ function createRunStyleSignature(style: RunTextStyle): string {
     style.fontSizeTwips ?? '',
     style.bold === true ? 'bold' : 'normal',
     style.italic === true ? 'italic' : 'upright',
+    style.superscript === true ? 'superscript' : 'baseline',
+    style.subscript === true ? 'subscript' : 'baseline',
     style.color ?? '',
     style.lineHeight ?? ''
   ].join('\u0000')
@@ -183,9 +185,12 @@ function createResolvedFontSignature(style: ResolvedFontStyle): string {
     style.fontFamily,
     style.requestedFontFamily ?? '',
     style.fontSizePx,
+    style.baseFontSizePx ?? '',
     style.status,
     style.bold === true ? 'bold' : 'normal',
     style.italic === true ? 'italic' : 'upright',
+    style.superscript === true ? 'superscript' : 'baseline',
+    style.subscript === true ? 'subscript' : 'baseline',
     style.color ?? '',
     style.lineHeight ?? ''
   ].join('\u0000')

@@ -6,13 +6,13 @@
  * Specs: docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md#62-建议的最小配置形状。
  */
 import { describe, expect, test } from 'vitest'
-import { BUILTIN_TOOL_IDS } from '../src/toolbar/builtin-tools'
+import { DEFAULT_VISIBLE_TOOL_IDS } from '../src/toolbar/builtin-tools'
 import { resolveToolbarConfig } from '../src/toolbar/config'
 
 describe('resolveToolbarConfig', () => {
   test('在未传 visibleTools 时回退到默认工具顺序', () => {
     expect(resolveToolbarConfig()).toEqual({
-      toolIds: [...BUILTIN_TOOL_IDS],
+      toolIds: [...DEFAULT_VISIBLE_TOOL_IDS],
       showSummaries: true
     })
   })
@@ -23,13 +23,13 @@ describe('resolveToolbarConfig', () => {
         'format.bold',
         'history.undo',
         'format.bold',
-        'paragraph.alignRight'
+        'paragraph.alignment'
       ]
     })).toEqual({
       toolIds: [
         'format.bold',
         'history.undo',
-        'paragraph.alignRight'
+        'paragraph.alignment'
       ],
       showSummaries: true
     })
@@ -59,8 +59,36 @@ describe('resolveToolbarConfig', () => {
       hiddenTools: ['history.undo'],
       showSummaries: false
     })).toEqual({
-      toolIds: BUILTIN_TOOL_IDS.filter((toolId) => toolId !== 'history.undo'),
+      toolIds: DEFAULT_VISIBLE_TOOL_IDS.filter((toolId) => toolId !== 'history.undo'),
       showSummaries: false
+    })
+  })
+
+  test('新加入的按钮工具也可以通过 visibleTools 和 hiddenTools 控制', () => {
+    expect(resolveToolbarConfig({
+      visibleTools: [
+        'format.fontSizeDecrease',
+        'format.fontSizeIncrease',
+        'format.superscript',
+        'format.subscript',
+        'paragraph.indentDecrease',
+        'paragraph.indentIncrease',
+        'paragraph.indentLeft',
+        'format.fontSizeIncrease'
+      ],
+      hiddenTools: [
+        'format.subscript',
+        'paragraph.indentLeft'
+      ]
+    })).toEqual({
+      toolIds: [
+        'format.fontSizeDecrease',
+        'format.fontSizeIncrease',
+        'format.superscript',
+        'paragraph.indentDecrease',
+        'paragraph.indentIncrease'
+      ],
+      showSummaries: true
     })
   })
 })

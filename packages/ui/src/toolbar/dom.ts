@@ -12,15 +12,15 @@ import {
   FONT_SIZE_EMPTY_VALUE,
   FONT_SIZE_MIXED_VALUE,
   getBuiltinToolDefinition,
+  isToolbarPlaceholderSelectValue,
+  TOOLBAR_SELECT_MIXED_VALUE,
   type BuiltinToolDefinition,
+  type ToolbarMenuLayout,
   type ToolbarOption
 } from './builtin-tools'
 import type { ResolvedToolbarConfig } from './config'
-import { createToolbarIcon } from './icons'
-import {
-  readAlignmentPressedState,
-  type ToolbarState
-} from './state'
+import { createToolbarIcon, type ToolbarIconName } from './icons'
+import type { ToolbarState } from './state'
 import { wrapWithTooltip } from './tooltip'
 
 interface SummaryNodes {
@@ -107,16 +107,25 @@ export function renderToolbarState(dom: ToolbarDom, state: ToolbarState): void {
   setToggleButtonState(dom.controls['format.italic'], state.runFormatEnabled, state.italicPressed)
   setToggleButtonState(dom.controls['format.underline'], state.runFormatEnabled, state.underlinePressed)
   setToggleButtonState(dom.controls['format.strike'], state.runFormatEnabled, state.strikePressed)
+  setToggleButtonState(dom.controls['format.superscript'], state.runFormatEnabled, state.superscriptPressed)
+  setToggleButtonState(dom.controls['format.subscript'], state.runFormatEnabled, state.subscriptPressed)
   setSelectState(dom.controls['format.fontFamily'], !state.runFormatEnabled, state.fontFamilyValue, state.fontFamilyState)
   setSelectState(dom.controls['format.fontSize'], !state.runFormatEnabled, state.fontSizeValue, state.fontSizeState)
+  setActionButtonState(dom.controls['format.fontSizeDecrease'], state.runFormatEnabled)
+  setActionButtonState(dom.controls['format.fontSizeIncrease'], state.runFormatEnabled)
   setColorState(dom.controls['format.textColor'], !state.runFormatEnabled, state.textColorValue, state.textColorState)
   setColorState(dom.controls['format.backgroundColor'], !state.runFormatEnabled, state.backgroundColorValue, state.backgroundColorState)
-  setAlignButtonState(dom.controls['paragraph.alignLeft'], state, 'left')
-  setAlignButtonState(dom.controls['paragraph.alignCenter'], state, 'center')
-  setAlignButtonState(dom.controls['paragraph.alignRight'], state, 'right')
-  setAlignButtonState(dom.controls['paragraph.alignJustify'], state, 'justify')
+  setSelectState(dom.controls['paragraph.alignment'], !state.paragraphFormatEnabled, state.paragraphAlignmentValue, state.paragraphAlignmentState)
   setActionButtonState(dom.controls['paragraph.indentDecrease'], state.paragraphFormatEnabled)
   setActionButtonState(dom.controls['paragraph.indentIncrease'], state.paragraphFormatEnabled)
+  setSelectState(dom.controls['paragraph.indentLeft'], !state.paragraphFormatEnabled, state.paragraphIndentLeftValue, state.paragraphIndentLeftState)
+  setSelectState(dom.controls['paragraph.lineHeight'], !state.paragraphFormatEnabled, state.paragraphLineHeightValue, state.paragraphLineHeightState)
+  setSelectState(dom.controls['paragraph.spacingBefore'], !state.paragraphFormatEnabled, state.paragraphSpacingBeforeValue, state.paragraphSpacingBeforeState)
+  setSelectState(dom.controls['paragraph.spacingAfter'], !state.paragraphFormatEnabled, state.paragraphSpacingAfterValue, state.paragraphSpacingAfterState)
+  setSelectState(dom.controls['paragraph.firstLineIndent'], !state.paragraphFormatEnabled, state.paragraphFirstLineIndentValue, state.paragraphFirstLineIndentState)
+  setSelectState(dom.controls['paragraph.hangingIndent'], !state.paragraphFormatEnabled, state.paragraphHangingIndentValue, state.paragraphHangingIndentState)
+  setSelectState(dom.controls['paragraph.style'], !state.paragraphFormatEnabled, state.paragraphStyleValue, state.paragraphStyleState)
+  setSelectState(dom.controls['paragraph.list'], !state.paragraphFormatEnabled, state.paragraphListValue, state.paragraphListState)
 
   if (dom.selectionSummary !== null) {
     dom.selectionSummary.textContent = state.selectionSummary
@@ -168,7 +177,7 @@ function createControl(definition: BuiltinToolDefinition): ControlParts {
       }
     }
     case 'select': {
-      const { wrapper, control } = createToolbarSelectControl(definition.options ?? [], definition.label)
+      const { wrapper, control } = createToolbarSelectControl(definition)
 
       wrapper.setAttribute('data-jword-tool-id', definition.id)
       control.setAttribute(definition.dataAttribute, 'true')
@@ -192,6 +201,7 @@ function createToolbarButton(definition: BuiltinToolDefinition): HTMLButtonEleme
 
   button.type = 'button'
   button.className = 'jw-toolbar__button'
+  button.setAttribute('data-jword-tooltip-surface', 'true')
   button.setAttribute('aria-label', definition.label)
   button.setAttribute(definition.dataAttribute, 'true')
 
@@ -199,29 +209,54 @@ function createToolbarButton(definition: BuiltinToolDefinition): HTMLButtonEleme
     button.append(createToolbarIcon(definition.icon))
   }
 
+  bindToolbarPointerFocusGuard(button)
+
   return button
 }
 
 /** 创建 select 控件包装。 */
 function createToolbarSelectControl(
-  options: readonly ToolbarOption[],
-  ariaLabel: string
+  definition: BuiltinToolDefinition
 ): { readonly wrapper: HTMLElement, readonly control: HTMLSelectElement, readonly destroy: () => void } {
+  const options = definition.options ?? []
+  const ariaLabel = definition.label
+  const fieldLabel = definition.fieldLabel ?? definition.label
+  const triggerVariant = definition.triggerVariant ?? 'plain'
+  const menuLayout = resolveToolbarSelectMenuLayout(definition, options)
+  const menuTextAlign = definition.menuTextAlign ?? 'start'
   const wrapper = document.createElement('div')
   const trigger = document.createElement('button')
+  const triggerIcon = document.createElement('span')
+  const triggerPrefix = document.createElement('span')
   const triggerLabel = document.createElement('span')
+  const triggerArrow = document.createElement('span')
   const menu = document.createElement('div')
   const select = document.createElement('select')
   const signalController = new AbortController()
 
   wrapper.className = 'jw-toolbar__select-wrap'
+  wrapper.setAttribute('data-jword-field-label', fieldLabel)
+  wrapper.setAttribute('data-jword-trigger-variant', triggerVariant)
+  wrapper.setAttribute('data-jword-menu-layout', menuLayout)
+  wrapper.setAttribute('data-jword-menu-text-align', menuTextAlign)
+  if (definition.triggerIcon !== undefined) {
+    wrapper.setAttribute('data-jword-trigger-icon', definition.triggerIcon)
+  }
+  applyToolbarSelectSizing(wrapper, definition)
   trigger.className = 'jw-toolbar__select-trigger'
   trigger.type = 'button'
+  trigger.setAttribute('data-jword-tooltip-surface', 'true')
   trigger.setAttribute('aria-haspopup', 'listbox')
   trigger.setAttribute('aria-expanded', 'false')
   trigger.setAttribute('aria-label', ariaLabel)
+  triggerIcon.className = 'jw-toolbar__select-trigger-icon'
+  triggerPrefix.className = 'jw-toolbar__select-prefix'
+  triggerPrefix.textContent = `${fieldLabel}：`
   triggerLabel.className = 'jw-toolbar__select-label'
+  triggerArrow.className = 'jw-toolbar__select-arrow'
+  triggerArrow.append(createToolbarIcon('caretDown'))
   menu.className = 'jw-toolbar__select-menu'
+  menu.setAttribute('data-jword-tooltip-skip', 'true')
   menu.hidden = true
   select.className = 'jw-toolbar__select'
   select.setAttribute('aria-label', ariaLabel)
@@ -232,22 +267,41 @@ function createToolbarSelectControl(
     node.value = option.value
     node.textContent = option.label
 
-    if (option.value === FONT_FAMILY_MIXED_VALUE || option.value === FONT_SIZE_MIXED_VALUE) {
+    if (
+      option.value === FONT_FAMILY_MIXED_VALUE
+      || option.value === FONT_SIZE_MIXED_VALUE
+      || option.value === TOOLBAR_SELECT_MIXED_VALUE
+    ) {
       node.disabled = true
     }
 
     select.append(node)
 
-    if (node.disabled || option.value === FONT_FAMILY_EMPTY_VALUE || option.value === FONT_SIZE_EMPTY_VALUE) {
+    if (
+      node.disabled
+      || option.value === FONT_FAMILY_EMPTY_VALUE
+      || option.value === FONT_SIZE_EMPTY_VALUE
+      || isToolbarPlaceholderSelectValue(option.value)
+    ) {
       continue
     }
 
     const optionButton = document.createElement('button')
+    const optionLabel = document.createElement('span')
+    const optionCheck = document.createElement('span')
 
     optionButton.type = 'button'
     optionButton.className = 'jw-toolbar__select-option'
-    optionButton.textContent = option.label
+    optionLabel.className = 'jw-toolbar__select-option-label'
+    optionLabel.textContent = option.label
+    optionCheck.className = 'jw-toolbar__select-option-check'
+    optionCheck.setAttribute('data-jword-option-check', 'true')
+    optionCheck.append(createToolbarIcon('check'))
     optionButton.setAttribute('data-jword-option-value', option.value)
+    if (option.icon !== undefined) {
+      optionButton.setAttribute('data-jword-option-icon', option.icon)
+    }
+    bindToolbarPointerFocusGuard(optionButton, signalController.signal)
     optionButton.addEventListener(
       'click',
       () => {
@@ -263,11 +317,33 @@ function createToolbarSelectControl(
       },
       { signal: signalController.signal }
     )
+
+    if (menuLayout === 'icon') {
+      const optionIcon = document.createElement('span')
+
+      optionIcon.className = 'jw-toolbar__select-option-icon'
+
+      if (option.icon !== undefined) {
+        optionIcon.append(createToolbarIcon(option.icon))
+      } else {
+        optionIcon.hidden = true
+      }
+
+      optionButton.append(optionIcon, optionLabel, optionCheck)
+    } else {
+      optionButton.append(optionLabel, optionCheck)
+    }
+
     menu.append(optionButton)
   }
 
-  trigger.append(triggerLabel)
+  if (triggerVariant === 'plain') {
+    trigger.append(triggerPrefix)
+  }
+
+  trigger.append(triggerIcon, triggerLabel, triggerArrow)
   wrapper.append(trigger, menu, select)
+  bindToolbarPointerFocusGuard(trigger, signalController.signal)
 
   trigger.addEventListener(
     'click',
@@ -336,21 +412,25 @@ function createToolbarColorControl(
   const wrapper = document.createElement('label')
   const visual = document.createElement('span')
   const indicator = document.createElement('span')
+  const arrow = document.createElement('span')
   const input = document.createElement('input')
 
   input.type = 'color'
   input.className = 'jw-toolbar__color'
   input.setAttribute('aria-label', ariaLabel)
   wrapper.className = 'jw-toolbar__color-wrap'
+  wrapper.setAttribute('data-jword-tooltip-surface', 'true')
   visual.className = 'jw-toolbar__color-visual'
   indicator.className = 'jw-toolbar__color-indicator'
+  arrow.className = 'jw-toolbar__color-arrow'
+  arrow.append(createToolbarIcon('caretDown'))
 
   if (iconName !== undefined) {
     visual.append(createToolbarIcon(iconName))
   }
 
   visual.append(indicator)
-  wrapper.append(visual, input)
+  wrapper.append(visual, arrow, input)
 
   return {
     wrapper,
@@ -374,21 +454,167 @@ function closeToolbarSelect(wrapper: HTMLElement, trigger: HTMLButtonElement, me
 
 /** 同步自绘下拉的触发器文案与选中态。 */
 function syncToolbarSelectVisual(control: HTMLSelectElement): void {
+  syncToolbarSelectRuntimeOption(control)
   const wrapper = control.parentElement
   const triggerLabel = wrapper?.querySelector<HTMLElement>('.jw-toolbar__select-label')
+  const triggerIcon = wrapper?.querySelector<HTMLElement>('.jw-toolbar__select-trigger-icon')
   const selectedOption = control.selectedOptions.item(0)
   const value = selectedOption?.value ?? control.value
   const label = selectedOption?.label ?? selectedOption?.textContent ?? control.value
+  let selectedIconName = wrapper?.getAttribute('data-jword-trigger-icon') ?? undefined
 
   if (triggerLabel !== null && triggerLabel !== undefined) {
     triggerLabel.textContent = label
   }
 
   for (const optionButton of wrapper?.querySelectorAll<HTMLElement>('.jw-toolbar__select-option') ?? []) {
+    const isSelected = optionButton.getAttribute('data-jword-option-value') === value
+
     optionButton.setAttribute(
       'data-jword-selected',
-      optionButton.getAttribute('data-jword-option-value') === value ? 'true' : 'false'
+      isSelected ? 'true' : 'false'
     )
+
+    if (isSelected) {
+      selectedIconName = optionButton.getAttribute('data-jword-option-icon') ?? selectedIconName
+    }
+  }
+
+  if (triggerIcon !== null && triggerIcon !== undefined) {
+    renderToolbarSelectTriggerIcon(triggerIcon, selectedIconName)
+  }
+}
+
+/** 为当前值补一个运行时 option，保证未静态声明的字体/字号也能显示出来。 */
+function syncToolbarSelectRuntimeOption(control: HTMLSelectElement): void {
+  const wrapper = control.parentElement
+  const menu = wrapper?.querySelector<HTMLElement>('.jw-toolbar__select-menu')
+  const runtimeOption = control.querySelector<HTMLOptionElement>('option[data-jword-runtime-option="true"]')
+  const runtimeButton = menu?.querySelector<HTMLElement>('[data-jword-runtime-option="true"]')
+  const value = control.getAttribute('data-jword-render-value') ?? control.value
+  const hasStaticOption = [...control.options].some((option) =>
+    option.getAttribute('data-jword-runtime-option') !== 'true' && option.value === value
+  )
+
+  runtimeOption?.remove()
+  runtimeButton?.remove()
+
+  if (
+    !(wrapper instanceof HTMLElement)
+    || !(menu instanceof HTMLElement)
+    || value.length === 0
+    || isToolbarPlaceholderSelectValue(value)
+    || hasStaticOption
+  ) {
+    return
+  }
+
+  const label = readToolbarRuntimeOptionLabel(control, value)
+  const option = document.createElement('option')
+  const button = document.createElement('button')
+  const buttonLabel = document.createElement('span')
+  const buttonCheck = document.createElement('span')
+  const trigger = wrapper.querySelector<HTMLButtonElement>('.jw-toolbar__select-trigger')
+
+  option.value = value
+  option.textContent = label
+  option.setAttribute('data-jword-runtime-option', 'true')
+  control.append(option)
+  control.value = value
+
+  button.type = 'button'
+  button.className = 'jw-toolbar__select-option'
+  button.setAttribute('data-jword-option-value', value)
+  button.setAttribute('data-jword-runtime-option', 'true')
+  buttonLabel.className = 'jw-toolbar__select-option-label'
+  buttonLabel.textContent = label
+  buttonCheck.className = 'jw-toolbar__select-option-check'
+  buttonCheck.setAttribute('data-jword-option-check', 'true')
+  buttonCheck.append(createToolbarIcon('check'))
+  button.append(buttonLabel, buttonCheck)
+  bindToolbarPointerFocusGuard(button)
+  button.addEventListener('click', () => {
+    if (trigger !== null) {
+      closeToolbarSelect(wrapper, trigger, menu)
+    }
+  })
+  menu.prepend(button)
+}
+
+/** 把运行时值格式化成 toolbar 可读标签。 */
+function readToolbarRuntimeOptionLabel(control: HTMLSelectElement, value: string): string {
+  const toolId = control.parentElement?.getAttribute('data-jword-tool-id')
+
+  if (toolId === 'format.fontSize') {
+    const twips = Number.parseFloat(value)
+
+    if (Number.isFinite(twips)) {
+      return `${formatToolbarPointValue(twips / 20)} pt`
+    }
+  }
+
+  return value
+}
+
+/** 规范化 pt 文案，避免出现多余的尾随 0。 */
+function formatToolbarPointValue(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value)
+  }
+
+  return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+/** 同步 select trigger 上的 SVG 图标。 */
+function renderToolbarSelectTriggerIcon(target: HTMLElement, iconName: string | undefined): void {
+  target.replaceChildren()
+
+  if (iconName === undefined || iconName === '') {
+    target.hidden = true
+    return
+  }
+
+  target.hidden = false
+  target.append(createToolbarIcon(iconName as ToolbarIconName))
+}
+
+/** 阻止 toolbar 按钮通过鼠标按下抢走 editor hidden textarea 的焦点。 */
+function bindToolbarPointerFocusGuard(target: HTMLElement, signal?: AbortSignal): void {
+  const listener = (event: Event) => {
+    event.preventDefault()
+  }
+  const options = signal === undefined ? undefined : { signal }
+
+  target.addEventListener('pointerdown', listener, options)
+  target.addEventListener('mousedown', listener, options)
+}
+
+/** 推断当前 select 菜单项的布局模式。 */
+function resolveToolbarSelectMenuLayout(
+  definition: BuiltinToolDefinition,
+  options: readonly ToolbarOption[]
+): ToolbarMenuLayout {
+  if (definition.menuLayout !== undefined) {
+    return definition.menuLayout
+  }
+
+  return options.some((option) => option.icon !== undefined && !isToolbarPlaceholderSelectValue(option.value))
+    ? 'icon'
+    : 'text'
+}
+
+/** 把内建 select 的尺寸元数据映射成 CSS 变量。 */
+function applyToolbarSelectSizing(wrapper: HTMLElement, definition: BuiltinToolDefinition): void {
+  if (definition.triggerMinWidthPx !== undefined) {
+    wrapper.style.setProperty('--jw-toolbar-trigger-min-width', `${definition.triggerMinWidthPx}px`)
+  }
+
+  if (definition.menuMinWidthPx !== undefined) {
+    wrapper.style.setProperty('--jw-toolbar-select-menu-min-width', `${definition.menuMinWidthPx}px`)
+  }
+
+  if (definition.menuMaxWidthPx !== undefined) {
+    wrapper.style.setProperty('--jw-toolbar-select-menu-max-width', `${definition.menuMaxWidthPx}px`)
   }
 }
 
@@ -484,6 +710,7 @@ function setSelectState(
   }
 
   control.disabled = disabled
+  control.setAttribute('data-jword-render-value', value)
   control.value = value
   control.setAttribute('data-jword-state', state)
   control.parentElement?.setAttribute('data-jword-state', state)
@@ -512,19 +739,4 @@ function setColorState(
   control.parentElement?.setAttribute('data-jword-state', state)
   control.parentElement?.setAttribute('data-jword-disabled', String(disabled))
   control.parentElement?.style.setProperty('--jw-toolbar-color', value)
-}
-
-/** 设置对齐按钮状态。 */
-function setAlignButtonState(
-  control: JWordToolbarControlElement | undefined,
-  state: ToolbarState,
-  alignment: 'left' | 'center' | 'right' | 'justify'
-): void {
-  if (!(control instanceof HTMLButtonElement)) {
-    return
-  }
-
-  control.disabled = !state.paragraphFormatEnabled
-  control.setAttribute('aria-pressed', readAlignmentPressedState(state, alignment))
-  control.setAttribute('data-jword-state', state.alignmentState)
 }

@@ -26,7 +26,13 @@ import {
   FONT_FAMILY_EMPTY_VALUE,
   FONT_FAMILY_MIXED_VALUE,
   FONT_SIZE_EMPTY_VALUE,
-  FONT_SIZE_MIXED_VALUE
+  FONT_SIZE_MIXED_VALUE,
+  readParagraphAlignmentLabel,
+  readParagraphListKindLabel,
+  readParagraphStyleLabel,
+  stringifyParagraphListSelectValue,
+  TOOLBAR_SELECT_EMPTY_VALUE,
+  TOOLBAR_SELECT_MIXED_VALUE
 } from './builtin-tools'
 
 /** 按钮按压态。 */
@@ -46,6 +52,8 @@ export interface ToolbarState {
   readonly italicPressed: ToolbarPressedState
   readonly underlinePressed: ToolbarPressedState
   readonly strikePressed: ToolbarPressedState
+  readonly superscriptPressed: ToolbarPressedState
+  readonly subscriptPressed: ToolbarPressedState
   readonly fontFamilyValue: string
   readonly fontFamilyState: ToolbarValueState
   readonly fontSizeValue: string
@@ -56,10 +64,24 @@ export interface ToolbarState {
   readonly backgroundColorValue: string
   readonly backgroundColorState: ToolbarValueState
   readonly backgroundColorLabel: string
-  readonly alignmentValue: ParagraphAlignment | ''
-  readonly alignmentState: ToolbarValueState
-  readonly indentLabel: string
-  readonly indentState: ToolbarValueState
+  readonly paragraphAlignmentValue: string
+  readonly paragraphAlignmentState: ToolbarValueState
+  readonly paragraphIndentLeftValue: string
+  readonly paragraphIndentLeftState: ToolbarValueState
+  readonly paragraphLineHeightValue: string
+  readonly paragraphLineHeightState: ToolbarValueState
+  readonly paragraphSpacingBeforeValue: string
+  readonly paragraphSpacingBeforeState: ToolbarValueState
+  readonly paragraphSpacingAfterValue: string
+  readonly paragraphSpacingAfterState: ToolbarValueState
+  readonly paragraphFirstLineIndentValue: string
+  readonly paragraphFirstLineIndentState: ToolbarValueState
+  readonly paragraphHangingIndentValue: string
+  readonly paragraphHangingIndentState: ToolbarValueState
+  readonly paragraphStyleValue: string
+  readonly paragraphStyleState: ToolbarValueState
+  readonly paragraphListValue: string
+  readonly paragraphListState: ToolbarValueState
   readonly selectionSummary: string
   readonly runSummary: string
   readonly blockedSummary: string
@@ -76,6 +98,24 @@ interface SelectionContext {
   readonly focus: SelectionEndpointContext
 }
 
+const SUPPORTED_PARAGRAPH_TWIPS_VALUES = new Set([
+  '0',
+  '120',
+  '240',
+  '360',
+  '480',
+  '600',
+  '720',
+  '960',
+  '1080',
+  '1440',
+  '1800',
+  '2160',
+  '2880'
+])
+const SUPPORTED_PARAGRAPH_LINE_HEIGHT_VALUES = new Set(['1', '1.15', '1.25', '1.5', '1.75', '1.8', '2', '2.5', '3'])
+const SUPPORTED_PARAGRAPH_STYLE_VALUES = new Set(['Normal', 'Heading1', 'Heading2', 'Heading3'])
+
 /** 读取当前 editor 对应的 toolbar 状态。 */
 export function buildToolbarState(editor: Editor): ToolbarState {
   const selection = editor.getSelection()
@@ -86,7 +126,15 @@ export function buildToolbarState(editor: Editor): ToolbarState {
   const fontSize = readNumberSelectState(formattingState.run?.fontSizeTwips ?? null, FONT_SIZE_EMPTY_VALUE, FONT_SIZE_MIXED_VALUE)
   const textColor = readColorControlState(formattingState.run?.color ?? null, DEFAULT_TEXT_COLOR)
   const backgroundColor = readColorControlState(formattingState.run?.backgroundColor ?? null, DEFAULT_BACKGROUND_COLOR)
-  const alignment = readAlignmentControlState(formattingState.paragraph?.alignment ?? null)
+  const paragraphAlignment = readParagraphAlignmentSelectState(formattingState.paragraph?.alignment ?? null)
+  const paragraphIndentLeft = readParagraphTwipsSelectState(formattingState.paragraph?.indentLeftTwips ?? null)
+  const paragraphLineHeight = readParagraphLineHeightSelectState(formattingState.paragraph?.lineHeight ?? null)
+  const paragraphSpacingBefore = readParagraphTwipsSelectState(formattingState.paragraph?.spacingBeforeTwips ?? null)
+  const paragraphSpacingAfter = readParagraphTwipsSelectState(formattingState.paragraph?.spacingAfterTwips ?? null)
+  const paragraphFirstLineIndent = readParagraphTwipsSelectState(formattingState.paragraph?.firstLineIndentTwips ?? null)
+  const paragraphHangingIndent = readParagraphTwipsSelectState(formattingState.paragraph?.hangingIndentTwips ?? null)
+  const paragraphStyle = readParagraphStyleSelectState(formattingState.paragraph?.styleId ?? null)
+  const paragraphList = readParagraphListSelectState(formattingState.paragraph?.list ?? null)
 
   return {
     canUndo: editor.canUndo(),
@@ -98,6 +146,8 @@ export function buildToolbarState(editor: Editor): ToolbarState {
     italicPressed: readPressedState(formattingState.run?.italic ?? null),
     underlinePressed: readPressedState(formattingState.run?.underline ?? null),
     strikePressed: readPressedState(formattingState.run?.strike ?? null),
+    superscriptPressed: readPressedState(formattingState.run?.superscript ?? null),
+    subscriptPressed: readPressedState(formattingState.run?.subscript ?? null),
     fontFamilyValue: fontFamily.value,
     fontFamilyState: fontFamily.state,
     fontSizeValue: fontSize.value,
@@ -108,10 +158,24 @@ export function buildToolbarState(editor: Editor): ToolbarState {
     backgroundColorValue: backgroundColor.value,
     backgroundColorState: backgroundColor.state,
     backgroundColorLabel: backgroundColor.label,
-    alignmentValue: alignment.value,
-    alignmentState: alignment.state,
-    indentLabel: readIndentLabel(formattingState.paragraph?.indentLeftTwips ?? null),
-    indentState: readValueState(formattingState.paragraph?.indentLeftTwips ?? null),
+    paragraphAlignmentValue: paragraphAlignment.value,
+    paragraphAlignmentState: paragraphAlignment.state,
+    paragraphIndentLeftValue: paragraphIndentLeft.value,
+    paragraphIndentLeftState: paragraphIndentLeft.state,
+    paragraphLineHeightValue: paragraphLineHeight.value,
+    paragraphLineHeightState: paragraphLineHeight.state,
+    paragraphSpacingBeforeValue: paragraphSpacingBefore.value,
+    paragraphSpacingBeforeState: paragraphSpacingBefore.state,
+    paragraphSpacingAfterValue: paragraphSpacingAfter.value,
+    paragraphSpacingAfterState: paragraphSpacingAfter.state,
+    paragraphFirstLineIndentValue: paragraphFirstLineIndent.value,
+    paragraphFirstLineIndentState: paragraphFirstLineIndent.state,
+    paragraphHangingIndentValue: paragraphHangingIndent.value,
+    paragraphHangingIndentState: paragraphHangingIndent.state,
+    paragraphStyleValue: paragraphStyle.value,
+    paragraphStyleState: paragraphStyle.state,
+    paragraphListValue: paragraphList.value,
+    paragraphListState: paragraphList.state,
     selectionSummary: readSelectionSummary(context, selection),
     runSummary: readRunSummary(formattingState),
     blockedSummary: readBlockedSummary(editor.getLayout().pages.length, context, formattingState)
@@ -155,6 +219,10 @@ export function readTransactionAnnouncement(editor: Editor, commandName: string)
       return `${summaryPrefix}已同步下划线状态。`
     case 'setStrike':
       return `${summaryPrefix}已同步删除线状态。`
+    case 'setSuperscript':
+      return `${summaryPrefix}已同步上标状态。`
+    case 'setSubscript':
+      return `${summaryPrefix}已同步下标状态。`
     case 'setFontFamily':
       return `${summaryPrefix}已同步字体。`
     case 'setFontSize':
@@ -165,9 +233,23 @@ export function readTransactionAnnouncement(editor: Editor, commandName: string)
       return `${summaryPrefix}已同步背景色。`
     case 'setParagraphAlignment':
       return `${summaryPrefix}已同步段落对齐。`
+    case 'setParagraphLineHeight':
+      return `${summaryPrefix}已同步段落行距。`
     case 'setParagraphIndent':
     case 'adjustParagraphIndent':
-      return `${summaryPrefix}已同步段落缩进。`
+      return `${summaryPrefix}已同步左缩进。`
+    case 'setParagraphSpacingBefore':
+      return `${summaryPrefix}已同步段前间距。`
+    case 'setParagraphSpacingAfter':
+      return `${summaryPrefix}已同步段后间距。`
+    case 'setParagraphFirstLineIndent':
+      return `${summaryPrefix}已同步首行缩进。`
+    case 'setParagraphHangingIndent':
+      return `${summaryPrefix}已同步悬挂缩进。`
+    case 'setParagraphStyle':
+      return `${summaryPrefix}已同步段落样式。`
+    case 'setParagraphList':
+      return `${summaryPrefix}已同步列表语义。`
     default:
       return `已执行 ${commandName}。`
   }
@@ -259,15 +341,6 @@ export function isRunNumberFormatAlreadyApplied(
   }
 
   return state.fontSizeTwips.mixed !== true && state.fontSizeTwips.value === value
-}
-
-/** 把 ParagraphAlignment 状态映射为按钮 aria-pressed 值。 */
-export function readAlignmentPressedState(state: ToolbarState, alignment: ParagraphAlignment): ToolbarPressedState {
-  if (state.alignmentState === 'mixed') {
-    return 'mixed'
-  }
-
-  return state.alignmentValue === alignment ? 'true' : 'false'
 }
 
 /** 规范化 hex 颜色值。 */
@@ -427,14 +500,14 @@ function readRunSummary(formattingState: SelectionFormattingState): string {
     `字号 ${readNumberFormattingToken(formattingState.run.fontSizeTwips, '默认', formatFontSizeTwips)}`,
     `字色 ${readStringFormattingToken(formattingState.run.color, '默认')}`,
     `底色 ${readStringFormattingToken(formattingState.run.backgroundColor, '默认')}`,
-    `对齐 ${readStringFormattingToken(formattingState.paragraph.alignment, '默认')}`,
+    `对齐 ${readParagraphAlignmentFormattingToken(formattingState.paragraph.alignment, '默认')}`,
     `行距 ${readNumberFormattingToken(formattingState.paragraph.lineHeight, '默认', formatLineHeight)}`,
-    `缩进 ${readNumberFormattingToken(formattingState.paragraph.indentLeftTwips, '0 pt', formatIndentTwips)}`,
+    `左缩进 ${readNumberFormattingToken(formattingState.paragraph.indentLeftTwips, '0 pt', formatIndentTwips)}`,
     `段前 ${readNumberFormattingToken(formattingState.paragraph.spacingBeforeTwips, '0 pt', formatIndentTwips)}`,
     `段后 ${readNumberFormattingToken(formattingState.paragraph.spacingAfterTwips, '0 pt', formatIndentTwips)}`,
     `首行 ${readNumberFormattingToken(formattingState.paragraph.firstLineIndentTwips, '0 pt', formatIndentTwips)}`,
     `悬挂 ${readNumberFormattingToken(formattingState.paragraph.hangingIndentTwips, '0 pt', formatIndentTwips)}`,
-    `样式 ${readNullableStringFormattingToken(formattingState.paragraph.styleId, '默认')}`,
+    `样式 ${readParagraphStyleFormattingToken(formattingState.paragraph.styleId, '默认')}`,
     `列表 ${readParagraphListFormattingToken(formattingState.paragraph.list)}`
   ].join(' / ')
 }
@@ -450,7 +523,7 @@ function readBlockedSummary(
   }
 
   if (context === null) {
-    return '当前已接通 facade-driven 基础格式、颜色、对齐和缩进；请先选择片段后再格式化。'
+    return '当前已接通 facade-driven 基础格式、颜色和段落下拉控件；请先选择片段后再格式化。'
   }
 
   if (hasMixedFormattingState(formattingState)) {
@@ -565,49 +638,106 @@ function readColorControlState(
   }
 }
 
-/** 读取对齐控件的显示态。 */
-function readAlignmentControlState(
+/** 读取段落对齐 select 的显示态。 */
+function readParagraphAlignmentSelectState(
   value: FormattingStateValue<ParagraphAlignment> | null
-): { readonly value: ParagraphAlignment | '', readonly state: ToolbarValueState } {
+): { readonly value: string, readonly state: ToolbarValueState } {
   if (value === null) {
-    return { value: '', state: 'empty' }
+    return { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
   }
 
   if (value.mixed) {
-    return { value: '', state: 'mixed' }
+    return { value: TOOLBAR_SELECT_MIXED_VALUE, state: 'mixed' }
   }
 
   if (value.value === undefined) {
-    return { value: '', state: 'empty' }
+    return { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
   }
 
   return { value: value.value, state: 'value' }
 }
 
-/** 读取缩进字段标签。 */
-function readIndentLabel(value: FormattingStateValue<number> | null): string {
+/** 读取段落数值 select 的显示态；未显式设置时按 0 值回显。 */
+function readParagraphTwipsSelectState(
+  value: FormattingStateValue<number> | null
+): { readonly value: string, readonly state: ToolbarValueState } {
   if (value === null) {
-    return '未定位'
+    return { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
   }
 
   if (value.mixed) {
-    return '混合'
+    return { value: TOOLBAR_SELECT_MIXED_VALUE, state: 'mixed' }
   }
 
-  return formatIndentTwips(value.value ?? 0)
+  const normalizedValue = String(value.value ?? 0)
+
+  return SUPPORTED_PARAGRAPH_TWIPS_VALUES.has(normalizedValue)
+    ? { value: normalizedValue, state: 'value' }
+    : { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
 }
 
-/** 读取字段通用值态。 */
-function readValueState<Value>(value: FormattingStateValue<Value> | null): ToolbarValueState {
+/** 读取段落行距 select 的显示态。 */
+function readParagraphLineHeightSelectState(
+  value: FormattingStateValue<number> | null
+): { readonly value: string, readonly state: ToolbarValueState } {
   if (value === null) {
-    return 'empty'
+    return { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
   }
 
   if (value.mixed) {
-    return 'mixed'
+    return { value: TOOLBAR_SELECT_MIXED_VALUE, state: 'mixed' }
   }
 
-  return value.value === undefined ? 'empty' : 'value'
+  if (value.value === undefined) {
+    return { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
+  }
+
+  const normalizedValue = String(value.value)
+
+  return SUPPORTED_PARAGRAPH_LINE_HEIGHT_VALUES.has(normalizedValue)
+    ? { value: normalizedValue, state: 'value' }
+    : { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
+}
+
+/** 读取段落样式 select 的显示态。 */
+function readParagraphStyleSelectState(
+  value: FormattingStateValue<string | null> | null
+): { readonly value: string, readonly state: ToolbarValueState } {
+  if (value === null) {
+    return { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
+  }
+
+  if (value.mixed) {
+    return { value: TOOLBAR_SELECT_MIXED_VALUE, state: 'mixed' }
+  }
+
+  if (value.value === undefined || value.value === null) {
+    return { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
+  }
+
+  return SUPPORTED_PARAGRAPH_STYLE_VALUES.has(value.value)
+    ? { value: value.value, state: 'value' }
+    : { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
+}
+
+/** 读取段落列表 select 的显示态。 */
+function readParagraphListSelectState(
+  value: FormattingStateValue<ParagraphList | null> | null
+): { readonly value: string, readonly state: ToolbarValueState } {
+  if (value === null) {
+    return { value: TOOLBAR_SELECT_EMPTY_VALUE, state: 'empty' }
+  }
+
+  if (value.mixed) {
+    return { value: TOOLBAR_SELECT_MIXED_VALUE, state: 'mixed' }
+  }
+
+  const normalizedValue = stringifyParagraphListSelectValue(value.value)
+
+  return {
+    value: normalizedValue,
+    state: normalizedValue === TOOLBAR_SELECT_EMPTY_VALUE ? 'empty' : 'value'
+  }
 }
 
 /** 把格式值转换成摘要 token。 */
@@ -659,6 +789,38 @@ function readNullableStringFormattingToken(
     : value.value
 }
 
+/** 把段落对齐格式值转换成中文摘要 token。 */
+function readParagraphAlignmentFormattingToken(
+  value: FormattingStateValue<ParagraphAlignment>,
+  emptyLabel: string
+): string {
+  if (value.mixed) {
+    return '混合'
+  }
+
+  if (value.value === undefined) {
+    return emptyLabel
+  }
+
+  return readParagraphAlignmentLabel(value.value) ?? value.value
+}
+
+/** 把段落样式格式值转换成中文摘要 token。 */
+function readParagraphStyleFormattingToken(
+  value: FormattingStateValue<string | null>,
+  emptyLabel: string
+): string {
+  if (value.mixed) {
+    return '混合'
+  }
+
+  if (value.value === undefined || value.value === null) {
+    return emptyLabel
+  }
+
+  return readParagraphStyleLabel(value.value) ?? value.value
+}
+
 /** 把数字格式值转换成摘要 token。 */
 function readNumberFormattingToken(
   value: FormattingStateValue<number>,
@@ -703,5 +865,5 @@ function readParagraphListFormattingToken(value: FormattingStateValue<ParagraphL
     return '无'
   }
 
-  return `${value.value.numberingId} / L${value.value.level}`
+  return `${readParagraphListKindLabel(value.value.numberingId)} / ${value.value.level}级`
 }

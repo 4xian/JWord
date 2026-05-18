@@ -21,6 +21,9 @@ import {
 import type { ModelProperties, ParagraphList } from './types'
 import type { DocumentProjection } from './projection'
 import type { SelectionState } from './selection'
+import { DEFAULT_LINE_HEIGHT_MULTIPLIER, createFontManager } from '../layout/font-manager'
+import { cssPxToTwips } from '../layout/page-config'
+import { resolveParagraphRunStyleDefaults } from '../layout/paragraph-semantics'
 
 /**
  * 计算当前选区的最小格式状态。
@@ -36,6 +39,7 @@ export function createSelectionFormattingState(
   const targets = collectSelectionTargets(projection, selection)
   const paragraphPropertiesList = targets.paragraphs.map((target) => target.paragraph.properties)
   const paragraphRunPropertiesList = collectParagraphRunProperties(targets.paragraphs)
+  const paragraphById = new Map(targets.paragraphs.map((target) => [target.paragraph.id, target.paragraph]))
 
   return {
     run: targets.runs.length === 0
@@ -47,8 +51,8 @@ export function createSelectionFormattingState(
           strike: readBooleanState(targets.runs.map((target) => target.run.properties), 'strike'),
           superscript: readBooleanState(targets.runs.map((target) => target.run.properties), 'superscript'),
           subscript: readBooleanState(targets.runs.map((target) => target.run.properties), 'subscript'),
-          fontFamily: readStringState(targets.runs.map((target) => target.run.properties), 'fontFamily'),
-          fontSizeTwips: readNumberState(targets.runs.map((target) => target.run.properties), 'fontSizeTwips'),
+          fontFamily: readEffectiveFontFamilyState(targets.runs, paragraphById),
+          fontSizeTwips: readEffectiveFontSizeState(targets.runs, paragraphById),
           color: readStringState(targets.runs.map((target) => target.run.properties), 'color'),
           backgroundColor: readStringState(targets.runs.map((target) => target.run.properties), 'backgroundColor')
         },
@@ -59,7 +63,7 @@ export function createSelectionFormattingState(
             paragraphPropertiesList,
             'alignment'
           ),
-          lineHeight: readNumberState(paragraphRunPropertiesList, 'lineHeight'),
+          lineHeight: readLineHeightState(paragraphRunPropertiesList),
           indentLeftTwips: readNumberState(
             paragraphPropertiesList,
             'indentLeftTwips'
@@ -73,6 +77,8 @@ export function createSelectionFormattingState(
         }
   }
 }
+
+const defaultFontManager = createFontManager()
 
 /**
  * 收集段落级行距读取需要的 run 属性列表。
@@ -161,6 +167,65 @@ function readParagraphAlignmentState(
   ))
 }
 
+function readLineHeightState(
+  propertiesList: readonly (ModelProperties | undefined)[]
+): FormattingStateValue<number> {
+  const firstValue = readEffectiveLineHeightValue(propertiesList[0])
+
+  for (let index = 1; index < propertiesList.length; index += 1) {
+    if (!Object.is(firstValue, readEffectiveLineHeightValue(propertiesList[index]))) {
+      return {
+        value: undefined,
+        mixed: true
+      }
+    }
+  }
+
+  return {
+    value: firstValue,
+    mixed: false
+  }
+}
+
+function readEffectiveFontFamilyState(
+  runs: readonly import('./selection-targets').SelectedRunTarget[],
+  paragraphById: ReadonlyMap<string, import('./types').Paragraph>
+): FormattingStateValue<string> {
+  return readResolvedRunFormattingState(runs, paragraphById, (style, properties) => (
+    readStringProperty(properties, 'fontFamily')
+    ?? style.fontFamily
+    ?? defaultFontManager.resolveFont(style).fontFamily
+  ))
+}
+
+function readEffectiveFontSizeState(
+  runs: readonly import('./selection-targets').SelectedRunTarget[],
+  paragraphById: ReadonlyMap<string, import('./types').Paragraph>
+): FormattingStateValue<number> {
+  return readResolvedRunFormattingState(runs, paragraphById, (style, properties) => {
+    const explicitFontSizePx = readNumberProperty(properties, 'fontSizePx')
+    const explicitFontSizeTwips = readNumberProperty(properties, 'fontSizeTwips')
+
+    if (explicitFontSizePx !== undefined) {
+      return cssPxToTwips(explicitFontSizePx)
+    }
+
+    if (explicitFontSizeTwips !== undefined) {
+      return explicitFontSizeTwips
+    }
+
+    if (style.fontSizeTwips !== undefined) {
+      return style.fontSizeTwips
+    }
+
+    if (style.fontSizePx !== undefined) {
+      return cssPxToTwips(style.fontSizePx)
+    }
+
+    return cssPxToTwips(defaultFontManager.resolveFont(style).fontSizePx)
+  })
+}
+
 /**
  * 判断两个段落列表语义是否等效。
  */
@@ -196,4 +261,59 @@ function readFormattingState<Value>(
     value: firstValue,
     mixed: false
   }
+}
+
+function readResolvedRunFormattingState<Value>(
+  runs: readonly import('./selection-targets').SelectedRunTarget[],
+  paragraphById: ReadonlyMap<string, import('./types').Paragraph>,
+  readValue: (
+    style: import('../layout/font-manager').RunTextStyle,
+    properties: ModelProperties | undefined
+  ) => Value
+): FormattingStateValue<Value> {
+  const firstValue = readResolvedRunFormattingValue(runs[0], paragraphById, readValue)
+
+  for (let index = 1; index < runs.length; index += 1) {
+    if (!Object.is(firstValue, readResolvedRunFormattingValue(runs[index], paragraphById, readValue))) {
+      return {
+        value: undefined,
+        mixed: true
+      }
+    }
+  }
+
+  return {
+    value: firstValue,
+    mixed: false
+  }
+}
+
+function readResolvedRunFormattingValue<Value>(
+  run: import('./selection-targets').SelectedRunTarget | undefined,
+  paragraphById: ReadonlyMap<string, import('./types').Paragraph>,
+  readValue: (
+    style: import('../layout/font-manager').RunTextStyle,
+    properties: ModelProperties | undefined
+  ) => Value
+): Value {
+  const paragraph = run === undefined ? undefined : paragraphById.get(run.paragraphId)
+  const style = paragraph === undefined ? {} : resolveParagraphRunStyleDefaults(paragraph)
+
+  return readValue(style, run?.run.properties)
+}
+
+function readStringProperty(properties: ModelProperties | undefined, key: string): string | undefined {
+  const value = properties?.[key]
+
+  return typeof value === 'string' ? value : undefined
+}
+
+function readNumberProperty(properties: ModelProperties | undefined, key: string): number | undefined {
+  const value = properties?.[key]
+
+  return typeof value === 'number' ? value : undefined
+}
+
+function readEffectiveLineHeightValue(properties: ModelProperties | undefined): number {
+  return readNumberProperty(properties, 'lineHeight') ?? DEFAULT_LINE_HEIGHT_MULTIPLIER
 }

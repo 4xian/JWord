@@ -186,12 +186,22 @@ export function buildSetParagraphStyleCommand(
 export function buildSetParagraphListCommand(
   projection: DocumentProjection,
   selection: SelectionState | null,
-  value: ParagraphList
+  value: ParagraphList | null
 ): Command | null {
-  return buildParagraphFormattingCommand(projection, selection, 'setParagraphList', {
-    listNumberingId: value.numberingId,
-    listLevel: value.level
-  })
+  return buildParagraphFormattingCommand(
+    projection,
+    selection,
+    'setParagraphList',
+    value === null
+      ? {
+          listNumberingId: null,
+          listLevel: null
+        }
+      : {
+          listNumberingId: value.numberingId,
+          listLevel: value.level
+        }
+  )
 }
 
 /**

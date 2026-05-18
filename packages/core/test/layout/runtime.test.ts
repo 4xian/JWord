@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createFontManager } from '../../src/layout/font-manager'
 import { layoutDocument, layoutDocumentIncrementally } from '../../src/layout/runtime'
-import { createPageConfig } from '../../src/layout/page-config'
+import { createPageConfig, cssPxToTwips } from '../../src/layout/page-config'
 import type { DocumentProjection } from '../../src/model/projection'
 import type { LayoutInput, DocumentLayout } from '../../src/layout/runtime'
 import type { FontManager } from '../../src/layout/font-manager'
@@ -241,6 +241,83 @@ describe('Gate 2 布局', () => {
     })
   })
 
+  it('reduces visual font size for superscript and subscript while preserving their flags', () => {
+    const projection: DocumentProjection = {
+      document: {
+        kind: 'document',
+        id: 'document-layout-script',
+        sections: [
+          {
+            kind: 'section',
+            id: 'section-layout-script',
+            blocks: [
+              {
+                kind: 'paragraph',
+                id: 'paragraph-layout-script',
+                runs: [
+                  {
+                    kind: 'run',
+                    id: 'run-layout-superscript',
+                    properties: {
+                      fontSizePx: 16,
+                      superscript: true
+                    },
+                    inlines: [
+                      {
+                        kind: 'text',
+                        text: '上'
+                      }
+                    ]
+                  },
+                  {
+                    kind: 'run',
+                    id: 'run-layout-subscript',
+                    properties: {
+                      fontSizePx: 16,
+                      subscript: true
+                    },
+                    inlines: [
+                      {
+                        kind: 'text',
+                        text: '下'
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+    const layout = layoutDocument({
+      projection,
+      pageConfig: createPageConfig(),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const fragments = layout.pages[0]?.lines[0]?.fragments ?? []
+    const superscript = fragments.find((fragment) => fragment.runId === 'run-layout-superscript')
+    const subscript = fragments.find((fragment) => fragment.runId === 'run-layout-subscript')
+
+    expect(superscript?.style).toMatchObject({
+      superscript: true,
+      baseFontSizePx: 16
+    })
+    expect(subscript?.style).toMatchObject({
+      subscript: true,
+      baseFontSizePx: 16
+    })
+    expect(superscript?.style.subscript).not.toBe(true)
+    expect(subscript?.style.superscript).not.toBe(true)
+    expect(superscript?.style.fontSizePx).toBeLessThan(16)
+    expect(subscript?.style.fontSizePx).toBeLessThan(16)
+    expect(superscript?.height).toBe(cssPxToTwips(20))
+    expect(subscript?.height).toBe(cssPxToTwips(20))
+  })
+
   it('applies paragraph alignment and indent to line geometry', () => {
     const layout = layoutDocument({
       projection: {
@@ -392,6 +469,208 @@ describe('Gate 2 布局', () => {
       + 180
       + 60
     )
+  })
+
+  it('applies Heading defaults to layout fragments and keeps explicit run props above those defaults', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-heading-defaults',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-heading-defaults',
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-heading-defaults-1',
+                  properties: {
+                    styleId: 'Heading1'
+                  },
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-heading-defaults-1',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: '标题一'
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-heading-defaults-2',
+                  properties: {
+                    styleId: 'Heading2'
+                  },
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-heading-defaults-2',
+                      properties: {
+                        fontSizePx: 18,
+                        bold: false
+                      },
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: '显式覆盖'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const headingOneFragment = layout.pages[0]?.lines.find((line) =>
+      line.paragraphId === 'paragraph-layout-heading-defaults-1'
+    )?.fragments[0]
+    const headingTwoFragment = layout.pages[0]?.lines.find((line) =>
+      line.paragraphId === 'paragraph-layout-heading-defaults-2'
+    )?.fragments[0]
+
+    expect(headingOneFragment?.style).toMatchObject({
+      fontSizePx: 32,
+      bold: true
+    })
+    expect(headingTwoFragment?.style).toMatchObject({
+      fontSizePx: 18,
+      bold: false
+    })
+  })
+
+  it('derives visible ordered and bullet list markers with basic nested indent', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-list-semantics',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-list-semantics',
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-list-semantics-1',
+                  properties: {
+                    listNumberingId: 'jword-list-ordered',
+                    listLevel: 0
+                  },
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-list-semantics-1',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: '第一项'
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-list-semantics-2',
+                  properties: {
+                    listNumberingId: 'jword-list-ordered',
+                    listLevel: 0
+                  },
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-list-semantics-2',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: '第二项'
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-list-semantics-3',
+                  properties: {
+                    listNumberingId: 'jword-list-bullet',
+                    listLevel: 1
+                  },
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-list-semantics-3',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: '子项'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const page = layout.pages[0]
+    const orderedParagraphOne = page?.paragraphs.find((paragraph) =>
+      paragraph.paragraphId === 'paragraph-layout-list-semantics-1'
+    )
+    const orderedParagraphTwo = page?.paragraphs.find((paragraph) =>
+      paragraph.paragraphId === 'paragraph-layout-list-semantics-2'
+    )
+    const bulletParagraph = page?.paragraphs.find((paragraph) =>
+      paragraph.paragraphId === 'paragraph-layout-list-semantics-3'
+    )
+    const orderedLineOne = page?.lines.find((line) => line.paragraphId === 'paragraph-layout-list-semantics-1')
+    const orderedLineTwo = page?.lines.find((line) => line.paragraphId === 'paragraph-layout-list-semantics-2')
+    const bulletLine = page?.lines.find((line) => line.paragraphId === 'paragraph-layout-list-semantics-3')
+
+    expect(orderedParagraphOne?.listMarker?.label).toBe('1.')
+    expect(orderedParagraphTwo?.listMarker?.label).toBe('2.')
+    expect(bulletParagraph?.listMarker?.label).toBe('◦')
+    expect(orderedLineOne?.x).toBe(orderedLineTwo?.x)
+    expect(bulletLine?.x).toBeGreaterThan(orderedLineOne?.x ?? 0)
   })
 
   it('keeps section page and header footer boundary on laid out page boxes', () => {

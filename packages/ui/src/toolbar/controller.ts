@@ -7,9 +7,16 @@
  */
 import {
   buildSetBackgroundColorCommand,
+  buildSetParagraphIndentCommand,
   buildSetTextColorCommand,
+  type Block,
+  type Command,
   type Editor,
+  type FormattingStateValue,
   type PagePreset,
+  type Paragraph,
+  type ParagraphAlignment,
+  type ParagraphList,
   type SelectionState
 } from '@4xian/jword-core'
 import type {
@@ -20,11 +27,14 @@ import type {
 import type { LiveRegionController } from '../assistive/live-region'
 import type { TextMirrorController } from '../assistive/text-mirror'
 import {
-  INDENT_STEP_TWIPS,
+  FONT_SIZE_TWIPS_STEPS,
   FONT_FAMILY_EMPTY_VALUE,
   FONT_FAMILY_MIXED_VALUE,
   FONT_SIZE_EMPTY_VALUE,
-  FONT_SIZE_MIXED_VALUE
+  FONT_SIZE_MIXED_VALUE,
+  isToolbarPlaceholderSelectValue,
+  parseParagraphListSelectValue,
+  readParagraphAlignmentLabel as readParagraphAlignmentText
 } from './builtin-tools'
 import { resolveToolbarConfig } from './config'
 import {
@@ -136,23 +146,49 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     })
   }
 
+  /** 在 toolbar 动作结束后把输入焦点还给 editor hidden textarea。 */
+  function restoreEditorFocusSoon(): void {
+    queueMicrotask(() => {
+      editor.focus()
+    })
+  }
+
   /** 绑定所有实际挂载出来的控件事件。 */
   function bindEvents(): void {
-    bindButton(dom.controls['history.undo'], () => {
+    const bindToolbarButton = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
+      bindButton(control, () => {
+        handler()
+        restoreEditorFocusSoon()
+      })
+    }
+    const bindToolbarSelect = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
+      bindSelect(control, () => {
+        handler()
+        restoreEditorFocusSoon()
+      })
+    }
+    const bindToolbarColorChange = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
+      bindColorChange(control, () => {
+        handler()
+        restoreEditorFocusSoon()
+      })
+    }
+
+    bindToolbarButton(dom.controls['history.undo'], () => {
       markToolbarTransaction()
       const result = editor.undo()
 
       refresh()
       announce(result.stackItem === null ? '没有可撤销的本地操作。' : '已撤销最近一次本地操作。', result.stackItem !== null)
     })
-    bindButton(dom.controls['history.redo'], () => {
+    bindToolbarButton(dom.controls['history.redo'], () => {
       markToolbarTransaction()
       const result = editor.redo()
 
       refresh()
       announce(result.stackItem === null ? '没有可重做的本地操作。' : '已重做最近一次本地操作。', result.stackItem !== null)
     })
-    bindSelect(dom.controls['document.pagePreset'], () => {
+    bindToolbarSelect(dom.controls['document.pagePreset'], () => {
       const control = readSelect(dom.controls['document.pagePreset'])
 
       if (control === null) {
@@ -175,19 +211,25 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       render()
       announce(readPagePresetAnnouncement(nextPreset, nextPageConfig), true)
     })
-    bindButton(dom.controls['format.bold'], () => {
+    bindToolbarButton(dom.controls['format.bold'], () => {
       toggleActiveRunBooleanFormat('bold', '加粗')
     })
-    bindButton(dom.controls['format.italic'], () => {
+    bindToolbarButton(dom.controls['format.italic'], () => {
       toggleActiveRunBooleanFormat('italic', '斜体')
     })
-    bindButton(dom.controls['format.underline'], () => {
+    bindToolbarButton(dom.controls['format.underline'], () => {
       toggleActiveRunBooleanFormat('underline', '下划线')
     })
-    bindButton(dom.controls['format.strike'], () => {
+    bindToolbarButton(dom.controls['format.strike'], () => {
       toggleActiveRunBooleanFormat('strike', '删除线')
     })
-    bindSelect(dom.controls['format.fontFamily'], () => {
+    bindToolbarButton(dom.controls['format.superscript'], () => {
+      toggleActiveRunBooleanFormat('superscript', '上标')
+    })
+    bindToolbarButton(dom.controls['format.subscript'], () => {
+      toggleActiveRunBooleanFormat('subscript', '下标')
+    })
+    bindToolbarSelect(dom.controls['format.fontFamily'], () => {
       const control = readSelect(dom.controls['format.fontFamily'])
 
       if (control === null) {
@@ -203,7 +245,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
       applyRunStringFormat('fontFamily', '字体', value)
     })
-    bindSelect(dom.controls['format.fontSize'], () => {
+    bindToolbarSelect(dom.controls['format.fontSize'], () => {
       const control = readSelect(dom.controls['format.fontSize'])
 
       if (control === null) {
@@ -227,13 +269,19 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
       applyRunNumberFormat('字号', parsedValue)
     })
+    bindToolbarButton(dom.controls['format.fontSizeDecrease'], () => {
+      applyFontSizeStep(-1)
+    })
+    bindToolbarButton(dom.controls['format.fontSizeIncrease'], () => {
+      applyFontSizeStep(1)
+    })
     bindColorClick(dom.controls['format.textColor'], () => {
       frozenColorSelections.text = cloneSelection(editor.getSelection())
     })
     bindColorClick(dom.controls['format.backgroundColor'], () => {
       frozenColorSelections.background = cloneSelection(editor.getSelection())
     })
-    bindColorChange(dom.controls['format.textColor'], () => {
+    bindToolbarColorChange(dom.controls['format.textColor'], () => {
       const control = readColor(dom.controls['format.textColor'])
 
       if (control === null) {
@@ -242,7 +290,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
       applyColorFormatFromFrozenSelection('textColor', '文字颜色', control.value.toLowerCase())
     })
-    bindColorChange(dom.controls['format.backgroundColor'], () => {
+    bindToolbarColorChange(dom.controls['format.backgroundColor'], () => {
       const control = readColor(dom.controls['format.backgroundColor'])
 
       if (control === null) {
@@ -251,29 +299,109 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
       applyColorFormatFromFrozenSelection('backgroundColor', '背景色', control.value.toLowerCase())
     })
-    bindButton(dom.controls['paragraph.alignLeft'], () => {
-      applyParagraphAlignment('left', '左对齐')
+    bindToolbarSelect(dom.controls['paragraph.alignment'], () => {
+      const control = readSelect(dom.controls['paragraph.alignment'])
+      const value = control === null ? null : parseParagraphAlignmentValue(control.value)
+
+      if (value === null) {
+        render()
+        return
+      }
+
+      applyParagraphAlignment(value, readParagraphAlignmentText(value) ?? '段落对齐')
     })
-    bindButton(dom.controls['paragraph.alignCenter'], () => {
-      applyParagraphAlignment('center', '居中对齐')
+    bindToolbarButton(dom.controls['paragraph.indentDecrease'], () => {
+      adjustParagraphIndentBy(-360)
     })
-    bindButton(dom.controls['paragraph.alignRight'], () => {
-      applyParagraphAlignment('right', '右对齐')
+    bindToolbarButton(dom.controls['paragraph.indentIncrease'], () => {
+      adjustParagraphIndentBy(360)
     })
-    bindButton(dom.controls['paragraph.alignJustify'], () => {
-      applyParagraphAlignment('justify', '两端对齐')
+    bindToolbarSelect(dom.controls['paragraph.indentLeft'], () => {
+      const value = readNumericToolbarSelectValue(dom.controls['paragraph.indentLeft'])
+
+      if (value === null) {
+        render()
+        return
+      }
+
+      applyParagraphIndentLeft(value)
     })
-    bindButton(dom.controls['paragraph.indentDecrease'], () => {
-      adjustParagraphIndent(-INDENT_STEP_TWIPS, '减少缩进')
+    bindToolbarSelect(dom.controls['paragraph.lineHeight'], () => {
+      const value = readNumericToolbarSelectValue(dom.controls['paragraph.lineHeight'])
+
+      if (value === null) {
+        render()
+        return
+      }
+
+      applyParagraphLineHeight(value)
     })
-    bindButton(dom.controls['paragraph.indentIncrease'], () => {
-      adjustParagraphIndent(INDENT_STEP_TWIPS, '增加缩进')
+    bindToolbarSelect(dom.controls['paragraph.spacingBefore'], () => {
+      const value = readNumericToolbarSelectValue(dom.controls['paragraph.spacingBefore'])
+
+      if (value === null) {
+        render()
+        return
+      }
+
+      applyParagraphSpacingBefore(value)
+    })
+    bindToolbarSelect(dom.controls['paragraph.spacingAfter'], () => {
+      const value = readNumericToolbarSelectValue(dom.controls['paragraph.spacingAfter'])
+
+      if (value === null) {
+        render()
+        return
+      }
+
+      applyParagraphSpacingAfter(value)
+    })
+    bindToolbarSelect(dom.controls['paragraph.firstLineIndent'], () => {
+      const value = readNumericToolbarSelectValue(dom.controls['paragraph.firstLineIndent'])
+
+      if (value === null) {
+        render()
+        return
+      }
+
+      applyParagraphFirstLineIndent(value)
+    })
+    bindToolbarSelect(dom.controls['paragraph.hangingIndent'], () => {
+      const value = readNumericToolbarSelectValue(dom.controls['paragraph.hangingIndent'])
+
+      if (value === null) {
+        render()
+        return
+      }
+
+      applyParagraphHangingIndent(value)
+    })
+    bindToolbarSelect(dom.controls['paragraph.style'], () => {
+      const control = readSelect(dom.controls['paragraph.style'])
+
+      if (control === null || isToolbarPlaceholderSelectValue(control.value)) {
+        render()
+        return
+      }
+
+      applyParagraphStyle(control.value)
+    })
+    bindToolbarSelect(dom.controls['paragraph.list'], () => {
+      const control = readSelect(dom.controls['paragraph.list'])
+      const value = control === null ? undefined : parseParagraphListSelectValue(control.value)
+
+      if (value === undefined) {
+        render()
+        return
+      }
+
+      applyParagraphList(value)
     })
   }
 
   /** 在当前选区上切换布尔格式。 */
   function toggleActiveRunBooleanFormat(
-    property: 'bold' | 'italic' | 'underline' | 'strike',
+    property: 'bold' | 'italic' | 'underline' | 'strike' | 'superscript' | 'subscript',
     label: string
   ): void {
     const selection = editor.getSelection()
@@ -284,7 +412,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       return
     }
 
-      switch (property) {
+    switch (property) {
       case 'bold':
         markToolbarTransaction()
         editor.toggleBold()
@@ -300,6 +428,14 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       case 'strike':
         markToolbarTransaction()
         editor.toggleStrike()
+        return
+      case 'superscript':
+        markToolbarTransaction()
+        editor.toggleSuperscript()
+        return
+      case 'subscript':
+        markToolbarTransaction()
+        editor.toggleSubscript()
         return
     }
   }
@@ -406,6 +542,32 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     editor.setFontSize(value)
   }
 
+  /** 沿固定字号档位向上或向下步进。 */
+  function applyFontSizeStep(direction: -1 | 1): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.run === null) {
+      announce(`BLOCKED: ${direction > 0 ? '增大字号' : '减小字号'} 需要当前有可格式化的文本选区。`)
+      render()
+      return
+    }
+
+    const currentValue = formattingState.run.fontSizeTwips.mixed === true
+      ? 240
+      : (formattingState.run.fontSizeTwips.value ?? 240)
+    const nextValue = resolveNextFontSizeStep(currentValue, direction)
+
+    if (nextValue === currentValue) {
+      announce(direction > 0 ? '字号 已经处于最大档位。' : '字号 已经处于最小档位。')
+      render()
+      return
+    }
+
+    markToolbarTransaction()
+    editor.setFontSize(nextValue)
+  }
+
   /** 应用段落对齐。 */
   function applyParagraphAlignment(value: 'left' | 'center' | 'right' | 'justify', label: string): void {
     const selection = editor.getSelection()
@@ -413,11 +575,13 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
     if (selection === null || formattingState.paragraph === null) {
       announce(`BLOCKED: ${label} 需要当前有可格式化的段落选区。`)
+      render()
       return
     }
 
     if (formattingState.paragraph.alignment.mixed !== true && formattingState.paragraph.alignment.value === value) {
       announce(`${label} 已经处于目标状态。`)
+      render()
       return
     }
 
@@ -425,28 +589,223 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     editor.setParagraphAlignment(value)
   }
 
-  /** 调整段落缩进。 */
-  function adjustParagraphIndent(deltaTwips: number, label: string): void {
+  /** 应用段落左缩进。 */
+  function applyParagraphIndentLeft(value: number): void {
     const selection = editor.getSelection()
     const formattingState = editor.getSelectionFormattingState()
 
     if (selection === null || formattingState.paragraph === null) {
-      announce(`BLOCKED: ${label} 需要当前有可格式化的段落选区。`)
+      announce('BLOCKED: 左缩进需要当前有可格式化的段落选区。')
+      render()
       return
     }
 
-    const currentIndent = formattingState.paragraph.indentLeftTwips.mixed
-      ? 0
-      : formattingState.paragraph.indentLeftTwips.value ?? 0
-    const nextIndent = Math.max(0, currentIndent + deltaTwips)
+    if (formattingState.paragraph.indentLeftTwips.mixed !== true && (formattingState.paragraph.indentLeftTwips.value ?? 0) === value) {
+      announce('左缩进 已经处于目标状态。')
+      render()
+      return
+    }
 
-    if (currentIndent === nextIndent) {
-      announce(`${label} 已经处于目标状态。`)
+    const command = buildSetParagraphIndentCommand(editor.getProjection(), selection, value)
+
+    if (command === null) {
+      announce('BLOCKED: 当前没有可应用左缩进的段落目标。')
+      render()
       return
     }
 
     markToolbarTransaction()
-    editor.adjustParagraphIndent(deltaTwips)
+    editor.executeCommand(command, {
+      selectionAfter: selection
+    })
+  }
+
+  /** 按腾讯文档式按钮对当前段落做缩进步进，并在 0 处钳制。 */
+  function adjustParagraphIndentBy(deltaTwips: number): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.paragraph === null) {
+      announce(`BLOCKED: ${deltaTwips > 0 ? '增加缩进' : '减少缩进'} 需要当前有可格式化的段落选区。`)
+      render()
+      return
+    }
+
+    const command = buildAdjustParagraphIndentCommand(editor, selection, deltaTwips)
+
+    if (command === null) {
+      announce(deltaTwips > 0 ? '增加缩进 已经处于目标状态。' : '减少缩进 已经处于目标状态。')
+      render()
+      return
+    }
+
+    markToolbarTransaction()
+    editor.executeCommand(command, {
+      selectionAfter: selection
+    })
+  }
+
+  /** 应用段落行距。 */
+  function applyParagraphLineHeight(value: number): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.paragraph === null) {
+      announce('BLOCKED: 行距需要当前有可格式化的段落选区。')
+      render()
+      return
+    }
+
+    if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.lineHeight, value)) {
+      announce('行距 已经处于目标状态。')
+      render()
+      return
+    }
+
+    markToolbarTransaction()
+    editor.setParagraphLineHeight(value)
+  }
+
+  /** 应用段前间距。 */
+  function applyParagraphSpacingBefore(value: number): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.paragraph === null) {
+      announce('BLOCKED: 段前间距需要当前有可格式化的段落选区。')
+      render()
+      return
+    }
+
+    if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.spacingBeforeTwips, value)) {
+      announce('段前间距 已经处于目标状态。')
+      render()
+      return
+    }
+
+    markToolbarTransaction()
+    editor.setParagraphSpacingBefore(value)
+  }
+
+  /** 应用段后间距。 */
+  function applyParagraphSpacingAfter(value: number): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.paragraph === null) {
+      announce('BLOCKED: 段后间距需要当前有可格式化的段落选区。')
+      render()
+      return
+    }
+
+    if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.spacingAfterTwips, value)) {
+      announce('段后间距 已经处于目标状态。')
+      render()
+      return
+    }
+
+    markToolbarTransaction()
+    editor.setParagraphSpacingAfter(value)
+  }
+
+  /** 应用首行缩进。 */
+  function applyParagraphFirstLineIndent(value: number): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.paragraph === null) {
+      announce('BLOCKED: 首行缩进需要当前有可格式化的段落选区。')
+      render()
+      return
+    }
+
+    if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.firstLineIndentTwips, value)) {
+      announce('首行缩进 已经处于目标状态。')
+      render()
+      return
+    }
+
+    markToolbarTransaction()
+    editor.setParagraphFirstLineIndent(value)
+  }
+
+  /** 应用悬挂缩进。 */
+  function applyParagraphHangingIndent(value: number): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.paragraph === null) {
+      announce('BLOCKED: 悬挂缩进需要当前有可格式化的段落选区。')
+      render()
+      return
+    }
+
+    if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.hangingIndentTwips, value)) {
+      announce('悬挂缩进 已经处于目标状态。')
+      render()
+      return
+    }
+
+    markToolbarTransaction()
+    editor.setParagraphHangingIndent(value)
+  }
+
+  /** 应用段落样式。 */
+  function applyParagraphStyle(value: string): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.paragraph === null) {
+      announce('BLOCKED: 段落样式需要当前有可格式化的段落选区。')
+      render()
+      return
+    }
+
+    if (formattingState.paragraph.styleId.mixed !== true && formattingState.paragraph.styleId.value === value) {
+      announce('段落样式 已经处于目标状态。')
+      render()
+      return
+    }
+
+    markToolbarTransaction()
+    editor.setParagraphStyle(value)
+  }
+
+  /** 应用段落列表；清空列表时先走当前 UI 层兼容 command。 */
+  function applyParagraphList(value: ParagraphList | null): void {
+    const selection = editor.getSelection()
+    const formattingState = editor.getSelectionFormattingState()
+
+    if (selection === null || formattingState.paragraph === null) {
+      announce('BLOCKED: 列表语义需要当前有可格式化的段落选区。')
+      render()
+      return
+    }
+
+    if (areParagraphListsEquivalent(formattingState.paragraph.list.value ?? null, value, formattingState.paragraph.list.mixed)) {
+      announce('列表语义 已经处于目标状态。')
+      render()
+      return
+    }
+
+    if (value === null) {
+      const command = buildClearParagraphListCommand(editor, selection)
+
+      if (command === null) {
+        announce('BLOCKED: 当前没有可清空的列表目标。')
+        render()
+        return
+      }
+
+      markToolbarTransaction()
+      editor.executeCommand(command, {
+        selectionAfter: selection
+      })
+      return
+    }
+
+    markToolbarTransaction()
+    editor.setParagraphList(value)
   }
 
   /** 清除单次颜色冻结快照。 */
@@ -536,4 +895,174 @@ function readSelect(control: JWordToolbarControlElement | undefined): HTMLSelect
 /** 安全读取颜色控件。 */
 function readColor(control: JWordToolbarControlElement | undefined): HTMLInputElement | null {
   return control instanceof HTMLInputElement ? control : null
+}
+
+/** 把段落对齐 select 的字符串值收敛成 facade 可接受的枚举。 */
+function parseParagraphAlignmentValue(value: string): ParagraphAlignment | null {
+  switch (value) {
+    case 'left':
+    case 'center':
+    case 'right':
+    case 'justify':
+      return value
+    default:
+      return null
+  }
+}
+
+/** 从 toolbar select 中安全读取数字值。 */
+function readNumericToolbarSelectValue(control: JWordToolbarControlElement | undefined): number | null {
+  const select = readSelect(control)
+
+  if (select === null || isToolbarPlaceholderSelectValue(select.value)) {
+    return null
+  }
+
+  const value = Number.parseFloat(select.value)
+
+  return Number.isFinite(value) ? value : null
+}
+
+/** 判断段落数字格式是否已处于目标状态。 */
+function isParagraphNumberStateAlreadyApplied(value: FormattingStateValue<number>, target: number): boolean {
+  return value.mixed !== true && value.value === target
+}
+
+/** 判断段落列表是否已处于目标状态。 */
+function areParagraphListsEquivalent(
+  current: ParagraphList | null,
+  target: ParagraphList | null,
+  mixed: boolean
+): boolean {
+  if (mixed) {
+    return false
+  }
+
+  if (current === null || target === null) {
+    return current === target
+  }
+
+  return current.numberingId === target.numberingId && current.level === target.level
+}
+
+/** 把固定字号档位向前或向后推进一档。 */
+function resolveNextFontSizeStep(currentValue: number, direction: -1 | 1): number {
+  if (direction > 0) {
+    return FONT_SIZE_TWIPS_STEPS.find((item) => item > currentValue) ?? currentValue
+  }
+
+  return [...FONT_SIZE_TWIPS_STEPS].reverse().find((item) => item < currentValue) ?? currentValue
+}
+
+/** 为缩进步进按钮构造带 0 下限钳制的 command。 */
+function buildAdjustParagraphIndentCommand(editor: Editor, selection: SelectionState, deltaTwips: number): Command | null {
+  if (deltaTwips === 0) {
+    return null
+  }
+
+  const operations = collectSelectedParagraphs(editor, selection).flatMap((paragraph) => {
+    const currentIndent = typeof paragraph.properties?.indentLeftTwips === 'number'
+      ? paragraph.properties.indentLeftTwips
+      : 0
+    const nextIndent = Math.max(0, currentIndent + deltaTwips)
+
+    return currentIndent === nextIndent
+      ? []
+      : [{
+          kind: 'setParagraphProperties' as const,
+          paragraphId: paragraph.id,
+          properties: {
+            indentLeftTwips: nextIndent
+          }
+        }]
+  })
+
+  return operations.length === 0
+    ? null
+    : {
+        name: 'adjustParagraphIndent',
+        operations
+      }
+}
+
+/** 为 clear-list 构造当前 UI 层的兼容 command。 */
+function buildClearParagraphListCommand(editor: Editor, selection: SelectionState): Command | null {
+  const paragraphs = collectSelectedParagraphs(editor, selection)
+  const operations = paragraphs
+    .filter((paragraph) => !isParagraphPropertiesEquivalent(paragraph, {
+      listNumberingId: null,
+      listLevel: null
+    }))
+    .map((paragraph) => ({
+      kind: 'setParagraphProperties' as const,
+      paragraphId: paragraph.id,
+      properties: {
+        listNumberingId: null,
+        listLevel: null
+      }
+    }))
+
+  if (operations.length === 0) {
+    return null
+  }
+
+  return {
+    name: 'setParagraphList',
+    operations
+  }
+}
+
+/** 以文档顺序收集当前选区覆盖的段落。 */
+function collectSelectedParagraphs(editor: Editor, selection: SelectionState): readonly Paragraph[] {
+  const projection = editor.getProjection()
+  const paragraphs = flattenParagraphs(projection.document.sections.flatMap((section) => section.blocks))
+  const anchorPosition = editor.resolveTextPosition(selection.anchor)
+  const focusPosition = editor.resolveTextPosition(selection.focus)
+  const anchorIndex = paragraphs.findIndex((paragraph) => paragraph.id === anchorPosition.blockId)
+  const focusIndex = paragraphs.findIndex((paragraph) => paragraph.id === focusPosition.blockId)
+
+  if (anchorIndex < 0 || focusIndex < 0) {
+    return []
+  }
+
+  const startIndex = Math.min(anchorIndex, focusIndex)
+  const endIndex = Math.max(anchorIndex, focusIndex)
+
+  return paragraphs.slice(startIndex, endIndex + 1)
+}
+
+/** 把 block 树拍平成文档顺序段落数组。 */
+function flattenParagraphs(blocks: readonly Block[]): readonly Paragraph[] {
+  const paragraphs: Paragraph[] = []
+
+  for (const block of blocks) {
+    if (block.kind === 'paragraph') {
+      paragraphs.push(block)
+      continue
+    }
+
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        paragraphs.push(...flattenParagraphs(cell.blocks))
+      }
+    }
+  }
+
+  return paragraphs
+}
+
+/** 判断段落属性是否已经等价于目标值；null 与缺失统一视为“已清空”。 */
+function isParagraphPropertiesEquivalent(
+  paragraph: Paragraph,
+  properties: Readonly<Record<string, string | number | null>>
+): boolean {
+  return Object.entries(properties).every(([key, value]) => {
+    const currentValue = paragraph.properties?.[key]
+
+    if (value === null) {
+      return currentValue === null || currentValue === undefined
+    }
+
+    return Object.is(currentValue, value)
+  })
 }

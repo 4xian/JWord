@@ -7,7 +7,7 @@
  */
 
 import type { FontManager, ResolvedFontStyle } from './font-manager'
-import type { Inline, Section } from '../model/types'
+import type { Inline, ParagraphList, Section } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { DocumentProjection } from '../model/projection'
 import type { TextPosition } from '../operations/transaction'
@@ -81,6 +81,7 @@ export interface ParagraphBox extends LayoutRect {
   readonly paragraphId: string
   readonly pageBreakPolicy: ParagraphPageBreakPolicy
   readonly lines: readonly LineBox[]
+  readonly listMarker?: ParagraphListMarker
 }
 
 export interface TableBox extends LayoutRect {
@@ -205,6 +206,15 @@ export interface LayoutDebugBox extends LayoutRect {
   readonly id: string
 }
 
+export interface ParagraphListMarker {
+  readonly kind: 'bullet' | 'ordered'
+  readonly label: string
+  readonly text: string
+  readonly level: number
+  readonly gapTwips: number
+  readonly list: ParagraphList
+}
+
 export interface LayoutLookupCache {
   readonly containerOrderByKey: ReadonlyMap<string, number>
   readonly fragmentsByContainerKey: ReadonlyMap<string, readonly TextFragment[]>
@@ -247,6 +257,7 @@ export interface MutableParagraphBox {
   height: number
   lines: LineBox[]
   pageBreakPolicy: ParagraphPageBreakPolicy
+  listMarker?: ParagraphListMarker
 }
 
 export interface MutableLineBox {
@@ -270,6 +281,7 @@ export interface LayoutCursor {
   y: number
   x: number
   paragraphLineCounts?: Map<string, number>
+  listCounters?: Map<string, number[]>
 }
 
 export interface IncrementalLayoutContext {

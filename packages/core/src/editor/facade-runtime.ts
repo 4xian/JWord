@@ -12,6 +12,7 @@ import {
   buildSetFontSizeCommand,
   buildSetItalicCommand,
   buildSetParagraphAlignmentCommand,
+  buildSetParagraphIndentCommand,
   buildSetParagraphFirstLineIndentCommand,
   buildSetParagraphHangingIndentCommand,
   buildSetParagraphLineHeightCommand,
@@ -31,7 +32,7 @@ import { createMountedCanvasImageResourceResolver } from '../resources/canvas-im
 import { createJWordError } from '../shared/errors'
 import { createSelectionFormattingState } from '../model/formatting-state'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
-import type { ParagraphList } from '../model/types'
+import type { Block, ParagraphList, Run } from '../model/types'
 import { DEFAULT_HISTORY_ORIGIN } from '../operations/history'
 import type { HistoryOperationResult } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
@@ -40,7 +41,7 @@ import type { DocumentLayout, LayoutDirtyRange, LayoutRect } from '../layout/run
 import { createAnchorRef, createGraphemeIndex, createTextAnchorRef, readAnchorRefSnapshot, resolveAnchorRef } from '../model/position'
 import type { AnchorRef, BlockId, RangeRef, RunId, SectionId } from '../model/position'
 import type { DocumentProjection } from '../model/projection'
-import { createSelectionRestoreSnapshot, createSelectionState, restoreSelection } from '../model/selection'
+import { createSelectionRestoreSnapshot, createSelectionState, isSelectionCollapsed, restoreSelection } from '../model/selection'
 import type { SelectionState } from '../model/selection'
 import { collectSelectionTargets } from '../model/selection-targets'
 import type { Command, TextPosition, TransactionMetadata, TransactionResult } from '../operations/transaction'
@@ -179,7 +180,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
   getSelectionFormattingState(): SelectionFormattingState {
     this.assertActive()
 
-    return createSelectionFormattingState(this.currentProjection, this.currentSelection)
+    return this.readCurrentSelectionFormattingState()
   }
 
   setSelection(selection: SelectionState | null): void {
@@ -231,6 +232,11 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
    */
   toggleSuperscript(): void {
     this.assertActive()
+    if (this.currentSelection !== null && isSelectionCollapsed(this.currentSelection)) {
+      this.toggleCollapsedScriptFormatting('superscript')
+      return
+    }
+
     this.executeFacadeFormattingCommand(buildSetSuperscriptCommand(
       this.currentProjection,
       this.currentSelection,
@@ -243,6 +249,11 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
    */
   toggleSubscript(): void {
     this.assertActive()
+    if (this.currentSelection !== null && isSelectionCollapsed(this.currentSelection)) {
+      this.toggleCollapsedScriptFormatting('subscript')
+      return
+    }
+
     this.executeFacadeFormattingCommand(buildSetSubscriptCommand(
       this.currentProjection,
       this.currentSelection,
@@ -289,6 +300,18 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
   setParagraphAlignment(value: ParagraphAlignment): void {
     this.assertActive()
     this.executeFacadeFormattingCommand(buildSetParagraphAlignmentCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  /**
+   * 设置当前选择区段落的左缩进。
+   */
+  setParagraphIndent(value: number): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphIndentCommand(
       this.currentProjection,
       this.currentSelection,
       value
@@ -370,7 +393,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
   /**
    * 设置当前选择区段落的稳定列表语义。
    */
-  setParagraphList(value: ParagraphList): void {
+  setParagraphList(value: ParagraphList | null): void {
     this.assertActive()
     this.executeFacadeFormattingCommand(buildSetParagraphListCommand(
       this.currentProjection,
@@ -561,6 +584,46 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     }
   }
 
+  focus(): void {
+    this.assertActive()
+
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined) {
+      return
+    }
+
+    mountedDom.hiddenTextarea.focus()
+    this.updateInputFocusState(true)
+
+    if (this.currentSelection !== null) {
+      return
+    }
+
+    const anchor = this.resolveInitialFocusAnchor()
+
+    if (anchor === undefined) {
+      return
+    }
+
+    this.commitSelection(createSelectionState(anchor, anchor), {
+      source: 'api'
+    })
+  }
+
+  blur(): void {
+    this.assertActive()
+
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined) {
+      return
+    }
+
+    mountedDom.hiddenTextarea.blur()
+    this.updateInputFocusState(false)
+  }
+
   mount(host: HTMLElement): void {
     this.assertActive()
 
@@ -632,6 +695,12 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     const handleCompositionEnd = (event: Event) => {
       this.handleRuntimeCompositionEnd(event)
     }
+    const handleFocus = () => {
+      this.updateInputFocusState(true)
+    }
+    const handleBlur = () => {
+      this.updateInputFocusState(false)
+    }
 
     canvasContainer.addEventListener('scroll', handleScroll)
     canvasContainer.addEventListener('mousedown', handlePointerDown)
@@ -647,6 +716,8 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     hiddenTextarea.addEventListener('compositionstart', handleCompositionStart)
     hiddenTextarea.addEventListener('compositionupdate', handleCompositionUpdate)
     hiddenTextarea.addEventListener('compositionend', handleCompositionEnd)
+    hiddenTextarea.addEventListener('focus', handleFocus)
+    hiddenTextarea.addEventListener('blur', handleBlur)
     shell.append(canvasContainer, hiddenTextarea, liveRegion, textMirror)
     host.append(shell)
 
@@ -751,6 +822,12 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
   ): DocumentProjection {
     const previousSelection = this.currentSelection
 
+    this.commitSelection(null, {
+      source: 'document',
+      render: false,
+      emit: false
+    })
+
     this.dirtyPageIndex = 0
     this.dirtyPageEndIndex = 0
     this.layoutDirtyRange = undefined
@@ -778,6 +855,78 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     })
   }
 
+  protected updateInputFocusState(nextFocused: boolean): void {
+    if (this.isInputFocused === nextFocused) {
+      return
+    }
+
+    this.isInputFocused = nextFocused
+    this.syncCaretBlinkState()
+
+    if (this.currentSelection !== null) {
+      this.renderMountedLayout('selection')
+    }
+  }
+
+  protected resolveInitialFocusAnchor(): AnchorRef | undefined {
+    for (const section of this.currentProjection.document.sections) {
+      const target = this.findFirstFocusableRunInBlocks(section.id, section.blocks)
+
+      if (target !== undefined) {
+        return this.createTextAnchor({
+          sectionId: target.sectionId,
+          blockId: target.blockId,
+          runId: target.runId,
+          graphemeIndex: 0
+        })
+      }
+    }
+
+    return undefined
+  }
+
+  protected findFirstFocusableRunInBlocks(
+    sectionId: string,
+    blocks: readonly Block[]
+  ): Readonly<{
+    sectionId: string
+    blockId: string
+    runId: string
+  }> | undefined {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        const preferredRun = block.runs.find((run) => this.isFocusableRun(run))
+        const run = preferredRun ?? block.runs[0]
+
+        if (run !== undefined) {
+          return {
+            sectionId,
+            blockId: block.id,
+            runId: run.id
+          }
+        }
+
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          const target = this.findFirstFocusableRunInBlocks(sectionId, cell.blocks)
+
+          if (target !== undefined) {
+            return target
+          }
+        }
+      }
+    }
+
+    return undefined
+  }
+
+  protected isFocusableRun(run: Run): boolean {
+    return run.inlines.some((inline) => inline.kind === 'text')
+  }
+
   protected commitSelection(
     selection: SelectionState | null,
     options: Readonly<{
@@ -788,6 +937,10 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     }>
   ): void {
     const previousSelection = options.previousSelection ?? this.currentSelection
+
+    if (options.source !== 'command') {
+      this.pendingCollapsedRunProperties = undefined
+    }
 
     if (options.source !== 'pointer') {
       this.cancelDeferredPointerSelectionWork()
@@ -805,6 +958,66 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
 
     if (options.emit !== false) {
       this.emitSelectionChange()
+    }
+  }
+
+  /**
+   * 读取当前选区格式状态，并在折叠光标时叠加待输入上下标态。
+   */
+  protected readCurrentSelectionFormattingState(): SelectionFormattingState {
+    const formattingState = createSelectionFormattingState(this.currentProjection, this.currentSelection)
+
+    return this.applyPendingCollapsedRunProperties(formattingState)
+  }
+
+  /**
+   * 折叠光标下的上下标切换只影响后续输入，不回改未选中的现有文字。
+   */
+  protected toggleCollapsedScriptFormatting(kind: 'superscript' | 'subscript'): void {
+    const currentRunState = this.readCurrentSelectionFormattingState().run
+    const shouldEnable = kind === 'superscript'
+      ? currentRunState?.superscript.value !== true
+      : currentRunState?.subscript.value !== true
+
+    this.pendingCollapsedRunProperties = Object.freeze(kind === 'superscript'
+      ? shouldEnable
+        ? { superscript: true, subscript: false }
+        : { superscript: false, subscript: false }
+      : shouldEnable
+        ? { superscript: false, subscript: true }
+        : { superscript: false, subscript: false })
+
+    this.emitSelectionChange()
+  }
+
+  /**
+   * 把折叠光标的待输入上下标态覆盖到当前格式状态，供 toolbar 与外部读取。
+   */
+  protected applyPendingCollapsedRunProperties(
+    formattingState: SelectionFormattingState
+  ): SelectionFormattingState {
+    if (
+      this.pendingCollapsedRunProperties === undefined
+      || this.currentSelection === null
+      || !isSelectionCollapsed(this.currentSelection)
+      || formattingState.run === null
+    ) {
+      return formattingState
+    }
+
+    return {
+      ...formattingState,
+      run: {
+        ...formattingState.run,
+        superscript: {
+          value: this.pendingCollapsedRunProperties.superscript === true,
+          mixed: false
+        },
+        subscript: {
+          value: this.pendingCollapsedRunProperties.subscript === true,
+          mixed: false
+        }
+      }
     }
   }
 

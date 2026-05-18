@@ -9,6 +9,40 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type { RangeRef } from '@4xian/jword-core'
 
+interface ParagraphRenderProbe {
+  readonly paragraphStyleId: string | null
+  readonly paragraphList: {
+    readonly numberingId: string
+    readonly level: number
+  } | null
+  readonly contentLeft: number
+  readonly contentRight: number
+  readonly paragraphX: number
+  readonly paragraphY: number
+  readonly paragraphHeight: number
+  readonly lineCount: number
+  readonly firstLineX: number
+  readonly firstLineRight: number
+  readonly firstLineHeight: number
+  readonly secondLineX: number | null
+  readonly secondParagraphY: number | null
+  readonly firstParagraphTailGap: number | null
+  readonly firstLineCanvasChecksum: number
+  readonly firstLineNonWhitePixels: number
+  readonly firstFragmentStyle: {
+    readonly fontFamily: string
+    readonly fontSizePx: number
+    readonly bold: boolean
+    readonly lineHeight?: number
+  }
+}
+
+interface SelectOptionMatcher {
+  readonly exactValue?: string
+  readonly valueAllOf?: readonly string[]
+  readonly labelAllOf?: readonly string[]
+}
+
 test.describe.configure({ mode: 'serial' })
 
 test('Gate 3 toolbar renders real controls and mirrors current selection state', async ({ page }) => {
@@ -31,6 +65,22 @@ test('Gate 3 toolbar renders real controls and mirrors current selection state',
   await expect(textMirror).toContainText('English text')
   await expect(textMirror).toContainText('13579')
   await expect(page.getByRole('button', { name: '选择首页片段' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '减小字号' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '增大字号' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '减少缩进' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '增加缩进' })).toBeVisible()
+  await expect(page.locator('[data-jword-paragraph-indent-left]')).toHaveCount(0)
+  await expect.poll(() => readToolbarSelectTriggerIconCount(page, '[data-jword-paragraph-alignment]')).toBeGreaterThan(0)
+  await expect.poll(() => readToolbarSelectTriggerIconCount(page, '[data-jword-paragraph-line-height]')).toBeGreaterThan(0)
+  await expect.poll(() => readToolbarSelectTriggerIconCount(page, '[data-jword-paragraph-list]')).toBeGreaterThan(0)
+  await expect.poll(() => readToolbarSelectFrameProbe(page, '[data-jword-format-font-family]')).toMatchObject({
+    borderTopWidth: '1px',
+    borderRightWidth: '1px'
+  })
+  await expect.poll(() => readToolbarSelectFrameProbe(page, '[data-jword-format-font-size]')).toMatchObject({
+    borderTopWidth: '1px',
+    borderRightWidth: '1px'
+  })
 
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await expect(page.getByRole('button', { name: '选择首页片段' })).toBeEnabled()
@@ -136,6 +186,8 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
 
   const underlineButton = page.getByRole('button', { name: '下划线' })
   const strikeButton = page.getByRole('button', { name: '删除线' })
+  const fontSizeDecreaseButton = page.getByRole('button', { name: '减小字号' })
+  const fontSizeIncreaseButton = page.getByRole('button', { name: '增大字号' })
   const fontFamilySelect = page.locator('[data-jword-format-font-family]')
   const fontSizeSelect = page.locator('[data-jword-format-font-size]')
   const textColorInput = page.locator('[data-jword-format-text-color]')
@@ -168,6 +220,24 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
   await fontSizeSelect.selectOption('360')
   await expect(fontSizeSelect).toHaveValue('360')
   await expect(fontSizeSelect).toHaveAttribute('data-jword-state', 'value')
+  await expect(runSummary).toContainText('字号 18 pt')
+  expect(await readFirstRunStyle(page)).toEqual({
+    underline: true,
+    strike: true,
+    fontFamily: 'KaiTi',
+    fontSizeTwips: 360
+  })
+
+  await fontSizeDecreaseButton.click()
+  await expect(runSummary).toContainText('字号 16 pt')
+  expect(await readFirstRunStyle(page)).toEqual({
+    underline: true,
+    strike: true,
+    fontFamily: 'KaiTi',
+    fontSizeTwips: 320
+  })
+
+  await fontSizeIncreaseButton.click()
   await expect(runSummary).toContainText('字号 18 pt')
   expect(await readFirstRunStyle(page)).toEqual({
     underline: true,
@@ -233,36 +303,242 @@ test('Gate 3 toolbar color picker keeps applying to the selection captured when 
   await expect(textColorInput).toHaveValue('#3366ff')
 })
 
-test('Gate 3 toolbar applies paragraph alignment and indent across a multi-paragraph selection', async ({ page }) => {
+test('Gate 3 toolbar paragraph alignment dropdown changes real line geometry', async ({ page }) => {
   await page.goto('/')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
   await selectFirstTwoParagraphs(page)
 
-  const alignRightButton = page.locator('[data-jword-format-align-right]')
-  const indentIncreaseButton = page.locator('[data-jword-format-indent-increase]')
+  const alignmentSelect = page.locator('[data-jword-paragraph-alignment]')
   const runSummary = page.locator('[data-jword-run-summary]')
+  const beforeProbe = await readFirstParagraphRenderProbe(page)
 
-  await alignRightButton.click()
-  await expect(alignRightButton).toHaveAttribute('aria-pressed', 'true')
-  await expect(alignRightButton).toHaveAttribute('data-jword-state', 'value')
-  await expect(runSummary).toContainText('对齐 right')
-  expect(await readFirstTwoParagraphProperties(page)).toEqual([
+  await expect(alignmentSelect).toBeVisible()
+
+  const selectedAlignment = await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-alignment]', {
+    exactValue: 'right',
+    labelAllOf: ['右']
+  })
+
+  await expect(alignmentSelect).toHaveValue(selectedAlignment.value)
+  await expect(runSummary).toContainText('对齐 右对齐')
+  await openToolbarSelectMenu(page, '[data-jword-paragraph-alignment]')
+  await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-alignment]')).resolves.toContain('右对齐')
+  await expect.poll(() => readFirstTwoParagraphProperties(page)).toEqual([
     { alignment: 'right' },
     { alignment: 'right' }
   ])
 
+  const afterProbe = await readFirstParagraphRenderProbe(page)
+
+  expect(afterProbe.firstLineX).toBeGreaterThan(beforeProbe.firstLineX)
+  expect(Math.abs(afterProbe.firstLineRight - afterProbe.contentRight)).toBeLessThan(1)
+})
+
+test('Gate 3 toolbar paragraph metric dropdowns update projection and layout geometry', async ({ page }) => {
+  await page.goto('/')
+  await waitForDemoReady(page)
+
+  const paperPresetSelect = page.locator('[data-jword-page-preset]')
+
+  await paperPresetSelect.selectOption('a5')
+  await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
+  await selectFirstTwoParagraphs(page)
+
+  const runSummary = page.locator('[data-jword-run-summary]')
+  const beforeProbe = await readFirstParagraphRenderProbe(page)
+  const indentDecreaseButton = page.getByRole('button', { name: '减少缩进' })
+  const indentIncreaseButton = page.getByRole('button', { name: '增加缩进' })
+
+  expect(beforeProbe.lineCount).toBeGreaterThan(1)
+
+  await expect(page.locator('[data-jword-paragraph-indent-left]')).toHaveCount(0)
+  await expect(page.locator('[data-jword-paragraph-line-height]')).toBeVisible()
+  await expect(page.locator('[data-jword-paragraph-spacing-before]')).toBeVisible()
+  await expect(page.locator('[data-jword-paragraph-spacing-after]')).toBeVisible()
+  await expect(page.locator('[data-jword-paragraph-first-line-indent]')).toBeVisible()
+  await expect(page.locator('[data-jword-paragraph-hanging-indent]')).toBeVisible()
+
   await indentIncreaseButton.click()
-  await expect(runSummary).toContainText('缩进 36 pt')
-  expect(await readFirstTwoParagraphProperties(page)).toEqual([
-    { alignment: 'right', indentLeftTwips: 720 },
-    { alignment: 'right', indentLeftTwips: 720 }
-  ])
-  expect(await readFirstLineGeometry(page)).toMatchObject({
-    paragraphXGreaterThanContentLeft: true,
-    lineRightMatchesContentRight: true
+  await indentIncreaseButton.click()
+  await indentDecreaseButton.click()
+  await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-line-height]', {
+    exactValue: '1.8',
+    labelAllOf: ['1.8']
   })
+  await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-spacing-before]', {
+    exactValue: '120',
+    labelAllOf: ['6 pt']
+  })
+  await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-spacing-after]', {
+    exactValue: '240',
+    labelAllOf: ['12 pt']
+  })
+  await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-first-line-indent]', {
+    exactValue: '360',
+    labelAllOf: ['18 pt']
+  })
+  await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-hanging-indent]', {
+    exactValue: '480',
+    labelAllOf: ['24 pt']
+  })
+
+  await expect(runSummary).toContainText('行距 1.8')
+  await expect(runSummary).toContainText('左缩进 18 pt')
+  await expect(runSummary).toContainText('段前 6 pt')
+  await expect(runSummary).toContainText('段后 12 pt')
+  await expect(runSummary).toContainText('首行 18 pt')
+  await expect(runSummary).toContainText('悬挂 24 pt')
+  await openToolbarSelectMenu(page, '[data-jword-paragraph-line-height]')
+  await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-line-height]')).resolves.toContain('1.8')
+
+  await expect.poll(() => readFirstTwoParagraphProperties(page)).toEqual([
+    {
+      indentLeftTwips: 360,
+      spacingBeforeTwips: 120,
+      spacingAfterTwips: 240,
+      firstLineIndentTwips: 360,
+      hangingIndentTwips: 480
+    },
+    {
+      indentLeftTwips: 360,
+      spacingBeforeTwips: 120,
+      spacingAfterTwips: 240,
+      firstLineIndentTwips: 360,
+      hangingIndentTwips: 480
+    }
+  ])
+  await expect.poll(() => readFirstTwoParagraphRunLineHeights(page)).toEqual([
+    [1.8],
+    [1.8]
+  ])
+
+  const afterProbe = await readFirstParagraphRenderProbe(page)
+
+  expect(afterProbe.paragraphX - beforeProbe.paragraphX).toBe(360)
+  expect(afterProbe.firstLineX - afterProbe.paragraphX).toBe(360)
+  expect(afterProbe.secondLineX).not.toBeNull()
+  expect((afterProbe.secondLineX ?? 0) - afterProbe.paragraphX).toBe(480)
+  expect(afterProbe.firstLineHeight).toBeGreaterThan(beforeProbe.firstLineHeight)
+  expect(afterProbe.paragraphY).toBeGreaterThan(beforeProbe.paragraphY)
+  expect(afterProbe.firstParagraphTailGap).not.toBeNull()
+  expect(beforeProbe.firstParagraphTailGap).not.toBeNull()
+  expect((afterProbe.firstParagraphTailGap ?? 0) - (beforeProbe.firstParagraphTailGap ?? 0)).toBeGreaterThan(200)
+})
+
+test('Gate 3 toolbar paragraph style dropdown makes heading rendering visibly different', async ({ page }) => {
+  await page.goto('/')
+  await waitForDemoReady(page)
+  await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
+  await page.getByRole('button', { name: '选择首页片段' }).click()
+
+  const styleSelect = page.locator('[data-jword-paragraph-style]')
+  const runSummary = page.locator('[data-jword-run-summary]')
+  const beforeProbe = await readFirstParagraphRenderProbe(page)
+
+  await expect(styleSelect).toBeVisible()
+
+  const selectedStyle = await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-style]', {
+    exactValue: 'Heading2',
+    valueAllOf: ['heading', '2'],
+    labelAllOf: ['标题', '2']
+  })
+
+  await expect(styleSelect).toHaveValue(selectedStyle.value)
+  await expect(runSummary).toContainText('样式 标题 2')
+  await openToolbarSelectMenu(page, '[data-jword-paragraph-style]')
+  await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-style]')).resolves.toContain('标题 2')
+
+  await expect.poll(() => readFirstParagraphRenderProbe(page)).toMatchObject({
+    paragraphStyleId: 'Heading2'
+  })
+
+  const afterProbe = await readFirstParagraphRenderProbe(page)
+  const visibleHeadingDiffs = [
+    afterProbe.firstFragmentStyle.fontSizePx !== beforeProbe.firstFragmentStyle.fontSizePx,
+    afterProbe.firstFragmentStyle.fontFamily !== beforeProbe.firstFragmentStyle.fontFamily,
+    afterProbe.firstFragmentStyle.bold !== beforeProbe.firstFragmentStyle.bold,
+    afterProbe.firstLineHeight !== beforeProbe.firstLineHeight,
+    afterProbe.firstLineCanvasChecksum !== beforeProbe.firstLineCanvasChecksum
+  ].filter(Boolean)
+
+  expect(visibleHeadingDiffs.length).toBeGreaterThan(0)
+  expect(afterProbe.firstLineNonWhitePixels).toBeGreaterThan(0)
+})
+
+test('Gate 3 toolbar paragraph list dropdown renders ordered and bullet variants and can clear', async ({ page }) => {
+  await page.goto('/')
+  await waitForDemoReady(page)
+  await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
+  await page.getByRole('button', { name: '选择首页片段' }).click()
+
+  const listSelect = page.locator('[data-jword-paragraph-list]')
+  const runSummary = page.locator('[data-jword-run-summary]')
+  const baselineProbe = await readFirstParagraphRenderProbe(page)
+
+  await expect(listSelect).toBeVisible()
+
+  const orderedOption = await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-list]', {
+    exactValue: 'ordered-l1',
+    labelAllOf: ['编号', '1']
+  })
+
+  await expect(listSelect).toHaveValue(orderedOption.value)
+  await expect(runSummary).toContainText('列表 编号列表 / 1级')
+  await openToolbarSelectMenu(page, '[data-jword-paragraph-list]')
+  await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-list]')).resolves.toContain('编号列表 1 级')
+
+  await expect.poll(() => readFirstParagraphRenderProbe(page)).toMatchObject({
+    paragraphList: {
+      numberingId: 'jword-list-ordered',
+      level: 1
+    }
+  })
+
+  const orderedProbe = await readFirstParagraphRenderProbe(page)
+
+  expect(orderedProbe.firstLineCanvasChecksum).not.toBe(baselineProbe.firstLineCanvasChecksum)
+  expect(orderedProbe.firstLineNonWhitePixels).toBeGreaterThan(0)
+
+  const bulletOption = await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-list]', {
+    exactValue: 'bullet-l2',
+    labelAllOf: ['项目符号', '2']
+  })
+
+  await expect(listSelect).toHaveValue(bulletOption.value)
+  await expect(runSummary).toContainText('列表 项目符号列表 / 2级')
+  await openToolbarSelectMenu(page, '[data-jword-paragraph-list]')
+  await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-list]')).resolves.toContain('项目符号列表 2 级')
+
+  await expect.poll(() => readFirstParagraphRenderProbe(page)).toMatchObject({
+    paragraphList: {
+      numberingId: 'jword-list-bullet',
+      level: 2
+    }
+  })
+
+  const bulletProbe = await readFirstParagraphRenderProbe(page)
+
+  expect(bulletProbe.firstLineCanvasChecksum).not.toBe(orderedProbe.firstLineCanvasChecksum)
+
+  const clearedOption = await selectDropdownOptionByMatcher(page, '[data-jword-paragraph-list]', {
+    exactValue: 'none',
+    labelAllOf: ['无列表']
+  })
+
+  await expect(listSelect).toHaveValue(clearedOption.value)
+  await openToolbarSelectMenu(page, '[data-jword-paragraph-list]')
+  await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-list]')).resolves.toContain('无列表')
+
+  await expect.poll(() => readFirstParagraphRenderProbe(page)).toMatchObject({
+    paragraphList: null
+  })
+
+  const clearedProbe = await readFirstParagraphRenderProbe(page)
+
+  expect(clearedProbe.firstLineCanvasChecksum).toBe(baselineProbe.firstLineCanvasChecksum)
+  expect(clearedProbe.firstLineX).toBe(baselineProbe.firstLineX)
 })
 
 test('Gate 3 toolbar switches paper size and updates real page geometry', async ({ page }) => {
@@ -353,6 +629,27 @@ async function readFirstTwoParagraphProperties(page: Page): Promise<readonly Rec
   })
 }
 
+async function readFirstTwoParagraphRunLineHeights(page: Page): Promise<readonly (readonly (number | null)[])[]> {
+  return page.evaluate(() => {
+    const projection = window.__jwordDemo?.editor.getProjection()
+    const firstBlock = projection?.document.sections[0]?.blocks[0]
+    const secondBlock = projection?.document.sections[0]?.blocks[1]
+
+    if (
+      firstBlock === undefined
+      || firstBlock.kind !== 'paragraph'
+      || secondBlock === undefined
+      || secondBlock.kind !== 'paragraph'
+    ) {
+      throw new Error('缺少前两段行距 probe')
+    }
+
+    return [firstBlock, secondBlock].map((block) =>
+      block.runs.map((run) => typeof run.properties?.lineHeight === 'number' ? run.properties.lineHeight : null)
+    )
+  })
+}
+
 async function readFirstRenderedFragment(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
     const fragment = window.__jwordDemo?.editor.getLayout().pages[0]?.lines[0]?.fragments[0]
@@ -368,22 +665,112 @@ async function readFirstRenderedFragment(page: Page): Promise<Record<string, unk
   })
 }
 
-async function readFirstLineGeometry(page: Page): Promise<{
-  readonly paragraphXGreaterThanContentLeft: boolean
-  readonly lineRightMatchesContentRight: boolean
-}> {
+async function readFirstParagraphRenderProbe(page: Page): Promise<ParagraphRenderProbe> {
   return page.evaluate(() => {
-    const pageBox = window.__jwordDemo?.editor.getLayout().pages[0]
-    const paragraph = pageBox?.paragraphs[0]
-    const line = pageBox?.lines[0]
+    const demo = window.__jwordDemo
+    const projection = demo?.editor.getProjection()
+    const pageBox = demo?.editor.getLayout().pages[0]
+    const firstBlock = projection?.document.sections[0]?.blocks[0]
+    const secondBlock = projection?.document.sections[0]?.blocks[1]
+    const paragraph = firstBlock === undefined || pageBox === undefined
+      ? undefined
+      : pageBox.paragraphs.find((item) => item.paragraphId === firstBlock.id)
+    const lines = firstBlock === undefined || pageBox === undefined
+      ? []
+      : pageBox.lines.filter((item) => item.paragraphId === firstBlock.id)
+    const firstLine = lines[0]
+    const secondLine = lines[1]
+    const lastLine = lines[lines.length - 1]
+    const firstFragment = firstLine?.fragments[0]
+    const secondParagraph = secondBlock === undefined || pageBox === undefined
+      ? undefined
+      : pageBox.paragraphs.find((item) => item.paragraphId === secondBlock.id)
+    const canvas = document.querySelector<HTMLCanvasElement>(`[data-jword-page="${pageBox?.pageIndex ?? 0}"] .jw-editor__page-canvas`)
+    const context = canvas?.getContext('2d')
 
-    if (pageBox === undefined || paragraph === undefined || line === undefined) {
-      throw new Error('缺少首行布局几何')
+    if (
+      demo === undefined
+      || projection === undefined
+      || firstBlock === undefined
+      || firstBlock.kind !== 'paragraph'
+      || pageBox === undefined
+      || paragraph === undefined
+      || firstLine === undefined
+      || firstFragment === undefined
+      || canvas === null
+      || context === null
+      || context === undefined
+    ) {
+      throw new Error('缺少首段渲染 probe')
+    }
+
+    const cropLeft = Math.max(0, Math.floor(((pageBox.contentRect.x - pageBox.x) * canvas.width) / pageBox.width))
+    const cropRight = Math.min(
+      canvas.width,
+      Math.ceil((((pageBox.contentRect.x + pageBox.contentRect.width) - pageBox.x) * canvas.width) / pageBox.width)
+    )
+    const cropTop = Math.max(0, Math.floor(((firstLine.y - pageBox.y) * canvas.height) / pageBox.height))
+    const cropBottom = Math.min(
+      canvas.height,
+      Math.ceil((((firstLine.y + firstLine.height) - pageBox.y) * canvas.height) / pageBox.height)
+    )
+    const image = context.getImageData(
+      cropLeft,
+      cropTop,
+      Math.max(1, cropRight - cropLeft),
+      Math.max(1, cropBottom - cropTop)
+    ).data
+    let firstLineCanvasChecksum = 0
+    let firstLineNonWhitePixels = 0
+
+    for (let index = 0; index < image.length; index += 4) {
+      const red = image[index] ?? 0
+      const green = image[index + 1] ?? 0
+      const blue = image[index + 2] ?? 0
+      const alpha = image[index + 3] ?? 0
+
+      if (alpha === 0) {
+        continue
+      }
+
+      if (red < 245 || green < 245 || blue < 245) {
+        firstLineNonWhitePixels += 1
+      }
+
+      firstLineCanvasChecksum = (
+        (firstLineCanvasChecksum * 131)
+        + (red * 3)
+        + (green * 5)
+        + (blue * 7)
+        + (alpha * 11)
+      ) % 2147483647
     }
 
     return {
-      paragraphXGreaterThanContentLeft: paragraph.x > pageBox.contentRect.x,
-      lineRightMatchesContentRight: Math.abs((line.x + line.width) - (pageBox.contentRect.x + pageBox.contentRect.width)) < 1
+      paragraphStyleId: firstBlock.styleId ?? null,
+      paragraphList: firstBlock.list ?? null,
+      contentLeft: pageBox.contentRect.x,
+      contentRight: pageBox.contentRect.x + pageBox.contentRect.width,
+      paragraphX: paragraph.x,
+      paragraphY: paragraph.y,
+      paragraphHeight: paragraph.height,
+      lineCount: lines.length,
+      firstLineX: firstLine.x,
+      firstLineRight: firstLine.x + firstLine.width,
+      firstLineHeight: firstLine.height,
+      secondLineX: secondLine?.x ?? null,
+      secondParagraphY: secondParagraph?.y ?? null,
+      firstParagraphTailGap: secondParagraph === undefined || lastLine === undefined
+        ? null
+        : secondParagraph.y - (lastLine.y + lastLine.height),
+      firstLineCanvasChecksum,
+      firstLineNonWhitePixels,
+      firstFragmentStyle: {
+        fontFamily: firstFragment.style.fontFamily,
+        fontSizePx: firstFragment.style.fontSizePx,
+        bold: firstFragment.style.bold === true,
+        ...(firstFragment.style.lineHeight === undefined ? {} : { lineHeight: firstFragment.style.lineHeight })
+      }
     }
   })
 }
@@ -440,6 +827,135 @@ async function readToolbarHistoryProbe(page: Page): Promise<{
       redoDisabled: redoButton.disabled
     }
   })
+}
+
+async function selectDropdownOptionByMatcher(
+  page: Page,
+  selector: string,
+  matcher: SelectOptionMatcher
+): Promise<{
+  readonly value: string
+  readonly label: string
+}> {
+  return page.locator(selector).evaluate((element, input) => {
+    if (!(element instanceof HTMLSelectElement)) {
+      throw new Error(`${input.selector} 不是原生 select，当前无法用回归 helper 选择`)
+    }
+
+    const selectorLabel = input.selector
+    const normalizedExactValue = input.exactValue
+    const normalizedValueAllOf = input.valueAllOf?.map((value) => value.toLowerCase()) ?? []
+    const normalizedLabelAllOf = input.labelAllOf?.map((value) => value.toLowerCase()) ?? []
+    const options = Array.from(element.options).map((option) => ({
+      value: option.value,
+      label: option.label.trim(),
+      normalizedValue: option.value.toLowerCase(),
+      normalizedLabel: option.label.trim().toLowerCase()
+    }))
+    const matchesAll = (source: string, patterns: readonly string[]): boolean =>
+      patterns.length > 0 && patterns.every((pattern) => source.includes(pattern))
+    const matched = options.find((option) => {
+      if (normalizedExactValue !== undefined && option.value === normalizedExactValue) {
+        return true
+      }
+
+      return matchesAll(option.normalizedValue, normalizedValueAllOf)
+        || matchesAll(option.normalizedLabel, normalizedLabelAllOf)
+    })
+
+    if (matched === undefined) {
+      throw new Error(`${selectorLabel} 缺少匹配 option，现有值: ${options.map((option) => `${option.value}::${option.label}`).join(' | ')}`)
+    }
+
+    element.value = matched.value
+    element.dispatchEvent(new Event('change', { bubbles: true }))
+
+    return {
+      value: matched.value,
+      label: matched.label
+    }
+  }, {
+    selector,
+    ...matcher
+  })
+}
+
+async function readToolbarSelectTriggerIconCount(page: Page, selector: string): Promise<number> {
+  return page.locator(selector).evaluate((element, inputSelector) => {
+    if (!(element instanceof HTMLSelectElement)) {
+      throw new Error(`${inputSelector} 不是原生 select，当前无法读取 trigger 图标`)
+    }
+
+    return element.parentElement?.querySelectorAll('.jw-toolbar__select-trigger svg').length ?? 0
+  }, selector)
+}
+
+async function readToolbarSelectFrameProbe(
+  page: Page,
+  selector: string
+): Promise<{
+  readonly borderTopWidth: string
+  readonly borderRightWidth: string
+  readonly borderRadius: string
+}> {
+  return page.locator(selector).evaluate((element, inputSelector) => {
+    if (!(element instanceof HTMLSelectElement)) {
+      throw new Error(`${inputSelector} 不是原生 select，当前无法读取框式样式`)
+    }
+
+    const wrapper = element.parentElement
+
+    if (wrapper === null) {
+      throw new Error(`${inputSelector} 缺少 wrapper`)
+    }
+
+    const style = window.getComputedStyle(wrapper)
+
+    return {
+      borderTopWidth: style.borderTopWidth,
+      borderRightWidth: style.borderRightWidth,
+      borderRadius: style.borderRadius
+    }
+  }, selector)
+}
+
+async function openToolbarSelectMenu(page: Page, selector: string): Promise<void> {
+  await page.locator(selector).evaluate((element, inputSelector) => {
+    if (!(element instanceof HTMLSelectElement)) {
+      throw new Error(`${inputSelector} 不是原生 select，当前无法打开 trigger`)
+    }
+
+    const trigger = element.parentElement?.querySelector<HTMLButtonElement>('.jw-toolbar__select-trigger')
+
+    if (trigger === null || trigger === undefined) {
+      throw new Error(`${inputSelector} 缺少 trigger 节点`)
+    }
+
+    trigger.click()
+  }, selector)
+}
+
+async function readSelectedToolbarOption(page: Page, selector: string): Promise<string> {
+  return page.locator(selector).evaluate((element, inputSelector) => {
+    if (!(element instanceof HTMLSelectElement)) {
+      throw new Error(`${inputSelector} 不是原生 select，当前无法读取菜单选中项`)
+    }
+
+    const selectedOption = element.parentElement?.querySelector<HTMLElement>(
+      '.jw-toolbar__select-option[data-jword-selected="true"]'
+    )
+    const check = selectedOption?.querySelector<HTMLElement>('[data-jword-option-check="true"]')
+
+    if (selectedOption === null || selectedOption === undefined) {
+      throw new Error(`${inputSelector} 缺少选中项`)
+    }
+
+    if (check === null || check === undefined) {
+      throw new Error(`${inputSelector} 缺少选中对号节点`)
+    }
+
+    return selectedOption.textContent?.trim() ?? ''
+  }, selector)
 }
 
 async function selectFirstFragmentRange(page: Page): Promise<void> {

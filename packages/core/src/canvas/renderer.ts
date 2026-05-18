@@ -41,6 +41,8 @@ const MAX_CANVAS_SIDE_PX = 4096
 const MAX_CANVAS_AREA_PX = 16777216
 const DEFAULT_CANVAS_TEXT_COLOR = '#374151'
 const DEFAULT_CANVAS_CARET_COLOR = '#111827'
+const SUPERSCRIPT_BASELINE_SHIFT_RATIO = 0.35
+const SUBSCRIPT_BASELINE_SHIFT_RATIO = 0.15
 const IMAGE_STATUS_COLORS = Object.freeze({
   pending: { fill: '#fff7ed', border: '#f59e0b', text: '#92400e' },
   success: { fill: '#eff6ff', border: '#2563eb', text: '#1d4ed8' },
@@ -79,6 +81,7 @@ export function renderPageCanvas(input: RenderPageInput): void {
 
   renderTextBackgrounds(context, input.page, drawingScale)
   renderSelectionRects(context, input, drawingScale)
+  renderParagraphListMarkers(context, input.page, drawingScale)
   renderTextFragments(context, input.page, drawingScale)
   renderInlineObjects(context, input.page, drawingScale, input.imageResourceResolver)
 
@@ -142,6 +145,7 @@ function renderTextFragments(
     for (const fragment of line.fragments) {
       const x = toCanvasX(page, fragment.x, drawingScale)
       const baseline = toCanvasY(page, fragment.baseline, drawingScale)
+        + readCanvasBaselineShiftPx(fragment, drawingScale)
       const width = twipsToCssPx(fragment.width, drawingScale)
 
       context.fillStyle = fragment.style.color ?? DEFAULT_CANVAS_TEXT_COLOR
@@ -150,6 +154,40 @@ function renderTextFragments(
       context.fillText(fragment.text, x, baseline)
       renderTextDecoration(context, fragment, x, baseline, width, drawingScale)
     }
+  }
+}
+
+function renderParagraphListMarkers(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  drawingScale: number
+): void {
+  for (const paragraph of page.paragraphs) {
+    if (paragraph.listMarker === undefined) {
+      continue
+    }
+
+    const line = paragraph.lines[0]
+
+    if (line === undefined) {
+      continue
+    }
+
+    const referenceFragment = line.fragments[0]
+    const referenceFontSizePx = referenceFragment?.style.fontSizePx ?? 16
+    const markerText = paragraph.listMarker.text ?? paragraph.listMarker.label
+    const baseline = referenceFragment === undefined
+      ? toCanvasY(page, line.baseline, drawingScale)
+      : toCanvasY(page, referenceFragment.baseline, drawingScale)
+    const markerX = toCanvasX(page, line.x - paragraph.listMarker.gapTwips, drawingScale)
+      - estimateParagraphMarkerWidthPx(markerText, referenceFontSizePx, drawingScale)
+
+    context.fillStyle = referenceFragment?.style.color ?? DEFAULT_CANVAS_TEXT_COLOR
+    context.font = referenceFragment === undefined
+      ? `${Math.max(1, Math.round(referenceFontSizePx * drawingScale))}px sans-serif`
+      : formatCanvasFont(referenceFragment, drawingScale)
+    context.textBaseline = 'alphabetic'
+    context.fillText(markerText, markerX, baseline)
   }
 }
 
@@ -387,4 +425,22 @@ function formatCanvasFont(fragment: TextFragment, scale: number): string {
   const fontFamily = style.fontFamily
 
   return [...traits, `${fontSizePx}px`, fontFamily].join(' ')
+}
+
+function readCanvasBaselineShiftPx(fragment: TextFragment, scale: number): number {
+  const baseFontSizePx = fragment.style.baseFontSizePx ?? fragment.style.fontSizePx
+
+  if (fragment.style.superscript === true) {
+    return -baseFontSizePx * SUPERSCRIPT_BASELINE_SHIFT_RATIO * scale
+  }
+
+  if (fragment.style.subscript === true) {
+    return baseFontSizePx * SUBSCRIPT_BASELINE_SHIFT_RATIO * scale
+  }
+
+  return 0
+}
+
+function estimateParagraphMarkerWidthPx(label: string, fontSizePx: number, scale: number): number {
+  return Math.max(1, Math.round(label.length * fontSizePx * 0.375 * scale))
 }

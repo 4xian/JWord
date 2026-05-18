@@ -70,6 +70,84 @@ describe('Editor input runtime', () => {
     }
   })
 
+  it('focuses the mounted editor and seeds a collapsed caret when selection is empty', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'abcdef' })
+
+    document.body.append(host)
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+
+      expect(editor.getSelection()).toBeNull()
+
+      editor.focus()
+
+      expect(document.activeElement).toBe(textarea)
+      expectSelectionIndexes(editor, editor.getSelection(), [0, 0])
+    } finally {
+      editor.destroy()
+      host.remove()
+    }
+  })
+
+  it('exposes a blur method that removes focus without clearing selection', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'abcdef' })
+
+    document.body.append(host)
+
+    try {
+      editor.mount(host)
+      editor.focus()
+
+      const textarea = getHiddenTextarea(host)
+      const selectionBeforeBlur = editor.getSelection()
+
+      editor.blur()
+
+      expect(document.activeElement).not.toBe(textarea)
+      expect(editor.getSelection()).toBe(selectionBeforeBlur)
+    } finally {
+      editor.destroy()
+      host.remove()
+    }
+  })
+
+  it('clears selection before document replacement transaction events after focus', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'abcdef' })
+    const selectionsDuringTransaction: Array<readonly [number, number] | null> = []
+
+    try {
+      editor.mount(host)
+      editor.focus()
+      editor.subscribe((event) => {
+        if (event.kind !== 'transaction') {
+          return
+        }
+
+        const selection = editor.getSelection()
+
+        selectionsDuringTransaction.push(selection === null
+          ? null
+          : [
+              editor.resolveTextPosition(selection.anchor).graphemeIndex,
+              editor.resolveTextPosition(selection.focus).graphemeIndex
+            ])
+      })
+
+      editor.createDocument({ text: 'xyz' })
+
+      expect(selectionsDuringTransaction).toEqual([null])
+      expect(editor.getSelection()).toBeNull()
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('commits composition text through the transaction pipeline and supports keyboard undo redo', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: 'ab' })
@@ -173,6 +251,68 @@ describe('Editor input runtime', () => {
 
       expect(readParagraphTexts(editor)).toEqual(['ab好'])
       expect(transactions).toEqual(['insertText', 'insertText'])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('applies superscript and subscript only to newly typed text at a collapsed caret', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'abc' })
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+
+      editor.setSelection(createSelectionState(anchor, anchor))
+      editor.toggleSuperscript()
+
+      expect(readParagraphRunTexts(editor)).toEqual([['abc']])
+      expect(readParagraphRunProperties(editor)).toEqual([[{}]])
+      expect(editor.getSelectionFormattingState().run?.superscript).toEqual({
+        value: true,
+        mixed: false
+      })
+      expect(editor.getSelectionFormattingState().run?.subscript).toEqual({
+        value: false,
+        mixed: false
+      })
+
+      dispatchTextInput(textarea, 'x')
+
+      expect(readParagraphRunTexts(editor)).toEqual([['a', 'x', 'bc']])
+      expect(readParagraphRunProperties(editor)).toEqual([
+        [{}, { superscript: true, subscript: false }, {}]
+      ])
+
+      editor.toggleSubscript()
+
+      expect(readParagraphRunTexts(editor)).toEqual([['a', 'x', 'bc']])
+      expect(readParagraphRunProperties(editor)).toEqual([
+        [{}, { superscript: true, subscript: false }, {}]
+      ])
+      expect(editor.getSelectionFormattingState().run?.superscript).toEqual({
+        value: false,
+        mixed: false
+      })
+      expect(editor.getSelectionFormattingState().run?.subscript).toEqual({
+        value: true,
+        mixed: false
+      })
+
+      dispatchTextInput(textarea, 'y')
+
+      expect(readParagraphRunTexts(editor)).toEqual([['a', 'x', 'y', 'bc']])
+      expect(readParagraphRunProperties(editor)).toEqual([
+        [{}, { superscript: true, subscript: false }, { superscript: false, subscript: true }, {}]
+      ])
     } finally {
       editor.destroy()
     }
@@ -1598,6 +1738,22 @@ function readParagraphTexts(editor: ReturnType<typeof createEditor>) {
   return editor.getProjection().document.sections.flatMap((section) =>
     section.blocks.flatMap((block) => block.kind === 'paragraph'
       ? [block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')).join('')]
+      : [])
+  )
+}
+
+function readParagraphRunTexts(editor: ReturnType<typeof createEditor>) {
+  return editor.getProjection().document.sections.flatMap((section) =>
+    section.blocks.flatMap((block) => block.kind === 'paragraph'
+      ? [block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join(''))]
+      : [])
+  )
+}
+
+function readParagraphRunProperties(editor: ReturnType<typeof createEditor>) {
+  return editor.getProjection().document.sections.flatMap((section) =>
+    section.blocks.flatMap((block) => block.kind === 'paragraph'
+      ? [block.runs.map((run) => run.properties ?? {})]
       : [])
   )
 }

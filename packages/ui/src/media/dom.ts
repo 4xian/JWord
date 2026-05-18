@@ -52,17 +52,17 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
   triggerLabel.textContent = title
   triggerButton.append(triggerLabel)
 
-  menu.className = 'jw-media-toolbar__menu'
+  menu.className = 'jw-toolbar__select-menu jw-media-toolbar__menu'
   menu.setAttribute('data-jword-media-menu', 'true')
   menu.hidden = true
 
   fileActionButton.type = 'button'
-  fileActionButton.className = 'jw-media-toolbar__menu-button'
+  fileActionButton.className = 'jw-toolbar__select-option jw-media-toolbar__menu-button'
   fileActionButton.textContent = '本地上传'
   fileActionButton.setAttribute('data-jword-media-action-file', 'true')
 
   urlActionButton.type = 'button'
-  urlActionButton.className = 'jw-media-toolbar__menu-button'
+  urlActionButton.className = 'jw-toolbar__select-option jw-media-toolbar__menu-button'
   urlActionButton.textContent = '网络地址'
   urlActionButton.setAttribute('data-jword-media-action-url', 'true')
 

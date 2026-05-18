@@ -177,7 +177,7 @@ function layoutRun(
   resources?: readonly Resource[]
 ): boolean {
   const sectionId = section.id
-  const style = readRunStyle(run.properties)
+  const style = readRunStyle(paragraph, run.properties)
   const resourceById = new Map((resources ?? []).map((resource) => [resource.id, resource] as const))
   const shouldEmitCollapsedTextAnchor = shouldEmitCollapsedTextRunAnchor(paragraph, run)
   let runGraphemeIndex = resolveRunStartGraphemeIndex(incremental, sectionId, paragraph.id, run.id)
@@ -284,7 +284,7 @@ function ensureEmptyParagraphVisible(
     return
   }
 
-  const measurement = input.fontManager.measureText('', readRunStyle(firstRun.properties))
+  const measurement = input.fontManager.measureText('', readRunStyle(paragraph, firstRun.properties))
   const height = cssPxToTwips(measurement.heightCssPx)
   const baseline = cssPxToTwips(measurement.baselineCssPx)
 
@@ -311,7 +311,7 @@ function appendCollapsedTextRunAnchor(
   cursor: LayoutCursor,
   pages: MutablePageBox[]
 ): void {
-  const measurement = input.fontManager.measureText('', readRunStyle(run.properties))
+  const measurement = input.fontManager.measureText('', readRunStyle(paragraph, run.properties))
   const height = cssPxToTwips(measurement.heightCssPx)
   const baseline = cssPxToTwips(measurement.baselineCssPx)
 

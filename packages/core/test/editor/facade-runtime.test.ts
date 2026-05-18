@@ -513,6 +513,7 @@ describe('Editor facade', () => {
     editor.setSelection(selection)
     editor.toggleSuperscript()
 
+    expect(readParagraphRunTexts(editor.getProjection())).toEqual([['a', 'bcde', 'f']])
     expect(readParagraphRunProperties(editor.getProjection())).toEqual([
       [{}, { superscript: true, subscript: false }, {}]
     ])
@@ -527,6 +528,7 @@ describe('Editor facade', () => {
 
     editor.toggleSubscript()
 
+    expect(readParagraphRunTexts(editor.getProjection())).toEqual([['a', 'bcde', 'f']])
     expect(readParagraphRunProperties(editor.getProjection())).toEqual([
       [{}, { superscript: false, subscript: true }, {}]
     ])
@@ -573,6 +575,47 @@ describe('Editor facade', () => {
     unsubscribe()
     editor.destroy()
     expect(commands).toEqual(['setSuperscript', 'setSubscript'])
+  })
+
+  it('does not mutate unselected text when toggling superscript and subscript on a collapsed caret', () => {
+    const editor = createEditor({ initialText: 'abcdef' })
+    const anchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 2
+    })
+    const selection = createSelectionState(anchor, anchor)
+
+    editor.setSelection(selection)
+    editor.toggleSuperscript()
+
+    expect(readParagraphRunTexts(editor.getProjection())).toEqual([['abcdef']])
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([[{}]])
+    expect(editor.getSelectionFormattingState().run?.superscript).toEqual({
+      value: true,
+      mixed: false
+    })
+    expect(editor.getSelectionFormattingState().run?.subscript).toEqual({
+      value: false,
+      mixed: false
+    })
+
+    editor.toggleSubscript()
+
+    expect(readParagraphRunTexts(editor.getProjection())).toEqual([['abcdef']])
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([[{}]])
+    expect(editor.getSelectionFormattingState().run?.superscript).toEqual({
+      value: false,
+      mixed: false
+    })
+    expect(editor.getSelectionFormattingState().run?.subscript).toEqual({
+      value: true,
+      mixed: false
+    })
+    expect(editor.getSelection()).toBe(selection)
+
+    editor.destroy()
   })
 
   it('applies paragraph facade formatting APIs through transactions', () => {
@@ -679,6 +722,70 @@ describe('Editor facade', () => {
       'setParagraphFirstLineIndent',
       'setParagraphHangingIndent',
       'setParagraphStyle',
+      'setParagraphList'
+    ])
+  })
+
+  it('reflects absolute paragraph indent and list clear commands in layout output', () => {
+    const editor = createEditor({ initialText: '标题\n\n正文' })
+    const commands: string[] = []
+    const firstParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+    expect(firstParagraph?.kind).toBe('paragraph')
+
+    const firstRunId = firstParagraph?.kind === 'paragraph' ? firstParagraph.runs[0]?.id : undefined
+    const anchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: firstParagraph?.id ?? 'paragraph-1',
+      runId: firstRunId ?? 'run-1',
+      graphemeIndex: 0
+    })
+    const selection = createSelectionState(anchor, anchor)
+    const unsubscribe = editor.subscribe((event) => {
+      if (event.kind === 'transaction') {
+        commands.push(event.transaction.commandName)
+      }
+    })
+
+    editor.setSelection(selection)
+    editor.setParagraphStyle('Heading1')
+    editor.setParagraphIndent(720)
+    editor.setParagraphList({
+      numberingId: 'jword-list-ordered',
+      level: 0
+    })
+
+    const listLayout = editor.getLayout()
+    const page = listLayout.pages[0]
+    const paragraph = page?.paragraphs.find((item) => item.paragraphId === firstParagraph?.id)
+    const line = page?.lines.find((item) => item.paragraphId === firstParagraph?.id)
+    const fragment = line?.fragments[0]
+
+    expect(paragraph?.listMarker?.label).toBe('1.')
+    expect(line?.x).toBe((page?.contentRect.x ?? 0) + 720)
+    expect(fragment?.style.bold).toBe(true)
+    expect(fragment?.style.fontSizePx).toBeGreaterThan(16)
+
+    editor.setParagraphList(null)
+
+    const clearedProjection = editor.getProjection().document.sections[0]?.blocks[0]
+    const clearedLayout = editor.getLayout()
+    const clearedParagraph = clearedLayout.pages[0]?.paragraphs.find((item) => item.paragraphId === firstParagraph?.id)
+
+    expect(clearedProjection?.kind).toBe('paragraph')
+    expect(clearedProjection?.kind === 'paragraph' ? clearedProjection.list : undefined).toBeUndefined()
+    expect(clearedParagraph?.listMarker).toBeUndefined()
+    expect(editor.getSelectionFormattingState().paragraph?.list).toEqual({
+      value: null,
+      mixed: false
+    })
+
+    unsubscribe()
+    editor.destroy()
+    expect(commands).toEqual([
+      'setParagraphStyle',
+      'setParagraphIndent',
+      'setParagraphList',
       'setParagraphList'
     ])
   })

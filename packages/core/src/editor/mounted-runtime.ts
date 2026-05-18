@@ -29,7 +29,7 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
     this.emit({
       kind: 'selectionChange',
       selection: this.currentSelection,
-      formattingState: createSelectionFormattingState(this.currentProjection, this.currentSelection)
+      formattingState: this.readCurrentSelectionFormattingState()
     })
   }
 
@@ -181,7 +181,7 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
   protected syncCaretBlinkState(): void {
     this.stopCaretBlink()
 
-    if (this.currentSelection === null || !isSelectionCollapsed(this.currentSelection)) {
+    if (!this.isInputFocused || this.currentSelection === null || !isSelectionCollapsed(this.currentSelection)) {
       this.caretBlinkVisible = false
       return
     }

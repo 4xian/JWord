@@ -15,6 +15,13 @@ import {
   resolveParagraphPageBreakPolicy
 } from './internal'
 import type { ResolvedFontStyle } from './font-manager'
+import {
+  resolveParagraphLayoutProperties,
+  resolveParagraphList,
+  resolveParagraphListBulletLabel,
+  resolveParagraphListKind,
+  resolveParagraphListLevel
+} from './paragraph-semantics'
 import type { Inline, Paragraph, Section } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { TextPosition } from '../operations/transaction'
@@ -148,18 +155,19 @@ export function startParagraph(
     return
   }
 
-  const indentLeftTwips = readNumberProperty(paragraph.properties, 'indentLeftTwips') ?? 0
-  const firstLineIndentTwips = readNumberProperty(paragraph.properties, 'firstLineIndentTwips') ?? 0
-  const hangingIndentTwips = readNumberProperty(paragraph.properties, 'hangingIndentTwips') ?? 0
-  const spacingBeforeTwips = readNumberProperty(paragraph.properties, 'spacingBeforeTwips') ?? 0
-  const spacingAfterTwips = readNumberProperty(paragraph.properties, 'spacingAfterTwips') ?? 0
+  const layoutProperties = resolveParagraphLayoutProperties(paragraph)
+  const indentLeftTwips = layoutProperties.indentLeftTwips
+  const firstLineIndentTwips = layoutProperties.firstLineIndentTwips
+  const hangingIndentTwips = layoutProperties.hangingIndentTwips
+  const spacingBeforeTwips = layoutProperties.spacingBeforeTwips
+  const spacingAfterTwips = layoutProperties.spacingAfterTwips
   const x = pageConfig.marginTwips.left + Math.max(0, indentLeftTwips)
   const paragraphBox: MutableParagraphBox = {
     kind: 'paragraph',
     pageIndex: cursor.page.pageIndex,
     sectionId,
     paragraphId: paragraph.id,
-    alignment: readParagraphAlignment(paragraph),
+    alignment: layoutProperties.alignment,
     indentLeftTwips,
     firstLineIndentTwips,
     hangingIndentTwips,
@@ -171,6 +179,16 @@ export function startParagraph(
     height: 0,
     lines: [],
     pageBreakPolicy: resolveParagraphPageBreakPolicy(paragraph)
+  }
+
+  if (resolveParagraphList(paragraph) === undefined) {
+    delete cursor.listCounters
+  } else if (readParagraphLineCount(cursor, paragraph.id) === 0) {
+    const listMarker = resolveParagraphListMarker(cursor, paragraph, layoutProperties.markerGapTwips)
+
+    if (listMarker !== undefined) {
+      paragraphBox.listMarker = listMarker
+    }
   }
 
   cursor.page.paragraphs.push(paragraphBox)
@@ -501,12 +519,6 @@ function alignLineToParagraph(line: MutableLineBox, cursor: LayoutCursor): void 
   }
 }
 
-function readParagraphAlignment(paragraph: Paragraph): 'left' | 'center' | 'right' | 'justify' {
-  const alignment = paragraph.properties?.alignment
-
-  return alignment === 'center' || alignment === 'right' || alignment === 'justify' ? alignment : 'left'
-}
-
 /**
  * 解析当前逻辑行的起始缩进。
  */
@@ -547,8 +559,48 @@ function getParagraphLineCounts(cursor: LayoutCursor): Map<string, number> {
   return cursor.paragraphLineCounts
 }
 
-function readNumberProperty(properties: Paragraph['properties'], key: string): number | undefined {
-  const value = properties?.[key]
+function resolveParagraphListMarker(
+  cursor: LayoutCursor,
+  paragraph: Paragraph,
+  markerGapTwips: number
+): MutableParagraphBox['listMarker'] {
+  const list = resolveParagraphList(paragraph)
 
-  return typeof value === 'number' ? value : undefined
+  if (list === undefined) {
+    return undefined
+  }
+
+  const kind = resolveParagraphListKind(list)
+  const level = resolveParagraphListLevel(list)
+
+  if (kind === 'bullet') {
+    return Object.freeze({
+      kind,
+      label: resolveParagraphListBulletLabel(level),
+      text: resolveParagraphListBulletLabel(level),
+      level,
+      gapTwips: markerGapTwips,
+      list
+    })
+  }
+
+  const counters = cursor.listCounters?.get(list.numberingId) ?? []
+
+  counters.length = level
+  counters[level - 1] = (counters[level - 1] ?? 0) + 1
+
+  if (cursor.listCounters === undefined) {
+    cursor.listCounters = new Map()
+  }
+
+  cursor.listCounters.set(list.numberingId, counters)
+
+  return Object.freeze({
+    kind,
+    label: `${counters.slice(0, level).join('.')}.`,
+    text: `${counters.slice(0, level).join('.')}.`,
+    level,
+    gapTwips: markerGapTwips,
+    list
+  })
 }

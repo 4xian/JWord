@@ -28,7 +28,7 @@ input {
 .jw-demo__workspace {
   display: flex;
   flex-direction: column;
-  max-width: 1040px;
+  max-width: 100%;
   height: calc(100vh - 56px);
   min-height: calc(100vh - 56px);
   margin: 0 auto;

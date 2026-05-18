@@ -14,7 +14,7 @@ import { countGraphemes, splitGraphemes } from '../shared/grapheme'
 import { getCaretRect as getLayoutCaretRect } from '../layout/runtime'
 import { createSelectionState, isSelectionCollapsed } from '../model/selection'
 import { collectSelectionTargets } from '../model/selection-targets'
-import type { Paragraph, Run } from '../model/types'
+import type { ModelProperties, Paragraph, Run } from '../model/types'
 import type { Command, Operation, TextPosition } from '../operations/transaction'
 import { createAllTextSelection, readSelectionHtmlFromProjection } from './clipboard-runtime'
 import { flattenLayoutLines, hitTestLineAtAbsoluteX, resolveLineBoundaryPosition } from './rendering'
@@ -138,9 +138,12 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
   }> | undefined {
     const parts = text.split('\n')
     const operations: Operation[] = [...leadingOperations]
+    const pendingRunProperties = this.pendingCollapsedRunProperties
+    const usedRunIds = pendingRunProperties === undefined ? undefined : collectProjectionRunIds(this.currentProjection)
     let currentPosition: TextPosition = { ...start }
     let currentRunId = start.runId
     let currentBlockId = start.blockId
+    let currentRunGraphemeLength = this.resolveRuntimeRunGraphemeLength(start)
 
     if (parts.length === 1 && parts[0]?.length === 0 && leadingOperations.length === 0) {
       return undefined
@@ -150,17 +153,40 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
       const part = parts[index] ?? ''
 
       if (part.length > 0) {
+        const insertedStartGraphemeIndex = currentPosition.graphemeIndex
+        const insertedGraphemeLength = countGraphemes(part)
         operations.push({
           kind: 'insertText',
           at: currentPosition,
           text: part
         })
 
+        currentRunGraphemeLength += insertedGraphemeLength
         currentPosition = {
           ...currentPosition,
           runId: currentRunId,
           blockId: currentBlockId,
-          graphemeIndex: currentPosition.graphemeIndex + countGraphemes(part)
+          graphemeIndex: insertedStartGraphemeIndex + insertedGraphemeLength
+        }
+
+        if (pendingRunProperties !== undefined && usedRunIds !== undefined) {
+          const pendingCaret = this.appendPendingCollapsedRunPropertiesToInsertedText(
+            operations,
+            usedRunIds,
+            currentRunId,
+            insertedStartGraphemeIndex,
+            insertedGraphemeLength,
+            currentRunGraphemeLength,
+            pendingRunProperties
+          )
+
+          currentRunId = pendingCaret.runId
+          currentRunGraphemeLength = insertedGraphemeLength
+          currentPosition = {
+            ...currentPosition,
+            runId: currentRunId,
+            graphemeIndex: pendingCaret.graphemeIndex
+          }
         }
       }
 
@@ -168,6 +194,7 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
         continue
       }
 
+      const splitRunTailGraphemeLength = Math.max(0, currentRunGraphemeLength - currentPosition.graphemeIndex)
       const identifiers = allocateParagraphSplitIds(this.currentProjection, operations)
 
       operations.push({
@@ -179,6 +206,8 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
 
       currentBlockId = identifiers.blockId
       currentRunId = identifiers.runId
+      currentRunGraphemeLength = splitRunTailGraphemeLength
+      usedRunIds?.add(identifiers.runId)
       currentPosition = {
         sectionId: currentPosition.sectionId,
         blockId: currentBlockId,
@@ -205,6 +234,70 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
       },
       selectionAfter
     }
+  }
+
+  /**
+   * 把折叠光标的待输入上下标只补到本次新增文本上。
+   */
+  protected appendPendingCollapsedRunPropertiesToInsertedText(
+    operations: Operation[],
+    usedRunIds: Set<string>,
+    runId: string,
+    startGraphemeIndex: number,
+    insertedGraphemeLength: number,
+    graphemeLengthAfterInsert: number,
+    properties: ModelProperties
+  ): Readonly<{
+    runId: string
+    graphemeIndex: number
+  }> {
+    if (startGraphemeIndex === 0 && insertedGraphemeLength === graphemeLengthAfterInsert) {
+      operations.push({
+        kind: 'setRunProperties',
+        runId,
+        properties
+      })
+
+      return {
+        runId,
+        graphemeIndex: insertedGraphemeLength
+      }
+    }
+
+    const formattedRunId = startGraphemeIndex > 0
+      ? allocateGeneratedRuntimeRunId(usedRunIds, runId, 'format')
+      : runId
+    const endGraphemeIndex = startGraphemeIndex + insertedGraphemeLength
+
+    operations.push({
+      kind: 'setRunProperties',
+      runId,
+      properties,
+      range: {
+        startGraphemeIndex,
+        endGraphemeIndex,
+        ...(startGraphemeIndex > 0 ? { formattedRunId } : {}),
+        ...(endGraphemeIndex < graphemeLengthAfterInsert
+          ? { trailingRunId: allocateGeneratedRuntimeRunId(usedRunIds, runId, 'tail') }
+          : {})
+      }
+    })
+
+    return {
+      runId: formattedRunId,
+      graphemeIndex: insertedGraphemeLength
+    }
+  }
+
+  /**
+   * 读取当前插入落点 run 的 grapheme 长度，用于后续只格式化新增文本。
+   */
+  protected resolveRuntimeRunGraphemeLength(position: TextPosition): number {
+    const paragraphs = collectParagraphRuntimeContexts(this.currentProjection)
+    const paragraph = paragraphs.find((candidate) => candidate.blockId === position.blockId)
+    const run = paragraph?.runs.find((candidate) => candidate.id === position.runId)
+
+    return run?.graphemeLength ?? 0
   }
 
   protected buildDeleteSelectionPlan(range: Readonly<{
@@ -1286,4 +1379,30 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
       selectionAfter: this.currentSelection
     })
   }
+}
+
+function collectProjectionRunIds(
+  projection: import('../model/projection').DocumentProjection
+): Set<string> {
+  return new Set(
+    collectParagraphRuntimeContexts(projection).flatMap((paragraph) => paragraph.runs.map((run) => run.id))
+  )
+}
+
+function allocateGeneratedRuntimeRunId(
+  usedRunIds: Set<string>,
+  runId: string,
+  suffix: 'format' | 'tail'
+): string {
+  let sequence = 1
+  let candidate = `${runId}__${suffix}-${sequence}`
+
+  while (usedRunIds.has(candidate)) {
+    sequence += 1
+    candidate = `${runId}__${suffix}-${sequence}`
+  }
+
+  usedRunIds.add(candidate)
+
+  return candidate
 }

@@ -422,6 +422,54 @@ describe('formatting command builders', () => {
       }
     ])
   })
+
+  it('builds a list clear command for none selection state and clears projected list semantics', () => {
+    const fixture = createFormattingFixture()
+    const pipeline = createTransactionPipeline(fixture.store.doc)
+    const selection = createSelectionState(
+      fixture.createAnchor('paragraph-1', 'run-1', 0),
+      fixture.createAnchor('paragraph-2', 'run-3', 3)
+    )
+
+    const listResult = pipeline.run(
+      buildSetParagraphListCommand(fixture.projection, selection, {
+        numberingId: 'jword-list-bullet',
+        level: 0
+      })!,
+      { origin: 'local-user' }
+    )
+    const clearCommand = buildSetParagraphListCommand(listResult.projection, selection, null)
+
+    expect(clearCommand).toEqual({
+      name: 'setParagraphList',
+      operations: [
+        {
+          kind: 'setParagraphProperties',
+          paragraphId: 'paragraph-1',
+          properties: {
+            listNumberingId: null,
+            listLevel: null
+          }
+        },
+        {
+          kind: 'setParagraphProperties',
+          paragraphId: 'paragraph-2',
+          properties: {
+            listNumberingId: null,
+            listLevel: null
+          }
+        }
+      ]
+    })
+
+    const clearedResult = pipeline.run(clearCommand!, { origin: 'local-user' })
+    const paragraphs = clearedResult.projection.document.sections[0]?.blocks.filter((block) => block.kind === 'paragraph')
+
+    expect(paragraphs?.[0]?.id).toBe('paragraph-1')
+    expect(paragraphs?.[0]?.list).toBeUndefined()
+    expect(paragraphs?.[1]?.id).toBe('paragraph-2')
+    expect(paragraphs?.[1]?.list).toBeUndefined()
+  })
 })
 
 function createFormattingFixture() {

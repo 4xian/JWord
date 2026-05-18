@@ -18,6 +18,8 @@ export interface RunTextStyle {
   readonly italic?: boolean
   readonly underline?: boolean
   readonly strike?: boolean
+  readonly superscript?: boolean
+  readonly subscript?: boolean
   readonly color?: string
   readonly backgroundColor?: string
   readonly lineHeight?: number
@@ -27,6 +29,7 @@ export interface ResolvedFontStyle extends RunTextStyle {
   readonly fontFamily: string
   readonly requestedFontFamily?: string
   readonly fontSizePx: number
+  readonly baseFontSizePx?: number
   readonly status: FontAvailabilityStatus
 }
 
@@ -62,6 +65,8 @@ export interface FontManager {
 
 const DEFAULT_FONT_SIZE_PX = 16
 const DEFAULT_FALLBACK_FONT = 'Arial'
+export const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1.25
+export const SCRIPT_FONT_SCALE = 0.65
 
 /**
  * 创建无 DOM 字体管理器。
@@ -87,13 +92,15 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
   return {
     resolveFont(style: RunTextStyle = {}): ResolvedFontStyle {
       const requestedFontFamily = style.fontFamily
-      const fontSizePx = normalizeFontSizePx(style)
+      const baseFontSizePx = normalizeFontSizePx(style)
+      const fontSizePx = resolveVisualFontSizePx(style, baseFontSizePx)
 
       if (requestedFontFamily === undefined) {
         return {
           ...style,
           fontFamily: fallbackFontFamily,
           fontSizePx,
+          baseFontSizePx,
           status: availableFontFamilies.has(fallbackFontFamily) ? 'available' : 'fallback'
         }
       }
@@ -103,6 +110,7 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
           ...style,
           fontFamily: requestedFontFamily,
           fontSizePx,
+          baseFontSizePx,
           status: 'available'
         }
       }
@@ -113,6 +121,7 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
           fontFamily: fallbackFontFamily,
           requestedFontFamily,
           fontSizePx,
+          baseFontSizePx,
           status: 'loading'
         }
       }
@@ -124,6 +133,7 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
         fontFamily: fallbackFontFamily,
         requestedFontFamily,
         fontSizePx,
+        baseFontSizePx,
         status: 'missing'
       }
     },
@@ -207,13 +217,23 @@ function normalizeFontSizePx(style: RunTextStyle): number {
   return DEFAULT_FONT_SIZE_PX
 }
 
+function resolveVisualFontSizePx(style: RunTextStyle, baseFontSizePx: number): number {
+  if (style.superscript === true || style.subscript === true) {
+    return Math.max(1, baseFontSizePx * SCRIPT_FONT_SCALE)
+  }
+
+  return baseFontSizePx
+}
+
 function resolveLineHeightCssPx(style: ResolvedFontStyle): number {
+  const referenceFontSizePx = style.baseFontSizePx ?? style.fontSizePx
+
   if (style.lineHeight === undefined) {
-    return style.fontSizePx * 1.2
+    return referenceFontSizePx * DEFAULT_LINE_HEIGHT_MULTIPLIER
   }
 
   if (style.lineHeight <= 3) {
-    return style.fontSizePx * style.lineHeight
+    return referenceFontSizePx * style.lineHeight
   }
 
   return style.lineHeight
@@ -414,10 +434,13 @@ function createMeasurementCacheKey(text: string, style: ResolvedFontStyle): stri
     style.fontFamily,
     style.requestedFontFamily ?? '',
     style.fontSizePx,
+    style.baseFontSizePx ?? '',
     style.bold === true ? 'bold' : 'normal',
     style.italic === true ? 'italic' : 'upright',
     style.underline === true ? 'underline' : 'no-underline',
     style.strike === true ? 'strike' : 'no-strike',
+    style.superscript === true ? 'superscript' : 'baseline',
+    style.subscript === true ? 'subscript' : 'baseline',
     style.color ?? '',
     style.backgroundColor ?? '',
     style.lineHeight ?? '',

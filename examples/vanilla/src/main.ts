@@ -58,6 +58,10 @@ window.__jwordDemo = Object.freeze({
   media: demoMedia.hooks
 })
 
+requestAnimationFrame(() => {
+  editor.focus()
+})
+
 window.addEventListener(
   'beforeunload',
   () => {
