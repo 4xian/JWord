@@ -49,7 +49,7 @@ test('Gate 4 media toolbar only exposes inline local upload and applies it succe
         .find((inline): inline is {
           readonly kind: 'image'
           readonly resourceId: string
-          readonly display?: 'inline' | 'block'
+          readonly display?: 'inline'
         } => inline.kind === 'image' && inline.resourceId === resourceId)
 
       return image === undefined
@@ -117,7 +117,7 @@ test('Gate 4 media toolbar uses confirm/cancel url dialog and inserts inline ima
         .find((inline): inline is {
           readonly kind: 'image'
           readonly resourceId: string
-          readonly display?: 'inline' | 'block'
+          readonly display?: 'inline'
         } => inline.kind === 'image' && inline.resourceId === resourceId)
 
       return image === undefined

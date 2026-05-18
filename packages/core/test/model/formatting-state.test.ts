@@ -39,6 +39,8 @@ describe('selection formatting state', () => {
         italic: { value: false, mixed: false },
         underline: { value: true, mixed: false },
         strike: { value: false, mixed: false },
+        superscript: { value: true, mixed: false },
+        subscript: { value: false, mixed: false },
         fontFamily: { value: 'SimSun', mixed: false },
         fontSizeTwips: { value: 420, mixed: false },
         color: { value: '#111111', mixed: false },
@@ -46,7 +48,14 @@ describe('selection formatting state', () => {
       },
       paragraph: {
         alignment: { value: 'left', mixed: false },
-        indentLeftTwips: { value: 0, mixed: false }
+        lineHeight: { value: 1.5, mixed: false },
+        indentLeftTwips: { value: 0, mixed: false },
+        spacingBeforeTwips: { value: 120, mixed: false },
+        spacingAfterTwips: { value: 240, mixed: false },
+        firstLineIndentTwips: { value: 360, mixed: false },
+        hangingIndentTwips: { value: 0, mixed: false },
+        styleId: { value: 'Heading1', mixed: false },
+        list: { value: null, mixed: false }
       }
     })
   })
@@ -77,6 +86,8 @@ describe('selection formatting state', () => {
         italic: { value: undefined, mixed: true },
         underline: { value: true, mixed: false },
         strike: { value: undefined, mixed: true },
+        superscript: { value: undefined, mixed: true },
+        subscript: { value: undefined, mixed: true },
         fontFamily: { value: undefined, mixed: true },
         fontSizeTwips: { value: undefined, mixed: true },
         color: { value: undefined, mixed: true },
@@ -84,7 +95,14 @@ describe('selection formatting state', () => {
       },
       paragraph: {
         alignment: { value: undefined, mixed: true },
-        indentLeftTwips: { value: undefined, mixed: true }
+        lineHeight: { value: undefined, mixed: true },
+        indentLeftTwips: { value: undefined, mixed: true },
+        spacingBeforeTwips: { value: undefined, mixed: true },
+        spacingAfterTwips: { value: undefined, mixed: true },
+        firstLineIndentTwips: { value: undefined, mixed: true },
+        hangingIndentTwips: { value: undefined, mixed: true },
+        styleId: { value: undefined, mixed: true },
+        list: { value: undefined, mixed: true }
       }
     })
   })
@@ -98,7 +116,14 @@ describe('selection formatting state', () => {
 
     expect(createSelectionFormattingState(fixture.projection, selection).paragraph).toEqual({
       alignment: { value: 'left', mixed: false },
-      indentLeftTwips: { value: 0, mixed: false }
+      lineHeight: { value: 1.5, mixed: false },
+      indentLeftTwips: { value: 0, mixed: false },
+      spacingBeforeTwips: { value: 120, mixed: false },
+      spacingAfterTwips: { value: 240, mixed: false },
+      firstLineIndentTwips: { value: 360, mixed: false },
+      hangingIndentTwips: { value: 0, mixed: false },
+      styleId: { value: 'Heading1', mixed: false },
+      list: { value: null, mixed: false }
     })
   })
 
@@ -108,6 +133,22 @@ describe('selection formatting state', () => {
     expect(createSelectionFormattingState(fixture.projection, null)).toEqual({
       run: null,
       paragraph: null
+    })
+  })
+
+  it('treats structurally equal list semantics as the same paragraph state', () => {
+    const fixture = createUniformListFormattingStateFixture()
+    const selection = createSelectionState(
+      fixture.createAnchor('paragraph-1', 'run-1', 0),
+      fixture.createAnchor('paragraph-2', 'run-2', 2)
+    )
+
+    expect(createSelectionFormattingState(fixture.projection, selection).paragraph?.list).toEqual({
+      value: {
+        numberingId: 'jword-list-bullet',
+        level: 0
+      },
+      mixed: false
     })
   })
 })
@@ -130,10 +171,12 @@ function createFormattingStateFixture() {
   setRecordProperties(runOne, DOCUMENT_STORE_FIELDS.run.properties, {
     bold: true,
     underline: true,
+    superscript: true,
     fontFamily: 'SimSun',
     fontSizeTwips: 420,
     color: '#111111',
-    backgroundColor: '#fff59d'
+    backgroundColor: '#fff59d',
+    lineHeight: 1.5
   })
   setRecordProperties(runTwo, DOCUMENT_STORE_FIELDS.run.properties, {
     bold: false,
@@ -141,23 +184,77 @@ function createFormattingStateFixture() {
     underline: true,
     fontFamily: 'KaiTi',
     fontSizeTwips: 360,
-    color: '#222222'
+    color: '#222222',
+    lineHeight: 1.5
   })
   setRecordProperties(runThree, DOCUMENT_STORE_FIELDS.run.properties, {
     strike: true,
+    subscript: true,
     underline: true,
     fontFamily: 'SimHei',
     fontSizeTwips: 300,
     color: '#333333',
-    backgroundColor: '#e0f2fe'
+    backgroundColor: '#e0f2fe',
+    lineHeight: 2
   })
   setRecordProperties(paragraphOne, DOCUMENT_STORE_FIELDS.block.properties, {
     alignment: 'left',
-    indentLeftTwips: 0
+    indentLeftTwips: 0,
+    spacingBeforeTwips: 120,
+    spacingAfterTwips: 240,
+    firstLineIndentTwips: 360,
+    hangingIndentTwips: 0,
+    styleId: 'Heading1'
   })
   setRecordProperties(paragraphTwo, DOCUMENT_STORE_FIELDS.block.properties, {
     alignment: 'center',
-    indentLeftTwips: 720
+    indentLeftTwips: 720,
+    spacingBeforeTwips: 60,
+    spacingAfterTwips: 120,
+    firstLineIndentTwips: 0,
+    hangingIndentTwips: 240,
+    styleId: 'ListBullet',
+    listNumberingId: 'jword-list-bullet',
+    listLevel: 1
+  })
+
+  const projection = createDocumentProjection(store)
+
+  return {
+    projection,
+    createAnchor(blockId: string, runId: string, graphemeIndex: number) {
+      return createAnchorRef({
+        documentId: 'document-1' as DocumentId,
+        sectionId: 'section-1' as SectionId,
+        blockId: blockId as BlockId,
+        runId: runId as RunId,
+        graphemeIndex: createGraphemeIndex(graphemeIndex)
+      })
+    }
+  }
+}
+
+function createUniformListFormattingStateFixture() {
+  const store = createDocumentStore()
+  const section = createSectionRecord('section-1' as SectionId)
+  const paragraphOne = createParagraphRecord('paragraph-1' as BlockId)
+  const paragraphTwo = createParagraphRecord('paragraph-2' as BlockId)
+  const runOne = createRunRecord('run-1' as RunId, '条目一')
+  const runTwo = createRunRecord('run-2' as RunId, '条目二')
+
+  store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-1' as DocumentId)
+  store.sections.push([section])
+  getSectionBlocks(section).push([paragraphOne, paragraphTwo])
+  getParagraphRuns(paragraphOne).push([runOne])
+  getParagraphRuns(paragraphTwo).push([runTwo])
+
+  setRecordProperties(paragraphOne, DOCUMENT_STORE_FIELDS.block.properties, {
+    listNumberingId: 'jword-list-bullet',
+    listLevel: 0
+  })
+  setRecordProperties(paragraphTwo, DOCUMENT_STORE_FIELDS.block.properties, {
+    listNumberingId: 'jword-list-bullet',
+    listLevel: 0
   })
 
   const projection = createDocumentProjection(store)

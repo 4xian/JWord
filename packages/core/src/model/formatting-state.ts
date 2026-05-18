@@ -7,6 +7,7 @@
  */
 
 import { collectSelectionTargets } from './selection-targets'
+import type { SelectedParagraphTarget } from './selection-targets'
 import type {
   FormattingStateValue,
   ParagraphAlignment,
@@ -17,7 +18,7 @@ import type {
 import {
   normalizeBooleanFormattingValue
 } from './formatting-types'
-import type { ModelProperties } from './types'
+import type { ModelProperties, ParagraphList } from './types'
 import type { DocumentProjection } from './projection'
 import type { SelectionState } from './selection'
 
@@ -33,6 +34,8 @@ export function createSelectionFormattingState(
   selection: SelectionState | null
 ): SelectionFormattingState {
   const targets = collectSelectionTargets(projection, selection)
+  const paragraphPropertiesList = targets.paragraphs.map((target) => target.paragraph.properties)
+  const paragraphRunPropertiesList = collectParagraphRunProperties(targets.paragraphs)
 
   return {
     run: targets.runs.length === 0
@@ -42,6 +45,8 @@ export function createSelectionFormattingState(
           italic: readBooleanState(targets.runs.map((target) => target.run.properties), 'italic'),
           underline: readBooleanState(targets.runs.map((target) => target.run.properties), 'underline'),
           strike: readBooleanState(targets.runs.map((target) => target.run.properties), 'strike'),
+          superscript: readBooleanState(targets.runs.map((target) => target.run.properties), 'superscript'),
+          subscript: readBooleanState(targets.runs.map((target) => target.run.properties), 'subscript'),
           fontFamily: readStringState(targets.runs.map((target) => target.run.properties), 'fontFamily'),
           fontSizeTwips: readNumberState(targets.runs.map((target) => target.run.properties), 'fontSizeTwips'),
           color: readStringState(targets.runs.map((target) => target.run.properties), 'color'),
@@ -51,14 +56,76 @@ export function createSelectionFormattingState(
       ? null
       : {
           alignment: readParagraphAlignmentState(
-            targets.paragraphs.map((target) => target.paragraph.properties),
+            paragraphPropertiesList,
             'alignment'
           ),
+          lineHeight: readNumberState(paragraphRunPropertiesList, 'lineHeight'),
           indentLeftTwips: readNumberState(
-            targets.paragraphs.map((target) => target.paragraph.properties),
+            paragraphPropertiesList,
             'indentLeftTwips'
-          )
+          ),
+          spacingBeforeTwips: readNumberState(paragraphPropertiesList, 'spacingBeforeTwips'),
+          spacingAfterTwips: readNumberState(paragraphPropertiesList, 'spacingAfterTwips'),
+          firstLineIndentTwips: readNumberState(paragraphPropertiesList, 'firstLineIndentTwips'),
+          hangingIndentTwips: readNumberState(paragraphPropertiesList, 'hangingIndentTwips'),
+          styleId: readParagraphStyleState(targets.paragraphs),
+          list: readParagraphListState(targets.paragraphs)
         }
+  }
+}
+
+/**
+ * 收集段落级行距读取需要的 run 属性列表。
+ */
+function collectParagraphRunProperties(
+  paragraphs: readonly SelectedParagraphTarget[]
+): readonly (ModelProperties | undefined)[] {
+  return paragraphs.flatMap((target) => target.paragraph.runs.map((run) => run.properties))
+}
+
+/**
+ * 读取段落样式语义，并把未设置归一成 null。
+ */
+function readParagraphStyleState(
+  paragraphs: readonly SelectedParagraphTarget[]
+): FormattingStateValue<string | null> {
+  const firstValue = paragraphs[0]?.paragraph.styleId ?? null
+
+  for (let index = 1; index < paragraphs.length; index += 1) {
+    if ((paragraphs[index]?.paragraph.styleId ?? null) !== firstValue) {
+      return {
+        value: undefined,
+        mixed: true
+      }
+    }
+  }
+
+  return {
+    value: firstValue,
+    mixed: false
+  }
+}
+
+/**
+ * 读取段落列表语义，并按结构值判断是否混合。
+ */
+function readParagraphListState(
+  paragraphs: readonly SelectedParagraphTarget[]
+): FormattingStateValue<ParagraphList | null> {
+  const firstValue = paragraphs[0]?.paragraph.list ?? null
+
+  for (let index = 1; index < paragraphs.length; index += 1) {
+    if (!areParagraphListsEquivalent(firstValue, paragraphs[index]?.paragraph.list ?? null)) {
+      return {
+        value: undefined,
+        mixed: true
+      }
+    }
+  }
+
+  return {
+    value: firstValue,
+    mixed: false
   }
 }
 
@@ -92,6 +159,21 @@ function readParagraphAlignmentState(
       ? value
       : undefined
   ))
+}
+
+/**
+ * 判断两个段落列表语义是否等效。
+ */
+function areParagraphListsEquivalent(
+  left: ParagraphList | null,
+  right: ParagraphList | null
+): boolean {
+  if (left === null || right === null) {
+    return left === right
+  }
+
+  return left.numberingId === right.numberingId
+    && left.level === right.level
 }
 
 function readFormattingState<Value>(

@@ -359,12 +359,7 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
     case 'deleteBlock':
       return findBlockPageIndexes(layout, operation.blockId)
     case 'insertImage':
-      return operation.mode === 'block'
-        ? mergePageIndexes(
-            findTextPositionPageIndexes(layout, operation.at),
-            operation.blockId === undefined ? [] : findBlockPageIndexes(layout, operation.blockId)
-          )
-        : findTextPositionPageIndexes(layout, operation.at)
+      return findTextPositionPageIndexes(layout, operation.at)
     case 'replaceImageResource':
     case 'deleteImage':
     case 'resizeImage':

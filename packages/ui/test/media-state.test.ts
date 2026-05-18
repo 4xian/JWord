@@ -30,8 +30,7 @@ describe('media policy and state helpers', () => {
       source: {
         kind: 'url',
         url: 'https://demo.local/media-inline.svg'
-      },
-      mode: 'block'
+      }
     })
     const deferredItem = applyMediaPanelUploadSuccess(pendingItem, {
       kind: 'resource',
@@ -62,9 +61,9 @@ describe('media policy and state helpers', () => {
       message: '上传失败，可重试。'
     }, 'retry-token-1')
 
-    expect(deferredItem.applyMessage).toBe(readDefaultDeferredMessage('block'))
+    expect(deferredItem.applyMessage).toBe(readDefaultDeferredMessage())
     expect(deferredItem.applyState).toBe('deferred')
-    expect(appliedItem.applyMessage).toBe(readDefaultAppliedMessage('block'))
+    expect(appliedItem.applyMessage).toBe(readDefaultAppliedMessage())
     expect(appliedItem.applyState).toBe('applied')
     expect(failedItem.retryToken).toBe('retry-token-1')
     expect(failedItem.error?.message).toBe('上传失败，可重试。')

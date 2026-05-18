@@ -488,6 +488,93 @@ describe('Editor facade', () => {
     expect(commands).toEqual(['setBold'])
   })
 
+  it('keeps superscript 和 subscript 在 facade、selection formatting state 与 undo/redo 中互斥一致', () => {
+    const editor = createEditor({ initialText: 'abcdef' })
+    const commands: string[] = []
+    const anchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 1
+    })
+    const focus = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 5
+    })
+    const selection = createSelectionState(anchor, focus)
+    const unsubscribe = editor.subscribe((event) => {
+      if (event.kind === 'transaction') {
+        commands.push(event.transaction.commandName)
+      }
+    })
+
+    editor.setSelection(selection)
+    editor.toggleSuperscript()
+
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([
+      [{}, { superscript: true, subscript: false }, {}]
+    ])
+    expect(editor.getSelectionFormattingState().run?.superscript).toEqual({
+      value: true,
+      mixed: false
+    })
+    expect(editor.getSelectionFormattingState().run?.subscript).toEqual({
+      value: false,
+      mixed: false
+    })
+
+    editor.toggleSubscript()
+
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([
+      [{}, { superscript: false, subscript: true }, {}]
+    ])
+    expect(editor.getSelectionFormattingState().run?.superscript).toEqual({
+      value: false,
+      mixed: false
+    })
+    expect(editor.getSelectionFormattingState().run?.subscript).toEqual({
+      value: true,
+      mixed: false
+    })
+    expect(editor.getSelection()).toBe(selection)
+
+    editor.undo()
+
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([
+      [{}, { superscript: true, subscript: false }, {}]
+    ])
+    expect(editor.getSelectionFormattingState().run?.superscript).toEqual({
+      value: true,
+      mixed: false
+    })
+    expect(editor.getSelectionFormattingState().run?.subscript).toEqual({
+      value: false,
+      mixed: false
+    })
+    expect(editor.getSelection()).toBe(selection)
+
+    editor.redo()
+
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([
+      [{}, { superscript: false, subscript: true }, {}]
+    ])
+    expect(editor.getSelectionFormattingState().run?.superscript).toEqual({
+      value: false,
+      mixed: false
+    })
+    expect(editor.getSelectionFormattingState().run?.subscript).toEqual({
+      value: true,
+      mixed: false
+    })
+    expect(editor.getSelection()).toBe(selection)
+
+    unsubscribe()
+    editor.destroy()
+    expect(commands).toEqual(['setSuperscript', 'setSubscript'])
+  })
+
   it('applies paragraph facade formatting APIs through transactions', () => {
     const editor = createEditor({ initialText: 'first\n\nsecond' })
     const commands: string[] = []
@@ -523,16 +610,77 @@ describe('Editor facade', () => {
     editor.setSelection(selection)
     editor.setParagraphAlignment('right')
     editor.adjustParagraphIndent(240)
+    editor.setParagraphLineHeight(1.8)
+    editor.setParagraphSpacingBefore(120)
+    editor.setParagraphSpacingAfter(180)
+    editor.setParagraphFirstLineIndent(360)
+    editor.setParagraphHangingIndent(480)
+    editor.setParagraphStyle('Heading2')
+    editor.setParagraphList({
+      numberingId: 'jword-list-ordered',
+      level: 1
+    })
 
     expect(readParagraphProperties(editor.getProjection())).toEqual([
-      { alignment: 'right', indentLeftTwips: 240 },
-      { alignment: 'right', indentLeftTwips: 240 }
+      {
+        alignment: 'right',
+        indentLeftTwips: 240,
+        spacingBeforeTwips: 120,
+        spacingAfterTwips: 180,
+        firstLineIndentTwips: 360,
+        hangingIndentTwips: 480,
+        styleId: 'Heading2',
+        listNumberingId: 'jword-list-ordered',
+        listLevel: 1
+      },
+      {
+        alignment: 'right',
+        indentLeftTwips: 240,
+        spacingBeforeTwips: 120,
+        spacingAfterTwips: 180,
+        firstLineIndentTwips: 360,
+        hangingIndentTwips: 480,
+        styleId: 'Heading2',
+        listNumberingId: 'jword-list-ordered',
+        listLevel: 1
+      }
     ])
+    expect(readParagraphRunProperties(editor.getProjection())).toEqual([
+      [{ lineHeight: 1.8 }],
+      [{ lineHeight: 1.8 }]
+    ])
+    expect(editor.getSelectionFormattingState().paragraph).toEqual({
+      alignment: { value: 'right', mixed: false },
+      lineHeight: { value: 1.8, mixed: false },
+      indentLeftTwips: { value: 240, mixed: false },
+      spacingBeforeTwips: { value: 120, mixed: false },
+      spacingAfterTwips: { value: 180, mixed: false },
+      firstLineIndentTwips: { value: 360, mixed: false },
+      hangingIndentTwips: { value: 480, mixed: false },
+      styleId: { value: 'Heading2', mixed: false },
+      list: {
+        value: {
+          numberingId: 'jword-list-ordered',
+          level: 1
+        },
+        mixed: false
+      }
+    })
     expect(editor.getSelection()).toBe(selection)
 
     unsubscribe()
     editor.destroy()
-    expect(commands).toEqual(['setParagraphAlignment', 'adjustParagraphIndent'])
+    expect(commands).toEqual([
+      'setParagraphAlignment',
+      'adjustParagraphIndent',
+      'setParagraphLineHeight',
+      'setParagraphSpacingBefore',
+      'setParagraphSpacingAfter',
+      'setParagraphFirstLineIndent',
+      'setParagraphHangingIndent',
+      'setParagraphStyle',
+      'setParagraphList'
+    ])
   })
 
   it('keeps hitTest -> AnchorRef -> caret rect stable inside a natural text fragment', () => {

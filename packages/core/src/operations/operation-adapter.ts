@@ -412,11 +412,6 @@ function insertImage(
   assertRunIdUnused(store, operation.imageRunId as RunId)
   assertResourceExists(store, operation.image.resourceId)
 
-  if (operation.mode === 'block') {
-    insertBlockImage(store, operation)
-    return
-  }
-
   insertInlineImage(store, operation)
 }
 
@@ -475,27 +470,6 @@ function insertInlineImage(
       text: getRunText(trailingRun)
     })
   }
-}
-
-function insertBlockImage(
-  store: DocumentStore,
-  operation: Extract<Operation, { kind: 'insertImage' }>
-): void {
-  if (operation.blockId === undefined) {
-    throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', '块级图片插入缺少 blockId')
-  }
-
-  const snapshot = resolveOperationPosition(store, operation.at)
-  const location = findBlockLocation(store, snapshot.blockId)
-  const paragraph = createParagraphRecord(operation.blockId as BlockId)
-
-  location.container.insert(location.index + 1, [paragraph])
-  getParagraphRuns(paragraph).push([
-    createImageRunRecord(operation.imageRunId as RunId, {
-      ...operation.image,
-      display: 'block'
-    })
-  ])
 }
 
 function replaceImageResource(store: DocumentStore, runId: string, resourceId: string): void {

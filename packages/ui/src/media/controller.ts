@@ -157,8 +157,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
 
     if (currentItem === undefined || currentItem.source.kind !== 'url' || currentItem.source.url !== url) {
       const nextItem = createPendingMediaPanelItem({
-        source,
-        mode: 'inline'
+        source
       })
 
       activeUrlItemId = nextItem.id
@@ -236,8 +235,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
       source: {
         kind: 'file',
         file
-      },
-      mode: 'inline'
+      }
     })
 
     upsertItem(pendingItem)
@@ -390,7 +388,7 @@ async function applyMediaCommand(
   if (commands === undefined) {
     return {
       kind: 'deferred',
-      message: readDefaultDeferredMessage('inline')
+      message: readDefaultDeferredMessage()
     }
   }
 
@@ -407,7 +405,7 @@ async function applyMediaCommand(
   if (commands.insertInlineImage === undefined) {
     return {
       kind: 'deferred',
-      message: readDefaultDeferredMessage('inline')
+      message: readDefaultDeferredMessage()
     }
   }
 

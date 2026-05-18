@@ -215,6 +215,42 @@ describe('createDocumentProjection', () => {
     })
   })
 
+  it('把段落 heading 与列表语义稳定投影到 paragraph.styleId 和 paragraph.list', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-structure-style' as SectionId)
+    const headingParagraph = createParagraphRecord('paragraph-heading-1' as BlockId)
+    const headingRun = createRunRecord('run-heading-1' as RunId, '第一章')
+    const listParagraph = createParagraphRecord('paragraph-list-1' as BlockId)
+    const listRun = createRunRecord('run-list-1' as RunId, '第一项')
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-structure-style' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([headingParagraph, listParagraph])
+    getParagraphRuns(headingParagraph).push([headingRun])
+    getParagraphRuns(listParagraph).push([listRun])
+
+    setRecordProperties(headingParagraph, DOCUMENT_STORE_FIELDS.block.properties, {
+      styleId: 'Heading2'
+    })
+    setRecordProperties(listParagraph, DOCUMENT_STORE_FIELDS.block.properties, {
+      styleId: 'ListBullet',
+      listNumberingId: 'jword-list-bullet',
+      listLevel: 1
+    })
+
+    const projection = createDocumentProjection(store)
+    const projectedHeading = projection.document.sections[0]?.blocks[0] as Paragraph
+    const projectedList = projection.document.sections[0]?.blocks[1] as Paragraph
+
+    expect(projectedHeading.styleId).toBe('Heading2')
+    expect(projectedHeading.list).toBeUndefined()
+    expect(projectedList.styleId).toBe('ListBullet')
+    expect(projectedList.list).toEqual({
+      numberingId: 'jword-list-bullet',
+      level: 1
+    })
+  })
+
   it('投影对象冻结且不暴露可写 Yjs 容器', () => {
     const store = createDocumentStore()
     const section = createSectionRecord('section-readonly' as SectionId)
@@ -382,4 +418,25 @@ function pushInline(inlines: readonly Inline[]) {
     kind: 'text',
     text: '反写文本'
   })
+}
+
+function setRecordProperties(
+  record: { get(key: string): unknown },
+  key: string,
+  properties: Readonly<Record<string, string | number | boolean | null>>
+) {
+  const propertyMap = record.get(key)
+
+  if (
+    propertyMap === null
+    || propertyMap === undefined
+    || typeof propertyMap !== 'object'
+    || typeof (propertyMap as { set?: unknown }).set !== 'function'
+  ) {
+    throw new Error('属性容器缺失')
+  }
+
+  for (const [propertyKey, value] of Object.entries(properties)) {
+    ;(propertyMap as { set(name: string, value: string | number | boolean | null): void }).set(propertyKey, value)
+  }
 }

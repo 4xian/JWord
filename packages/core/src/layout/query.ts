@@ -19,6 +19,13 @@ import type {
 
 const layoutLookupCache = new WeakMap<DocumentLayout, LayoutLookupCache>()
 const DEFAULT_CARET_HEIGHT_TWIPS = cssPxToTwips(16 * 1.2)
+const DOUBLE_CLICK_GRAPHEME_LEFT_RATIO = 0.35
+const DOUBLE_CLICK_GRAPHEME_RIGHT_RATIO = 0.65
+
+export interface DocumentLayoutTextHit {
+  readonly position: TextPosition
+  readonly bias: 'left' | 'center' | 'right' | 'none'
+}
 
 export function hitTestDocumentLayout(
   layout: DocumentLayout,
@@ -75,6 +82,85 @@ export function hitTestDocumentLayout(
   }
 
   return resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x) ?? lastFragment.end
+}
+
+/**
+ * 命中测试当前文本单元，并补充双击扩选需要的左右偏向信息。
+ */
+export function hitTestDocumentLayoutTextHit(
+  layout: DocumentLayout,
+  point: Readonly<{
+    pageIndex: number
+    x: number
+    y: number
+  }>
+): DocumentLayoutTextHit | undefined {
+  const page = layout.pages[point.pageIndex]
+
+  if (page === undefined) {
+    return undefined
+  }
+
+  const absolutePoint = {
+    x: page.x + point.x,
+    y: page.y + point.y
+  }
+  const line = page.lines.find((candidate) =>
+    absolutePoint.y >= candidate.y && absolutePoint.y <= candidate.y + candidate.height
+  ) ?? findNearestLine(page.lines, absolutePoint.y)
+
+  if (line === undefined) {
+    return undefined
+  }
+
+  const inlineHit = hitTestInlineBoxes(line.inlines, absolutePoint.x, absolutePoint.y)
+
+  if (inlineHit !== undefined) {
+    const position = resolveInlineHitPosition(line, inlineHit, absolutePoint.x) ?? inlineHit.at
+
+    return {
+      position,
+      bias: 'none'
+    }
+  }
+
+  if (line.fragments.length === 0) {
+    const position = resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x)
+
+    return position === undefined
+      ? undefined
+      : {
+        position,
+        bias: 'none'
+      }
+  }
+
+  const firstFragment = line.fragments[0]
+  const lastFragment = line.fragments[line.fragments.length - 1]
+
+  if (firstFragment === undefined || lastFragment === undefined) {
+    return undefined
+  }
+
+  if (absolutePoint.x <= firstFragment.x) {
+    const position = resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x) ?? firstFragment.start
+
+    return {
+      position,
+      bias: 'none'
+    }
+  }
+
+  for (const fragment of line.fragments) {
+    if (absolutePoint.x <= fragment.x + fragment.width) {
+      return resolveFragmentTextHit(fragment, absolutePoint.x)
+    }
+  }
+
+  return {
+    position: resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x) ?? lastFragment.end,
+    bias: 'none'
+  }
 }
 
 /**
@@ -186,6 +272,53 @@ function positionInFragment(fragment: TextFragment, x: number): TextPosition {
     runId: fragment.runId,
     graphemeIndex,
     ...(graphemeIndex === fragment.end.graphemeIndex ? { assoc: -1 } : {})
+  }
+}
+
+/**
+ * 读取片段内当前点击 grapheme 的左右偏向，用于中文双击扩选。
+ */
+function resolveFragmentTextHit(
+  fragment: TextFragment,
+  x: number
+): DocumentLayoutTextHit {
+  const relativeX = Math.max(0, Math.min(fragment.width, x - fragment.x))
+
+  for (let index = 1; index < fragment.advanceTwips.length; index += 1) {
+    const previousAdvance = fragment.advanceTwips[index - 1] ?? 0
+    const nextAdvance = fragment.advanceTwips[index] ?? fragment.width
+
+    if (relativeX > nextAdvance && index < fragment.advanceTwips.length - 1) {
+      continue
+    }
+
+    const graphemeWidth = Math.max(nextAdvance - previousAdvance, 0)
+    const leftThreshold = previousAdvance + (graphemeWidth * DOUBLE_CLICK_GRAPHEME_LEFT_RATIO)
+    const rightThreshold = previousAdvance + (graphemeWidth * DOUBLE_CLICK_GRAPHEME_RIGHT_RATIO)
+
+    return {
+      position: {
+        sectionId: fragment.sectionId,
+        blockId: fragment.blockId,
+        runId: fragment.runId,
+        graphemeIndex: fragment.start.graphemeIndex + index - 1
+      },
+      bias: relativeX < leftThreshold
+        ? 'left'
+        : relativeX > rightThreshold
+          ? 'right'
+          : 'center'
+    }
+  }
+
+  return {
+    position: {
+      sectionId: fragment.sectionId,
+      blockId: fragment.blockId,
+      runId: fragment.runId,
+      graphemeIndex: Math.max(fragment.start.graphemeIndex, fragment.end.graphemeIndex - 1)
+    },
+    bias: 'right'
   }
 }
 

@@ -923,7 +923,7 @@ describe('Editor input runtime', () => {
     }
   })
 
-  it('keeps double click on Chinese text scoped to the hit grapheme instead of swallowing the whole run', () => {
+  it('expands Chinese double click selection by the real hit bias instead of hard-coding a single grapheme', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: '中文测试文本' })
 
@@ -934,18 +934,36 @@ describe('Editor input runtime', () => {
 
       mockPageRect(page)
 
-      const hitPoint = findPointerPointForGrapheme(editor, 0, 2)
+      const leftPoint = findPointerPointForGraphemeBias(editor, 0, 2, 'left')
+      const centerPoint = findPointerPointForGraphemeBias(editor, 0, 2, 'center')
+      const rightPoint = findPointerPointForGraphemeBias(editor, 0, 2, 'right')
 
       dispatchMouse(
         page,
         'dblclick',
-        hitPoint.clientX,
-        hitPoint.clientY
+        centerPoint.clientX,
+        centerPoint.clientY
       )
 
-      const selection = editor.getSelection()
+      expectSelectionIndexes(editor, editor.getSelection(), [2, 3])
 
-      expectSelectionIndexes(editor, selection, [2, 3])
+      dispatchMouse(
+        page,
+        'dblclick',
+        leftPoint.clientX,
+        leftPoint.clientY
+      )
+
+      expectSelectionIndexes(editor, editor.getSelection(), [1, 3])
+
+      dispatchMouse(
+        page,
+        'dblclick',
+        rightPoint.clientX,
+        rightPoint.clientY
+      )
+
+      expectSelectionIndexes(editor, editor.getSelection(), [2, 4])
     } finally {
       editor.destroy()
     }
@@ -1508,6 +1526,47 @@ function findPointerPointForGrapheme(
   }
 
   throw new Error(`找不到 grapheme ${graphemeIndex} 的命中点`)
+}
+
+function findPointerPointForGraphemeBias(
+  editor: ReturnType<typeof createEditor>,
+  pageIndex: number,
+  graphemeIndex: number,
+  bias: 'left' | 'center' | 'right'
+) {
+  const layout = editor.getLayout()
+  const page = layout.pages[pageIndex]
+
+  if (page === undefined) {
+    throw new Error(`page ${pageIndex} 不存在`)
+  }
+
+  for (const line of page.lines) {
+    for (const fragment of line.fragments) {
+      if (
+        graphemeIndex < fragment.start.graphemeIndex
+        || graphemeIndex >= fragment.end.graphemeIndex
+      ) {
+        continue
+      }
+
+      const relativeIndex = graphemeIndex - fragment.start.graphemeIndex
+      const graphemeStart = fragment.advanceTwips[relativeIndex] ?? 0
+      const graphemeEnd = fragment.advanceTwips[relativeIndex + 1] ?? fragment.width
+      const relativeX = bias === 'left'
+        ? graphemeStart + ((graphemeEnd - graphemeStart) * 0.1)
+        : bias === 'right'
+          ? graphemeStart + ((graphemeEnd - graphemeStart) * 0.9)
+          : graphemeStart + ((graphemeEnd - graphemeStart) * 0.5)
+
+      return {
+        clientX: twipsToCssPx(fragment.x - page.x + relativeX),
+        clientY: twipsToCssPx(line.y - page.y + Math.max(1, line.height / 2))
+      }
+    }
+  }
+
+  throw new Error(`找不到 grapheme ${graphemeIndex} 的 ${bias} 命中点`)
 }
 
 function findPointerPointForImageRun(

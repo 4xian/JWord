@@ -23,6 +23,17 @@ import {
   buildSetUnderlineCommand
 } from '../../src/index'
 import {
+  buildSetParagraphFirstLineIndentCommand,
+  buildSetParagraphHangingIndentCommand,
+  buildSetParagraphLineHeightCommand,
+  buildSetParagraphListCommand,
+  buildSetParagraphSpacingAfterCommand,
+  buildSetParagraphSpacingBeforeCommand,
+  buildSetParagraphStyleCommand,
+  buildSetSubscriptCommand,
+  buildSetSuperscriptCommand
+} from '../../src/operations/command-builders'
+import {
   DOCUMENT_STORE_FIELDS,
   type DocumentStoreJson,
   createDocumentStore,
@@ -139,13 +150,50 @@ describe('formatting command builders', () => {
     })
   })
 
+  it('在启用 superscript 或 subscript 时清掉互斥的 run 属性', () => {
+    const fixture = createFormattingFixture()
+    const superscriptSelection = createCollapsedSelection(fixture.createAnchor('paragraph-2', 'run-3', 1))
+    const subscriptSelection = createCollapsedSelection(fixture.createAnchor('paragraph-1', 'run-1', 1))
+
+    expect(buildSetSuperscriptCommand(fixture.projection, superscriptSelection, true)).toEqual({
+      name: 'setSuperscript',
+      operations: [
+        {
+          kind: 'setRunProperties',
+          runId: 'run-3',
+          properties: {
+            superscript: true,
+            subscript: false
+          }
+        }
+      ]
+    })
+    expect(buildSetSubscriptCommand(fixture.projection, subscriptSelection, true)).toEqual({
+      name: 'setSubscript',
+      operations: [
+        {
+          kind: 'setRunProperties',
+          runId: 'run-1',
+          properties: {
+            superscript: false,
+            subscript: true
+          }
+        }
+      ]
+    })
+  })
+
   it('在目标值与当前渲染语义等效时不构造 formatting command', () => {
     const fixture = createFormattingFixture()
     const paragraphSelection = createCollapsedSelection(fixture.createAnchor('paragraph-2', 'run-3', 1))
     const runSelection = createCollapsedSelection(fixture.createAnchor('paragraph-2', 'run-3', 1))
+    const superscriptSelection = createCollapsedSelection(fixture.createAnchor('paragraph-1', 'run-1', 1))
+    const subscriptSelection = createCollapsedSelection(fixture.createAnchor('paragraph-2', 'run-3', 1))
 
     expect(buildSetBoldCommand(fixture.projection, runSelection, false)).toBeNull()
     expect(buildSetParagraphAlignmentCommand(fixture.projection, paragraphSelection, 'center')).toBeNull()
+    expect(buildSetSuperscriptCommand(fixture.projection, superscriptSelection, true)).toBeNull()
+    expect(buildSetSubscriptCommand(fixture.projection, subscriptSelection, true)).toBeNull()
   })
 
   it('builds paragraph formatting commands for every touched paragraph', () => {
@@ -155,18 +203,77 @@ describe('formatting command builders', () => {
       fixture.createAnchor('paragraph-2', 'run-3', 2)
     )
 
-    expect(buildSetParagraphIndentCommand(fixture.projection, selection, 720)).toEqual({
-      name: 'setParagraphIndent',
+    const commandCases = [
+      {
+        command: buildSetParagraphIndentCommand(fixture.projection, selection, 720),
+        name: 'setParagraphIndent',
+        properties: { indentLeftTwips: 720 }
+      },
+      {
+        command: buildSetParagraphSpacingBeforeCommand(fixture.projection, selection, 120),
+        name: 'setParagraphSpacingBefore',
+        properties: { spacingBeforeTwips: 120 }
+      },
+      {
+        command: buildSetParagraphSpacingAfterCommand(fixture.projection, selection, 180),
+        name: 'setParagraphSpacingAfter',
+        properties: { spacingAfterTwips: 180 }
+      },
+      {
+        command: buildSetParagraphFirstLineIndentCommand(fixture.projection, selection, 240),
+        name: 'setParagraphFirstLineIndent',
+        properties: { firstLineIndentTwips: 240 }
+      },
+      {
+        command: buildSetParagraphHangingIndentCommand(fixture.projection, selection, 360),
+        name: 'setParagraphHangingIndent',
+        properties: { hangingIndentTwips: 360 }
+      }
+    ] as const
+
+    for (const testCase of commandCases) {
+      expect(testCase.command).toEqual({
+        name: testCase.name,
+        operations: [
+          {
+            kind: 'setParagraphProperties',
+            paragraphId: 'paragraph-1',
+            properties: testCase.properties
+          },
+          {
+            kind: 'setParagraphProperties',
+            paragraphId: 'paragraph-2',
+            properties: testCase.properties
+          }
+        ]
+      })
+    }
+  })
+
+  it('builds paragraph line-height commands by rewriting all runs in touched paragraphs', () => {
+    const fixture = createFormattingFixture()
+    const selection = createSelectionState(
+      fixture.createAnchor('paragraph-1', 'run-1', 1),
+      fixture.createAnchor('paragraph-2', 'run-3', 2)
+    )
+
+    expect(buildSetParagraphLineHeightCommand(fixture.projection, selection, 1.8)).toEqual({
+      name: 'setParagraphLineHeight',
       operations: [
         {
-          kind: 'setParagraphProperties',
-          paragraphId: 'paragraph-1',
-          properties: { indentLeftTwips: 720 }
+          kind: 'setRunProperties',
+          runId: 'run-1',
+          properties: { lineHeight: 1.8 }
         },
         {
-          kind: 'setParagraphProperties',
-          paragraphId: 'paragraph-2',
-          properties: { indentLeftTwips: 720 }
+          kind: 'setRunProperties',
+          runId: 'run-2',
+          properties: { lineHeight: 1.8 }
+        },
+        {
+          kind: 'setRunProperties',
+          runId: 'run-3',
+          properties: { lineHeight: 1.8 }
         }
       ]
     })
@@ -191,15 +298,128 @@ describe('formatting command builders', () => {
 
     expect(readRunTexts(boldResult.projection)).toEqual(['你', '好', '世界', '工具', '栏'])
     expect(readRunProperties(boldResult.projection)).toEqual([
-      {},
+      { superscript: true },
+      { bold: true, superscript: true },
       { bold: true },
-      { bold: true },
-      { bold: true },
-      {}
+      { bold: true, subscript: true },
+      { subscript: true }
     ])
     expect(readParagraphProperties(alignmentResult.projection)).toEqual([
       { alignment: 'right' },
       { alignment: 'right' }
+    ])
+  })
+
+  it('lands superscript 和 subscript 为互斥的 projection 属性', () => {
+    const fixture = createFormattingFixture()
+    const pipeline = createTransactionPipeline(fixture.store.doc)
+    const superscriptSelection = createCollapsedSelection(fixture.createAnchor('paragraph-2', 'run-3', 1))
+    const subscriptSelection = createCollapsedSelection(fixture.createAnchor('paragraph-1', 'run-1', 1))
+    const superscriptCommand = buildSetSuperscriptCommand(fixture.projection, superscriptSelection, true)
+
+    expect(superscriptCommand).not.toBeNull()
+
+    const superscriptResult = pipeline.run(superscriptCommand!, { origin: 'local-user' })
+    const subscriptCommand = buildSetSubscriptCommand(
+      superscriptResult.projection,
+      subscriptSelection,
+      true
+    )
+
+    expect(subscriptCommand).not.toBeNull()
+
+    const subscriptResult = pipeline.run(subscriptCommand!, { origin: 'local-user' })
+
+    expect(readRunProperties(superscriptResult.projection)).toEqual([
+      { superscript: true },
+      { bold: false },
+      { superscript: true, subscript: false }
+    ])
+    expect(readRunProperties(subscriptResult.projection)).toEqual([
+      { superscript: false, subscript: true },
+      { bold: false },
+      { superscript: true, subscript: false }
+    ])
+  })
+
+  it('builds stable paragraph style 和 list commands，并让 projection 直接读回结构语义', () => {
+    const fixture = createFormattingFixture()
+    const pipeline = createTransactionPipeline(fixture.store.doc)
+    const selection = createSelectionState(
+      fixture.createAnchor('paragraph-1', 'run-1', 0),
+      fixture.createAnchor('paragraph-2', 'run-3', 3)
+    )
+
+    expect(buildSetParagraphStyleCommand(fixture.projection, selection, 'Heading3')).toEqual({
+      name: 'setParagraphStyle',
+      operations: [
+        {
+          kind: 'setParagraphProperties',
+          paragraphId: 'paragraph-1',
+          properties: { styleId: 'Heading3' }
+        },
+        {
+          kind: 'setParagraphProperties',
+          paragraphId: 'paragraph-2',
+          properties: { styleId: 'Heading3' }
+        }
+      ]
+    })
+    expect(buildSetParagraphListCommand(fixture.projection, selection, {
+      numberingId: 'jword-list-ordered',
+      level: 1
+    })).toEqual({
+      name: 'setParagraphList',
+      operations: [
+        {
+          kind: 'setParagraphProperties',
+          paragraphId: 'paragraph-1',
+          properties: {
+            listNumberingId: 'jword-list-ordered',
+            listLevel: 1
+          }
+        },
+        {
+          kind: 'setParagraphProperties',
+          paragraphId: 'paragraph-2',
+          properties: {
+            listNumberingId: 'jword-list-ordered',
+            listLevel: 1
+          }
+        }
+      ]
+    })
+
+    const styleResult = pipeline.run(
+      buildSetParagraphStyleCommand(fixture.projection, selection, 'Heading3')!,
+      { origin: 'local-user' }
+    )
+    const listResult = pipeline.run(
+      buildSetParagraphListCommand(styleResult.projection, selection, {
+        numberingId: 'jword-list-ordered',
+        level: 1
+      })!,
+      { origin: 'local-user' }
+    )
+    const paragraphs = listResult.projection.document.sections[0]?.blocks.filter((block) => block.kind === 'paragraph')
+
+    expect(paragraphs).toMatchObject([
+      {
+        id: 'paragraph-1',
+        styleId: 'Heading3',
+        list: {
+          numberingId: 'jword-list-ordered',
+          level: 1
+        }
+      },
+      {
+        id: 'paragraph-2',
+        styleId: 'Heading3',
+        list: {
+          numberingId: 'jword-list-ordered',
+          level: 1
+        }
+      }
     ])
   })
 })
@@ -219,8 +439,14 @@ function createFormattingFixture() {
   getParagraphRuns(paragraphOne).push([runOne, runTwo])
   getParagraphRuns(paragraphTwo).push([runThree])
 
+  setRecordProperties(runOne, DOCUMENT_STORE_FIELDS.run.properties, {
+    superscript: true
+  })
   setRecordProperties(runTwo, DOCUMENT_STORE_FIELDS.run.properties, {
     bold: false
+  })
+  setRecordProperties(runThree, DOCUMENT_STORE_FIELDS.run.properties, {
+    subscript: true
   })
   setRecordProperties(paragraphTwo, DOCUMENT_STORE_FIELDS.block.properties, {
     alignment: 'center'

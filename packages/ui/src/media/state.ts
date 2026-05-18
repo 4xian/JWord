@@ -8,7 +8,6 @@
 import type {
   JWordMediaCommandResult,
   JWordMediaErrorState,
-  JWordMediaInsertMode,
   JWordMediaResource,
   JWordMediaStatus,
   JWordMediaUploadSource
@@ -25,7 +24,6 @@ export interface MediaPanelItemState {
   readonly id: string
   readonly resourceId: string
   readonly source: JWordMediaUploadSource
-  readonly mode: JWordMediaInsertMode
   readonly status: JWordMediaStatus
   readonly resource: JWordMediaResource | null
   readonly progress: MediaPanelProgressState | null
@@ -33,15 +31,6 @@ export interface MediaPanelItemState {
   readonly retryToken?: string
   readonly applyState: 'applied' | 'deferred'
   readonly applyMessage: string
-}
-
-/** media panel 的渲染快照。 */
-export interface MediaPanelViewState {
-  readonly mode: JWordMediaInsertMode
-  readonly fileName: string
-  readonly note: string
-  readonly targetSummary: string
-  readonly items: readonly MediaPanelItemState[]
 }
 
 let mediaPanelItemSequence = 0
@@ -64,13 +53,11 @@ export function createMediaResourceId(): string {
 /** 为一次新的上传/插入动作创建 pending 项。 */
 export function createPendingMediaPanelItem(input: {
   readonly source: JWordMediaUploadSource
-  readonly mode: JWordMediaInsertMode
 }): MediaPanelItemState {
   return {
     id: createMediaPanelItemId(),
     resourceId: createMediaResourceId(),
     source: input.source,
-    mode: input.mode,
     status: 'pending',
     resource: null,
     progress: {
@@ -86,14 +73,12 @@ export function createPendingMediaPanelItem(input: {
 /** 为 UI 侧校验失败创建 failed 项。 */
 export function createFailedMediaPanelItem(input: {
   readonly source: JWordMediaUploadSource
-  readonly mode: JWordMediaInsertMode
   readonly error: JWordMediaErrorState
 }): MediaPanelItemState {
   return {
     id: createMediaPanelItemId(),
     resourceId: createMediaResourceId(),
     source: input.source,
-    mode: input.mode,
     status: 'failed',
     resource: null,
     progress: null,
@@ -137,8 +122,8 @@ export function applyMediaPanelUploadSuccess(
     applyState: commandResult.kind,
     applyMessage: commandResult.message ?? (
       commandResult.kind === 'applied'
-        ? readDefaultAppliedMessage(item.mode)
-        : readDefaultDeferredMessage(item.mode)
+        ? readDefaultAppliedMessage()
+        : readDefaultDeferredMessage()
     )
   }
 }
@@ -171,43 +156,14 @@ export function readMediaSourceLabel(source: JWordMediaUploadSource): string {
     : source.url
 }
 
-/** 读取单个资源项的标题。 */
-export function readMediaItemTitle(item: MediaPanelItemState): string {
-  return `${item.mode === 'inline' ? '行内' : '块级'} · ${readMediaSourceLabel(item.source)}`
-}
-
-/** 读取单个资源项的状态标签。 */
-export function readMediaItemStatusLabel(item: MediaPanelItemState): string {
-  if (item.status === 'pending') {
-    return readMediaProgressLabel(item.progress)
-  }
-
-  if (item.status === 'failed') {
-    return item.error?.message ?? '上传失败。'
-  }
-
-  return item.applyMessage
-}
-
-/** 读取默认的 panel 说明。 */
-export function readDefaultMediaPanelNote(mode: JWordMediaInsertMode): string {
-  return mode === 'inline'
-    ? '当前为行内图片模式：资源上传完成后会按 inline image command 方向继续对接。'
-    : '当前为块级图片模式：资源上传完成后会按 block image command 方向继续对接。'
-}
-
 /** 读取默认的 deferred 文案。 */
-export function readDefaultDeferredMessage(mode: JWordMediaInsertMode): string {
-  return mode === 'inline'
-    ? '资源已就绪，等待主进程对接 core 的 inline image command。'
-    : '资源已就绪，等待主进程对接 core 的 block image command。'
+export function readDefaultDeferredMessage(): string {
+  return '资源已就绪，等待主进程对接 core 的 inline image command。'
 }
 
 /** 读取默认的 applied 文案。 */
-export function readDefaultAppliedMessage(mode: JWordMediaInsertMode): string {
-  return mode === 'inline'
-    ? '资源已就绪，并已插入当前文档。'
-    : '资源已就绪，并已作为块级图片插入当前文档。'
+export function readDefaultAppliedMessage(): string {
+  return '资源已就绪，并已插入当前文档。'
 }
 
 /** 读取进度标签。 */

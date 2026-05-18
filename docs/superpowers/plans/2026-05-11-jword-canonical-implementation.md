@@ -224,6 +224,7 @@
 - [x] Step 3.4：实现 keyboard handler，覆盖输入、删除、回车、方向键、快捷键、撤销重做。
 - [x] Step 3.5：实现 pointer selection，支持点击定位、拖拽选区、双击词选择的扩展边界。
   - 复核 2026-05-15：E2E 命中点 helper 已支持自然文本片段内部 grapheme 边界，不再依赖逐字 fragment；三浏览器 pointer selection 和 Chromium 大夹具拖拽/双击回归已通过。
+  - 复核 2026-05-18：中文双击词选择已按真实命中偏向补齐左右临界值；同一字符中心双击命中 `[2,3]`，偏左命中 `[1,3]`，偏右命中 `[2,4]`，避免中文场景始终只吞单个 grapheme。
 - [x] Step 3.6：实现 clipboard plain text，复制、剪切、粘贴都走 safe text 路线和 transaction pipeline。
 - [x] Step 3.7：实现基础 commands：加粗、斜体、下划线、删除线、字体、字号、颜色、背景色、对齐、缩进。
   - 复核 2026-05-15：`examples/vanilla/tests/gate3-toolbar.e2e.ts` 已补齐 `underline`、`strike`、`fontFamily`、`fontSize`、`textColor`、`backgroundColor`、`alignment`、`indent` 的三浏览器真实控件验收，并同时校验 toolbar DOM 状态与 `editor.getProjection()` 的实际属性落地。
@@ -239,10 +240,14 @@
 
 ### Gate 3 补充收尾（不阻塞 Gate 4 主线）
 
-- [ ] Step 3.14：补齐 run format v1：上标、下标；要求 command、toolbar 状态、undo/redo 与 projection 落地一致。
-- [ ] Step 3.15：补齐 paragraph format v1：行距、段前、段后、首行缩进、悬挂缩进；要求 command -> projection -> layout -> toolbar 状态闭环。
-- [ ] Step 3.16：补齐 structure/style baseline：有序列表、无序列表、基础多级列表、Heading 1-3；目录与 docx numbering/outline 后续只消费这套稳定语义，不直接从纯文本猜测结构。
-- [ ] 补充说明：以上三项不回滚 Gate 4 准入结论，但在 Gate 4 `Step 4.11` 目录闭环和 Gate 5 docx T1 列表/标题 fixture 进入稳定验证前应完成。
+- [x] Step 3.14：补齐 run format v1：上标、下标；要求 command、toolbar 状态、undo/redo 与 projection 落地一致。
+  - 完成 2026-05-18：上标、下标的 command builder、Editor facade、public export 与 toolbar summary 已闭环；定点 Vitest 已覆盖 command/projection/facade/undo-redo，Kimi 浏览器实测 `toggleSuperscript()` 与 `toggleSubscript()` 互斥生效，`[data-jword-run-summary]` 同步显示 `上标 关 / 下标 开`。
+- [x] Step 3.15：补齐 paragraph format v1：行距、段前、段后、首行缩进、悬挂缩进；要求 command -> projection -> layout -> toolbar 状态闭环。
+  - 完成 2026-05-18：行距、段前、段后、首行缩进、悬挂缩进已串通 `command -> projection -> layout -> toolbar`；Kimi 浏览器实测 `1.8 / 120 / 180 / 360 / 480` 会准确回读到 `getSelectionFormattingState()` 与 `[data-jword-run-summary]`。
+- [x] Step 3.16：补齐 structure/style baseline：有序列表、无序列表、基础多级列表、Heading 1-3；目录与 docx numbering/outline 后续只消费这套稳定语义，不直接从纯文本猜测结构。
+  - 完成 2026-05-18：`paragraph.styleId` / `paragraph.list` 的稳定语义已打通 projection、formatting state、Editor facade 与 public export；Kimi 浏览器实测 `Heading2 + jword-list-ordered / L1` 与 `Heading3 + jword-list-bullet / L2` 都能稳定回读到 `getSelectionFormattingState()` 与 `[data-jword-run-summary]`。
+- [x] 补充说明：以上三项不回滚 Gate 4 准入结论，但在 Gate 4 `Step 4.11` 目录闭环和 Gate 5 docx T1 列表/标题 fixture 进入稳定验证前应完成。
+  - 完成 2026-05-18：3.14 / 3.15 / 3.16 已在当前 checkout 收口，不再保留为 Gate 4 `Step 4.11` 与 Gate 5 docx T1 的前置缺口。
 
 ### 验收
 
@@ -305,7 +310,7 @@
 
 #### Iteration 0 - 冻结 Gate 4 起跑线
 
-- [x] 建立 Gate 4 fixture 清单：`image-inline`、`image-block`、`table-basic`、`comment-thread`、`link-basic`、`find-replace`、`header-footer`、`paste-html`、`mobile-readonly`。
+- [x] 建立 Gate 4 fixture 清单：`image-inline`、`table-basic`、`comment-thread`、`link-basic`、`find-replace`、`header-footer`、`paste-html`、`mobile-readonly`。
   - 完成 2026-05-17：已新增 `fixtures/gate4/README.md`，把 Gate 4 fixture registry 固定为可复查清单，并补入首个图片 smoke 资产 `fixtures/gate4/media-inline.svg`。
 - [x] 明确每类 fixture 的最小可观察契约：anchor、selection、history、render、error recovery。
   - 完成 2026-05-17：`fixtures/gate4/README.md` 已逐项写明五类最小可观察契约，避免后续图片、表格、批注各自定义一套验收口径。
@@ -331,19 +336,17 @@
   - 完成 2026-05-17：`packages/core/src/resources/types.ts`、`packages/core/src/index.ts` 与 `packages/ui/src/types.ts` 已把资源快照、`previousResource` / `retryToken`、`signal` / `onProgress` 和 URL allowlist 边界固定成公开接口；`packages/core/test/model/projection.test.ts`、`packages/core/test/operations/image-command-builders.test.ts`、`packages/ui/test/media-state.test.ts` 已覆盖资源投影、allowlist 与 retry token 语义。
 - [ ] 为图片补 fixture 与错误场景：
   - inline image
-  - block image
   - upload pending / success / failed
   - replace resource
-  - 回写 2026-05-17：`fixtures/gate4/README.md` 与 `fixtures/gate4/media-inline.svg` 已建立图片 registry 和最小 smoke 资产，demo adapter / browser case 也覆盖了 pending、success、failed 意图；但还没有独立的 `replace resource` fixture，块级图片也仍复用同一图片资产，因此先保留未完成。
-- [x] 实现 inline image / block image 的 model、projection、selection target、anchor 映射。
-  - 完成 2026-05-17：`packages/core/src/model/projection.ts`、`packages/core/src/model/image-target.ts`、`packages/core/src/operations/command-builders.ts` 已把 inline / block image 接到 projection、selected target 和稳定 anchor 上；`packages/core/test/model/projection.test.ts`、`packages/core/test/operations/image-command-builders.test.ts`、`packages/core/test/layout/query.test.ts` 已验证图片 run 投影、折叠选区命中图片 target，以及 page-local hit-test 回到对应图片 run。
+  - 回写 2026-05-17：`fixtures/gate4/README.md` 与 `fixtures/gate4/media-inline.svg` 已建立图片 registry 和最小 smoke 资产，demo adapter / browser case 也覆盖了 pending、success、failed 意图；但还没有独立的 `replace resource` fixture，因此先保留未完成。
+- [x] 实现 inline image 的 model、projection、selection target、anchor 映射。
+  - 完成 2026-05-18：`packages/core/src/model/projection.ts`、`packages/core/src/model/image-target.ts`、`packages/core/src/operations/command-builders.ts` 当前只保留 inline image 写入路径；`packages/core/test/model/projection.test.ts`、`packages/core/test/operations/image-command-builders.test.ts`、`packages/core/test/layout/query.test.ts` 已验证图片 run 投影、折叠选区命中图片 target，以及 page-local hit-test 回到对应图片 run。
 - [x] 实现图片 operation：
   - 插入 inline image
-  - 插入 block image
   - 替换资源
   - 删除图片
   - resize
-  - 完成 2026-05-17：`packages/core/test/operations/image-command-builders.test.ts` 已补成执行级闭环，`inline image insert`、`block image insert`、`replace selected image resource`、`resize selected image`、`delete selected image` 现都通过 `editor.executeCommand(...)` 后验 `projection`；为支撑块级插入，`packages/core/src/operations/operation-adapter.ts` 还修正了 `insertBlockImage` 先挂载段落再写 runs 的容器时序问题。
+  - 完成 2026-05-18：`packages/core/test/operations/image-command-builders.test.ts` 已补成 inline-only 执行级闭环，`inline image insert`、`replace selected image resource`、`resize selected image`、`delete selected image` 现都通过 `editor.executeCommand(...)` 后验 `projection`；`packages/core/src/operations/command-builders.ts`、`packages/core/src/operations/operation-adapter.ts` 与根导出里的 `insertBlockImage` 路径已同步删除。
 - [x] 实现图片 layout / render：
   - 占位态
   - 成功态
@@ -475,7 +478,7 @@
 ### 待办步骤
 
 - [x] Step 4.1：实现资源表和 ResourceAdapter，定义图片上传、替换、失败恢复、白名单 URL 策略。
-- [x] Step 4.2：实现 inline image 和 block image 的 model、operation、layout、render、resize handle。
+- [x] Step 4.2：实现 inline image 的 model、operation、layout、render、resize handle。
 - [x] Step 4.3：实现图片插入 UI 和上传状态 UI，失败时保留用户可恢复状态。
 - [ ] Step 4.4：实现简单表格 model：table、row、cell、grid、border、cell props、cell text content。
 - [ ] Step 4.5：实现表格 operation：插入表格、插入/删除行列、合并单元格、更新边框、单元格文本编辑。

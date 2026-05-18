@@ -12,6 +12,7 @@ import {
   areFormattingPropertyValuesEquivalent
 } from '../model/formatting-types'
 import type { ParagraphAlignment } from '../model/formatting-types'
+import type { ParagraphList } from '../model/types'
 import { readAnchorRefSnapshot } from '../model/position'
 import type { ModelProperties, Paragraph, Run } from '../model/types'
 import type { DocumentProjection } from '../model/projection'
@@ -64,6 +65,42 @@ export function buildSetStrikeCommand(
   value: boolean
 ): Command | null {
   return buildRunFormattingCommand(projection, selection, 'setStrike', { strike: value })
+}
+
+/**
+ * 构造上标命令。
+ */
+export function buildSetSuperscriptCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: boolean
+): Command | null {
+  return buildRunFormattingCommand(
+    projection,
+    selection,
+    'setSuperscript',
+    value
+      ? { superscript: true, subscript: false }
+      : { superscript: false }
+  )
+}
+
+/**
+ * 构造下标命令。
+ */
+export function buildSetSubscriptCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: boolean
+): Command | null {
+  return buildRunFormattingCommand(
+    projection,
+    selection,
+    'setSubscript',
+    value
+      ? { superscript: false, subscript: true }
+      : { subscript: false }
+  )
 }
 
 /**
@@ -130,6 +167,111 @@ export function buildSetParagraphIndentCommand(
   value: number
 ): Command | null {
   return buildParagraphFormattingCommand(projection, selection, 'setParagraphIndent', { indentLeftTwips: value })
+}
+
+/**
+ * 构造段落样式命令。
+ */
+export function buildSetParagraphStyleCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: string
+): Command | null {
+  return buildParagraphFormattingCommand(projection, selection, 'setParagraphStyle', { styleId: value })
+}
+
+/**
+ * 构造段落列表命令。
+ */
+export function buildSetParagraphListCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: ParagraphList
+): Command | null {
+  return buildParagraphFormattingCommand(projection, selection, 'setParagraphList', {
+    listNumberingId: value.numberingId,
+    listLevel: value.level
+  })
+}
+
+/**
+ * 构造段落行距命令。
+ */
+export function buildSetParagraphLineHeightCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: number
+): Command | null {
+  return buildParagraphRunFormattingCommand(
+    projection,
+    selection,
+    'setParagraphLineHeight',
+    { lineHeight: value }
+  )
+}
+
+/**
+ * 构造段前距命令。
+ */
+export function buildSetParagraphSpacingBeforeCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: number
+): Command | null {
+  return buildParagraphFormattingCommand(
+    projection,
+    selection,
+    'setParagraphSpacingBefore',
+    { spacingBeforeTwips: value }
+  )
+}
+
+/**
+ * 构造段后距命令。
+ */
+export function buildSetParagraphSpacingAfterCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: number
+): Command | null {
+  return buildParagraphFormattingCommand(
+    projection,
+    selection,
+    'setParagraphSpacingAfter',
+    { spacingAfterTwips: value }
+  )
+}
+
+/**
+ * 构造首行缩进命令。
+ */
+export function buildSetParagraphFirstLineIndentCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: number
+): Command | null {
+  return buildParagraphFormattingCommand(
+    projection,
+    selection,
+    'setParagraphFirstLineIndent',
+    { firstLineIndentTwips: value }
+  )
+}
+
+/**
+ * 构造悬挂缩进命令。
+ */
+export function buildSetParagraphHangingIndentCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  value: number
+): Command | null {
+  return buildParagraphFormattingCommand(
+    projection,
+    selection,
+    'setParagraphHangingIndent',
+    { hangingIndentTwips: value }
+  )
 }
 
 /**
@@ -211,51 +353,6 @@ export function buildInsertInlineImageCommand(
         kind: 'image',
         resourceId: resource.id,
         display: 'inline',
-        ...(input.alt === undefined ? {} : { alt: input.alt }),
-        ...(input.widthTwips === undefined ? {} : { widthTwips: input.widthTwips }),
-        ...(input.heightTwips === undefined ? {} : { heightTwips: input.heightTwips })
-      }
-    }]
-  }
-}
-
-/**
- * 构造块级图片插入命令。
- */
-export function buildInsertBlockImageCommand(
-  projection: DocumentProjection,
-  selection: SelectionState | null,
-  resource: Resource,
-  input: Readonly<{
-    alt?: string
-    widthTwips?: number
-    heightTwips?: number
-  }> = {}
-): Command | null {
-  const insertion = resolveSelectionInsertionContext(projection, selection)
-
-  if (insertion === null) {
-    return null
-  }
-
-  const usedRunIds = collectRunIds(projection)
-  const usedBlockIds = collectBlockIds(projection)
-
-  return {
-    name: 'insertBlockImage',
-    operations: [{
-      kind: 'upsertResource',
-      resource
-    }, {
-      kind: 'insertImage',
-      at: insertion.at,
-      imageRunId: allocateGeneratedRunId(usedRunIds, insertion.run.id, 'image'),
-      blockId: allocateGeneratedBlockId(usedBlockIds, insertion.blockId, 'image'),
-      mode: 'block',
-      image: {
-        kind: 'image',
-        resourceId: resource.id,
-        display: 'block',
         ...(input.alt === undefined ? {} : { alt: input.alt }),
         ...(input.widthTwips === undefined ? {} : { widthTwips: input.widthTwips }),
         ...(input.heightTwips === undefined ? {} : { heightTwips: input.heightTwips })
@@ -459,6 +556,43 @@ function buildParagraphFormattingCommand(
   }
 }
 
+/**
+ * 构造段落级 run 样式命令。
+ */
+function buildParagraphRunFormattingCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  name: string,
+  properties: ModelProperties
+): Command | null {
+  const targets = collectSelectionTargets(projection, selection)
+
+  if (targets.paragraphs.length === 0) {
+    return null
+  }
+
+  const operations: Operation[] = targets.paragraphs.flatMap((target) =>
+    target.paragraph.runs.flatMap((run) =>
+      isPropertySetEquivalent(run.properties, properties)
+        ? []
+        : [{
+            kind: 'setRunProperties',
+            runId: run.id,
+            properties
+          }]
+    )
+  )
+
+  if (operations.length === 0) {
+    return null
+  }
+
+  return {
+    name,
+    operations
+  }
+}
+
 function isPropertySetEquivalent(
   currentProperties: ModelProperties | undefined,
   nextProperties: ModelProperties
@@ -528,30 +662,6 @@ function countImageResourceReferences(projection: DocumentProjection, resourceId
   }
 }
 
-function collectBlockIds(projection: DocumentProjection): Set<string> {
-  const blockIds = new Set<string>()
-
-  for (const section of projection.document.sections) {
-    visitBlocks(section.blocks)
-  }
-
-  return blockIds
-
-  function visitBlocks(blocks: readonly import('../model/types').Block[]) {
-    for (const block of blocks) {
-      blockIds.add(block.id)
-
-      if (block.kind === 'table') {
-        for (const row of block.rows) {
-          for (const cell of row.cells) {
-            visitBlocks(cell.blocks)
-          }
-        }
-      }
-    }
-  }
-}
-
 function allocateGeneratedRunId(
   usedRunIds: Set<string>,
   runId: string,
@@ -566,24 +676,6 @@ function allocateGeneratedRunId(
   }
 
   usedRunIds.add(candidate)
-
-  return candidate
-}
-
-function allocateGeneratedBlockId(
-  usedBlockIds: Set<string>,
-  blockId: string,
-  suffix: 'image'
-): string {
-  let sequence = 1
-  let candidate = `${blockId}__${suffix}-${sequence}`
-
-  while (usedBlockIds.has(candidate)) {
-    sequence += 1
-    candidate = `${blockId}__${suffix}-${sequence}`
-  }
-
-  usedBlockIds.add(candidate)
 
   return candidate
 }

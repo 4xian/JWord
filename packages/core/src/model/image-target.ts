@@ -20,7 +20,6 @@ export interface SelectedImageTarget {
   readonly run: Run
   readonly image: ImageInline
   readonly resource?: Resource
-  readonly mode: 'inline' | 'block'
 }
 
 /**
@@ -83,8 +82,7 @@ function findImageTargetInBlocks(
           paragraph: block,
           run,
           image,
-          ...(resource === undefined ? {} : { resource }),
-          mode: image.display === 'block' ? 'block' : 'inline'
+          ...(resource === undefined ? {} : { resource })
         }
       }
     }

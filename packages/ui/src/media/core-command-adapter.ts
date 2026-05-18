@@ -8,7 +8,6 @@
 
 import {
   buildDeleteSelectedImageCommand,
-  buildInsertBlockImageCommand,
   buildInsertInlineImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
@@ -25,7 +24,6 @@ import {
 import type {
   JWordMediaCommandAdapter,
   JWordMediaCommandResult,
-  JWordMediaInsertMode,
   JWordMediaInsertRequest,
   JWordMediaResource,
   JWordSelectedImageTarget
@@ -62,21 +60,6 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
         '当前选区无法插入行内图片。',
         '已插入行内图片。',
         selectionAfter
-      )
-    },
-    insertBlockImage(request) {
-      const command = buildInsertBlockImageCommand(
-        request.projection,
-        request.selection,
-        toCoreResource(request.resource),
-        readImageInsertionOptions(request.resource)
-      )
-
-      return executeMediaCommand(
-        command,
-        request,
-        '当前选区无法插入块级图片。',
-        '已插入块级图片。'
       )
     },
     replaceSelectedImageResource(request) {
@@ -274,7 +257,6 @@ function runContainsText(
 function toUiSelectedImageTarget(target: SelectedImageTarget): JWordSelectedImageTarget {
   return {
     resourceId: target.image.resourceId,
-    display: target.mode,
     ...(target.image.widthTwips === undefined ? {} : { widthTwips: target.image.widthTwips }),
     ...(target.image.heightTwips === undefined ? {} : { heightTwips: target.image.heightTwips })
   }

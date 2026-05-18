@@ -12,6 +12,15 @@ import {
   buildSetFontSizeCommand,
   buildSetItalicCommand,
   buildSetParagraphAlignmentCommand,
+  buildSetParagraphFirstLineIndentCommand,
+  buildSetParagraphHangingIndentCommand,
+  buildSetParagraphLineHeightCommand,
+  buildSetParagraphListCommand,
+  buildSetParagraphSpacingAfterCommand,
+  buildSetParagraphSpacingBeforeCommand,
+  buildSetParagraphStyleCommand,
+  buildSetSubscriptCommand,
+  buildSetSuperscriptCommand,
   buildSetStrikeCommand,
   buildSetTextColorCommand,
   buildSetUnderlineCommand
@@ -22,6 +31,7 @@ import { createMountedCanvasImageResourceResolver } from '../resources/canvas-im
 import { createJWordError } from '../shared/errors'
 import { createSelectionFormattingState } from '../model/formatting-state'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
+import type { ParagraphList } from '../model/types'
 import { DEFAULT_HISTORY_ORIGIN } from '../operations/history'
 import type { HistoryOperationResult } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
@@ -216,6 +226,30 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     ))
   }
 
+  /**
+   * 切换当前选择区的上标状态。
+   */
+  toggleSuperscript(): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetSuperscriptCommand(
+      this.currentProjection,
+      this.currentSelection,
+      this.getSelectionFormattingState().run?.superscript.value !== true
+    ))
+  }
+
+  /**
+   * 切换当前选择区的下标状态。
+   */
+  toggleSubscript(): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetSubscriptCommand(
+      this.currentProjection,
+      this.currentSelection,
+      this.getSelectionFormattingState().run?.subscript.value !== true
+    ))
+  }
+
   setFontFamily(value: string): void {
     this.assertActive()
     this.executeFacadeFormattingCommand(buildSetFontFamilyCommand(
@@ -255,6 +289,90 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
   setParagraphAlignment(value: ParagraphAlignment): void {
     this.assertActive()
     this.executeFacadeFormattingCommand(buildSetParagraphAlignmentCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  /**
+   * 设置当前选择区段落的行距。
+   */
+  setParagraphLineHeight(value: number): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphLineHeightCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  /**
+   * 设置当前选择区段落的段前距。
+   */
+  setParagraphSpacingBefore(value: number): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphSpacingBeforeCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  /**
+   * 设置当前选择区段落的段后距。
+   */
+  setParagraphSpacingAfter(value: number): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphSpacingAfterCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  /**
+   * 设置当前选择区段落的首行缩进。
+   */
+  setParagraphFirstLineIndent(value: number): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphFirstLineIndentCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  /**
+   * 设置当前选择区段落的悬挂缩进。
+   */
+  setParagraphHangingIndent(value: number): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphHangingIndentCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  /**
+   * 设置当前选择区段落的稳定样式语义。
+   */
+  setParagraphStyle(value: string): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphStyleCommand(
+      this.currentProjection,
+      this.currentSelection,
+      value
+    ))
+  }
+
+  /**
+   * 设置当前选择区段落的稳定列表语义。
+   */
+  setParagraphList(value: ParagraphList): void {
+    this.assertActive()
+    this.executeFacadeFormattingCommand(buildSetParagraphListCommand(
       this.currentProjection,
       this.currentSelection,
       value

@@ -174,7 +174,7 @@ export interface CommentRangeInlinePayload {
 export interface ImageInlineLayoutPayload {
   readonly resourceId: string
   readonly alt?: string
-  readonly display?: 'inline' | 'block'
+  readonly display?: 'inline'
   readonly widthTwips?: number
   readonly heightTwips?: number
   readonly resourceStatus?: ResourceStatus
@@ -237,6 +237,10 @@ export interface MutableParagraphBox {
   paragraphId: string
   alignment: 'left' | 'center' | 'right' | 'justify'
   indentLeftTwips: number
+  firstLineIndentTwips: number
+  hangingIndentTwips: number
+  spacingBeforeTwips: number
+  spacingAfterTwips: number
   x: number
   y: number
   width: number
@@ -265,6 +269,7 @@ export interface LayoutCursor {
   line: MutableLineBox | undefined
   y: number
   x: number
+  paragraphLineCounts?: Map<string, number>
 }
 
 export interface IncrementalLayoutContext {

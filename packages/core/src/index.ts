@@ -38,7 +38,6 @@ export type { JWordErrorCode, JWordErrorDetails } from './shared/errors'
 export {
   buildDeleteResourceCommand,
   buildDeleteSelectedImageCommand,
-  buildInsertBlockImageCommand,
   buildInsertInlineImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
@@ -48,8 +47,17 @@ export {
   buildSetFontSizeCommand,
   buildSetItalicCommand,
   buildSetParagraphAlignmentCommand,
+  buildSetParagraphFirstLineIndentCommand,
+  buildSetParagraphHangingIndentCommand,
   buildSetParagraphIndentCommand,
+  buildSetParagraphLineHeightCommand,
+  buildSetParagraphListCommand,
+  buildSetParagraphSpacingAfterCommand,
+  buildSetParagraphSpacingBeforeCommand,
+  buildSetParagraphStyleCommand,
   buildSetStrikeCommand,
+  buildSetSubscriptCommand,
+  buildSetSuperscriptCommand,
   buildSetTextColorCommand,
   buildSetUnderlineCommand,
   buildUpsertResourceCommand,
@@ -103,7 +111,7 @@ export type {
 } from './layout/runtime'
 export { createLayoutSchedule } from './layout/scheduler'
 export type { LayoutSchedule, LayoutScheduleInput } from './layout/scheduler'
-export type { Block, Document, Paragraph, Run, Section } from './model/types'
+export type { Block, Document, Paragraph, ParagraphList, Run, Section } from './model/types'
 export type { ImageInline } from './model/types'
 export {
   CSS_PX_PER_INCH,

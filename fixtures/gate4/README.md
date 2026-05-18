@@ -7,7 +7,6 @@
 | Fixture | 当前用途 | 最小可观察契约 |
 | --- | --- | --- |
 | `image-inline` | 行内图片插入、替换、删除、尺寸调整 | anchor、selection、history、render、error recovery |
-| `image-block` | 块级图片插入、替换、删除、尺寸调整 | anchor、selection、history、render、error recovery |
 | `table-basic` | 基础表格插入、行列操作、单元格文本编辑 | anchor、selection、history、render、error recovery |
 | `comment-thread` | 批注添加、回复、解决、重新打开、定位 | anchor、selection、history、render、error recovery |
 | `link-basic` | 超链接创建、编辑、allowlist 校验、打开行为 | anchor、selection、history、render、error recovery |

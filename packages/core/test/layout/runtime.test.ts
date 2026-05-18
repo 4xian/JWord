@@ -302,6 +302,98 @@ describe('Gate 2 布局', () => {
     expect(fragment.x).toBe(line.x)
   })
 
+  it('applies paragraph spacing and first-line or hanging indents to flow geometry', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-paragraph-spacing',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-paragraph-spacing',
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-paragraph-spacing-1',
+                  properties: {
+                    indentLeftTwips: 120,
+                    spacingBeforeTwips: 120,
+                    spacingAfterTwips: 180,
+                    firstLineIndentTwips: 240,
+                    hangingIndentTwips: 360
+                  },
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-paragraph-spacing-1',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: '一二三四五六七八九十一二三四五六'
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-paragraph-spacing-2',
+                  properties: {
+                    spacingBeforeTwips: 60
+                  },
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-paragraph-spacing-2',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: '次段'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig({
+        widthTwips: 1800,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const page = layout.pages[0]!
+    const paragraphOne = page.paragraphs.find((paragraph) => paragraph.paragraphId === 'paragraph-layout-paragraph-spacing-1')
+    const firstParagraphLines = page.lines.filter((line) => line.paragraphId === 'paragraph-layout-paragraph-spacing-1')
+    const secondParagraphLine = page.lines.find((line) => line.paragraphId === 'paragraph-layout-paragraph-spacing-2')
+    const lastFirstParagraphLine = firstParagraphLines[firstParagraphLines.length - 1]
+
+    expect(firstParagraphLines.length).toBeGreaterThan(1)
+    expect(paragraphOne?.x).toBe(240)
+    expect(firstParagraphLines[0]?.y).toBe(page.contentRect.y + 120)
+    expect(firstParagraphLines[0]?.x).toBe(480)
+    expect(firstParagraphLines[1]?.x).toBe(600)
+    expect(secondParagraphLine?.y).toBe(
+      (lastFirstParagraphLine?.y ?? 0)
+      + (lastFirstParagraphLine?.height ?? 0)
+      + 180
+      + 60
+    )
+  })
+
   it('keeps section page and header footer boundary on laid out page boxes', () => {
     const layout = layoutDocument({
       projection: {

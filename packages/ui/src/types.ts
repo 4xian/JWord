@@ -37,9 +37,6 @@ export interface JWordToolbarOptions {
   readonly showSummaries?: boolean
 }
 
-/** Gate 4 第一版图片插入模式。 */
-export type JWordMediaInsertMode = 'inline' | 'block'
-
 /** Gate 4 第一版图片资源状态。 */
 export type JWordMediaStatus = 'pending' | 'success' | 'failed'
 
@@ -142,7 +139,6 @@ export interface JWordMediaUrlPolicy {
 /** 当前选中的图片目标快照。 */
 export interface JWordSelectedImageTarget {
   readonly resourceId: string
-  readonly display?: JWordMediaInsertMode
   readonly widthTwips?: number
   readonly heightTwips?: number
 }
@@ -168,9 +164,6 @@ export interface JWordMediaCommandAdapter {
     selection: SelectionState | null
   ): JWordSelectedImageTarget | null
   insertInlineImage?(
-    request: JWordMediaInsertRequest
-  ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
-  insertBlockImage?(
     request: JWordMediaInsertRequest
   ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
   replaceSelectedImageResource?(

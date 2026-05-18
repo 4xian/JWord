@@ -87,9 +87,7 @@ function resolveInlineObjectGeometry(
     })
   }
 
-  const fallbackWidth = inline.display === 'block'
-    ? Math.min(pageConfig.contentWidthTwips, cssPxToTwips(320))
-    : Math.min(pageConfig.contentWidthTwips, cssPxToTwips(160))
+  const fallbackWidth = Math.min(pageConfig.contentWidthTwips, cssPxToTwips(160))
   const width = inline.widthTwips ?? fallbackWidth
   const height = inline.heightTwips ?? Math.max(cssPxToTwips(64), Math.round(width * 0.56))
 
@@ -151,6 +149,10 @@ export function startParagraph(
   }
 
   const indentLeftTwips = readNumberProperty(paragraph.properties, 'indentLeftTwips') ?? 0
+  const firstLineIndentTwips = readNumberProperty(paragraph.properties, 'firstLineIndentTwips') ?? 0
+  const hangingIndentTwips = readNumberProperty(paragraph.properties, 'hangingIndentTwips') ?? 0
+  const spacingBeforeTwips = readNumberProperty(paragraph.properties, 'spacingBeforeTwips') ?? 0
+  const spacingAfterTwips = readNumberProperty(paragraph.properties, 'spacingAfterTwips') ?? 0
   const x = pageConfig.marginTwips.left + Math.max(0, indentLeftTwips)
   const paragraphBox: MutableParagraphBox = {
     kind: 'paragraph',
@@ -159,6 +161,10 @@ export function startParagraph(
     paragraphId: paragraph.id,
     alignment: readParagraphAlignment(paragraph),
     indentLeftTwips,
+    firstLineIndentTwips,
+    hangingIndentTwips,
+    spacingBeforeTwips,
+    spacingAfterTwips,
     x,
     y: cursor.y,
     width: 0,
@@ -170,6 +176,30 @@ export function startParagraph(
   cursor.page.paragraphs.push(paragraphBox)
   cursor.page.blocks.push(paragraphBox)
   cursor.paragraph = paragraphBox
+}
+
+/**
+ * 应用段前距。
+ */
+export function applyParagraphSpacingBefore(cursor: LayoutCursor): void {
+  if (cursor.paragraph === undefined || cursor.paragraph.spacingBeforeTwips <= 0) {
+    return
+  }
+
+  cursor.y += cursor.paragraph.spacingBeforeTwips
+  cursor.paragraph.y = cursor.y
+}
+
+/**
+ * 应用段后距。
+ */
+export function applyParagraphSpacingAfter(cursor: LayoutCursor): void {
+  if (cursor.paragraph === undefined || cursor.paragraph.spacingAfterTwips <= 0) {
+    return
+  }
+
+  cursor.y += cursor.paragraph.spacingAfterTwips
+  cursor.paragraph.height += cursor.paragraph.spacingAfterTwips
 }
 
 export function ensureLineFits(
@@ -213,7 +243,9 @@ export function ensureLine(
     pageIndex: cursor.page.pageIndex,
     sectionId,
     paragraphId: paragraph.id,
-    x: cursor.paragraph?.x ?? pageConfig.marginTwips.left,
+    x: cursor.paragraph === undefined
+      ? pageConfig.marginTwips.left
+      : resolveParagraphLineX(cursor, cursor.paragraph),
     y: cursor.y,
     width: 0,
     height: 0,
@@ -297,10 +329,14 @@ export function flushLine(cursor: LayoutCursor): void {
 
     cursor.page.lines.push(frozenLine)
     cursor.paragraph?.lines.push(frozenLine)
+    recordParagraphLine(cursor, frozenLine.paragraphId)
     cursor.y += Math.max(line.height, 1)
 
     if (cursor.paragraph !== undefined) {
-      cursor.paragraph.width = Math.max(cursor.paragraph.width, frozenLine.width)
+      cursor.paragraph.width = Math.max(
+        cursor.paragraph.width,
+        frozenLine.x + frozenLine.width - cursor.paragraph.x
+      )
       cursor.paragraph.height = cursor.y - cursor.paragraph.y
     }
   }
@@ -431,7 +467,7 @@ function alignLineToParagraph(line: MutableLineBox, cursor: LayoutCursor): void 
     return
   }
 
-  const availableWidth = Math.max(0, cursor.page.contentRect.x + cursor.page.contentRect.width - paragraph.x)
+  const availableWidth = Math.max(0, cursor.page.contentRect.x + cursor.page.contentRect.width - line.x)
   const remainingWidth = Math.max(0, availableWidth - line.width)
   const offset = paragraph.alignment === 'right'
     ? remainingWidth
@@ -469,6 +505,46 @@ function readParagraphAlignment(paragraph: Paragraph): 'left' | 'center' | 'righ
   const alignment = paragraph.properties?.alignment
 
   return alignment === 'center' || alignment === 'right' || alignment === 'justify' ? alignment : 'left'
+}
+
+/**
+ * 解析当前逻辑行的起始缩进。
+ */
+function resolveParagraphLineX(cursor: LayoutCursor, paragraph: MutableParagraphBox): number {
+  const lineCount = readParagraphLineCount(cursor, paragraph.paragraphId)
+  const offsetTwips = lineCount === 0
+    ? paragraph.firstLineIndentTwips
+    : paragraph.hangingIndentTwips
+
+  return paragraph.x + Math.max(0, offsetTwips)
+}
+
+/**
+ * 记录段落已经排出的逻辑行数。
+ */
+function recordParagraphLine(cursor: LayoutCursor, paragraphId: string): void {
+  const lineCounts = getParagraphLineCounts(cursor)
+  const currentCount = lineCounts.get(paragraphId) ?? 0
+
+  lineCounts.set(paragraphId, currentCount + 1)
+}
+
+/**
+ * 读取段落已排出的逻辑行数。
+ */
+function readParagraphLineCount(cursor: LayoutCursor, paragraphId: string): number {
+  return getParagraphLineCounts(cursor).get(paragraphId) ?? 0
+}
+
+/**
+ * 获取段落逻辑行计数表。
+ */
+function getParagraphLineCounts(cursor: LayoutCursor): Map<string, number> {
+  if (cursor.paragraphLineCounts === undefined) {
+    cursor.paragraphLineCounts = new Map()
+  }
+
+  return cursor.paragraphLineCounts
 }
 
 function readNumberProperty(properties: Paragraph['properties'], key: string): number | undefined {

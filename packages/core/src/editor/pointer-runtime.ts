@@ -5,7 +5,7 @@
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
  */
-import { hitTestDocumentLayout } from '../layout/runtime'
+import { hitTestDocumentLayout, hitTestDocumentLayoutTextHit } from '../layout/runtime'
 import type { TextPosition } from '../operations/transaction'
 import { createJWordError } from '../shared/errors'
 import { readAnchorRefSnapshot } from '../model/position'
@@ -102,7 +102,11 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
     }
   }
 
-  protected expandWordSelection(anchor: AnchorRef): SelectionState {
+  protected expandWordSelection(
+    anchor: AnchorRef,
+    event?: MouseEvent,
+    pageMetrics?: PointerPageMetrics
+  ): SelectionState {
     const position = this.resolveTextPosition(anchor)
     const snapshot = readAnchorRefSnapshot(anchor)
     const text = readProjectionRunText(this.currentProjection, position.blockId, position.runId)
@@ -112,7 +116,12 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
       return createSelectionState(anchor, anchor)
     }
 
-    const index = resolveWordSelectionIndex(graphemes, position.graphemeIndex, snapshot.assoc)
+    const hit = event === undefined || pageMetrics === undefined
+      ? undefined
+      : this.resolvePointerTextHit(event, pageMetrics)
+    const index = hit === undefined
+      ? resolveWordSelectionIndex(graphemes, position.graphemeIndex, snapshot.assoc)
+      : Math.min(Math.max(hit.position.graphemeIndex, 0), graphemes.length - 1)
     const expansionKind = readDoubleClickExpansionKind(graphemes[index] ?? '')
     const isWord = expansionKind === 'word'
     let start = index
@@ -124,6 +133,14 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
       }
 
       while (end < graphemes.length && isWordLikeGrapheme(graphemes[end] ?? '')) {
+        end += 1
+      }
+    } else if (expansionKind === 'grapheme' && hit !== undefined) {
+      if (hit.bias === 'left' && start > 0) {
+        start -= 1
+      }
+
+      if (hit.bias === 'right' && end < graphemes.length) {
         end += 1
       }
     }
@@ -144,6 +161,25 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
         graphemeIndex: end
       })
     )
+  }
+
+  /**
+   * 读取双击当前字符的左右偏向，避免中文永远只按单个 grapheme 扩选。
+   */
+  protected resolvePointerTextHit(
+    event: MouseEvent,
+    pageMetrics: PointerPageMetrics
+  ) {
+    const point = {
+      pageIndex: pageMetrics.pageIndex,
+      x: (event.clientX - pageMetrics.left) / pageMetrics.scaleX,
+      y: (event.clientY - pageMetrics.top) / pageMetrics.scaleY
+    }
+    const layout = this.cachedLayout !== undefined && !this.layoutNeedsRefresh
+      ? this.cachedLayout
+      : this.readTransientLayoutThroughPage(pageMetrics.pageIndex)
+
+    return hitTestDocumentLayoutTextHit(layout, point)
   }
 
   protected scheduleDeferredRender(

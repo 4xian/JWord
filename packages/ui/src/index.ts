@@ -13,7 +13,6 @@ export type {
   JWordMediaCommandAdapter,
   JWordMediaCommandResult,
   JWordMediaErrorState,
-  JWordMediaInsertMode,
   JWordMediaOptions,
   JWordMediaPanelElements,
   JWordMediaResource,

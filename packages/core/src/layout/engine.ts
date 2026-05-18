@@ -26,6 +26,8 @@ import {
   readRunStyle
 } from './internal'
 import {
+  applyParagraphSpacingAfter,
+  applyParagraphSpacingBefore,
   appendEmptyTextAnchor,
   appendNonTextInlineBox,
   appendTextFragment,
@@ -149,6 +151,7 @@ function layoutBlock(
   }
 
   startParagraph(cursor, section.id, block, input.pageConfig)
+  applyParagraphSpacingBefore(cursor)
 
   for (const run of block.runs) {
     if (layoutRun(run, section, block, input, cursor, pages, incremental, input.projection.document.resources)) {
@@ -158,6 +161,7 @@ function layoutBlock(
 
   ensureEmptyParagraphVisible(block, section, input, cursor, pages)
   flushLine(cursor)
+  applyParagraphSpacingAfter(cursor)
 
   return false
 }
@@ -443,18 +447,7 @@ function layoutInlineBoundary(
 
   if (inline.kind !== 'break') {
     if (inline.kind !== 'text') {
-      if (inline.kind === 'image' && inline.display === 'block') {
-        flushLine(cursor)
-        const blockSize = resolveImageInlineSize(inline, pageConfig)
-
-        ensureLineFits(blockSize.width, blockSize.height, cursor, pages, pageConfig, section, paragraph)
-      }
-
       appendNonTextInlineBox(inline, sectionId, paragraph.id, runId, graphemeIndex, cursor, pageConfig, resourceById)
-
-      if (inline.kind === 'image' && inline.display === 'block') {
-        flushLine(cursor)
-      }
     }
     return
   }
@@ -501,9 +494,7 @@ function resolveImageInlineSize(
   width: number
   height: number
 }> {
-  const fallbackWidth = inline.display === 'block'
-    ? Math.min(pageConfig.contentWidthTwips, cssPxToTwips(320))
-    : Math.min(pageConfig.contentWidthTwips, cssPxToTwips(160))
+  const fallbackWidth = Math.min(pageConfig.contentWidthTwips, cssPxToTwips(160))
   const width = inline.widthTwips ?? fallbackWidth
   const height = inline.heightTwips ?? Math.max(cssPxToTwips(64), Math.round(width * 0.56))
 

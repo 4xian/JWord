@@ -396,7 +396,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
 
     this.cancelDeferredPointerSelectionWork()
     event.preventDefault()
-    this.commitSelection(this.expandWordSelection(anchor), {
+    this.commitSelection(this.expandWordSelection(anchor, event, pageMetrics), {
       source: 'pointer',
       render: false,
       emit: false
@@ -424,5 +424,9 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
 
   protected abstract resolvePointerPageMetrics(event: MouseEvent, cachedPageMetrics?: PointerPageMetrics): PointerPageMetrics | undefined
   protected abstract resolvePointerAnchor(event: MouseEvent, pageMetrics: PointerPageMetrics): AnchorRef | undefined
-  protected abstract expandWordSelection(anchor: AnchorRef): SelectionState
+  protected abstract expandWordSelection(
+    anchor: AnchorRef,
+    event?: MouseEvent,
+    pageMetrics?: PointerPageMetrics
+  ): SelectionState
 }

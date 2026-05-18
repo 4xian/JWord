@@ -119,13 +119,20 @@ function projectBlock(block: BlockRecord): Block {
   })
 }
 
+/**
+ * 投影段落并补齐稳定的 style/list 语义。
+ */
 function projectParagraph(block: BlockRecord): Paragraph {
   const properties = projectProperties(block.get(DOCUMENT_STORE_FIELDS.block.properties))
+  const styleId = readParagraphStyleId(properties)
+  const list = readParagraphList(properties)
 
   return deepFreeze({
     kind: 'paragraph',
     id: readString(block.get(DOCUMENT_STORE_FIELDS.block.id), 'paragraph'),
     ...(properties === undefined ? {} : { properties }),
+    ...(styleId === undefined ? {} : { styleId }),
+    ...(list === undefined ? {} : { list }),
     runs: deepFreezeArray(getParagraphRuns(block).toArray().map(projectRun))
   })
 }
@@ -192,6 +199,32 @@ function projectProperties(value: unknown): ModelProperties | undefined {
   }
 
   return deepFreeze(Object.fromEntries(value.entries()) as ModelProperties)
+}
+
+/**
+ * 读取段落样式标识。
+ */
+function readParagraphStyleId(properties: ModelProperties | undefined): string | undefined {
+  const value = properties?.styleId
+
+  return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * 读取段落列表语义。
+ */
+function readParagraphList(properties: ModelProperties | undefined): Paragraph['list'] | undefined {
+  const numberingId = properties?.listNumberingId
+  const level = properties?.listLevel
+
+  if (typeof numberingId !== 'string' || typeof level !== 'number') {
+    return undefined
+  }
+
+  return deepFreeze({
+    numberingId,
+    level
+  })
 }
 
 function projectSectionPage(value: unknown): SectionPageLayout | undefined {

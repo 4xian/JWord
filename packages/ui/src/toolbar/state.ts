@@ -14,6 +14,7 @@ import type {
   PagePreset,
   Paragraph,
   ParagraphAlignment,
+  ParagraphList,
   SelectionFormattingState,
   SelectionState,
   TextPosition
@@ -420,12 +421,21 @@ function readRunSummary(formattingState: SelectionFormattingState): string {
     `I ${readFormattingToken(formattingState.run.italic, '开', '关')}`,
     `U ${readFormattingToken(formattingState.run.underline, '开', '关')}`,
     `S ${readFormattingToken(formattingState.run.strike, '开', '关')}`,
+    `上标 ${readFormattingToken(formattingState.run.superscript, '开', '关')}`,
+    `下标 ${readFormattingToken(formattingState.run.subscript, '开', '关')}`,
     `字体 ${readStringFormattingToken(formattingState.run.fontFamily, '默认')}`,
     `字号 ${readNumberFormattingToken(formattingState.run.fontSizeTwips, '默认', formatFontSizeTwips)}`,
     `字色 ${readStringFormattingToken(formattingState.run.color, '默认')}`,
     `底色 ${readStringFormattingToken(formattingState.run.backgroundColor, '默认')}`,
     `对齐 ${readStringFormattingToken(formattingState.paragraph.alignment, '默认')}`,
-    `缩进 ${readNumberFormattingToken(formattingState.paragraph.indentLeftTwips, '0 pt', formatIndentTwips)}`
+    `行距 ${readNumberFormattingToken(formattingState.paragraph.lineHeight, '默认', formatLineHeight)}`,
+    `缩进 ${readNumberFormattingToken(formattingState.paragraph.indentLeftTwips, '0 pt', formatIndentTwips)}`,
+    `段前 ${readNumberFormattingToken(formattingState.paragraph.spacingBeforeTwips, '0 pt', formatIndentTwips)}`,
+    `段后 ${readNumberFormattingToken(formattingState.paragraph.spacingAfterTwips, '0 pt', formatIndentTwips)}`,
+    `首行 ${readNumberFormattingToken(formattingState.paragraph.firstLineIndentTwips, '0 pt', formatIndentTwips)}`,
+    `悬挂 ${readNumberFormattingToken(formattingState.paragraph.hangingIndentTwips, '0 pt', formatIndentTwips)}`,
+    `样式 ${readNullableStringFormattingToken(formattingState.paragraph.styleId, '默认')}`,
+    `列表 ${readParagraphListFormattingToken(formattingState.paragraph.list)}`
   ].join(' / ')
 }
 
@@ -457,6 +467,8 @@ function hasMixedFormattingState(formattingState: SelectionFormattingState): boo
       || formattingState.run.italic.mixed
       || formattingState.run.underline.mixed
       || formattingState.run.strike.mixed
+      || formattingState.run.superscript.mixed
+      || formattingState.run.subscript.mixed
       || formattingState.run.fontFamily.mixed
       || formattingState.run.fontSizeTwips.mixed
       || formattingState.run.color.mixed
@@ -464,6 +476,13 @@ function hasMixedFormattingState(formattingState: SelectionFormattingState): boo
   ) || formattingState.paragraph !== null && (
     formattingState.paragraph.alignment.mixed
       || formattingState.paragraph.indentLeftTwips.mixed
+      || formattingState.paragraph.lineHeight.mixed
+      || formattingState.paragraph.spacingBeforeTwips.mixed
+      || formattingState.paragraph.spacingAfterTwips.mixed
+      || formattingState.paragraph.firstLineIndentTwips.mixed
+      || formattingState.paragraph.hangingIndentTwips.mixed
+      || formattingState.paragraph.styleId.mixed
+      || formattingState.paragraph.list.mixed
   )
 }
 
@@ -624,6 +643,22 @@ function readStringFormattingToken(
   return value.value === undefined ? emptyLabel : value.value
 }
 
+/**
+ * 把可空字符串格式值转换成摘要 token。
+ */
+function readNullableStringFormattingToken(
+  value: FormattingStateValue<string | null>,
+  emptyLabel: string
+): string {
+  if (value.mixed) {
+    return '混合'
+  }
+
+  return value.value === undefined || value.value === null
+    ? emptyLabel
+    : value.value
+}
+
 /** 把数字格式值转换成摘要 token。 */
 function readNumberFormattingToken(
   value: FormattingStateValue<number>,
@@ -644,7 +679,29 @@ function formatFontSizeTwips(value: number): string {
   return Number.isInteger(points) ? `${points} pt` : `${points.toFixed(1)} pt`
 }
 
+/**
+ * 把行距值转成摘要文案。
+ */
+function formatLineHeight(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
+}
+
 /** 把缩进 twips 转成 pt 文案。 */
 function formatIndentTwips(value: number): string {
   return `${(value / 20).toFixed(value % 20 === 0 ? 0 : 1)} pt`
+}
+
+/**
+ * 把稳定列表语义转换成 toolbar 摘要文案。
+ */
+function readParagraphListFormattingToken(value: FormattingStateValue<ParagraphList | null>): string {
+  if (value.mixed) {
+    return '混合'
+  }
+
+  if (value.value === undefined || value.value === null) {
+    return '无'
+  }
+
+  return `${value.value.numberingId} / L${value.value.level}`
 }

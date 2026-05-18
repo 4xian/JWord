@@ -6,6 +6,8 @@
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-3---输入与基础编辑。
  */
 
+import type { ParagraphList } from './types'
+
 /** Gate 3 当前最小段落对齐值。 */
 export type ParagraphAlignment = 'left' | 'center' | 'right' | 'justify'
 
@@ -15,6 +17,8 @@ export type BooleanFormattingPropertyKey =
   | 'italic'
   | 'underline'
   | 'strike'
+  | 'superscript'
+  | 'subscript'
 
 /** toolbar 读取单个格式值时使用的统一形状。 */
 export interface FormattingStateValue<Value> {
@@ -28,6 +32,8 @@ export interface RunFormattingState {
   readonly italic: FormattingStateValue<boolean>
   readonly underline: FormattingStateValue<boolean>
   readonly strike: FormattingStateValue<boolean>
+  readonly superscript: FormattingStateValue<boolean>
+  readonly subscript: FormattingStateValue<boolean>
   readonly fontFamily: FormattingStateValue<string>
   readonly fontSizeTwips: FormattingStateValue<number>
   readonly color: FormattingStateValue<string>
@@ -37,7 +43,14 @@ export interface RunFormattingState {
 /** 当前选区聚合出的段落级格式状态。 */
 export interface ParagraphFormattingState {
   readonly alignment: FormattingStateValue<ParagraphAlignment>
+  readonly lineHeight: FormattingStateValue<number>
   readonly indentLeftTwips: FormattingStateValue<number>
+  readonly spacingBeforeTwips: FormattingStateValue<number>
+  readonly spacingAfterTwips: FormattingStateValue<number>
+  readonly firstLineIndentTwips: FormattingStateValue<number>
+  readonly hangingIndentTwips: FormattingStateValue<number>
+  readonly styleId: FormattingStateValue<string | null>
+  readonly list: FormattingStateValue<ParagraphList | null>
 }
 
 /** toolbar 第一版需要的最小选区格式状态。 */
@@ -50,7 +63,9 @@ const BOOLEAN_FORMATTING_PROPERTY_KEYS = new Set<BooleanFormattingPropertyKey>([
   'bold',
   'italic',
   'underline',
-  'strike'
+  'strike',
+  'superscript',
+  'subscript'
 ])
 
 /**

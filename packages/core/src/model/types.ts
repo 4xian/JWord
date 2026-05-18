@@ -55,6 +55,7 @@ export interface Paragraph {
   readonly kind: 'paragraph'
   readonly id: string
   readonly properties?: ModelProperties
+  readonly styleId?: string
   readonly list?: ParagraphList
   readonly tabs?: readonly number[]
   readonly runs: readonly Run[]
@@ -101,7 +102,7 @@ export interface ImageInline {
   readonly kind: 'image'
   readonly resourceId: string
   readonly alt?: string
-  readonly display?: 'inline' | 'block'
+  readonly display?: 'inline'
   readonly widthTwips?: number
   readonly heightTwips?: number
 }

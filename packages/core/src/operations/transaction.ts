@@ -158,13 +158,12 @@ export interface DeleteResourceOperation extends OperationBase<'deleteResource'>
   readonly resourceId: string
 }
 
-/** 在当前文本位置插入图片，支持 inline 与 image-only paragraph 两种第一版模式。 */
+/** 在当前文本位置插入图片。 */
 export interface InsertImageOperation extends OperationBase<'insertImage'> {
   readonly at: TextPosition
   readonly imageRunId: string
   readonly trailingRunId?: string
-  readonly blockId?: string
-  readonly mode: 'inline' | 'block'
+  readonly mode: 'inline'
   readonly image: ImageInline
 }
 

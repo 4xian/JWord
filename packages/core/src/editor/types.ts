@@ -7,6 +7,7 @@
  */
 import type { CanvasLike, createCanvasPool } from '../canvas/pool'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
+import type { ParagraphList } from '../model/types'
 import type { HistoryOperationResult } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
 import type { DocumentLayout, LayoutBox, LayoutOptions, LayoutRect } from '../layout/runtime'
@@ -353,6 +354,22 @@ export interface Editor {
   toggleStrike(): void
 
   /**
+   * 切换当前选择区的上标状态。
+   *
+   * @remarks
+   * 启用时会清掉同一目标上的下标属性，保持 run format 互斥语义。
+   */
+  toggleSuperscript(): void
+
+  /**
+   * 切换当前选择区的下标状态。
+   *
+   * @remarks
+   * 启用时会清掉同一目标上的上标属性，保持 run format 互斥语义。
+   */
+  toggleSubscript(): void
+
+  /**
    * 设置当前选择区的字体名称。
    *
    * @param value 目标字体名称。
@@ -386,6 +403,55 @@ export interface Editor {
    * @param value 目标段落对齐值。
    */
   setParagraphAlignment(value: ParagraphAlignment): void
+
+  /**
+   * 设置当前选择区段落的行距。
+   *
+   * @param value 目标行距值。
+   */
+  setParagraphLineHeight(value: number): void
+
+  /**
+   * 设置当前选择区段落的段前距。
+   *
+   * @param value 目标段前距 twips。
+   */
+  setParagraphSpacingBefore(value: number): void
+
+  /**
+   * 设置当前选择区段落的段后距。
+   *
+   * @param value 目标段后距 twips。
+   */
+  setParagraphSpacingAfter(value: number): void
+
+  /**
+   * 设置当前选择区段落的首行缩进。
+   *
+   * @param value 目标首行缩进 twips。
+   */
+  setParagraphFirstLineIndent(value: number): void
+
+  /**
+   * 设置当前选择区段落的悬挂缩进。
+   *
+   * @param value 目标悬挂缩进 twips。
+   */
+  setParagraphHangingIndent(value: number): void
+
+  /**
+   * 设置当前选择区段落的稳定样式语义。
+   *
+   * @param value 目标样式标识，例如 Heading1/Heading2/Heading3。
+   */
+  setParagraphStyle(value: string): void
+
+  /**
+   * 设置当前选择区段落的稳定列表语义。
+   *
+   * @param value 目标列表语义，包含 numberingId 与 level。
+   */
+  setParagraphList(value: ParagraphList): void
 
   /**
    * 按 twips 增量调整当前选择区段落缩进。

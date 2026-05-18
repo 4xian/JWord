@@ -29,7 +29,7 @@ interface LargeFixtureDoubleClickPlan {
   readonly targetGraphemeIndex: number
 }
 
-interface AlphaChineseDoubleClickTarget {
+interface AlphaChineseDoubleClickProbe {
   readonly clientX: number
   readonly clientY: number
   readonly expectedStartGraphemeIndex: number
@@ -173,22 +173,24 @@ test('Gate 3 runtime pointer selection supports click drag and double click on t
   await expect.poll(() => readSelectionSummary(page)).toContain('6→13')
 })
 
-test('Gate 3 runtime double click keeps Chinese selection local to the hit grapheme on the real canvas', async ({ page }) => {
+test('Gate 3 runtime double click expands Chinese selection by the real hit bias on the real canvas', async ({ page }) => {
   await page.goto('/')
   await waitForGate3AlphaReady(page)
 
-  const chineseTarget = await readAlphaChineseDoubleClickTarget(page)
+  const chineseProbes = await readAlphaChineseDoubleClickProbes(page)
 
-  await page.mouse.dblclick(chineseTarget.clientX, chineseTarget.clientY)
+  for (const probe of chineseProbes) {
+    await page.mouse.dblclick(probe.clientX, probe.clientY)
 
-  await expect.poll(async () => {
-    const snapshot = await readResolvedSelectionSnapshot(page)
+    await expect.poll(async () => {
+      const snapshot = await readResolvedSelectionSnapshot(page)
 
-    return snapshot.range
-  }).toEqual({
-    startGraphemeIndex: chineseTarget.expectedStartGraphemeIndex,
-    endGraphemeIndex: chineseTarget.expectedEndGraphemeIndex
-  })
+      return snapshot.range
+    }).toEqual({
+      startGraphemeIndex: probe.expectedStartGraphemeIndex,
+      endGraphemeIndex: probe.expectedEndGraphemeIndex
+    })
+  }
 })
 
 test('Gate 3 runtime keeps keyboard Enter and select-all working after clicking page whitespace', async ({ page }) => {
@@ -714,15 +716,54 @@ async function readLargeFixtureDoubleClickPlan(page: Page): Promise<LargeFixture
   })
 }
 
-async function readAlphaChineseDoubleClickTarget(page: Page): Promise<AlphaChineseDoubleClickTarget> {
-  const targetGraphemeIndex = 22
-  const point = await readClientPointForGrapheme(page, targetGraphemeIndex)
+async function readAlphaChineseDoubleClickProbes(page: Page): Promise<readonly AlphaChineseDoubleClickProbe[]> {
+  return page.evaluate(() => {
+    const targetGraphemeIndex = 22
+    const demo = window.__jwordDemo
+    const pageBox = demo?.editor.getLayout().pages[0]
+    const pageElement = document.querySelector<HTMLElement>('[data-jword-page="0"]')
+    const fragmentMatch = pageBox?.lines
+      .flatMap((line) => line.fragments.map((fragment) => ({
+        line,
+        fragment
+      })))
+      .find(({ fragment }) => {
+        return targetGraphemeIndex >= fragment.start.graphemeIndex
+          && targetGraphemeIndex < fragment.end.graphemeIndex
+      })
 
-  return {
-    ...point,
-    expectedStartGraphemeIndex: targetGraphemeIndex,
-    expectedEndGraphemeIndex: targetGraphemeIndex + 1
-  }
+    if (demo === undefined || pageBox === undefined || pageElement === null || fragmentMatch === undefined) {
+      throw new Error('缺少中文双击偏移探针所需的布局或 DOM')
+    }
+
+    const rect = pageElement.getBoundingClientRect()
+    const scaleX = rect.width / pageBox.width
+    const scaleY = rect.height / pageBox.height
+    const relativeIndex = targetGraphemeIndex - fragmentMatch.fragment.start.graphemeIndex
+    const graphemeStart = fragmentMatch.fragment.advanceTwips[relativeIndex] ?? 0
+    const graphemeEnd = fragmentMatch.fragment.advanceTwips[relativeIndex + 1] ?? fragmentMatch.fragment.width
+    const toProbe = (
+      ratio: number,
+      expectedStartGraphemeIndex: number,
+      expectedEndGraphemeIndex: number
+    ): AlphaChineseDoubleClickProbe => {
+      const localX = fragmentMatch.fragment.x - pageBox.x + graphemeStart + ((graphemeEnd - graphemeStart) * ratio)
+      const localY = fragmentMatch.line.y - pageBox.y + fragmentMatch.line.height * 0.5
+
+      return {
+        clientX: Math.round(rect.left + localX * scaleX),
+        clientY: Math.round(rect.top + localY * scaleY),
+        expectedStartGraphemeIndex,
+        expectedEndGraphemeIndex
+      }
+    }
+
+    return [
+      toProbe(0.5, targetGraphemeIndex, targetGraphemeIndex + 1),
+      toProbe(0.1, targetGraphemeIndex - 1, targetGraphemeIndex + 1),
+      toProbe(0.9, targetGraphemeIndex, targetGraphemeIndex + 2)
+    ]
+  })
 }
 
 async function readResolvedSelectionSnapshot(page: Page): Promise<ResolvedSelectionSnapshot> {

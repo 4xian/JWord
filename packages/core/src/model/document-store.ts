@@ -736,7 +736,7 @@ function projectInlineFromJson(value: unknown): Inline {
         kind: 'image',
         resourceId: value.resourceId,
         ...(typeof value.alt === 'string' ? { alt: value.alt } : {}),
-        ...(value.display === 'inline' || value.display === 'block' ? { display: value.display } : {}),
+        ...(value.display === 'inline' ? { display: value.display } : {}),
         ...(typeof value.widthTwips === 'number' ? { widthTwips: value.widthTwips } : {}),
         ...(typeof value.heightTwips === 'number' ? { heightTwips: value.heightTwips } : {})
       }

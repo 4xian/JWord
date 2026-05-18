@@ -12,7 +12,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildDeleteSelectedImageCommand,
-  buildInsertBlockImageCommand,
   buildInsertInlineImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
@@ -154,7 +153,6 @@ describe('image command builders', () => {
       sectionId: 'section-1',
       blockId: 'paragraph-1',
       runId: imageRunId,
-      mode: 'inline',
       image: {
         resourceId: 'image-inline-1',
         alt: '示意图'
@@ -248,7 +246,7 @@ describe('image command builders', () => {
     editor.destroy()
   })
 
-  it('replaces resizes and deletes the selected block image through executeCommand', () => {
+  it('replaces resizes and deletes the selected inline image through executeCommand', () => {
     const oldResource: Resource = {
       kind: 'resource',
       id: 'image-old',
@@ -270,46 +268,34 @@ describe('image command builders', () => {
       status: 'success'
     }
     const editor = createEditor({
-      initialText: '',
+      initialText: 'abcd',
       resources: [oldResource]
     })
-
-    editor.executeCommand({
-      name: 'seed-image-block',
-      operations: [
-        {
-          kind: 'insertBlock',
-          sectionId: 'section-1',
-          placement: {
-            kind: 'append'
-          },
-          block: {
-            kind: 'paragraph',
-            id: 'paragraph-image',
-            runs: [
-              {
-                kind: 'run',
-                id: 'run-image',
-                inlines: [
-                  {
-                    kind: 'image',
-                    resourceId: 'image-old',
-                    display: 'block',
-                    widthTwips: 1800,
-                    heightTwips: 1200
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      ]
+    const textAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 2
     })
+    const textSelection = createSelectionState(textAnchor, textAnchor)
+    const insertCommand = buildInsertInlineImageCommand(editor.getProjection(), textSelection, oldResource, {
+      widthTwips: 1800,
+      heightTwips: 1200
+    })
+
+    editor.executeCommand(insertCommand!)
+
+    const insertedParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+    const imageRunId = insertedParagraph?.kind === 'paragraph'
+      ? insertedParagraph.runs[1]?.id
+      : undefined
+
+    expect(imageRunId).toBeDefined()
 
     const imageAnchor = editor.createTextAnchor({
       sectionId: 'section-1',
-      blockId: 'paragraph-image',
-      runId: 'run-image',
+      blockId: 'paragraph-1',
+      runId: imageRunId!,
       graphemeIndex: 0
     })
     const imageSelection = createSelectionState(imageAnchor, imageAnchor)
@@ -324,7 +310,7 @@ describe('image command builders', () => {
         },
         {
           kind: 'replaceImageResource',
-          runId: 'run-image',
+          runId: imageRunId,
           resourceId: 'image-new'
         },
         {
@@ -335,26 +321,20 @@ describe('image command builders', () => {
     })
     editor.executeCommand(replaceCommand!)
 
-    let imageParagraph = editor.getProjection().document.sections[0]?.blocks.find((block) => block.id === 'paragraph-image')
+    let imageParagraph = editor.getProjection().document.sections[0]?.blocks[0]
 
     expect(imageParagraph?.kind).toBe('paragraph')
     if (imageParagraph?.kind !== 'paragraph') {
-      throw new Error('expected image paragraph block')
+      throw new Error('expected inline image paragraph')
     }
 
-    expect(imageParagraph.runs).toEqual([
+    expect(imageParagraph.runs[1]?.inlines).toEqual([
       {
-        kind: 'run',
-        id: 'run-image',
-        inlines: [
-          {
-            kind: 'image',
-            resourceId: 'image-new',
-            display: 'block',
-            widthTwips: 1800,
-            heightTwips: 1200
-          }
-        ]
+        kind: 'image',
+        resourceId: 'image-new',
+        display: 'inline',
+        widthTwips: 1800,
+        heightTwips: 1200
       }
     ])
     expect(editor.getProjection().document.resources).toEqual([newResource])
@@ -369,7 +349,7 @@ describe('image command builders', () => {
       operations: [
         {
           kind: 'resizeImage',
-          runId: 'run-image',
+          runId: imageRunId,
           widthTwips: 2400,
           heightTwips: 1600
         }
@@ -377,18 +357,18 @@ describe('image command builders', () => {
     })
     editor.executeCommand(resizeCommand!)
 
-    imageParagraph = editor.getProjection().document.sections[0]?.blocks.find((block) => block.id === 'paragraph-image')
+    imageParagraph = editor.getProjection().document.sections[0]?.blocks[0]
 
     expect(imageParagraph?.kind).toBe('paragraph')
     if (imageParagraph?.kind !== 'paragraph') {
-      throw new Error('expected resized image paragraph block')
+      throw new Error('expected resized inline image paragraph')
     }
 
-    expect(imageParagraph.runs[0]?.inlines).toEqual([
+    expect(imageParagraph.runs[1]?.inlines).toEqual([
       {
         kind: 'image',
         resourceId: 'image-new',
-        display: 'block',
+        display: 'inline',
         widthTwips: 2400,
         heightTwips: 1600
       }
@@ -401,7 +381,7 @@ describe('image command builders', () => {
       operations: [
         {
           kind: 'deleteImage',
-          runId: 'run-image'
+          runId: imageRunId
         },
         {
           kind: 'deleteResource',
@@ -411,91 +391,27 @@ describe('image command builders', () => {
     })
     editor.executeCommand(deleteCommand!)
 
-    expect(editor.getProjection().document.sections[0]?.blocks.map((block) => block.id)).toEqual(['paragraph-1'])
-    expect(editor.getProjection().document.resources ?? []).toEqual([])
-
-    editor.destroy()
-  })
-
-  it('inserts a block image through executeCommand as an image-only paragraph', () => {
-    const editor = createEditor({ initialText: '段落' })
-    const anchor = editor.createTextAnchor({
-      sectionId: 'section-1',
-      blockId: 'paragraph-1',
-      runId: 'run-1',
-      graphemeIndex: 2
-    })
-    const selection = createSelectionState(anchor, anchor)
-    const resource: Resource = {
-      kind: 'resource',
-      id: 'image-block-1',
-      mime: 'image/png',
-      source: {
-        kind: 'dataUrl',
-        url: 'data:image/png;base64,CCCC'
-      },
-      status: 'success'
-    }
-    const command = buildInsertBlockImageCommand(editor.getProjection(), selection, resource, {
-      alt: '块图',
-      widthTwips: 1920,
-      heightTwips: 1440
-    })
-
-    expect(command?.operations).toEqual([
-      {
-        kind: 'upsertResource',
-        resource
-      },
-      {
-        kind: 'insertImage',
-        at: {
-          sectionId: 'section-1',
-          blockId: 'paragraph-1',
-          runId: 'run-1',
-          graphemeIndex: 2
-        },
-        imageRunId: expect.any(String),
-        blockId: expect.any(String),
-        mode: 'block',
-        image: {
-          kind: 'image',
-          resourceId: 'image-block-1',
-          alt: '块图',
-          display: 'block',
-          widthTwips: 1920,
-          heightTwips: 1440
-        }
-      }
-    ])
-
-    editor.executeCommand(command!)
-
-    const blocks = editor.getProjection().document.sections[0]?.blocks
-    const imageParagraph = blocks?.[1]
-
-    expect(blocks?.map((block) => block.id)).toEqual(['paragraph-1', expect.any(String)])
+    imageParagraph = editor.getProjection().document.sections[0]?.blocks[0]
     expect(imageParagraph?.kind).toBe('paragraph')
     if (imageParagraph?.kind !== 'paragraph') {
-      throw new Error('expected block image paragraph')
+      throw new Error('expected paragraph after deleting inline image')
     }
 
-    expect(imageParagraph.runs).toEqual([
-      {
-        kind: 'run',
-        id: expect.any(String),
-        inlines: [
-          {
-            kind: 'image',
-            resourceId: 'image-block-1',
-            alt: '块图',
-            display: 'block',
-            widthTwips: 1920,
-            heightTwips: 1440
-          }
-        ]
-      }
+    expect(imageParagraph.runs.map((run) => run.inlines)).toEqual([
+      [
+        {
+          kind: 'text',
+          text: 'ab'
+        }
+      ],
+      [
+        {
+          kind: 'text',
+          text: 'cd'
+        }
+      ]
     ])
+    expect(editor.getProjection().document.resources ?? []).toEqual([])
 
     editor.destroy()
   })
