@@ -12,7 +12,7 @@ import type { DocumentLayout, LayoutRect } from '../layout/runtime'
 import { isSelectionCollapsed } from '../model/selection'
 import type { SelectionState } from '../model/selection'
 import { CARET_BLINK_INTERVAL_MS, DEFERRED_DOCUMENT_RENDER_DELAY_MS, DEFERRED_TEXT_MIRROR_SYNC_DELAY_MS } from './constants'
-import { syncHiddenTextareaPosition } from './dom'
+import { focusHiddenTextarea, syncHiddenTextareaPosition } from './dom'
 import { JWordEditorLayoutRuntime } from './layout-runtime'
 import { createCanvasElement, mergePageIndexes, renderPointerSelectionCanvas, resolveCanvasPixelRatio } from './rendering'
 import { readProjectionPlainText } from './text-runtime'
@@ -346,7 +346,7 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
     mountedDom.pointerState.paintedPageIndexes = []
     this.syncMountedAssistiveDom(this.cachedLayout ?? this.ensureCurrentLayout())
     this.emitSelectionChange()
-    mountedDom.hiddenTextarea.focus()
+    focusHiddenTextarea(mountedDom)
   }
 
   protected scheduleDeferredPointerSelectionFinalize(delayMs = 0): void {

@@ -9,12 +9,14 @@
 import {
   buildDeleteSelectedImageCommand,
   buildInsertInlineImageCommand,
+  buildMoveSelectedImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
   buildSetSelectedImageRotationCommand,
   createSelectionState,
   resolveSelectedImageTarget,
   type Command,
+  type Editor,
   type Paragraph,
   type Resource,
   type Run,
@@ -103,6 +105,28 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
         '当前图片旋转角度未变化，或当前选区未命中可旋转的图片。',
         input.rotationDegrees === 0 ? '已重置图片旋转角度。' : '已更新图片旋转角度。'
       )
+    },
+    moveSelectedImage(input) {
+      const command = buildMoveSelectedImageCommand(
+        input.projection,
+        input.selection,
+        input.dropSelection
+      )
+
+      if (command === null) {
+        return {
+          kind: 'deferred',
+          message: '当前图片未移动，或当前拖拽落点不可用。'
+        }
+      }
+
+      input.editor.executeCommand(command)
+      syncMovedImageSelection(input.editor, command)
+
+      return {
+        kind: 'applied',
+        message: '已更新图片位置。'
+      }
     },
     deleteSelectedImage(input) {
       const command = buildDeleteSelectedImageCommand(input.projection, input.selection)
@@ -224,9 +248,27 @@ function readInlineImageInsertionContext(
   }
 }
 
+/** 把移动后的新图片 run 重新设为当前选中项。 */
+function syncMovedImageSelection(editor: Editor, command: Command): void {
+  const operation = command.operations.find(isInlineImageInsertOperation)
+
+  if (operation === undefined) {
+    return
+  }
+
+  const anchor = editor.createTextAnchor({
+    sectionId: operation.at.sectionId,
+    blockId: operation.at.blockId,
+    runId: operation.imageRunId,
+    graphemeIndex: 0
+  })
+
+  editor.setSelection(createSelectionState(anchor, anchor))
+}
+
 /** 基于 editor facade 创建折叠 selectionAfter。 */
 function createCollapsedSelectionAfter(
-  request: JWordMediaInsertRequest,
+  request: Pick<JWordMediaInsertRequest, 'editor'>,
   input: Readonly<{
     sectionId: string
     blockId: string

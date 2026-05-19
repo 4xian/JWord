@@ -198,6 +198,15 @@ export interface JWordMediaCommandAdapter {
       readonly rotationDegrees: number
     }
   ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
+  moveSelectedImage?(
+    input: {
+      readonly editor: Editor
+      readonly projection: DocumentProjection
+      readonly selection: SelectionState | null
+      readonly target: JWordSelectedImageTarget
+      readonly dropSelection: SelectionState
+    }
+  ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
   deleteSelectedImage?(
     input: {
       readonly editor: Editor

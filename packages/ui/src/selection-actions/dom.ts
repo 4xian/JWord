@@ -30,8 +30,8 @@ export function createSelectionActionsDom(host: HTMLElement): SelectionActionsDo
     formatControls.italic,
     formatControls.underline,
     formatControls.strike,
-    createColorLabel('文字颜色', 'text-color', formatControls.textColor),
-    createColorLabel('背景色', 'background-color', formatControls.backgroundColor)
+    createColorLabel('文字颜色', 'text-color', 'textColor', formatControls.textColor),
+    createColorLabel('背景色', 'background-color', 'backgroundColor', formatControls.backgroundColor)
   )
   floatingToolbar.append(floatingBar)
 
@@ -83,6 +83,8 @@ export function renderSelectionActionsDom(dom: SelectionActionsDom, state: Selec
   dom.formatControls.backgroundColor.disabled = !state.formatEnabled
   dom.formatControls.textColor.value = state.textColorValue
   dom.formatControls.backgroundColor.value = state.backgroundColorValue
+  syncColorControl(dom.formatControls.textColor, state.textColorValue)
+  syncColorControl(dom.formatControls.backgroundColor, state.backgroundColorValue)
 
   dom.contextControls.cut.disabled = state.cutDisabled
   dom.contextControls.copy.disabled = state.copyDisabled
@@ -153,15 +155,23 @@ function createColorInput(actionId: string, ariaLabel: string, initialValue: str
 }
 
 /** 创建浮动工具栏的颜色包装。 */
-function createColorLabel(ariaLabel: string, tone: string, input: HTMLInputElement): HTMLLabelElement {
+function createColorLabel(
+  ariaLabel: string,
+  tone: string,
+  iconName: 'textColor' | 'backgroundColor',
+  input: HTMLInputElement
+): HTMLLabelElement {
   const label = document.createElement('label')
-  const swatch = document.createElement('span')
+  const visual = document.createElement('span')
+  const indicator = document.createElement('span')
 
   label.className = 'jw-selection-toolbar__color'
   label.setAttribute('data-jword-color-tone', tone)
   label.setAttribute('aria-label', ariaLabel)
-  swatch.className = 'jw-selection-toolbar__color-swatch'
-  label.append(swatch, input)
+  visual.className = 'jw-selection-toolbar__color-visual'
+  indicator.className = 'jw-selection-toolbar__color-indicator'
+  visual.append(createToolbarIcon(iconName), indicator)
+  label.append(visual, input)
 
   return label
 }
@@ -212,4 +222,10 @@ function syncPosition(target: HTMLElement, position: SelectionActionPosition | n
 function setToggleState(target: HTMLButtonElement, enabled: boolean, pressed: 'true' | 'false' | 'mixed'): void {
   target.disabled = !enabled
   target.setAttribute('aria-pressed', pressed)
+}
+
+/** 同步颜色控件当前色值到可视色条。 */
+function syncColorControl(control: HTMLInputElement, value: string): void {
+  control.parentElement?.style.setProperty('--jw-selection-toolbar-color', value)
+  control.parentElement?.setAttribute('data-jword-disabled', String(control.disabled))
 }

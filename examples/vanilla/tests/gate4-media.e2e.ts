@@ -151,7 +151,59 @@ test('Gate 4 inline image keeps fixture natural size instead of layout fallback 
   })
 })
 
-test('Gate 4 image overlay exposes six resize handles and supports rotate reset delete plus drag ghost', async ({ page }) => {
+test('Gate 4 image flow keeps editor host scroll stable when refocusing hidden input from a far offscreen textarea', async ({ page }) => {
+  await page.goto('/')
+  await waitForMediaDemoReady(page)
+  await prepareInsertSelection(page)
+  await insertFixtureByFile(page)
+
+  const hiddenTextareaTop = await page.evaluate(() => {
+    const textarea = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
+
+    if (textarea === null) {
+      throw new Error('缺少隐藏输入框')
+    }
+
+    textarea.style.top = '3300px'
+    textarea.style.left = '240px'
+    window.__jwordDemo?.editor.blur()
+
+    return Number.parseFloat(textarea?.style.top ?? '0')
+  })
+
+  expect(hiddenTextareaTop).toBeGreaterThan(2000)
+  await expect.poll(() => {
+    return page.evaluate(() => document.querySelector<HTMLElement>('#jword-editor')?.scrollTop ?? -1)
+  }).toBe(0)
+
+  const editorBox = await page.locator('#jword-editor').boundingBox()
+
+  expect(editorBox).not.toBeNull()
+  if (editorBox === null) {
+    throw new Error('缺少编辑器宿主')
+  }
+
+  await page.mouse.click(editorBox.x + 320, editorBox.y + 180)
+
+  await expect.poll(() => {
+    return page.evaluate(() => {
+      const host = document.querySelector<HTMLElement>('#jword-editor')
+      const shell = document.querySelector<HTMLElement>('[data-jword-editor]')
+
+      return {
+        hostScrollTop: host?.scrollTop ?? -1,
+        shellTop: Math.round(shell?.getBoundingClientRect().top ?? -9999),
+        hostTop: Math.round(host?.getBoundingClientRect().top ?? -9999)
+      }
+    })
+  }).toEqual({
+    hostScrollTop: 0,
+    shellTop: Math.round(editorBox.y) + 1,
+    hostTop: Math.round(editorBox.y)
+  })
+})
+
+test('Gate 4 image overlay exposes eight resize handles and supports rotate reset delete plus drag move', async ({ page }) => {
   await page.goto('/')
   await waitForMediaDemoReady(page)
   await prepareInsertSelection(page)
@@ -172,13 +224,23 @@ test('Gate 4 image overlay exposes six resize handles and supports rotate reset 
   const selection = page.locator('[data-jword-image-selection="true"]')
   const toolbar = page.locator('[data-jword-image-toolbar="true"]')
   const bottomRightHandle = page.locator('[data-jword-image-resize-handle="bottom-right"]')
+  const middleRightHandle = page.locator('[data-jword-image-resize-handle="middle-right"]')
+  const topCenterHandle = page.locator('[data-jword-image-resize-handle="top-center"]')
+  const dropCaret = page.locator('[data-jword-image-drop-caret="true"]')
   const rotateButton = page.locator('[data-jword-image-toolbar-action="rotate"]')
   const resetButton = page.locator('[data-jword-image-toolbar-action="reset"]')
   const deleteButton = page.locator('[data-jword-image-toolbar-action="delete"]')
 
   await expect(selection).toBeVisible()
   await expect(toolbar).toBeVisible()
-  await expect(page.locator('[data-jword-image-resize-handle]')).toHaveCount(6)
+  await expect(page.locator('[data-jword-image-resize-handle]')).toHaveCount(8)
+
+  const initialSelectionBox = await selection.boundingBox()
+
+  expect(initialSelectionBox).not.toBeNull()
+  if (initialSelectionBox === null) {
+    throw new Error('缺少初始图片选中 overlay')
+  }
 
   const handleBox = await bottomRightHandle.boundingBox()
 
@@ -189,27 +251,180 @@ test('Gate 4 image overlay exposes six resize handles and supports rotate reset 
 
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
   await page.mouse.down()
-  await page.mouse.move(handleBox.x + handleBox.width / 2 + 36, handleBox.y + handleBox.height / 2 + 18)
+  const cornerTarget = {
+    x: handleBox.x + handleBox.width / 2 + 36,
+    y: handleBox.y + handleBox.height / 2 + 18
+  }
+  await page.mouse.move(cornerTarget.x, cornerTarget.y)
   await page.mouse.up()
 
-  await expect.poll(() => {
-    return readProjectionImage(page, resourceId)
-  }).toEqual({
-    display: 'inline',
-    widthTwips: 4140,
-    heightTwips: 2070,
-    rotationDegrees: 0
-  })
+  const cornerSelectionBox = await selection.boundingBox()
+
+  expect(cornerSelectionBox).not.toBeNull()
+  if (cornerSelectionBox === null) {
+    throw new Error('四角缩放后缺少 overlay')
+  }
+
+  expect(Math.abs((cornerSelectionBox.x + cornerSelectionBox.width) - cornerTarget.x)).toBeLessThanOrEqual(8)
+  expect(Math.abs((cornerSelectionBox.y + cornerSelectionBox.height) - cornerTarget.y)).toBeLessThanOrEqual(8)
 
   await rotateButton.click()
   await expect.poll(() => {
     return readProjectionImage(page, resourceId)
   }).toEqual({
     display: 'inline',
-    widthTwips: 4140,
-    heightTwips: 2070,
+    widthTwips: await page.evaluate((targetResourceId) => {
+      const projection = window.__jwordDemo?.editor.getProjection()
+      const image = projection?.document.sections
+        .flatMap((section) => section.blocks)
+        .filter((block) => block.kind === 'paragraph')
+        .flatMap((block) => block.runs)
+        .flatMap((run) => run.inlines)
+        .find((inline): inline is { kind: 'image', resourceId: string, widthTwips?: number, heightTwips?: number } =>
+          inline.kind === 'image' && inline.resourceId === targetResourceId)
+
+      return image?.widthTwips ?? null
+    }, resourceId),
+    heightTwips: await page.evaluate((targetResourceId) => {
+      const projection = window.__jwordDemo?.editor.getProjection()
+      const image = projection?.document.sections
+        .flatMap((section) => section.blocks)
+        .filter((block) => block.kind === 'paragraph')
+        .flatMap((block) => block.runs)
+        .flatMap((run) => run.inlines)
+        .find((inline): inline is { kind: 'image', resourceId: string, widthTwips?: number, heightTwips?: number } =>
+          inline.kind === 'image' && inline.resourceId === targetResourceId)
+
+      return image?.heightTwips ?? null
+    }, resourceId),
     rotationDegrees: 90
   })
+
+  await resetButton.click()
+  await expect.poll(() => {
+    return readProjectionImage(page, resourceId)
+  }).toEqual({
+    display: 'inline',
+    widthTwips: FIXTURE_WIDTH_TWIPS,
+    heightTwips: FIXTURE_HEIGHT_TWIPS,
+    rotationDegrees: 0
+  })
+
+  const middleRightHandleBox = await middleRightHandle.boundingBox()
+
+  expect(middleRightHandleBox).not.toBeNull()
+  if (middleRightHandleBox === null) {
+    throw new Error('缺少右侧中间缩放手柄')
+  }
+
+  await page.mouse.move(
+    middleRightHandleBox.x + middleRightHandleBox.width / 2,
+    middleRightHandleBox.y + middleRightHandleBox.height / 2
+  )
+  await page.mouse.down()
+  const rightEdgeTargetX = middleRightHandleBox.x + middleRightHandleBox.width / 2 - 48
+  await page.mouse.move(rightEdgeTargetX, middleRightHandleBox.y + middleRightHandleBox.height / 2)
+  await page.mouse.up()
+
+  const middleShrinkSelectionBox = await selection.boundingBox()
+
+  expect(middleShrinkSelectionBox).not.toBeNull()
+  if (middleShrinkSelectionBox === null) {
+    throw new Error('右侧缩小后缺少 overlay')
+  }
+
+  expect(Math.abs((middleShrinkSelectionBox.x + middleShrinkSelectionBox.width) - rightEdgeTargetX)).toBeLessThanOrEqual(8)
+  expect(Math.abs(middleShrinkSelectionBox.height - initialSelectionBox.height)).toBeLessThanOrEqual(4)
+
+  await expect.poll(() => {
+    return page.evaluate(() => {
+      const layer = document.querySelector<HTMLElement>('.jw-image-selection-layer')
+      const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
+      const overlay = document.querySelector<HTMLElement>('[data-jword-image-selection="true"]')
+
+      return {
+        layerHeight: Number.parseFloat(layer?.style.height ?? '0'),
+        containerHeight: container?.clientHeight ?? 0,
+        overlayWidth: overlay?.getBoundingClientRect().width ?? 0
+      }
+    })
+  }).toMatchObject({
+    layerHeight: await page.evaluate(() => document.querySelector<HTMLElement>('[data-jword-canvas-container]')?.clientHeight ?? 0)
+  })
+
+  const shrunkenSelectionBox = await selection.boundingBox()
+
+  expect(shrunkenSelectionBox).not.toBeNull()
+  if (shrunkenSelectionBox === null) {
+    throw new Error('缩小后缺少图片选中 overlay')
+  }
+
+  expect(shrunkenSelectionBox.width).toBeLessThan(initialSelectionBox.width)
+
+  await resetButton.click()
+  await expect.poll(() => {
+    return readProjectionImage(page, resourceId)
+  }).toEqual({
+    display: 'inline',
+    widthTwips: FIXTURE_WIDTH_TWIPS,
+    heightTwips: FIXTURE_HEIGHT_TWIPS,
+    rotationDegrees: 0
+  })
+
+  await page.mouse.move(
+    middleRightHandleBox.x + middleRightHandleBox.width / 2,
+    middleRightHandleBox.y + middleRightHandleBox.height / 2
+  )
+  await page.mouse.down()
+  const rightExpandTargetX = middleRightHandleBox.x + middleRightHandleBox.width / 2 + 48
+  await page.mouse.move(rightExpandTargetX, middleRightHandleBox.y + middleRightHandleBox.height / 2)
+  await page.mouse.up()
+
+  const middleExpandSelectionBox = await selection.boundingBox()
+
+  expect(middleExpandSelectionBox).not.toBeNull()
+  if (middleExpandSelectionBox === null) {
+    throw new Error('右侧放大后缺少 overlay')
+  }
+
+  expect(Math.abs((middleExpandSelectionBox.x + middleExpandSelectionBox.width) - rightExpandTargetX)).toBeLessThanOrEqual(8)
+  expect(Math.abs(middleExpandSelectionBox.height - initialSelectionBox.height)).toBeLessThanOrEqual(4)
+
+  await resetButton.click()
+  await expect.poll(() => {
+    return readProjectionImage(page, resourceId)
+  }).toEqual({
+    display: 'inline',
+    widthTwips: FIXTURE_WIDTH_TWIPS,
+    heightTwips: FIXTURE_HEIGHT_TWIPS,
+    rotationDegrees: 0
+  })
+
+  const topCenterHandleBox = await topCenterHandle.boundingBox()
+
+  expect(topCenterHandleBox).not.toBeNull()
+  if (topCenterHandleBox === null) {
+    throw new Error('缺少顶部中间缩放手柄')
+  }
+
+  await page.mouse.move(
+    topCenterHandleBox.x + topCenterHandleBox.width / 2,
+    topCenterHandleBox.y + topCenterHandleBox.height / 2
+  )
+  await page.mouse.down()
+  const topEdgeTargetY = topCenterHandleBox.y + topCenterHandleBox.height / 2 + 48
+  await page.mouse.move(topCenterHandleBox.x + topCenterHandleBox.width / 2, topEdgeTargetY)
+
+  const topShrinkSelectionBox = await selection.boundingBox()
+
+  expect(topShrinkSelectionBox).not.toBeNull()
+  if (topShrinkSelectionBox === null) {
+    throw new Error('顶部缩小后缺少 overlay')
+  }
+
+  expect(Math.abs(topShrinkSelectionBox.y - topEdgeTargetY)).toBeLessThanOrEqual(8)
+  expect(Math.abs(topShrinkSelectionBox.width - initialSelectionBox.width)).toBeLessThanOrEqual(4)
+  await page.mouse.up()
 
   await resetButton.click()
   await expect.poll(() => {
@@ -230,10 +445,34 @@ test('Gate 4 image overlay exposes six resize handles and supports rotate reset 
 
   await page.mouse.move(selectionBox.x + selectionBox.width / 2, selectionBox.y + selectionBox.height / 2)
   await page.mouse.down()
-  await page.mouse.move(selectionBox.x + selectionBox.width / 2 + 48, selectionBox.y + selectionBox.height / 2 + 24)
+  const dragTarget = {
+    x: selectionBox.x + selectionBox.width / 2 + 20,
+    y: selectionBox.y + selectionBox.height / 2 + 260
+  }
+  await page.mouse.move(dragTarget.x, dragTarget.y)
   await expect(page.locator('[data-jword-image-drag-ghost="true"]')).toBeVisible()
+  await expect(dropCaret).toBeVisible()
+  await expect.poll(() => {
+    return page.evaluate(() => {
+      const ghost = document.querySelector<HTMLElement>('[data-jword-image-drag-ghost="true"]')
+      const caret = document.querySelector<HTMLElement>('[data-jword-image-drop-caret="true"]')
+      const ghostRect = ghost?.getBoundingClientRect()
+      const caretRect = caret?.getBoundingClientRect()
+
+      return {
+        ghostLeft: Math.round(ghostRect?.left ?? -9999),
+        ghostTop: Math.round(ghostRect?.top ?? -9999),
+        caretLeft: Math.round(caretRect?.left ?? -9999)
+      }
+    })
+  }).toEqual({
+    ghostLeft: Math.round(dragTarget.x),
+    ghostTop: Math.round(dragTarget.y),
+    caretLeft: Math.round(dragTarget.x)
+  })
   await page.mouse.up()
   await expect(page.locator('[data-jword-image-drag-ghost="true"]')).toHaveCount(0)
+  await expect(dropCaret).toHaveCount(0)
 
   await expect.poll(() => {
     return readProjectionImage(page, resourceId)
@@ -243,6 +482,8 @@ test('Gate 4 image overlay exposes six resize handles and supports rotate reset 
     heightTwips: FIXTURE_HEIGHT_TWIPS,
     rotationDegrees: 0
   })
+
+  await expect(selection).toBeVisible()
 
   await deleteButton.click()
 

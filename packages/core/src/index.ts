@@ -39,6 +39,7 @@ export {
   buildDeleteResourceCommand,
   buildDeleteSelectedImageCommand,
   buildInsertInlineImageCommand,
+  buildMoveSelectedImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
   buildSetSelectedImageRotationCommand,

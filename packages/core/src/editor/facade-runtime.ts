@@ -47,7 +47,7 @@ import { collectSelectionTargets } from '../model/selection-targets'
 import type { Command, TextPosition, TransactionMetadata, TransactionResult } from '../operations/transaction'
 import { DOCUMENT_CREATE_ORIGIN, FIXTURE_LOAD_ORIGIN } from './constants'
 import { createCanvasElement } from './rendering'
-import { createHiddenTextareaElement, createLiveRegionElement, createTextMirrorElement } from './dom'
+import { createHiddenTextareaElement, createLiveRegionElement, createTextMirrorElement, focusHiddenTextarea } from './dom'
 import { findRunText, readCurrentDocumentId, replaceStoreDocument } from './document'
 import { JWordEditorState } from './state'
 import { resolveCommandDirtyRange } from './rendering'
@@ -593,7 +593,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
       return
     }
 
-    mountedDom.hiddenTextarea.focus()
+    focusHiddenTextarea(mountedDom)
     this.updateInputFocusState(true)
 
     if (this.currentSelection !== null) {

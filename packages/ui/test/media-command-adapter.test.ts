@@ -205,4 +205,93 @@ describe('media command adapter', () => {
 
     editor.destroy()
   })
+
+  test('拖拽图片后通过 adapter 把图片选中态提交到新位置', () => {
+    const editor = createEditor({ initialText: 'abcd' })
+    const adapter = createCoreMediaCommandAdapter()
+    const textAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 2
+    })
+    const textSelection = createSelectionState(textAnchor, textAnchor)
+
+    adapter.insertInlineImage!({
+      editor,
+      projection: editor.getProjection(),
+      selection: textSelection,
+      resource: {
+        ...INLINE_RESOURCE,
+        metadata: {
+          widthTwips: 1800,
+          heightTwips: 1200
+        }
+      }
+    })
+
+    const paragraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+    expect(paragraph?.kind).toBe('paragraph')
+    if (paragraph?.kind !== 'paragraph') {
+      throw new Error('expected paragraph block')
+    }
+
+    const imageRunId = paragraph.runs[1]?.id
+    const trailingRunId = paragraph.runs[2]?.id
+
+    expect(imageRunId).toBeDefined()
+    expect(trailingRunId).toBeDefined()
+
+    const imageAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: imageRunId!,
+      graphemeIndex: 0
+    })
+    const imageSelection = createSelectionState(imageAnchor, imageAnchor)
+    const target = adapter.resolveSelectedImageTarget!(editor.getProjection(), imageSelection)
+    const dropAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: trailingRunId!,
+      graphemeIndex: 2
+    })
+    const dropSelection = createSelectionState(dropAnchor, dropAnchor)
+
+    const result = adapter.moveSelectedImage!({
+      editor,
+      projection: editor.getProjection(),
+      selection: imageSelection,
+      target: target!,
+      dropSelection
+    })
+
+    expect(result).toEqual({
+      kind: 'applied',
+      message: '已更新图片位置。'
+    })
+    expect(editor.resolveTextPosition(editor.getSelection()!.focus)).toMatchObject({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      graphemeIndex: 0
+    })
+
+    const movedParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+    expect(movedParagraph?.kind).toBe('paragraph')
+    if (movedParagraph?.kind !== 'paragraph') {
+      throw new Error('expected moved paragraph block')
+    }
+
+    expect(movedParagraph.runs[2]?.inlines).toEqual([{
+      kind: 'image',
+      resourceId: 'media-adapter-inline-image',
+      display: 'inline',
+      widthTwips: 1800,
+      heightTwips: 1200
+    }])
+
+    editor.destroy()
+  })
 })

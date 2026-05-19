@@ -85,3 +85,13 @@ export function syncHiddenTextareaPosition(input: Readonly<{
   input.mountedDom.hiddenTextarea.style.left = `${Math.max(0, left)}px`
   input.mountedDom.hiddenTextarea.style.top = `${Math.max(0, top)}px`
 }
+
+export function focusHiddenTextarea(mountedDom: MountedEditorDom): void {
+  try {
+    mountedDom.hiddenTextarea.focus({
+      preventScroll: true
+    })
+  } catch {
+    mountedDom.hiddenTextarea.focus()
+  }
+}

@@ -9,6 +9,7 @@ import type { AnchorRef } from '../model/position'
 import { createSelectionState, isSelectionCollapsed } from '../model/selection'
 import type { SelectionState } from '../model/selection'
 import { POINTER_MULTI_CLICK_GRACE_MS } from './constants'
+import { focusHiddenTextarea } from './dom'
 import { JWordEditorTextEditingRuntime } from './text-editing-runtime'
 import { normalizePlainText, readClipboardData, readEventData, readInputType, isCompositionKeyboardEvent } from './text-runtime'
 import type { PointerPageMetrics } from './types'
@@ -320,7 +321,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
     mountedDom.pointerState.anchor = anchor
     mountedDom.pointerState.pageMetrics = pageMetrics ?? null
     mountedDom.pointerState.paintedPageIndexes = this.selectionPageIndexes
-    mountedDom.hiddenTextarea.focus()
+    focusHiddenTextarea(mountedDom)
     this.commitSelection(createSelectionState(anchor, anchor), {
       source: 'pointer',
       render: false,

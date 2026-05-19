@@ -508,6 +508,45 @@ export function buildSetSelectedImageRotationCommand(
   }
 }
 
+/**
+ * 构造当前选中图片的移动命令。
+ */
+export function buildMoveSelectedImageCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  dropSelection: SelectionState | null
+): Command | null {
+  const target = resolveSelectedImageTarget(projection, selection)
+  const insertion = resolveSelectionInsertionContext(projection, dropSelection)
+
+  if (target === null || insertion === null) {
+    return null
+  }
+
+  const usedRunIds = collectRunIds(projection)
+  const needsTrailingRun = shouldCreateInlineImageTrailingRun(projection, insertion)
+
+  return {
+    name: 'moveImage',
+    operations: [{
+      kind: 'insertImage',
+      at: insertion.at,
+      imageRunId: allocateGeneratedRunId(usedRunIds, insertion.run.id, 'image'),
+      ...(needsTrailingRun
+        ? { trailingRunId: allocateGeneratedRunId(usedRunIds, insertion.run.id, 'tail') }
+        : {}),
+      mode: 'inline',
+      image: {
+        ...target.image,
+        ...(target.image.display === undefined ? { display: 'inline' } : {})
+      }
+    }, {
+      kind: 'deleteImage',
+      runId: target.runId
+    }]
+  }
+}
+
 function buildRunFormattingCommand(
   projection: DocumentProjection,
   selection: SelectionState | null,

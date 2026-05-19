@@ -1,17 +1,20 @@
 /**
- * 职责：为当前选中的图片提供覆盖层、顶部工具栏、六点缩放和拖拽鬼影的最小控制器。
+ * 职责：为当前选中的图片提供覆盖层、顶部工具栏、八点缩放和拖拽鬼影的最小控制器。
  * 边界：只消费 editor facade、layout 和 media command adapter，不改写 selection/right-click 模块，不旁路 core transaction pipeline。
  * 协作模块：create-ui 负责装配生命周期，core-command-adapter 负责尺寸/旋转/删除命令桥接，toolbar icons 负责按钮图标。
- * 性能/安全约束：覆盖层只在已选中图片时存在，DOM 直接挂在 canvas container 内，拖拽只做视觉 ghost，不改变文档位置。
+ * 性能/安全约束：覆盖层只在已选中图片时存在，DOM 直接挂在 canvas container 内，缩放和拖拽统一通过 transaction pipeline 提交。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
  */
 import {
+  createSelectionState,
   cssPxToTwips,
   twipsToCssPx,
   type DocumentLayout,
   type Editor,
   type InlineBox,
-  type LayoutBox
+  type LayoutBox,
+  type LayoutRect,
+  type TextPosition
 } from '@4xian/jword-core'
 import type { DocumentProjection } from '@4xian/jword-core'
 import { createToolbarIcon } from '../toolbar/icons'
@@ -21,6 +24,8 @@ type ResizeHandleId =
   | 'top-left'
   | 'top-center'
   | 'top-right'
+  | 'middle-left'
+  | 'middle-right'
   | 'bottom-left'
   | 'bottom-center'
   | 'bottom-right'
@@ -41,6 +46,7 @@ interface ImageOverlayRect {
   readonly topPx: number
   readonly widthPx: number
   readonly heightPx: number
+  readonly scale: number
 }
 
 interface ImageSelectionSnapshot {
@@ -54,10 +60,12 @@ interface ImageSelectionSnapshot {
 interface ResizeSession {
   readonly target: JWordSelectedImageTarget
   readonly handleId: ResizeHandleId
+  readonly startRect: ImageOverlayRect
   readonly startClientX: number
   readonly startClientY: number
   readonly startWidthTwips: number
   readonly startHeightTwips: number
+  previewRect: ImageOverlayRect
   previewWidthTwips: number
   previewHeightTwips: number
 }
@@ -74,12 +82,20 @@ interface DragGhostSession {
   started: boolean
 }
 
+interface DragDropPreview {
+  readonly anchor: ReturnType<Editor['createTextAnchor']>
+  readonly rect: ImageOverlayRect
+  readonly visualLeftPx: number
+  readonly visualTopPx: number
+}
+
 interface ImageSelectionDom {
   readonly layer: HTMLElement
   readonly selection: HTMLElement
   readonly toolbar: HTMLElement
   readonly ghost: HTMLElement
   readonly ghostImage: HTMLImageElement
+  readonly dropCaret: HTMLElement
   readonly rotateButton: HTMLButtonElement
   readonly resetButton: HTMLButtonElement
   readonly deleteButton: HTMLButtonElement
@@ -90,6 +106,8 @@ const RESIZE_HANDLE_IDS: readonly ResizeHandleId[] = Object.freeze([
   'top-left',
   'top-center',
   'top-right',
+  'middle-left',
+  'middle-right',
   'bottom-left',
   'bottom-center',
   'bottom-right'
@@ -97,7 +115,6 @@ const RESIZE_HANDLE_IDS: readonly ResizeHandleId[] = Object.freeze([
 
 const MIN_IMAGE_SIZE_TWIPS = cssPxToTwips(24)
 const DRAG_GHOST_THRESHOLD_PX = 3
-
 /** 创建图片选中 overlay controller。 */
 export function createImageSelectionController(
   options: CreateImageSelectionControllerOptions
@@ -121,6 +138,7 @@ export function createImageSelectionController(
   let currentSnapshot: ImageSelectionSnapshot | null = null
   let resizeSession: ResizeSession | null = null
   let dragGhostSession: DragGhostSession | null = null
+  let dragDropPreview: DragDropPreview | null = null
 
   /** 读取当前最新图片快照。 */
   function readCurrentSnapshot(): ImageSelectionSnapshot | null {
@@ -161,6 +179,7 @@ export function createImageSelectionController(
 
     if (snapshot === null) {
       resizeSession = null
+      dragDropPreview = null
       hideSelection(dom)
       return
     }
@@ -171,16 +190,19 @@ export function createImageSelectionController(
     const previewHeightTwips = resizeSession?.target.resourceId === snapshot.target.resourceId
       ? resizeSession.previewHeightTwips
       : snapshot.target.heightTwips ?? snapshot.naturalHeightTwips
+    const previewRect = resizeSession?.target.resourceId === snapshot.target.resourceId
+      ? resolveResizePreviewRect(snapshot.rect, resizeSession)
+      : snapshot.rect
     const widthPx = previewWidthTwips === undefined
       ? snapshot.rect.widthPx
-      : twipsToCssPx(previewWidthTwips)
+      : twipsToCssPx(previewWidthTwips, snapshot.rect.scale)
     const heightPx = previewHeightTwips === undefined
       ? snapshot.rect.heightPx
-      : twipsToCssPx(previewHeightTwips)
+      : twipsToCssPx(previewHeightTwips, snapshot.rect.scale)
 
     dom.selection.hidden = false
-    dom.selection.style.left = `${snapshot.rect.leftPx}px`
-    dom.selection.style.top = `${snapshot.rect.topPx}px`
+    dom.selection.style.left = `${previewRect.leftPx}px`
+    dom.selection.style.top = `${previewRect.topPx}px`
     dom.selection.style.width = `${widthPx}px`
     dom.selection.style.height = `${heightPx}px`
     dom.selection.setAttribute('data-jword-image-rotation', String(snapshot.target.rotationDegrees ?? 0))
@@ -195,6 +217,8 @@ export function createImageSelectionController(
     selectionDom.ghost.hidden = true
     selectionDom.ghost.removeAttribute('data-jword-image-drag-ghost')
     selectionDom.ghostImage.removeAttribute('src')
+    selectionDom.dropCaret.hidden = true
+    selectionDom.dropCaret.removeAttribute('data-jword-image-drop-caret')
   }
 
   /** 读取当前执行命令所需的上下文。 */
@@ -340,10 +364,12 @@ export function createImageSelectionController(
     resizeSession = {
       target: snapshot.target,
       handleId,
+      startRect: snapshot.rect,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startWidthTwips: widthTwips,
       startHeightTwips: heightTwips,
+      previewRect: snapshot.rect,
       previewWidthTwips: widthTwips,
       previewHeightTwips: heightTwips
     }
@@ -370,27 +396,35 @@ export function createImageSelectionController(
       rotationDegrees: snapshot.target.rotationDegrees ?? 0,
       started: false
     }
+    dragDropPreview = null
     refresh()
   }
 
   /** 推进缩放预览或拖拽鬼影。 */
-  function handlePointerMove(event: PointerEvent): void {
+  function handlePointerMove(event: PointerEvent | MouseEvent): void {
     if (resizeSession !== null) {
       event.preventDefault()
-      updateResizePreview(resizeSession, event)
+      updateResizePreview(resizeSession, canvasContainer, event)
       refresh()
       return
     }
 
     if (dragGhostSession !== null) {
       event.preventDefault()
-      updateGhostPreview(dom, dragGhostSession, event)
+      updateGhostPreview(dom, canvasContainer, dragGhostSession, event)
+      dragDropPreview = resolveDragDropPreview(
+        options.editor,
+        canvasContainer,
+        dragGhostSession,
+        event
+      )
+      syncDropCaret(dom, dragDropPreview)
       refresh()
     }
   }
 
   /** 在 pointerup 时提交缩放或清理拖拽鬼影。 */
-  async function handlePointerUp(event: PointerEvent): Promise<void> {
+  async function handlePointerUp(event: PointerEvent | MouseEvent): Promise<void> {
     if (resizeSession !== null) {
       event.preventDefault()
       const session = resizeSession
@@ -422,8 +456,37 @@ export function createImageSelectionController(
 
     if (dragGhostSession !== null) {
       event.preventDefault()
+      const session = dragGhostSession
       dragGhostSession = null
+
+      if (session.started) {
+        const snapshot = currentSnapshot
+
+        if (snapshot !== null && options.commands?.moveSelectedImage !== undefined) {
+          const context = readCommandContext(snapshot.target)
+          const dropAnchor = dragDropPreview?.anchor ?? resolvePointerAnchorFromClientPoint(
+            options.editor,
+            canvasContainer,
+            event.clientX,
+            event.clientY
+          )
+
+          if (context !== null && dropAnchor !== null) {
+            await options.commands.moveSelectedImage({
+              editor: options.editor,
+              projection: context.projection,
+              selection: context.selection,
+              target: context.target,
+              dropSelection: createSelectionState(dropAnchor, dropAnchor)
+            })
+          }
+        }
+      }
+
+      dragDropPreview = null
       hideGhost(dom)
+      syncDropCaret(dom, null)
+      options.editor.focus()
       refresh()
     }
   }
@@ -465,7 +528,13 @@ export function createImageSelectionController(
     canvasContainer.ownerDocument.addEventListener('pointermove', (event) => {
       void handlePointerMove(event)
     }, { signal: signalController.signal })
+    canvasContainer.ownerDocument.addEventListener('mousemove', (event) => {
+      void handlePointerMove(event)
+    }, { signal: signalController.signal })
     canvasContainer.ownerDocument.addEventListener('pointerup', (event) => {
+      void handlePointerUp(event)
+    }, { signal: signalController.signal })
+    canvasContainer.ownerDocument.addEventListener('mouseup', (event) => {
       void handlePointerUp(event)
     }, { signal: signalController.signal })
     canvasContainer.addEventListener('scroll', () => {
@@ -481,6 +550,7 @@ export function createImageSelectionController(
       currentSnapshot = null
       resizeSession = null
       dragGhostSession = null
+      dragDropPreview = null
       destroy()
       return
     }
@@ -511,15 +581,18 @@ function createImageSelectionDom(canvasContainer: HTMLElement): ImageSelectionDo
   const toolbar = canvasContainer.ownerDocument.createElement('div')
   const ghost = canvasContainer.ownerDocument.createElement('div')
   const ghostImage = canvasContainer.ownerDocument.createElement('img')
+  const dropCaret = canvasContainer.ownerDocument.createElement('div')
 
   layer.className = 'jw-image-selection-layer'
   selection.className = 'jw-image-selection'
   toolbar.className = 'jw-image-selection__toolbar'
   ghost.className = 'jw-image-selection__ghost'
+  dropCaret.className = 'jw-image-selection__drop-caret'
   selection.setAttribute('data-jword-image-selection', 'true')
   toolbar.setAttribute('data-jword-image-toolbar', 'true')
   selection.hidden = true
   ghost.hidden = true
+  dropCaret.hidden = true
 
   const rotateButton = createImageSelectionToolButton('rotate', '旋转', false)
   const resetButton = createImageSelectionToolButton('reset', '重置', false)
@@ -565,7 +638,7 @@ function createImageSelectionDom(canvasContainer: HTMLElement): ImageSelectionDo
 
   ghostImage.className = 'jw-image-selection__ghost-image'
   ghost.append(ghostImage)
-  layer.append(selection, ghost)
+  layer.append(selection, ghost, dropCaret)
   canvasContainer.append(layer)
 
   return {
@@ -574,6 +647,7 @@ function createImageSelectionDom(canvasContainer: HTMLElement): ImageSelectionDo
     toolbar,
     ghost,
     ghostImage,
+    dropCaret,
     rotateButton,
     resetButton,
     deleteButton,
@@ -600,7 +674,12 @@ function createImageSelectionToolButton(
 }
 
 /** 在拖拽期间更新鬼影位置。 */
-function updateGhostPreview(dom: ImageSelectionDom, session: DragGhostSession, event: PointerEvent): void {
+function updateGhostPreview(
+  dom: ImageSelectionDom,
+  canvasContainer: HTMLElement,
+  session: DragGhostSession,
+  event: PointerEvent | MouseEvent
+): void {
   const deltaX = event.clientX - session.startClientX
   const deltaY = event.clientY - session.startClientY
 
@@ -608,11 +687,13 @@ function updateGhostPreview(dom: ImageSelectionDom, session: DragGhostSession, e
     return
   }
 
+  const pointer = resolveContainerPointer(canvasContainer, event.clientX, event.clientY)
+
   session.started = true
   dom.ghost.hidden = false
   dom.ghost.setAttribute('data-jword-image-drag-ghost', 'true')
-  dom.ghost.style.left = `${session.leftPx + deltaX}px`
-  dom.ghost.style.top = `${session.topPx + deltaY}px`
+  dom.ghost.style.left = `${pointer.x}px`
+  dom.ghost.style.top = `${pointer.y}px`
   dom.ghost.style.width = `${session.widthPx}px`
   dom.ghost.style.height = `${session.heightPx}px`
   dom.ghost.style.transform = `rotate(${session.rotationDegrees}deg)`
@@ -629,40 +710,79 @@ function hideGhost(dom: ImageSelectionDom): void {
   dom.ghostImage.removeAttribute('src')
 }
 
-/** 根据 pointer 位移更新缩放预览。 */
-function updateResizePreview(session: ResizeSession, event: PointerEvent): void {
-  const deltaX = event.clientX - session.startClientX
-  const deltaY = event.clientY - session.startClientY
-  const startWidthPx = twipsToCssPx(session.startWidthTwips)
-  const startHeightPx = twipsToCssPx(session.startHeightTwips)
-  const widthScale = readResizeAxisScale(startWidthPx, deltaX, session.handleId.endsWith('left'))
-  const heightScale = readResizeAxisScale(startHeightPx, deltaY, session.handleId.startsWith('top'))
-
-  const scale = session.handleId.endsWith('center')
-    ? heightScale
-    : session.handleId.includes('center')
-      ? widthScale
-      : Math.max(widthScale, heightScale)
-
-  session.previewWidthTwips = Math.max(MIN_IMAGE_SIZE_TWIPS, Math.round(session.startWidthTwips * scale))
-  session.previewHeightTwips = Math.max(MIN_IMAGE_SIZE_TWIPS, Math.round(session.startHeightTwips * scale))
-}
-
-/** 读取单轴缩放倍率。 */
-function readResizeAxisScale(startSizePx: number, deltaPx: number, invertDirection: boolean): number {
-  if (startSizePx <= 0) {
-    return 1
+/** 同步拖拽落点 caret 的显隐与几何。 */
+function syncDropCaret(dom: ImageSelectionDom, preview: DragDropPreview | null): void {
+  if (preview === null) {
+    dom.dropCaret.hidden = true
+    dom.dropCaret.removeAttribute('data-jword-image-drop-caret')
+    return
   }
 
-  const nextSizePx = startSizePx + (invertDirection ? -deltaPx : deltaPx)
+  dom.dropCaret.hidden = false
+  dom.dropCaret.setAttribute('data-jword-image-drop-caret', 'true')
+  dom.dropCaret.style.left = `${preview.visualLeftPx}px`
+  dom.dropCaret.style.top = `${preview.visualTopPx}px`
+  dom.dropCaret.style.height = `${Math.max(preview.rect.heightPx, 18)}px`
+}
 
-  return Math.max(0.1, nextSizePx / startSizePx)
+/** 根据 pointer 位移更新缩放预览。 */
+function updateResizePreview(
+  session: ResizeSession,
+  canvasContainer: HTMLElement,
+  event: PointerEvent | MouseEvent
+): void {
+  const pointer = resolveContainerPointer(canvasContainer, event.clientX, event.clientY)
+  const minSizePx = twipsToCssPx(MIN_IMAGE_SIZE_TWIPS, session.startRect.scale)
+  const startLeft = session.startRect.leftPx
+  const startTop = session.startRect.topPx
+  const startRight = session.startRect.leftPx + session.startRect.widthPx
+  const startBottom = session.startRect.topPx + session.startRect.heightPx
+  let nextLeft = startLeft
+  let nextTop = startTop
+  let nextRight = startRight
+  let nextBottom = startBottom
+
+  if (session.handleId.endsWith('left')) {
+    nextLeft = Math.min(pointer.x, startRight - minSizePx)
+  }
+  if (session.handleId.endsWith('right')) {
+    nextRight = Math.max(pointer.x, startLeft + minSizePx)
+  }
+  if (session.handleId.startsWith('top')) {
+    nextTop = Math.min(pointer.y, startBottom - minSizePx)
+  }
+  if (session.handleId.startsWith('bottom')) {
+    nextBottom = Math.max(pointer.y, startTop + minSizePx)
+  }
+
+  const previewRect = {
+    ...session.startRect,
+    leftPx: nextLeft,
+    topPx: nextTop,
+    widthPx: Math.max(minSizePx, nextRight - nextLeft),
+    heightPx: Math.max(minSizePx, nextBottom - nextTop)
+  } satisfies ImageOverlayRect
+
+  session.previewRect = previewRect
+  session.previewWidthTwips = Math.max(
+    MIN_IMAGE_SIZE_TWIPS,
+    cssPxToTwips(previewRect.widthPx / session.startRect.scale)
+  )
+  session.previewHeightTwips = Math.max(
+    MIN_IMAGE_SIZE_TWIPS,
+    cssPxToTwips(previewRect.heightPx / session.startRect.scale)
+  )
+}
+
+/** 读取当前缩放预览对应的 overlay 矩形。 */
+function resolveResizePreviewRect(baseRect: ImageOverlayRect, session: ResizeSession): ImageOverlayRect {
+  return session.previewRect ?? baseRect
 }
 
 /** 调整 overlay layer 尺寸，使其覆盖当前滚动内容区域。 */
 function resizeLayer(layer: HTMLElement, canvasContainer: HTMLElement): void {
-  layer.style.width = `${Math.max(canvasContainer.clientWidth, canvasContainer.scrollWidth)}px`
-  layer.style.height = `${Math.max(canvasContainer.clientHeight, canvasContainer.scrollHeight)}px`
+  layer.style.width = `${canvasContainer.clientWidth}px`
+  layer.style.height = `${canvasContainer.clientHeight}px`
 }
 
 /** 从当前 layout 和挂载 DOM 解析已选图片的绝对矩形。 */
@@ -692,7 +812,8 @@ function resolveSelectedImageRect(
       leftPx: pageElement.offsetLeft + twipsToCssPx(imageInline.x - page.x, scale),
       topPx: pageElement.offsetTop + twipsToCssPx(imageInline.y - page.y, scale),
       widthPx: twipsToCssPx(imageInline.width, scale),
-      heightPx: twipsToCssPx(imageInline.height, scale)
+      heightPx: twipsToCssPx(imageInline.height, scale),
+      scale
     }
   }
 
@@ -745,6 +866,233 @@ function resolveCanvasContainer(editorHost: HTMLElement): HTMLElement | null {
   return editorHost.querySelector<HTMLElement>('[data-jword-canvas-container]')
 }
 
+/** 根据 client 坐标把当前拖拽落点映射回 editor 锚点。 */
+function resolvePointerAnchorFromClientPoint(
+  editor: Editor,
+  canvasContainer: HTMLElement,
+  clientX: number,
+  clientY: number
+) {
+  const pageElements = Array.from(
+    canvasContainer.querySelectorAll<HTMLElement>('[data-jword-page]')
+  )
+  const pageElement = pageElements.reduce<{
+    distance: number
+    element: HTMLElement
+  } | null>((best, candidate) => {
+    const rect = candidate.getBoundingClientRect()
+    const deltaX = clientX < rect.left
+      ? rect.left - clientX
+      : clientX > rect.right
+        ? clientX - rect.right
+        : 0
+    const deltaY = clientY < rect.top
+      ? rect.top - clientY
+      : clientY > rect.bottom
+        ? clientY - rect.bottom
+        : 0
+    const distance = Math.hypot(deltaX, deltaY)
+
+    if (best === null || distance < best.distance) {
+      return {
+        distance,
+        element: candidate
+      }
+    }
+
+    return best
+  }, null)?.element
+
+  if (pageElement === undefined) {
+    return null
+  }
+
+  const pageIndex = Number.parseInt(pageElement.getAttribute('data-jword-page') ?? '-1', 10)
+  const layout = editor.getLayout()
+  const page = layout.pages[pageIndex]
+
+  if (!Number.isInteger(pageIndex) || page === undefined) {
+    return null
+  }
+
+  const rect = pageElement.getBoundingClientRect()
+  const point = {
+    pageIndex,
+    x: (clientX - rect.left) / (rect.width / page.width),
+    y: (clientY - rect.top) / (rect.height / page.height)
+  }
+  const directAnchor = editor.hitTest(point)
+
+  if (directAnchor !== undefined) {
+    return directAnchor
+  }
+
+  const fallbackPosition = resolveNearestDropPosition(page, point.x, point.y)
+
+  return fallbackPosition === undefined
+    ? null
+    : editor.createTextAnchor(fallbackPosition)
+}
+
+/** 解析拖拽中的实时落点锚点与 caret 几何。 */
+function resolveDragDropPreview(
+  editor: Editor,
+  canvasContainer: HTMLElement,
+  session: DragGhostSession,
+  event: PointerEvent | MouseEvent
+): DragDropPreview | null {
+  const pointer = resolveContainerPointer(canvasContainer, event.clientX, event.clientY)
+  const anchor = resolvePointerAnchorFromClientPoint(
+    editor,
+    canvasContainer,
+    event.clientX,
+    event.clientY
+  )
+
+  if (anchor === null) {
+    return null
+  }
+
+  const caretRect = editor.getCaretRect(anchor)
+  const overlayRect = caretRect === undefined
+    ? undefined
+    : resolveLayoutRectOverlay(caretRect, editor.getLayout(), canvasContainer)
+
+  if (overlayRect === undefined) {
+    return null
+  }
+
+  return {
+    anchor,
+    rect: overlayRect,
+    visualLeftPx: pointer.x,
+    visualTopPx: pointer.y - (Math.max(overlayRect.heightPx, 18) / 2)
+  }
+}
+
+/** 把 viewport client 坐标转换成 canvas container 内的绝对像素坐标。 */
+function resolveContainerPointer(
+  canvasContainer: HTMLElement,
+  clientX: number,
+  clientY: number
+): Readonly<{
+  x: number
+  y: number
+}> {
+  const rect = canvasContainer.getBoundingClientRect()
+
+  return {
+    x: clientX - rect.left + canvasContainer.scrollLeft,
+    y: clientY - rect.top + canvasContainer.scrollTop
+  }
+}
+
+/** 当 drop 点落在空白区时，吸附到当前页最近一行的可编辑边界。 */
+function resolveNearestDropPosition(
+  page: DocumentLayout['pages'][number],
+  pageX: number,
+  pageY: number
+): TextPosition | undefined {
+  const line = page.lines.reduce<{
+    distance: number
+    line: typeof page.lines[number]
+  } | null>((best, candidate) => {
+    const top = candidate.y
+    const bottom = candidate.y + candidate.height
+    const distance = pageY < top
+      ? top - pageY
+      : pageY > bottom
+        ? pageY - bottom
+        : 0
+
+    if (best === null || distance < best.distance) {
+      return {
+        distance,
+        line: candidate
+      }
+    }
+
+    return best
+  }, null)?.line
+
+  if (line === undefined) {
+    return undefined
+  }
+
+  const positions = [
+    ...line.fragments.flatMap((fragment) => [
+      {
+        x: fragment.x,
+        position: fragment.start
+      },
+      {
+        x: fragment.x + fragment.width,
+        position: {
+          ...fragment.end,
+          assoc: -1
+        } satisfies TextPosition
+      }
+    ]),
+    ...line.inlines.flatMap((inline) => [
+      {
+        x: inline.x,
+        position: inline.at
+      },
+      {
+        x: inline.x + inline.width,
+        position: {
+          ...inline.at,
+          assoc: -1
+        } satisfies TextPosition
+      }
+    ])
+  ].sort((left, right) => left.x - right.x)
+
+  if (positions.length === 0) {
+    return undefined
+  }
+
+  if (pageX <= positions[0]!.x) {
+    return positions[0]!.position
+  }
+
+  const last = positions[positions.length - 1]!
+
+  if (pageX >= last.x) {
+    return last.position
+  }
+
+  return positions.reduce((best, candidate) =>
+    Math.abs(candidate.x - pageX) < Math.abs(best.x - pageX)
+      ? candidate
+      : best
+  ).position
+}
+
+/** 把 layout rect 转成挂载 overlay 所在容器的像素矩形。 */
+function resolveLayoutRectOverlay(
+  rect: LayoutRect,
+  layout: DocumentLayout,
+  canvasContainer: HTMLElement
+): ImageOverlayRect | undefined {
+  const page = layout.pages[rect.pageIndex]
+  const pageElement = canvasContainer.querySelector<HTMLElement>(`[data-jword-page="${rect.pageIndex}"]`)
+
+  if (page === undefined || pageElement === null) {
+    return undefined
+  }
+
+  const scale = resolvePageScale(pageElement, page)
+
+  return {
+    leftPx: pageElement.offsetLeft + twipsToCssPx(rect.x - page.x, scale),
+    topPx: pageElement.offsetTop + twipsToCssPx(rect.y - page.y, scale),
+    widthPx: twipsToCssPx(rect.width, scale),
+    heightPx: twipsToCssPx(rect.height, scale),
+    scale
+  }
+}
+
 /** 读取缩放手柄可见名称。 */
 function readResizeHandleLabel(handleId: ResizeHandleId): string {
   switch (handleId) {
@@ -754,6 +1102,10 @@ function readResizeHandleLabel(handleId: ResizeHandleId): string {
       return '顶部缩放'
     case 'top-right':
       return '右上缩放'
+    case 'middle-left':
+      return '左侧缩放'
+    case 'middle-right':
+      return '右侧缩放'
     case 'bottom-left':
       return '左下缩放'
     case 'bottom-center':

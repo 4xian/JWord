@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDeleteSelectedImageCommand,
   buildInsertInlineImageCommand,
+  buildMoveSelectedImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
   buildSetSelectedImageRotationCommand,
@@ -501,6 +502,110 @@ describe('image command builders', () => {
       widthTwips: 1800,
       heightTwips: 1200
     }])
+
+    editor.destroy()
+  })
+
+  it('moves the selected inline image to the dropped text position and keeps the resource alive', () => {
+    const editor = createEditor({ initialText: 'abcd' })
+    const textAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 2
+    })
+    const textSelection = createSelectionState(textAnchor, textAnchor)
+    const insertCommand = buildInsertInlineImageCommand(editor.getProjection(), textSelection, INLINE_RESOURCE, {
+      widthTwips: 1800,
+      heightTwips: 1200
+    })
+
+    editor.executeCommand(insertCommand!)
+
+    const insertedParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+    const imageRunId = insertedParagraph?.kind === 'paragraph'
+      ? insertedParagraph.runs[1]?.id
+      : undefined
+    const trailingRunId = insertedParagraph?.kind === 'paragraph'
+      ? insertedParagraph.runs[2]?.id
+      : undefined
+
+    expect(imageRunId).toBeDefined()
+    expect(trailingRunId).toBeDefined()
+
+    const imageAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: imageRunId!,
+      graphemeIndex: 0
+    })
+    const imageSelection = createSelectionState(imageAnchor, imageAnchor)
+    const dropAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: trailingRunId!,
+      graphemeIndex: 2
+    })
+    const dropSelection = createSelectionState(dropAnchor, dropAnchor)
+    const moveCommand = buildMoveSelectedImageCommand(editor.getProjection(), imageSelection, dropSelection)
+
+    expect(moveCommand).toEqual({
+      name: 'moveImage',
+      operations: [{
+        kind: 'insertImage',
+        at: {
+          sectionId: 'section-1',
+          blockId: 'paragraph-1',
+          runId: trailingRunId,
+          graphemeIndex: 2
+        },
+        imageRunId: expect.any(String),
+        trailingRunId: expect.any(String),
+        mode: 'inline',
+        image: {
+          kind: 'image',
+          resourceId: 'image-inline-1',
+          display: 'inline',
+          widthTwips: 1800,
+          heightTwips: 1200
+        }
+      }, {
+        kind: 'deleteImage',
+        runId: imageRunId
+      }]
+    })
+
+    editor.executeCommand(moveCommand!)
+
+    const paragraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+    expect(paragraph?.kind).toBe('paragraph')
+    if (paragraph?.kind !== 'paragraph') {
+      throw new Error('expected moved inline image paragraph')
+    }
+
+    expect(paragraph.runs.map((run) => run.inlines)).toEqual([
+      [{
+        kind: 'text',
+        text: 'ab'
+      }],
+      [{
+        kind: 'text',
+        text: 'cd'
+      }],
+      [{
+        kind: 'image',
+        resourceId: 'image-inline-1',
+        display: 'inline',
+        widthTwips: 1800,
+        heightTwips: 1200
+      }],
+      [{
+        kind: 'text',
+        text: ''
+      }]
+    ])
+    expect(editor.getProjection().document.resources).toEqual([INLINE_RESOURCE])
 
     editor.destroy()
   })
