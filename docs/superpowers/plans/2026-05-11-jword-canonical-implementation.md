@@ -218,9 +218,9 @@
 
 - [x] Step 3.1：实现 mount lifecycle，所有 DOM 创建都在 mount 后执行，destroy 能完整解绑事件和释放 canvas。
 - [x] Step 3.2：实现 hidden textarea，位置跟随 caret，保证中文 IME 候选框位置可用。
-- [ ] Step 3.3：实现 composition handler，覆盖 Chrome/Safari/Firefox 差异和 macOS/Windows 中文输入。
+- [x] Step 3.3：实现 composition handler，覆盖 Chrome/Safari/Firefox 差异和 macOS/Windows 中文输入。
   完成 2026-05-14：当前宿主浏览器的 Chromium、Firefox、WebKit composition 事件链已由 `examples/vanilla/tests/gate3-input.e2e.ts` 验证；仍缺 Windows 中文输入实机证据，因此此项暂不勾选。
-  回写 2026-05-15：按当前阶段决策，Windows 中文输入实机证据暂作为进入 Gate 4 的豁免项保留到 Alpha 发布前补证；此步骤因此不再阻塞 Gate 4 开发，但仍不记为完全完成。
+  补证 2026-05-19：在 Windows 真实 Chrome 宿主上通过 `kimi-webbridge` 绑定活动标签页，并使用系统简体中文输入法完成 `nihao + 空格 -> 你好` 实机输入；事件探针确认 `compositionstart -> compositionupdate(nihao/你好) -> compositionend` 成立，且 `projectionText` 在 `compositionend` 前始终为空、在 `compositionend` 时落成 `你好`，因此此步骤收口为完成。
 - [x] Step 3.4：实现 keyboard handler，覆盖输入、删除、回车、方向键、快捷键、撤销重做。
 - [x] Step 3.5：实现 pointer selection，支持点击定位、拖拽选区、双击词选择的扩展边界。
   - 复核 2026-05-15：E2E 命中点 helper 已支持自然文本片段内部 grapheme 边界，不再依赖逐字 fragment；三浏览器 pointer selection 和 Chromium 大夹具拖拽/双击回归已通过。
@@ -251,9 +251,8 @@
 
 ### 验收
 
-- [ ] macOS 和 Windows 中文输入可用。
-  现状 2026-05-14：当前宿主浏览器的 composition 链已在 Chromium、Firefox、WebKit 上验证；仓库和当前环境都没有 Windows 实机或远程验证通道，因此此项暂不勾选。
-  - 阶段决策 2026-05-15：Windows 中文输入实机证据暂作为进入 Gate 4 的豁免项保留到 Alpha 发布前补证，不再阻塞下一阶段开发。
+- [x] macOS 和 Windows 中文输入可用。
+  完成 2026-05-19：当前宿主浏览器的 composition 链已在 Chromium、Firefox、WebKit 上验证；另已在 Windows 真实 Chrome 宿主中通过 `kimi-webbridge` + 系统简体中文输入法完成 `nihao + 空格 -> 你好` 实机输入补证，因此此项收口为完成。
 - [x] 输入、删除、回车、方向键、选择、复制粘贴可用。
 - [x] 加粗、斜体、下划线、删除线、字体、字号、颜色、对齐、缩进可用。
   - 复核 2026-05-15：三浏览器 toolbar E2E 已覆盖剩余 run/paragraph 格式矩阵，避免只靠 selector 存在或单一 bold case 判断“可用”。
@@ -269,7 +268,7 @@
 
 - [x] 2026-05-15：按当前阶段决策，Gate 3 已具备进入 Gate 4 的功能闭环证据。
   - 已验证范围：真实 DOM 输入、composition 事件链、pointer selection、plain text clipboard、toolbar/selection state sync、undo/redo、vanilla visual 验证、transaction pipeline 复核。
-  - 已知 carry-over：Windows 中文输入实机证据、Alpha 性能目标 `输入热路径 P95 < 50ms`、`INP P95 < 150ms`。
+  - 已知 carry-over：Alpha 性能目标 `输入热路径 P95 < 50ms`、`INP P95 < 150ms`。
   - 约束：允许继续 Gate 4 开发，不允许对外宣称 Gate 3 Alpha 已完全完成。
 
 ### 禁止事项
@@ -295,7 +294,7 @@
 - [x] `@4xian/jword-ui` 已作为 workspace 包落地，`examples/vanilla` 已退化为 host app 装配层，不再承载官方 toolbar 主逻辑。
 - [x] Gate 2 demo 宿主 viewport 回退已修复；50 页夹具重新回到 viewport virtualization 语义，不再在滚动后退化成 50 页 canvas 同时保留。
 - [x] 当前基线验证已通过：`pnpm lint`、`pnpm typecheck`、`pnpm build`、`pnpm test:e2e`、`pnpm test:visual`。
-- [ ] carry-over 仍保留：Windows 中文输入实机证据、Alpha 性能目标 `输入热路径 P95 < 50ms`、`INP P95 < 150ms`。
+- [ ] carry-over 仍保留：Alpha 性能目标 `输入热路径 P95 < 50ms`、`INP P95 < 150ms`。
 
 ### 推荐执行顺序
 
@@ -951,7 +950,7 @@
   - 回写 2026-05-14：当前可执行证据只覆盖分页 text layout/render、viewport virtualization、hit-test 和 rect mapping。LayoutBox/PageBox/LineBox/TextFragment/InlineBox 已作为只读 layout/render/PDF 边界导出，未见会阻断 Gate 4/5 表格、图片、页眉页脚扩展的结构性缺口；但这些能力本身不算 Gate 2 已完成。
 - [x] 复核点 C：进入 Alpha 前，确认输入系统、IME、selection、history 没有绕开 transaction pipeline；若绕开，不进入 Alpha。
   - 完成 2026-05-15：`packages/core/test/editor-input.test.ts` 已补充 composition、keyboard、clipboard、pointer selection 的 runtime 证据，确认写入型行为会发出 facade `transaction` 事件并带 `commandName` / `operationKinds` / history metadata，而纯 selection 变化只走 `selectionChange`，不伪装成事务写入。
-  - 说明 2026-05-15：此复核只覆盖当前已实现并已验证的输入路径；Windows 中文输入实机证据按当前阶段决策另行补证。
+  - 说明 2026-05-19：此复核只覆盖当前已实现并已验证的输入路径；Windows 中文输入实机证据已在 Step 3.3 按真实浏览器 + 系统 IME 链路补齐。
 - [ ] 复核点 D：Gate 5 完成后，确认 OOXML mapping 的 warning、fixture diff、worker cancel/progress 可用；若不可用，不进入 Beta。
 - [ ] 复核点 E：Gate 6 完成后，确认 origin、undo scope、remote/AI/local 并发语义清晰；若不清晰，不进入 Stable。
 

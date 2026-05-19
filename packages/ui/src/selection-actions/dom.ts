@@ -181,6 +181,7 @@ function createContextButton(
   button.disabled = disabled
   button.setAttribute('data-jword-context-action', actionId)
   label.className = 'jw-context-menu__label'
+  label.title = text
   label.textContent = text
   button.append(label)
 
