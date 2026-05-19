@@ -9,6 +9,8 @@ import type { Block, DocumentProjection, Paragraph, Run } from '@4xian/jword-cor
 import { createLiveRegion } from './assistive/live-region'
 import { createTextMirror } from './assistive/text-mirror'
 import { createMediaController } from './media/controller'
+import { createImageSelectionController } from './media/image-selection-controller'
+import { createSelectionActionsController } from './selection-actions/controller'
 import { createToolbarController } from './toolbar/controller'
 import type { CreateJWordUiOptions, JWordUiInstance } from './types'
 
@@ -42,29 +44,52 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         liveRegion
       }
     })
+  const selectionActions = options.editorHost === undefined
+    ? null
+    : createSelectionActionsController({
+      editor: options.editor,
+      editorHost: options.editorHost,
+      assistive: {
+        liveRegion
+      }
+    })
+  const imageSelection = options.editorHost === undefined
+    ? null
+    : createImageSelectionController({
+      editor: options.editor,
+      editorHost: options.editorHost,
+      commands: options.media?.commands
+    })
 
   return {
     elements: {
       ...toolbar.elements,
-      mediaPanel: media?.elements ?? null
+      mediaPanel: media?.elements ?? null,
+      selectionActions: selectionActions?.elements ?? null
     },
     refresh(): void {
       toolbar.refresh()
       media?.refresh()
+      selectionActions?.refresh()
+      imageSelection?.refresh()
     },
     destroy(): void {
+      imageSelection?.destroy()
+      selectionActions?.destroy()
       media?.destroy()
       toolbar.destroy()
     }
   }
 }
 
+/** 从 projection 读取纯文本镜像内容。 */
 function readProjectionPlainText(projection: DocumentProjection): string {
   return projection.document.sections
     .map((section) => section.blocks.map(readBlockPlainText).join('\n'))
     .join('\n\n')
 }
 
+/** 从 block 读取纯文本内容。 */
 function readBlockPlainText(block: Block): string {
   if (block.kind === 'paragraph') {
     return readParagraphPlainText(block)
@@ -75,10 +100,12 @@ function readBlockPlainText(block: Block): string {
     .join('\n')
 }
 
+/** 从段落读取 run 级纯文本内容。 */
 function readParagraphPlainText(paragraph: Paragraph): string {
   return paragraph.runs.map(readRunPlainText).join('')
 }
 
+/** 从 run 读取 inline 级纯文本内容。 */
 function readRunPlainText(run: Run): string {
   return run.inlines
     .map((inline) => {

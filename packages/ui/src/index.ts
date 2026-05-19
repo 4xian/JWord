@@ -18,6 +18,7 @@ export type {
   JWordMediaResource,
   JWordMediaSource,
   JWordMediaStatus,
+  JWordSelectionActionElements,
   JWordMediaUploadFile,
   JWordMediaUploadOptions,
   JWordMediaUploadProgressEvent,

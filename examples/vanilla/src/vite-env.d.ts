@@ -30,6 +30,7 @@ declare global {
     __jwordDemo?: Readonly<{
       readonly editor: Editor
       readonly selectTextRange: (input: JWordDemoSelectionInput) => SelectionState
+      readonly selectImageByResourceId: (resourceId: string) => void
       readonly media: {
         getFixtureUrl(): string
         buildScenarioUrl(scenario: 'success' | 'retry-once' | 'always-fail'): string

@@ -157,7 +157,7 @@ export function createInlineObjectPayload(
         name: inline.name,
         edge: inline.edge
       })
-    case 'image':
+    case 'image': {
       const resource = resourceById?.get(inline.resourceId)
 
       return Object.freeze({
@@ -166,6 +166,7 @@ export function createInlineObjectPayload(
         ...(inline.display === undefined ? {} : { display: inline.display }),
         ...(inline.widthTwips === undefined ? {} : { widthTwips: inline.widthTwips }),
         ...(inline.heightTwips === undefined ? {} : { heightTwips: inline.heightTwips }),
+        ...(inline.rotationDegrees === undefined ? {} : { rotationDegrees: inline.rotationDegrees }),
         ...(resource === undefined
           ? {}
           : {
@@ -177,6 +178,7 @@ export function createInlineObjectPayload(
               ...(resource.retryToken === undefined ? {} : { retryToken: resource.retryToken })
             })
       })
+    }
     case 'commentRangeMarker':
       return Object.freeze({
         commentId: inline.commentId,

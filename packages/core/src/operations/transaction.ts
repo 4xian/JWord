@@ -33,6 +33,7 @@ export type OperationKind =
   | 'replaceImageResource'
   | 'deleteImage'
   | 'resizeImage'
+  | 'setImageRotation'
 
 const OPERATION_KINDS = new Set<OperationKind>([
   'insertText',
@@ -48,7 +49,8 @@ const OPERATION_KINDS = new Set<OperationKind>([
   'insertImage',
   'replaceImageResource',
   'deleteImage',
-  'resizeImage'
+  'resizeImage',
+  'setImageRotation'
 ])
 
 /**
@@ -185,6 +187,12 @@ export interface ResizeImageOperation extends OperationBase<'resizeImage'> {
   readonly heightTwips: number
 }
 
+/** 更新当前图片 run 的旋转角度。 */
+export interface SetImageRotationOperation extends OperationBase<'setImageRotation'> {
+  readonly runId: string
+  readonly rotationDegrees: number
+}
+
 /**
  * Gate 1.4 首批可序列化操作边界。
  */
@@ -203,6 +211,7 @@ export type Operation =
   | ReplaceImageResourceOperation
   | DeleteImageOperation
   | ResizeImageOperation
+  | SetImageRotationOperation
 
 /**
  * 最小命令描述。

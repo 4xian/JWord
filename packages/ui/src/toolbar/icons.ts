@@ -35,6 +35,13 @@ export type ToolbarIconName =
   | 'paragraphStyle'
   | 'fontSizeIncrease'
   | 'fontSizeDecrease'
+  | 'rotate'
+  | 'reset'
+  | 'trash'
+  | 'download'
+  | 'crop'
+  | 'layout'
+  | 'comment'
   | 'caretDown'
   | 'check'
 
@@ -298,6 +305,74 @@ const TOOLBAR_ICON_DEFINITIONS = Object.freeze<Record<ToolbarIconName, ToolbarIc
     paths: [
       {
         d: 'M12.17 5.002h-1.788l-3.12 8.558h-.019v.049l-1.967 5.393h1.582l1.446-3.942h5.915l1.443 3.942h1.615zm1.5 8.558-2.405-6.574-2.411 6.574zm7.606-5.708h-6v1.5h6z',
+        fillRule: 'evenodd',
+        clipRule: 'evenodd'
+      }
+    ]
+  },
+  rotate: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M12 5.25a6.75 6.75 0 1 1-6.56 8.36h1.3A5.5 5.5 0 1 0 8.2 7.35l2.17 2.17H6V5.15l1.31 1.31A6.72 6.72 0 0 1 12 5.25',
+        fillRule: 'evenodd',
+        clipRule: 'evenodd'
+      }
+    ]
+  },
+  reset: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M12 5.25a6.74 6.74 0 0 1 6.74 6.75A6.74 6.74 0 0 1 12 18.75 6.74 6.74 0 0 1 5.25 12H4a8 8 0 1 0 2.34-5.66L4.78 7.9 5.66 8.78 8.5 5.94 5.66 3.1l-.88.88 1.5 1.5A7.96 7.96 0 0 1 12 5.25',
+        fillRule: 'evenodd',
+        clipRule: 'evenodd'
+      }
+    ]
+  },
+  trash: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M9 4.75h6l.5 1.5H19V7.5h-1l-.64 10.03A1.5 1.5 0 0 1 15.86 19H8.14a1.5 1.5 0 0 1-1.5-1.47L6 7.5H5V6.25h3.5zm-1.75 2.75.63 9.95a.25.25 0 0 0 .25.24h7.72a.25.25 0 0 0 .25-.24l.63-9.95zM10.25 9h1.25v6h-1.25zm2.25 0h1.25v6H12.5z',
+        fillRule: 'evenodd',
+        clipRule: 'evenodd'
+      }
+    ]
+  },
+  download: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M11.38 4h1.25v8.46l2.69-2.7.88.89L12 15l-4.2-4.35.9-.88 2.68 2.69zM5 17.25h14V19H5z'
+      }
+    ]
+  },
+  crop: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M8 4h1.25v2.75H16a2 2 0 0 1 2 2V15.5H20v1.25h-2v2.75h-1.25v-2.75H9a2 2 0 0 1-2-2V8H4V6.75h3V4zm1.25 4v6.75c0 .41.34.75.75.75h6.75V8.75a.75.75 0 0 0-.75-.75z',
+        fillRule: 'evenodd',
+        clipRule: 'evenodd'
+      }
+    ]
+  },
+  layout: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M5 5.5A1.5 1.5 0 0 1 6.5 4h11A1.5 1.5 0 0 1 19 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18.5zm1.25 0v13.25h11.5V5.25zm2 2.25h7.5V9h-7.5zm0 3.25h7.5v1.25h-7.5zm0 3.25h4.75v1.25H8.25z',
+        fillRule: 'evenodd',
+        clipRule: 'evenodd'
+      }
+    ]
+  },
+  comment: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M6.5 5h11A2.5 2.5 0 0 1 20 7.5v7A2.5 2.5 0 0 1 17.5 17H10l-3.93 2.62A.75.75 0 0 1 5 19v-2.09A2.5 2.5 0 0 1 4 14.5v-7A2.5 2.5 0 0 1 6.5 5m0 1.25a1.25 1.25 0 0 0-1.25 1.25v7c0 .56.46 1.25 1.25 1.25H6.25v1.84l3.25-2.17h8A1.25 1.25 0 0 0 18.75 14.5v-7a1.25 1.25 0 0 0-1.25-1.25z',
         fillRule: 'evenodd',
         clipRule: 'evenodd'
       }

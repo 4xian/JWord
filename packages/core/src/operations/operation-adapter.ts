@@ -152,6 +152,9 @@ export function applyOperation(
     case 'resizeImage':
       resizeImage(store, operation.runId, operation.widthTwips, operation.heightTwips)
       break
+    case 'setImageRotation':
+      setImageRotation(store, operation.runId, operation.rotationDegrees)
+      break
   }
 }
 
@@ -497,6 +500,22 @@ function resizeImage(store: DocumentStore, runId: string, widthTwips: number, he
   }))
 }
 
+function setImageRotation(store: DocumentStore, runId: string, rotationDegrees: number): void {
+  if (!Number.isFinite(rotationDegrees)) {
+    throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', '图片旋转角度必须是有限数字', {
+      runId,
+      rotationDegrees
+    })
+  }
+
+  const normalizedRotationDegrees = normalizeImageRotationDegrees(rotationDegrees)
+
+  updateImageRun(store, runId as RunId, (image) => ({
+    ...omitImageRotation(image),
+    ...(normalizedRotationDegrees === 0 ? {} : { rotationDegrees: normalizedRotationDegrees })
+  }))
+}
+
 function deleteImage(store: DocumentStore, runId: string): void {
   const runLocation = findRunLocation(store, runId as RunId)
   const blockLocation = findBlockLocation(store, runLocation.blockId)
@@ -515,6 +534,20 @@ function deleteImage(store: DocumentStore, runId: string): void {
   }
 
   runLocation.container.delete(runLocation.index, 1)
+}
+
+/** 统一把图片角度约束到 0-359。 */
+function normalizeImageRotationDegrees(rotationDegrees: number): number {
+  const normalized = Math.round(rotationDegrees) % 360
+
+  return normalized < 0 ? normalized + 360 : normalized
+}
+
+/** 返回不包含旋转字段的图片快照，供 reset 复用。 */
+function omitImageRotation(image: Extract<Run['inlines'][number], { kind: 'image' }>): Extract<Run['inlines'][number], { kind: 'image' }> {
+  const { rotationDegrees: _rotationDegrees, ...rest } = image
+
+  return rest
 }
 
 interface ResolvedTextPosition {

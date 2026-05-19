@@ -150,6 +150,7 @@ export interface JWordSelectedImageTarget {
   readonly resourceId: string
   readonly widthTwips?: number
   readonly heightTwips?: number
+  readonly rotationDegrees?: number
 }
 
 /** 图片命令执行请求。 */
@@ -186,6 +187,15 @@ export interface JWordMediaCommandAdapter {
       readonly target: JWordSelectedImageTarget
       readonly widthTwips?: number
       readonly heightTwips?: number
+    }
+  ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
+  setSelectedImageRotation?(
+    input: {
+      readonly editor: Editor
+      readonly projection: DocumentProjection
+      readonly selection: SelectionState | null
+      readonly target: JWordSelectedImageTarget
+      readonly rotationDegrees: number
     }
   ): JWordMediaCommandResult | Promise<JWordMediaCommandResult>
   deleteSelectedImage?(
@@ -291,10 +301,22 @@ export interface JWordMediaPanelElements {
   readonly urlDialogError: HTMLElement
 }
 
+/** 选区浮动工具栏与右键菜单对外暴露的最小句柄。 */
+export interface JWordSelectionActionElements {
+  /** selection-actions 根宿主。 */
+  readonly host: HTMLElement
+  /** 非折叠文本选区上的浮动工具栏。 */
+  readonly floatingToolbar: HTMLElement
+  /** 右键菜单根节点。 */
+  readonly contextMenu: HTMLElement
+}
+
 /** createJWordUi 返回的完整 DOM 句柄。 */
 export interface JWordUiElements extends JWordToolbarElements {
   /** Gate 4 第一版图片 panel；未启用时为 null。 */
   readonly mediaPanel: JWordMediaPanelElements | null
+  /** Gate 4 选区浮层；editorHost 未提供时为 null。 */
+  readonly selectionActions: JWordSelectionActionElements | null
 }
 
 /** UI 装配实例的最小返回值。 */

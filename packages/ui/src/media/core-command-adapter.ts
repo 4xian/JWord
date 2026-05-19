@@ -11,6 +11,7 @@ import {
   buildInsertInlineImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
+  buildSetSelectedImageRotationCommand,
   createSelectionState,
   resolveSelectedImageTarget,
   type Command,
@@ -89,6 +90,20 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
         '已更新图片尺寸。'
       )
     },
+    setSelectedImageRotation(input) {
+      const command = buildSetSelectedImageRotationCommand(
+        input.projection,
+        input.selection,
+        input.rotationDegrees
+      )
+
+      return executeMediaCommand(
+        command,
+        input,
+        '当前图片旋转角度未变化，或当前选区未命中可旋转的图片。',
+        input.rotationDegrees === 0 ? '已重置图片旋转角度。' : '已更新图片旋转角度。'
+      )
+    },
     deleteSelectedImage(input) {
       const command = buildDeleteSelectedImageCommand(input.projection, input.selection)
 
@@ -102,6 +117,7 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
   }
 }
 
+/** 执行图片命令并返回 UI 层可展示的结果。 */
 function executeMediaCommand(
   command: Command | null,
   input: Pick<JWordMediaInsertRequest, 'editor'>,
@@ -254,14 +270,17 @@ function runContainsText(
   return run.inlines.some((inline) => inline.kind === 'text')
 }
 
+/** 把 core 图片选中目标转换成 UI 层快照。 */
 function toUiSelectedImageTarget(target: SelectedImageTarget): JWordSelectedImageTarget {
   return {
     resourceId: target.image.resourceId,
     ...(target.image.widthTwips === undefined ? {} : { widthTwips: target.image.widthTwips }),
-    ...(target.image.heightTwips === undefined ? {} : { heightTwips: target.image.heightTwips })
+    ...(target.image.heightTwips === undefined ? {} : { heightTwips: target.image.heightTwips }),
+    ...(target.image.rotationDegrees === undefined ? {} : { rotationDegrees: target.image.rotationDegrees })
   }
 }
 
+/** 把 UI 层资源快照转换成 core 资源模型。 */
 function toCoreResource(resource: JWordMediaResource): Resource {
   return {
     kind: 'resource',
@@ -275,6 +294,7 @@ function toCoreResource(resource: JWordMediaResource): Resource {
   }
 }
 
+/** 从资源 metadata 读取行内图片插入参数。 */
 function readImageInsertionOptions(resource: JWordMediaResource): Readonly<{
   alt?: string
   widthTwips?: number
@@ -291,12 +311,14 @@ function readImageInsertionOptions(resource: JWordMediaResource): Readonly<{
   }
 }
 
+/** 从资源 metadata 中读取字符串值。 */
 function readStringMetadata(resource: JWordMediaResource, key: string): string | undefined {
   const value = resource.metadata?.[key]
 
   return typeof value === 'string' ? value : undefined
 }
 
+/** 从资源 metadata 中读取正数值。 */
 function readNumberMetadata(resource: JWordMediaResource, key: string): number | undefined {
   const value = resource.metadata?.[key]
 

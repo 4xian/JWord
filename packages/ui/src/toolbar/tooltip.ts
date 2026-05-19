@@ -44,12 +44,12 @@ function bindToolbarTooltipVisibility(anchor: HTMLElement): void {
       return
     }
 
-    if (resolveTooltipClosest(anchor, target, '[data-jword-tooltip-skip=\"true\"]') !== null) {
+    if (resolveTooltipClosest(anchor, target, '[data-jword-tooltip-skip="true"]') !== null) {
       hideToolbarTooltip(anchor)
       return
     }
 
-    if (resolveTooltipClosest(anchor, target, '[data-jword-tooltip-surface=\"true\"]') === null) {
+    if (resolveTooltipClosest(anchor, target, '[data-jword-tooltip-surface="true"]') === null) {
       return
     }
 
@@ -59,7 +59,7 @@ function bindToolbarTooltipVisibility(anchor: HTMLElement): void {
     if (relatedTarget instanceof Node && anchor.contains(relatedTarget)) {
       if (
         relatedTarget instanceof Element
-        && resolveTooltipClosest(anchor, relatedTarget, '[data-jword-tooltip-skip=\"true\"]') !== null
+        && resolveTooltipClosest(anchor, relatedTarget, '[data-jword-tooltip-skip="true"]') !== null
       ) {
         hideToolbarTooltip(anchor)
       }

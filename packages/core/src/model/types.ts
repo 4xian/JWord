@@ -105,6 +105,7 @@ export interface ImageInline {
   readonly display?: 'inline'
   readonly widthTwips?: number
   readonly heightTwips?: number
+  readonly rotationDegrees?: number
 }
 
 export interface BreakInline {

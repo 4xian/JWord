@@ -224,9 +224,10 @@ function renderImageInlineBox(
   const width = Math.max(1, twipsToCssPx(inline.width, drawingScale))
   const height = Math.max(1, twipsToCssPx(inline.height, drawingScale))
   const resolution = resolveImageInlineResource(imageResourceResolver, payload)
+  const rotationDegrees = normalizeImageRotationDegrees(payload.rotationDegrees ?? 0)
 
   if (resolution?.status === 'ready' && typeof context.drawImage === 'function') {
-    context.drawImage(resolution.image.source, x, y, width, height)
+    drawRotatedImage(context, resolution.image.source, x, y, width, height, rotationDegrees)
     return
   }
 
@@ -295,6 +296,78 @@ function resolveImageInlineResource(
   }
 
   return resolver.resolve(payload.resourceId, payload.resourceSourceUrl)
+}
+
+/** 以图片盒中心为轴绘制旋转后的图片。 */
+function drawRotatedImage(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  source: unknown,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  rotationDegrees: number
+): void {
+  const drawImage = context.drawImage
+
+  if (drawImage === undefined) {
+    return
+  }
+
+  if (rotationDegrees === 0) {
+    drawImage.call(context, source, x, y, width, height)
+    return
+  }
+
+  if (
+    context.save === undefined
+    || context.restore === undefined
+    || context.translate === undefined
+    || context.rotate === undefined
+  ) {
+    drawImage.call(context, source, x, y, width, height)
+    return
+  }
+
+  const centerX = x + (width / 2)
+  const centerY = y + (height / 2)
+  const quarterTurns = Math.abs(rotationDegrees / 90) % 2 === 1
+  const drawBox = quarterTurns
+    ? resolveQuarterTurnImageDrawBox(width, height)
+    : { width, height }
+
+  context.save()
+  context.translate(centerX, centerY)
+  context.rotate((rotationDegrees * Math.PI) / 180)
+  drawImage.call(
+    context,
+    source,
+    -drawBox.width / 2,
+    -drawBox.height / 2,
+    drawBox.width,
+    drawBox.height
+  )
+  context.restore()
+}
+
+/** 在 90/270 度下缩放图片，避免在固定盒内被裁剪。 */
+function resolveQuarterTurnImageDrawBox(width: number, height: number): Readonly<{
+  width: number
+  height: number
+}> {
+  const scale = Math.min(height / width, width / height)
+
+  return {
+    width: Math.max(1, width * scale),
+    height: Math.max(1, height * scale)
+  }
+}
+
+/** 统一把图片角度约束到 0-359。 */
+function normalizeImageRotationDegrees(rotationDegrees: number): number {
+  const normalized = Math.round(rotationDegrees) % 360
+
+  return normalized < 0 ? normalized + 360 : normalized
 }
 
 function renderTextDecoration(

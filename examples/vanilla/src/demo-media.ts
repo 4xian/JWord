@@ -13,6 +13,7 @@ import type {
   JWordMediaUploadOptions,
   JWordMediaUploadRequest
 } from '@4xian/jword-ui'
+import { cssPxToTwips } from '@4xian/jword-core'
 import { createCoreMediaCommandAdapter } from '@4xian/jword-ui'
 
 const DEMO_MEDIA_SCENARIO_PARAM = 'demo-media-scenario'
@@ -119,7 +120,13 @@ async function uploadDemoResource(
 
   if (request.source.kind === 'file') {
     const source = createBlobMediaSource(request.source.file, ownedBlobUrls)
-    const resource = createDemoResource(request, source, request.source.file.type || 'image/svg+xml')
+    const sizeMetadata = await loadIntrinsicSizeMetadata(source.url)
+    const resource = createDemoResource(
+      request,
+      source,
+      request.source.file.type || 'image/svg+xml',
+      sizeMetadata
+    )
 
     ownedResourceBlobUrls.set(resource.id, source.url)
     uploadLog.push(createUploadLogEntry(request, 'success'))
@@ -144,7 +151,13 @@ async function uploadDemoResource(
   }
 
   const source = createUrlMediaSource(request.source.url)
-  const resource = createDemoResource(request, source, inferMimeTypeFromUrl(request.source.url))
+  const sizeMetadata = await loadIntrinsicSizeMetadata(source.url)
+  const resource = createDemoResource(
+    request,
+    source,
+    inferMimeTypeFromUrl(request.source.url),
+    sizeMetadata
+  )
 
   uploadLog.push(createUploadLogEntry(request, 'success'))
 
@@ -218,14 +231,21 @@ function createUrlMediaSource(url: string): JWordMediaSource {
 function createDemoResource(
   request: JWordMediaUploadRequest,
   source: JWordMediaSource,
-  mime: string
+  mime: string,
+  metadata: Readonly<{
+    widthTwips: number
+    heightTwips: number
+    naturalWidth: number
+    naturalHeight: number
+  }>
 ): JWordMediaResource {
   return {
     kind: 'resource',
     id: request.resourceId,
     mime,
     source,
-    status: 'success'
+    status: 'success',
+    metadata
   }
 }
 
@@ -277,5 +297,48 @@ function createDemoUploadError(code: string, message: string, retryToken: string
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms)
+  })
+}
+
+/** 读取图片天然尺寸，并把像素尺寸转成插图命令需要的 twips。 */
+async function loadIntrinsicSizeMetadata(url: string): Promise<Readonly<{
+  widthTwips: number
+  heightTwips: number
+  naturalWidth: number
+  naturalHeight: number
+}>> {
+  const size = await loadImageIntrinsicSize(url)
+
+  return Object.freeze({
+    widthTwips: cssPxToTwips(size.naturalWidth),
+    heightTwips: cssPxToTwips(size.naturalHeight),
+    naturalWidth: size.naturalWidth,
+    naturalHeight: size.naturalHeight
+  })
+}
+
+/** 通过浏览器图片解码读取天然宽高。 */
+function loadImageIntrinsicSize(url: string): Promise<Readonly<{
+  naturalWidth: number
+  naturalHeight: number
+}>> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+
+    image.onload = () => {
+      if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+        reject(new Error(`无法读取图片天然尺寸: ${url}`))
+        return
+      }
+
+      resolve(Object.freeze({
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight
+      }))
+    }
+    image.onerror = () => {
+      reject(new Error(`图片解码失败: ${url}`))
+    }
+    image.src = url
   })
 }

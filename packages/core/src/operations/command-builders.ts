@@ -477,6 +477,37 @@ export function buildResizeSelectedImageCommand(
   }
 }
 
+/**
+ * 构造当前选中图片的旋转角度更新命令。
+ */
+export function buildSetSelectedImageRotationCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  rotationDegrees: number
+): Command | null {
+  const target = resolveSelectedImageTarget(projection, selection)
+
+  if (target === null) {
+    return null
+  }
+
+  const normalizedRotationDegrees = normalizeImageRotationDegrees(rotationDegrees)
+  const currentRotationDegrees = normalizeImageRotationDegrees(target.image.rotationDegrees ?? 0)
+
+  if (currentRotationDegrees === normalizedRotationDegrees) {
+    return null
+  }
+
+  return {
+    name: 'setImageRotation',
+    operations: [{
+      kind: 'setImageRotation',
+      runId: target.runId,
+      rotationDegrees: normalizedRotationDegrees
+    }]
+  }
+}
+
 function buildRunFormattingCommand(
   projection: DocumentProjection,
   selection: SelectionState | null,
@@ -532,6 +563,13 @@ function buildRunFormattingCommand(
     name,
     operations
   }
+}
+
+/** 统一把图片角度约束到 0-359。 */
+function normalizeImageRotationDegrees(rotationDegrees: number): number {
+  const normalized = Math.round(rotationDegrees) % 360
+
+  return normalized < 0 ? normalized + 360 : normalized
 }
 
 function buildParagraphFormattingCommand(

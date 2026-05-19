@@ -738,7 +738,8 @@ function projectInlineFromJson(value: unknown): Inline {
         ...(typeof value.alt === 'string' ? { alt: value.alt } : {}),
         ...(value.display === 'inline' ? { display: value.display } : {}),
         ...(typeof value.widthTwips === 'number' ? { widthTwips: value.widthTwips } : {}),
-        ...(typeof value.heightTwips === 'number' ? { heightTwips: value.heightTwips } : {})
+        ...(typeof value.heightTwips === 'number' ? { heightTwips: value.heightTwips } : {}),
+        ...(typeof value.rotationDegrees === 'number' ? { rotationDegrees: value.rotationDegrees } : {})
       }
     case 'break':
       if (value.breakType === 'line' || value.breakType === 'page' || value.breakType === 'column') {

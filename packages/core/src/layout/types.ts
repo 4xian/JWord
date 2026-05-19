@@ -178,6 +178,7 @@ export interface ImageInlineLayoutPayload {
   readonly display?: 'inline'
   readonly widthTwips?: number
   readonly heightTwips?: number
+  readonly rotationDegrees?: number
   readonly resourceStatus?: ResourceStatus
   readonly resourceMime?: string
   readonly resourceSourceKind?: ResourceSource['kind']

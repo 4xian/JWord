@@ -363,6 +363,7 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
     case 'replaceImageResource':
     case 'deleteImage':
     case 'resizeImage':
+    case 'setImageRotation':
       return findRunPageIndexes(layout, operation.runId)
     case 'upsertResource':
     case 'deleteResource':

@@ -143,7 +143,7 @@ describe('toolbar select dom', () => {
 
     try {
       const trigger = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger')
-      const option = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-option[data-jword-option-value=\"Arial\"]')
+      const option = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-option[data-jword-option-value="Arial"]')
       const tooltipAnchor = trigger?.closest<HTMLElement>('.jw-toolbar__tooltip-anchor')
 
       expect(trigger).toBeInstanceOf(HTMLElement)

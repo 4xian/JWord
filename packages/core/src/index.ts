@@ -41,6 +41,7 @@ export {
   buildInsertInlineImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
+  buildSetSelectedImageRotationCommand,
   buildSetBackgroundColorCommand,
   buildSetBoldCommand,
   buildSetFontFamilyCommand,
@@ -144,7 +145,7 @@ export {
   isAllowedResourceUrl
 } from './resources/types'
 export type { SelectionState } from './model/selection'
-export { createSelectionState } from './model/selection'
+export { createSelectionState, isSelectionCollapsed } from './model/selection'
 export type {
   Command,
   Operation,

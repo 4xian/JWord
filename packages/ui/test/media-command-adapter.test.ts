@@ -108,4 +108,101 @@ describe('media command adapter', () => {
 
     editor.destroy()
   })
+
+  test('选中图片后允许通过 adapter 同步旋转和重置角度', () => {
+    const editor = createEditor({ initialText: 'abcd' })
+    const adapter = createCoreMediaCommandAdapter()
+    const textAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 2
+    })
+    const textSelection = createSelectionState(textAnchor, textAnchor)
+
+    adapter.insertInlineImage!({
+      editor,
+      projection: editor.getProjection(),
+      selection: textSelection,
+      resource: {
+        ...INLINE_RESOURCE,
+        metadata: {
+          widthTwips: 1800,
+          heightTwips: 1200
+        }
+      }
+    })
+
+    const paragraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+    expect(paragraph?.kind).toBe('paragraph')
+    if (paragraph?.kind !== 'paragraph') {
+      throw new Error('expected paragraph block')
+    }
+
+    const imageRunId = paragraph.runs[1]?.id
+
+    expect(imageRunId).toBeDefined()
+
+    const imageAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: imageRunId!,
+      graphemeIndex: 0
+    })
+    const imageSelection = createSelectionState(imageAnchor, imageAnchor)
+    const target = adapter.resolveSelectedImageTarget!(editor.getProjection(), imageSelection)
+
+    expect(target).toEqual({
+      resourceId: 'media-adapter-inline-image',
+      widthTwips: 1800,
+      heightTwips: 1200
+    })
+
+    const rotateResult = adapter.setSelectedImageRotation!({
+      editor,
+      projection: editor.getProjection(),
+      selection: imageSelection,
+      target: target!,
+      rotationDegrees: 90
+    })
+
+    expect(rotateResult).toEqual({
+      kind: 'applied',
+      message: '已更新图片旋转角度。'
+    })
+    expect((editor.getProjection().document.sections[0]?.blocks[0] as Extract<typeof paragraph, { kind: 'paragraph' }>).runs[1]?.inlines).toEqual([{
+      kind: 'image',
+      resourceId: 'media-adapter-inline-image',
+      display: 'inline',
+      widthTwips: 1800,
+      heightTwips: 1200,
+      rotationDegrees: 90
+    }])
+
+    const resetResult = adapter.setSelectedImageRotation!({
+      editor,
+      projection: editor.getProjection(),
+      selection: imageSelection,
+      target: {
+        ...target!,
+        rotationDegrees: 90
+      },
+      rotationDegrees: 0
+    })
+
+    expect(resetResult).toEqual({
+      kind: 'applied',
+      message: '已重置图片旋转角度。'
+    })
+    expect((editor.getProjection().document.sections[0]?.blocks[0] as Extract<typeof paragraph, { kind: 'paragraph' }>).runs[1]?.inlines).toEqual([{
+      kind: 'image',
+      resourceId: 'media-adapter-inline-image',
+      display: 'inline',
+      widthTwips: 1800,
+      heightTwips: 1200
+    }])
+
+    editor.destroy()
+  })
 })

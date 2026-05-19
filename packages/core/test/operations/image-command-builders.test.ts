@@ -15,6 +15,7 @@ import {
   buildInsertInlineImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
+  buildSetSelectedImageRotationCommand,
   buildUpsertResourceCommand,
   createEditor,
   resolveSelectedImageTarget
@@ -412,6 +413,94 @@ describe('image command builders', () => {
       ]
     ])
     expect(editor.getProjection().document.resources ?? []).toEqual([])
+
+    editor.destroy()
+  })
+
+  it('rotates the selected inline image and allows resetting rotation to zero', () => {
+    const editor = createEditor({ initialText: 'abcd' })
+    const textAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 2
+    })
+    const textSelection = createSelectionState(textAnchor, textAnchor)
+    const insertCommand = buildInsertInlineImageCommand(editor.getProjection(), textSelection, INLINE_RESOURCE, {
+      widthTwips: 1800,
+      heightTwips: 1200
+    })
+
+    editor.executeCommand(insertCommand!)
+
+    const insertedParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+    const imageRunId = insertedParagraph?.kind === 'paragraph'
+      ? insertedParagraph.runs[1]?.id
+      : undefined
+
+    expect(imageRunId).toBeDefined()
+
+    const imageAnchor = editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: imageRunId!,
+      graphemeIndex: 0
+    })
+    const imageSelection = createSelectionState(imageAnchor, imageAnchor)
+    const rotateCommand = buildSetSelectedImageRotationCommand(editor.getProjection(), imageSelection, 90)
+
+    expect(rotateCommand).toEqual({
+      name: 'setImageRotation',
+      operations: [{
+        kind: 'setImageRotation',
+        runId: imageRunId,
+        rotationDegrees: 90
+      }]
+    })
+    editor.executeCommand(rotateCommand!)
+
+    let imageParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+    expect(imageParagraph?.kind).toBe('paragraph')
+    if (imageParagraph?.kind !== 'paragraph') {
+      throw new Error('expected rotated inline image paragraph')
+    }
+
+    expect(imageParagraph.runs[1]?.inlines).toEqual([{
+      kind: 'image',
+      resourceId: 'image-inline-1',
+      display: 'inline',
+      widthTwips: 1800,
+      heightTwips: 1200,
+      rotationDegrees: 90
+    }])
+
+    const resetCommand = buildSetSelectedImageRotationCommand(editor.getProjection(), imageSelection, 0)
+
+    expect(resetCommand).toEqual({
+      name: 'setImageRotation',
+      operations: [{
+        kind: 'setImageRotation',
+        runId: imageRunId,
+        rotationDegrees: 0
+      }]
+    })
+    editor.executeCommand(resetCommand!)
+
+    imageParagraph = editor.getProjection().document.sections[0]?.blocks[0]
+
+    expect(imageParagraph?.kind).toBe('paragraph')
+    if (imageParagraph?.kind !== 'paragraph') {
+      throw new Error('expected reset inline image paragraph')
+    }
+
+    expect(imageParagraph.runs[1]?.inlines).toEqual([{
+      kind: 'image',
+      resourceId: 'image-inline-1',
+      display: 'inline',
+      widthTwips: 1800,
+      heightTwips: 1200
+    }])
 
     editor.destroy()
   })

@@ -5,7 +5,7 @@
  * 性能/安全约束：只在入口层访问宿主 DOM，不回退到旧的 toolbar 内联实现。
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
  */
-import { createEditor } from '@4xian/jword-core'
+import { createEditor, createSelectionState } from '@4xian/jword-core'
 import { createJWordUi } from '@4xian/jword-ui'
 
 import { createDemoControls, loadInitialDemoText } from './demo-controls'
@@ -38,6 +38,7 @@ editor.mount(editorHost)
 
 const jwordUi = createJWordUi({
   editor,
+  editorHost,
   toolbarHost,
   liveRegionHost: statusHost,
   assistiveMirrorHost,
@@ -55,6 +56,9 @@ const demoControls = createDemoControls({
 window.__jwordDemo = Object.freeze({
   editor,
   selectTextRange: demoControls.selectTextRange,
+  selectImageByResourceId: (resourceId: string) => {
+    selectImageByResourceId(editor, resourceId)
+  },
   media: demoMedia.hooks
 })
 
@@ -85,4 +89,38 @@ function requireElement<ElementType extends HTMLElement>(selector: string, error
   }
 
   return element
+}
+
+/** 根据资源 id 直接把测试选区切到对应图片 run。 */
+function selectImageByResourceId(editorInstance: typeof editor, resourceId: string): void {
+  const projection = editorInstance.getProjection()
+
+  for (const section of projection.document.sections) {
+    for (const block of section.blocks) {
+      if (block.kind !== 'paragraph') {
+        continue
+      }
+
+      for (const run of block.runs) {
+        const image = run.inlines.find((inline) => inline.kind === 'image' && inline.resourceId === resourceId)
+
+        if (image === undefined) {
+          continue
+        }
+
+        const anchor = editorInstance.createTextAnchor({
+          sectionId: section.id,
+          blockId: block.id,
+          runId: run.id,
+          graphemeIndex: 0
+        })
+
+        editorInstance.setSelection(createSelectionState(anchor, anchor))
+        editorInstance.focus()
+        return
+      }
+    }
+  }
+
+  throw new Error(`未找到资源 ${resourceId} 对应的图片 run`)
 }
