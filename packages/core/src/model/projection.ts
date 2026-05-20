@@ -42,6 +42,7 @@ import type {
   Run,
   Section,
   Table,
+  TableBorder,
   TableCell,
   TableRow
 } from './types'
@@ -162,11 +163,15 @@ function projectRun(run: RunRecord): Run {
 
 function projectTable(block: BlockRecord): Table {
   const properties = projectProperties(block.get(DOCUMENT_STORE_FIELDS.block.properties))
+  const grid = readTableGrid(properties)
+  const border = readTableBorder(properties)
 
   return deepFreeze({
     kind: 'table',
     id: readString(block.get(DOCUMENT_STORE_FIELDS.block.id), 'table'),
     ...(properties === undefined ? {} : { properties }),
+    ...(grid === undefined ? {} : { grid }),
+    ...(border === undefined ? {} : { border }),
     rows: deepFreezeArray(getTableRows(block).toArray().map(projectTableRow))
   })
 }
@@ -184,13 +189,49 @@ function projectTableRow(row: TableRowRecord): TableRow {
 function projectTableCell(cell: TableCellRecord): TableCell {
   const properties = projectProperties(cell.get(DOCUMENT_STORE_FIELDS.tableCell.properties))
   const gridSpan = readOptionalNumber(cell.get(DOCUMENT_STORE_FIELDS.tableCell.gridSpan))
+  const border = readTableBorder(properties)
 
   return deepFreeze({
     id: readString(cell.get(DOCUMENT_STORE_FIELDS.tableCell.id), 'table cell'),
     ...(properties === undefined ? {} : { properties }),
+    ...(border === undefined ? {} : { border }),
     ...(gridSpan === undefined ? {} : { gridSpan }),
     blocks: deepFreezeArray(getTableCellBlocks(cell).toArray().map(projectBlock))
   })
+}
+
+/** 从属性里读取表格边框快照。 */
+function readTableBorder(properties: ModelProperties | undefined): TableBorder | undefined {
+  const value = properties?.border
+
+  if (!isRecord(value)) {
+    return undefined
+  }
+
+  const color = typeof value.color === 'string' ? value.color : undefined
+  const widthTwips = readOptionalNumber(value.widthTwips)
+
+  if (color === undefined && widthTwips === undefined) {
+    return undefined
+  }
+
+  return deepFreeze({
+    ...(color === undefined ? {} : { color }),
+    ...(widthTwips === undefined ? {} : { widthTwips })
+  })
+}
+
+/** 从属性里读取表格网格列宽。 */
+function readTableGrid(properties: ModelProperties | undefined): readonly number[] | undefined {
+  const value = properties?.grid
+
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+
+  const grid = value.filter((item): item is number => typeof item === 'number' && item > 0)
+
+  return grid.length === 0 ? undefined : deepFreezeArray(grid)
 }
 
 function projectProperties(value: unknown): ModelProperties | undefined {

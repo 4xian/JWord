@@ -25,6 +25,17 @@ export interface JWordDemoMediaUploadLogEntry {
   readonly retryToken?: string
 }
 
+export interface JWordDemoTableSnapshot {
+  readonly tableId: string
+  readonly rowCount: number
+  readonly columnCount: number
+  readonly firstRowCellCount: number
+  readonly firstCellGridSpan: number
+  readonly firstCellText: string
+  readonly firstCellBorderColor: string | null
+  readonly firstCellBorderWidthTwips: number | null
+}
+
 declare global {
   interface Window {
     __jwordDemo?: Readonly<{
@@ -35,6 +46,25 @@ declare global {
         getFixtureUrl(): string
         buildScenarioUrl(scenario: 'success' | 'retry-once' | 'always-fail'): string
         readUploadLog(): readonly JWordDemoMediaUploadLogEntry[]
+      }
+      readonly table: {
+        readSnapshot(): JWordDemoTableSnapshot | null
+        readActiveTarget(): {
+          tableId: string
+          sectionId: string
+          rowIndex: number
+          columnIndex: number
+          cellIndex: number
+          rowCount: number
+          columnCount: number
+          rowCellCount: number
+          cellId: string
+          blockId: string
+          runId: string
+          cellGridSpan: number
+        } | null
+        selectCell(rowIndex: number, columnIndex: number): boolean
+        setCellText(rowIndex: number, columnIndex: number, text: string): boolean
       }
     }>
   }

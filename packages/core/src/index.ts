@@ -38,7 +38,13 @@ export type { JWordErrorCode, JWordErrorDetails } from './shared/errors'
 export {
   buildDeleteResourceCommand,
   buildDeleteSelectedImageCommand,
+  buildDeleteTableColumnCommand,
+  buildDeleteTableRowCommand,
   buildInsertInlineImageCommand,
+  buildInsertTableColumnCommand,
+  buildInsertTableCommand,
+  buildInsertTableRowCommand,
+  buildMergeTableCellsCommand,
   buildMoveSelectedImageCommand,
   buildReplaceSelectedImageResourceCommand,
   buildResizeSelectedImageCommand,
@@ -60,6 +66,9 @@ export {
   buildSetStrikeCommand,
   buildSetSubscriptCommand,
   buildSetSuperscriptCommand,
+  buildSetTableBorderCommand,
+  buildSetTableCellBorderCommand,
+  buildSetTableCellTextCommand,
   buildSetTextColorCommand,
   buildSetUnderlineCommand,
   buildUpsertResourceCommand,
@@ -113,7 +122,7 @@ export type {
 } from './layout/runtime'
 export { createLayoutSchedule } from './layout/scheduler'
 export type { LayoutSchedule, LayoutScheduleInput } from './layout/scheduler'
-export type { Block, Document, Paragraph, ParagraphList, Run, Section } from './model/types'
+export type { Block, Document, Paragraph, ParagraphList, Run, Section, Table, TableBorder, TableCell, TableRow } from './model/types'
 export type { ImageInline } from './model/types'
 export {
   CSS_PX_PER_INCH,

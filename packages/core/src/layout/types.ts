@@ -7,7 +7,7 @@
  */
 
 import type { FontManager, ResolvedFontStyle } from './font-manager'
-import type { Inline, ParagraphList, Section } from '../model/types'
+import type { Inline, ParagraphList, Section, TableBorder } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { DocumentProjection } from '../model/projection'
 import type { TextPosition } from '../operations/transaction'
@@ -89,6 +89,7 @@ export interface TableBox extends LayoutRect {
   readonly sectionId: string
   readonly tableId: string
   readonly grid: readonly number[]
+  readonly border?: TableBorder
   readonly rowCount: number
   readonly cellCount: number
   readonly rows: readonly TableRowBox[]
@@ -96,15 +97,18 @@ export interface TableBox extends LayoutRect {
 
 export type BlockBox = ParagraphBox | TableBox
 
-export interface TableRowBox {
+export interface TableRowBox extends LayoutRect {
   readonly rowId: string
   readonly cells: readonly TableCellBox[]
 }
 
-export interface TableCellBox {
+export interface TableCellBox extends LayoutRect {
   readonly cellId: string
   readonly gridSpan: number
+  readonly border?: TableBorder
   readonly blockIds: readonly string[]
+  readonly text: string
+  readonly textPosition?: TextPosition
 }
 
 export interface LineBox extends LayoutRect {

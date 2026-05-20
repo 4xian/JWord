@@ -7,6 +7,7 @@
  */
 export { createJWordUi } from './create-ui'
 export { createCoreMediaCommandAdapter } from './media/core-command-adapter'
+export { createCoreTableCommandAdapter } from './table/core-command-adapter'
 export type {
   CreateJWordUiOptions,
   JWordMediaAdapter,
@@ -19,6 +20,19 @@ export type {
   JWordMediaSource,
   JWordMediaStatus,
   JWordSelectionActionElements,
+  JWordTableBorderCommandRequest,
+  JWordTableBorderPreset,
+  JWordTableColumnCommandRequest,
+  JWordTableCommandAdapter,
+  JWordTableCommandContext,
+  JWordTableCommandResult,
+  JWordTableInsertRequest,
+  JWordTableOptions,
+  JWordTablePanelElements,
+  JWordTableRowCommandRequest,
+  JWordTableSelectionScope,
+  JWordTableSelectionTarget,
+  JWordTableTargetCommandRequest,
   JWordMediaUploadFile,
   JWordMediaUploadOptions,
   JWordMediaUploadProgressEvent,

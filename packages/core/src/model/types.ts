@@ -131,6 +131,7 @@ export interface Table {
   readonly id: string
   readonly properties?: ModelProperties
   readonly grid?: readonly number[]
+  readonly border?: TableBorder
   readonly rows: readonly TableRow[]
 }
 
@@ -143,8 +144,14 @@ export interface TableRow {
 export interface TableCell {
   readonly id: string
   readonly properties?: ModelProperties
+  readonly border?: TableBorder
   readonly gridSpan?: number
   readonly blocks: readonly Block[]
+}
+
+export interface TableBorder {
+  readonly color?: string
+  readonly widthTwips?: number
 }
 
 export interface Comment {

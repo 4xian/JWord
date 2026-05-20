@@ -8,7 +8,7 @@
 
 import { cssPxToTwips } from './page-config'
 import { measureLayoutTextSegment, measureTextSegmentForLayout, segmentTextForLayout } from './text-segments'
-import type { Block, Inline, Paragraph, Run, Section, Table } from '../model/types'
+import type { Block, Inline, Paragraph, Run, Section, Table, TableCell } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { TextPosition } from '../operations/transaction'
 import type { Resource } from '../resources/types'
@@ -514,35 +514,122 @@ function layoutTable(
   flushLine(cursor)
 
   const tableHeight = Math.max(cssPxToTwips(24), table.rows.length * cssPxToTwips(24))
+  const rowHeight = Math.max(cssPxToTwips(24), Math.round(tableHeight / Math.max(1, table.rows.length)))
+  const grid = resolveTableGrid(table, pageConfig)
 
   if (cursor.y + tableHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
     startNewPage(cursor, pages, pageConfig)
     assignPageSectionBoundary(cursor.page, section)
   }
 
+  const tableX = cursor.page.contentRect.x
+  const tableY = cursor.y
+  const tableWidth = grid.reduce((sum, width) => sum + width, 0)
+
   const tableBox: TableBox = Object.freeze({
     kind: 'table',
     pageIndex: cursor.page.pageIndex,
     sectionId: section.id,
     tableId: table.id,
-    grid: Object.freeze([...(table.grid ?? [])]),
+    grid: Object.freeze(grid),
+    ...(table.border === undefined ? {} : { border: table.border }),
     rowCount: table.rows.length,
     cellCount: table.rows.reduce((count, row) => count + row.cells.length, 0),
-    rows: Object.freeze(table.rows.map((row) => Object.freeze({
-      rowId: row.id,
-      cells: Object.freeze(row.cells.map((cell) => Object.freeze({
-        cellId: cell.id,
-        gridSpan: cell.gridSpan ?? 1,
-        blockIds: Object.freeze(cell.blocks.map((block) => block.id))
-      })))
-    }))),
-    x: cursor.page.contentRect.x,
-    y: cursor.y,
-    width: cursor.page.contentRect.width,
+    rows: Object.freeze(table.rows.map((row, rowIndex) => {
+      let cellX = tableX
+      let gridIndex = 0
+
+      return Object.freeze({
+        rowId: row.id,
+        pageIndex: cursor.page.pageIndex,
+        x: tableX,
+        y: tableY + (rowIndex * rowHeight),
+        width: tableWidth,
+        height: rowHeight,
+        cells: Object.freeze(row.cells.map((cell) => {
+          const gridSpan = cell.gridSpan ?? 1
+          const width = sumGridWidth(grid, gridIndex, gridSpan)
+          const text = readTableCellText(cell)
+          const textPosition = readTableCellTextPosition(section.id, cell)
+          const cellBox = Object.freeze({
+            cellId: cell.id,
+            pageIndex: cursor.page.pageIndex,
+            x: cellX,
+            y: tableY + (rowIndex * rowHeight),
+            width,
+            height: rowHeight,
+            gridSpan,
+            ...(cell.border === undefined ? {} : { border: cell.border }),
+            blockIds: Object.freeze(cell.blocks.map((block) => block.id)),
+            text,
+            ...(textPosition === undefined ? {} : { textPosition })
+          })
+
+          cellX += width
+          gridIndex += gridSpan
+
+          return cellBox
+        }))
+      })
+    })),
+    x: tableX,
+    y: tableY,
+    width: tableWidth,
     height: tableHeight
   })
 
   cursor.page.blocks.push(tableBox)
   cursor.y += tableHeight
   cursor.x = cursor.page.contentRect.x
+}
+
+/** 读取表格列宽，未声明时平均分配正文宽度。 */
+function resolveTableGrid(table: Table, pageConfig: PageConfig): readonly number[] {
+  if (table.grid !== undefined && table.grid.length > 0) {
+    return table.grid
+  }
+
+  const columnCount = Math.max(1, table.rows[0]?.cells.reduce((count, cell) => count + (cell.gridSpan ?? 1), 0) ?? 1)
+  const columnWidth = Math.floor(pageConfig.contentWidthTwips / columnCount)
+
+  return Array.from({ length: columnCount }, () => columnWidth)
+}
+
+/** 按列索引和 span 计算单元格宽度。 */
+function sumGridWidth(grid: readonly number[], startIndex: number, gridSpan: number): number {
+  return grid.slice(startIndex, startIndex + gridSpan).reduce((sum, width) => sum + width, 0)
+    || grid[startIndex]
+    || cssPxToTwips(96)
+}
+
+/** 读取单元格纯文本。 */
+function readTableCellText(cell: TableCell): string {
+  return cell.blocks
+    .flatMap((block) => block.kind === 'paragraph' ? block.runs : [])
+    .flatMap((run) => run.inlines)
+    .filter((inline): inline is Extract<Inline, { kind: 'text' }> => inline.kind === 'text')
+    .map((inline) => inline.text)
+    .join('')
+}
+
+/** 读取单元格首个可编辑文本位置。 */
+function readTableCellTextPosition(sectionId: string, cell: TableCell): TextPosition | undefined {
+  for (const block of cell.blocks) {
+    if (block.kind !== 'paragraph') {
+      continue
+    }
+
+    for (const run of block.runs) {
+      if (run.inlines.some((inline) => inline.kind === 'text')) {
+        return {
+          sectionId,
+          blockId: block.id,
+          runId: run.id,
+          graphemeIndex: 0
+        }
+      }
+    }
+  }
+
+  return undefined
 }

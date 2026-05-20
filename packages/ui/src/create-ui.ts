@@ -11,6 +11,7 @@ import { createTextMirror } from './assistive/text-mirror'
 import { createMediaController } from './media/controller'
 import { createImageSelectionController } from './media/image-selection-controller'
 import { createSelectionActionsController } from './selection-actions/controller'
+import { createTableController } from './table/controller'
 import { createToolbarController } from './toolbar/controller'
 import type { CreateJWordUiOptions, JWordUiInstance } from './types'
 
@@ -44,6 +45,16 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         liveRegion
       }
     })
+  const table = options.table === undefined
+    ? null
+    : createTableController({
+      editor: options.editor,
+      host: options.toolbarHost,
+      table: options.table,
+      assistive: {
+        liveRegion
+      }
+    })
   const selectionActions = options.editorHost === undefined
     ? null
     : createSelectionActionsController({
@@ -65,17 +76,20 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     elements: {
       ...toolbar.elements,
       mediaPanel: media?.elements ?? null,
+      tablePanel: table?.elements ?? null,
       selectionActions: selectionActions?.elements ?? null
     },
     refresh(): void {
       toolbar.refresh()
       media?.refresh()
+      table?.refresh()
       selectionActions?.refresh()
       imageSelection?.refresh()
     },
     destroy(): void {
       imageSelection?.destroy()
       selectionActions?.destroy()
+      table?.destroy()
       media?.destroy()
       toolbar.destroy()
     }

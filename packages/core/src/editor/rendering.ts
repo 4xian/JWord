@@ -365,6 +365,19 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
     case 'resizeImage':
     case 'setImageRotation':
       return findRunPageIndexes(layout, operation.runId)
+    case 'insertTable':
+      return operation.placement.kind === 'append'
+        ? [layout.pages[layout.pages.length - 1]?.pageIndex ?? 0]
+        : findBlockPageIndexes(layout, operation.placement.blockId)
+    case 'insertTableRow':
+    case 'deleteTableRow':
+    case 'insertTableColumn':
+    case 'deleteTableColumn':
+    case 'mergeTableCells':
+    case 'setTableBorder':
+      return findBlockPageIndexes(layout, operation.tableId)
+    case 'setTableCellText':
+      return findBlockPageIndexes(layout, operation.tableId)
     case 'upsertResource':
     case 'deleteResource':
       return []

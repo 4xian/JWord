@@ -8,7 +8,7 @@
 
 import * as Y from 'yjs'
 
-import type { Block, ImageInline, ModelProperties } from '../model/types'
+import type { Block, ImageInline, ModelProperties, TableBorder } from '../model/types'
 import { createDocumentProjection } from '../model/projection'
 import { createOperationAdapter } from './operation-adapter'
 import { createJWordError } from '../shared/errors'
@@ -34,6 +34,14 @@ export type OperationKind =
   | 'deleteImage'
   | 'resizeImage'
   | 'setImageRotation'
+  | 'insertTable'
+  | 'insertTableRow'
+  | 'deleteTableRow'
+  | 'insertTableColumn'
+  | 'deleteTableColumn'
+  | 'mergeTableCells'
+  | 'setTableBorder'
+  | 'setTableCellText'
 
 const OPERATION_KINDS = new Set<OperationKind>([
   'insertText',
@@ -50,7 +58,15 @@ const OPERATION_KINDS = new Set<OperationKind>([
   'replaceImageResource',
   'deleteImage',
   'resizeImage',
-  'setImageRotation'
+  'setImageRotation',
+  'insertTable',
+  'insertTableRow',
+  'deleteTableRow',
+  'insertTableColumn',
+  'deleteTableColumn',
+  'mergeTableCells',
+  'setTableBorder',
+  'setTableCellText'
 ])
 
 /**
@@ -193,6 +209,67 @@ export interface SetImageRotationOperation extends OperationBase<'setImageRotati
   readonly rotationDegrees: number
 }
 
+/** 插入简单表格。 */
+export interface InsertTableOperation extends OperationBase<'insertTable'> {
+  readonly sectionId: string
+  readonly placement: BlockInsertPlacement
+  readonly table: Extract<Block, { readonly kind: 'table' }>
+}
+
+/** 插入表格行。 */
+export interface InsertTableRowOperation extends OperationBase<'insertTableRow'> {
+  readonly tableId: string
+  readonly rowIndex: number
+  readonly rowId: string
+  readonly cellIds: readonly string[]
+  readonly paragraphIds: readonly string[]
+  readonly runIds: readonly string[]
+}
+
+/** 删除表格行。 */
+export interface DeleteTableRowOperation extends OperationBase<'deleteTableRow'> {
+  readonly tableId: string
+  readonly rowIndex: number
+}
+
+/** 插入表格列。 */
+export interface InsertTableColumnOperation extends OperationBase<'insertTableColumn'> {
+  readonly tableId: string
+  readonly columnIndex: number
+  readonly columnWidthTwips?: number
+  readonly cellIds: readonly string[]
+  readonly paragraphIds: readonly string[]
+  readonly runIds: readonly string[]
+}
+
+/** 删除表格列。 */
+export interface DeleteTableColumnOperation extends OperationBase<'deleteTableColumn'> {
+  readonly tableId: string
+  readonly columnIndex: number
+}
+
+/** 合并同一行内连续单元格。 */
+export interface MergeTableCellsOperation extends OperationBase<'mergeTableCells'> {
+  readonly tableId: string
+  readonly rowIndex: number
+  readonly startColumnIndex: number
+  readonly endColumnIndex: number
+}
+
+/** 设置表格或单元格边框。 */
+export interface SetTableBorderOperation extends OperationBase<'setTableBorder'> {
+  readonly tableId: string
+  readonly cellId?: string
+  readonly border: TableBorder
+}
+
+/** 替换单元格第一段第一 run 的文本。 */
+export interface SetTableCellTextOperation extends OperationBase<'setTableCellText'> {
+  readonly tableId: string
+  readonly cellId: string
+  readonly text: string
+}
+
 /**
  * Gate 1.4 首批可序列化操作边界。
  */
@@ -212,6 +289,14 @@ export type Operation =
   | DeleteImageOperation
   | ResizeImageOperation
   | SetImageRotationOperation
+  | InsertTableOperation
+  | InsertTableRowOperation
+  | DeleteTableRowOperation
+  | InsertTableColumnOperation
+  | DeleteTableColumnOperation
+  | MergeTableCellsOperation
+  | SetTableBorderOperation
+  | SetTableCellTextOperation
 
 /**
  * 最小命令描述。

@@ -8,7 +8,7 @@
 
 import type { CanvasLike, CanvasPool } from './pool'
 import { twipsToCssPx } from '../layout/page-config'
-import type { ImageInlineLayoutPayload, InlineBox, LayoutBox, LayoutRect, TextFragment } from '../layout/runtime'
+import type { ImageInlineLayoutPayload, InlineBox, LayoutBox, LayoutRect, TableBox, TextFragment } from '../layout/runtime'
 import type { CanvasImageResourceResolution, CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 
 export interface RenderPageInput {
@@ -80,6 +80,7 @@ export function renderPageCanvas(input: RenderPageInput): void {
   context.fillRect(0, 0, supportsTransform ? cssWidth : canvasWidth, supportsTransform ? cssHeight : canvasHeight)
 
   renderTextBackgrounds(context, input.page, drawingScale)
+  renderTables(context, input.page, drawingScale)
   renderSelectionRects(context, input, drawingScale)
   renderParagraphListMarkers(context, input.page, drawingScale)
   renderTextFragments(context, input.page, drawingScale)
@@ -94,6 +95,73 @@ export function renderPageCanvas(input: RenderPageInput): void {
       twipsToCssPx(input.caretRect.height, drawingScale)
     )
   }
+}
+
+/** 绘制表格边框和单元格第一版文本。 */
+function renderTables(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  drawingScale: number
+): void {
+  for (const block of page.blocks) {
+    if (block.kind !== 'table') {
+      continue
+    }
+
+    renderTableBox(context, page, block, drawingScale)
+  }
+}
+
+/** 绘制单个表格。 */
+function renderTableBox(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  table: TableBox,
+  drawingScale: number
+): void {
+  const borderColor = table.border?.color ?? '#6b7280'
+  const borderWidth = Math.max(1, Math.round(twipsToCssPx(table.border?.widthTwips ?? 15, drawingScale)))
+
+  context.fillStyle = borderColor
+  renderRectBorder(context, page, table, drawingScale, borderWidth)
+
+  for (const row of table.rows) {
+    for (const cell of row.cells) {
+      context.fillStyle = cell.border?.color ?? borderColor
+      renderRectBorder(context, page, cell, drawingScale, borderWidth)
+      if (cell.text.length === 0) {
+        continue
+      }
+
+      context.fillStyle = DEFAULT_CANVAS_TEXT_COLOR
+      context.font = `${Math.max(11, Math.round(13 * drawingScale))}px sans-serif`
+      context.textBaseline = 'alphabetic'
+      context.fillText(
+        cell.text.slice(0, 60),
+        toCanvasX(page, cell.x + 120, drawingScale),
+        toCanvasY(page, cell.y + Math.min(cell.height - 60, 300), drawingScale)
+      )
+    }
+  }
+}
+
+/** 使用 fillRect 绘制矩形边框，兼容 mock canvas。 */
+function renderRectBorder(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  rect: LayoutRect,
+  drawingScale: number,
+  borderWidth: number
+): void {
+  const x = toCanvasX(page, rect.x, drawingScale)
+  const y = toCanvasY(page, rect.y, drawingScale)
+  const width = Math.max(1, twipsToCssPx(rect.width, drawingScale))
+  const height = Math.max(1, twipsToCssPx(rect.height, drawingScale))
+
+  context.fillRect(x, y, width, borderWidth)
+  context.fillRect(x, y + height - borderWidth, width, borderWidth)
+  context.fillRect(x, y, borderWidth, height)
+  context.fillRect(x + width - borderWidth, y, borderWidth, height)
 }
 
 function renderSelectionRects(

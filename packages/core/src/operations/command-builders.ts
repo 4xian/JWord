@@ -12,7 +12,7 @@ import {
   areFormattingPropertyValuesEquivalent
 } from '../model/formatting-types'
 import type { ParagraphAlignment } from '../model/formatting-types'
-import type { ParagraphList } from '../model/types'
+import type { ParagraphList, Table, TableBorder } from '../model/types'
 import { readAnchorRefSnapshot } from '../model/position'
 import type { ModelProperties, Paragraph, Run } from '../model/types'
 import type { DocumentProjection } from '../model/projection'
@@ -22,6 +22,8 @@ import { isAllowedResourceUrl } from '../resources/types'
 import type { Resource, ResourceUrlPolicy } from '../resources/types'
 import { countGraphemes } from '../shared/grapheme'
 import { createJWordError } from '../shared/errors'
+
+let tableCommandSequence = 0
 
 /**
  * 构造加粗命令。
@@ -547,6 +549,228 @@ export function buildMoveSelectedImageCommand(
   }
 }
 
+/** 构造插入简单表格命令。 */
+export function buildInsertTableCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  input: Readonly<{
+    rows: number
+    columns: number
+  }>
+): Command | null {
+  const section = projection.document.sections[0]
+
+  if (section === undefined) {
+    return null
+  }
+
+  const insertion = resolveSelectionInsertionContext(projection, selection)
+  const sectionId = insertion?.at.sectionId ?? section.id
+  const usedIds = collectModelIds(projection)
+  const tableId = allocateGeneratedModelId(usedIds, 'table')
+
+  return {
+    name: 'insertTable',
+    operations: [{
+      kind: 'insertTable',
+      sectionId,
+      placement: insertion === null
+        ? { kind: 'append' }
+        : { kind: 'after', blockId: insertion.blockId },
+      table: createSimpleTableModel(tableId, Math.max(1, input.rows), Math.max(1, input.columns), usedIds)
+    }]
+  }
+}
+
+/** 构造插入表格行命令。 */
+export function buildInsertTableRowCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  rowIndex: number
+): Command | null {
+  const table = findTableById(projection, tableId)
+
+  if (table === null) {
+    return null
+  }
+
+  const usedIds = collectModelIds(projection)
+  const columnCount = resolveTableColumnCount(table)
+
+  return {
+    name: 'insertTableRow',
+    operations: [{
+      kind: 'insertTableRow',
+      tableId,
+      rowIndex,
+      rowId: allocateGeneratedModelId(usedIds, `${tableId}-row`),
+      cellIds: createGeneratedIdList(usedIds, `${tableId}-cell`, columnCount),
+      paragraphIds: createGeneratedIdList(usedIds, `${tableId}-paragraph`, columnCount),
+      runIds: createGeneratedIdList(usedIds, `${tableId}-run`, columnCount)
+    }]
+  }
+}
+
+/** 构造删除表格行命令。 */
+export function buildDeleteTableRowCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  rowIndex: number
+): Command | null {
+  const table = findTableById(projection, tableId)
+
+  if (table === null || table.rows.length <= 1) {
+    return null
+  }
+
+  return {
+    name: 'deleteTableRow',
+    operations: [{
+      kind: 'deleteTableRow',
+      tableId,
+      rowIndex
+    }]
+  }
+}
+
+/** 构造插入表格列命令。 */
+export function buildInsertTableColumnCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  columnIndex: number
+): Command | null {
+  const table = findTableById(projection, tableId)
+
+  if (table === null) {
+    return null
+  }
+
+  const usedIds = collectModelIds(projection)
+
+  return {
+    name: 'insertTableColumn',
+    operations: [{
+      kind: 'insertTableColumn',
+      tableId,
+      columnIndex,
+      columnWidthTwips: table.grid?.[Math.max(0, Math.min(columnIndex, (table.grid?.length ?? 1) - 1))] ?? 2400,
+      cellIds: createGeneratedIdList(usedIds, `${tableId}-cell`, table.rows.length),
+      paragraphIds: createGeneratedIdList(usedIds, `${tableId}-paragraph`, table.rows.length),
+      runIds: createGeneratedIdList(usedIds, `${tableId}-run`, table.rows.length)
+    }]
+  }
+}
+
+/** 构造删除表格列命令。 */
+export function buildDeleteTableColumnCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  columnIndex: number
+): Command | null {
+  const table = findTableById(projection, tableId)
+
+  if (table === null || resolveTableColumnCount(table) <= 1) {
+    return null
+  }
+
+  return {
+    name: 'deleteTableColumn',
+    operations: [{
+      kind: 'deleteTableColumn',
+      tableId,
+      columnIndex
+    }]
+  }
+}
+
+/** 构造合并同一行连续单元格命令。 */
+export function buildMergeTableCellsCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  rowIndex: number,
+  startColumnIndex: number,
+  endColumnIndex: number
+): Command | null {
+  const table = findTableById(projection, tableId)
+  const row = table?.rows[rowIndex]
+
+  if (table === null || row === undefined || endColumnIndex <= startColumnIndex) {
+    return null
+  }
+
+  return {
+    name: 'mergeTableCells',
+    operations: [{
+      kind: 'mergeTableCells',
+      tableId,
+      rowIndex,
+      startColumnIndex,
+      endColumnIndex
+    }]
+  }
+}
+
+/** 构造表格边框命令。 */
+export function buildSetTableBorderCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  border: TableBorder,
+  cellId?: string
+): Command | null {
+  if (findTableById(projection, tableId) === null) {
+    return null
+  }
+
+  return {
+    name: 'setTableBorder',
+    operations: [{
+      kind: 'setTableBorder',
+      tableId,
+      ...(cellId === undefined ? {} : { cellId }),
+      border
+    }]
+  }
+}
+
+/** 构造单元格文本替换命令。 */
+export function buildSetTableCellTextCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  cellId: string,
+  text: string
+): Command | null {
+  if (findTableCellById(projection, tableId, cellId) === null) {
+    return null
+  }
+
+  return {
+    name: 'setTableCellText',
+    operations: [{
+      kind: 'setTableCellText',
+      tableId,
+      cellId,
+      text
+    }]
+  }
+}
+
+/** 构造单元格边框命令。 */
+export function buildSetTableCellBorderCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  cellId: string,
+  border: TableBorder
+): Command | null {
+  const command = buildSetTableBorderCommand(projection, tableId, border, cellId)
+
+  return command === null
+    ? null
+    : {
+        name: 'setTableCellBorder',
+        operations: command.operations
+      }
+}
+
 function buildRunFormattingCommand(
   projection: DocumentProjection,
   selection: SelectionState | null,
@@ -932,4 +1156,170 @@ function readRunText(run: Run): string {
     .filter((inline): inline is Extract<Run['inlines'][number], { kind: 'text' }> => inline.kind === 'text')
     .map((inline) => inline.text)
     .join('')
+}
+
+/** 创建最小简单表格模型。 */
+function createSimpleTableModel(
+  tableId: string,
+  rows: number,
+  columns: number,
+  usedIds: Set<string>
+): Table {
+  return {
+    kind: 'table',
+    id: tableId,
+    grid: Array.from({ length: columns }, () => 2400),
+    border: {
+      color: '#6b7280',
+      widthTwips: 15
+    },
+    rows: Array.from({ length: rows }, () => {
+      const rowId = allocateGeneratedModelId(usedIds, `${tableId}-row`)
+
+      return {
+        id: rowId,
+        cells: Array.from({ length: columns }, () => {
+          const cellId = allocateGeneratedModelId(usedIds, `${tableId}-cell`)
+          const paragraphId = allocateGeneratedModelId(usedIds, `${tableId}-paragraph`)
+          const runId = allocateGeneratedModelId(usedIds, `${tableId}-run`)
+
+          return {
+            id: cellId,
+            blocks: [{
+              kind: 'paragraph',
+              id: paragraphId,
+              runs: [{
+                kind: 'run',
+                id: runId,
+                inlines: [{
+                  kind: 'text',
+                  text: ''
+                }]
+              }]
+            }]
+          }
+        })
+      }
+    })
+  }
+}
+
+/** 收集模型内所有常用 ID，避免 command builder 生成重复 ID。 */
+function collectModelIds(projection: DocumentProjection): Set<string> {
+  const ids = collectRunIds(projection)
+
+  for (const section of projection.document.sections) {
+    ids.add(section.id)
+    visitBlocks(section.blocks)
+  }
+
+  return ids
+
+  /** 递归收集块、表格行、单元格 ID。 */
+  function visitBlocks(blocks: readonly import('../model/types').Block[]): void {
+    for (const block of blocks) {
+      ids.add(block.id)
+
+      if (block.kind === 'paragraph') {
+        continue
+      }
+
+      for (const row of block.rows) {
+        ids.add(row.id)
+        for (const cell of row.cells) {
+          ids.add(cell.id)
+          visitBlocks(cell.blocks)
+        }
+      }
+    }
+  }
+}
+
+/** 分配模型节点 ID。 */
+function allocateGeneratedModelId(usedIds: Set<string>, prefix: string): string {
+  tableCommandSequence += 1
+
+  let candidate = `${prefix}-${tableCommandSequence}`
+
+  while (usedIds.has(candidate)) {
+    tableCommandSequence += 1
+    candidate = `${prefix}-${tableCommandSequence}`
+  }
+
+  usedIds.add(candidate)
+
+  return candidate
+}
+
+/** 批量生成模型 ID。 */
+function createGeneratedIdList(usedIds: Set<string>, prefix: string, count: number): readonly string[] {
+  return Array.from({ length: count }, () => allocateGeneratedModelId(usedIds, prefix))
+}
+
+/** 根据 ID 查找表格。 */
+function findTableById(projection: DocumentProjection, tableId: string): Table | null {
+  for (const section of projection.document.sections) {
+    const table = visitBlocks(section.blocks)
+
+    if (table !== null) {
+      return table
+    }
+  }
+
+  return null
+
+  /** 递归查找表格。 */
+  function visitBlocks(blocks: readonly import('../model/types').Block[]): Table | null {
+    for (const block of blocks) {
+      if (block.kind === 'table' && block.id === tableId) {
+        return block
+      }
+
+      if (block.kind !== 'table') {
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          const nested = visitBlocks(cell.blocks)
+
+          if (nested !== null) {
+            return nested
+          }
+        }
+      }
+    }
+
+    return null
+  }
+}
+
+/** 根据 ID 查找表格单元格。 */
+function findTableCellById(
+  projection: DocumentProjection,
+  tableId: string,
+  cellId: string
+): Table['rows'][number]['cells'][number] | null {
+  const table = findTableById(projection, tableId)
+
+  if (table === null) {
+    return null
+  }
+
+  for (const row of table.rows) {
+    for (const cell of row.cells) {
+      if (cell.id === cellId) {
+        return cell
+      }
+    }
+  }
+
+  return null
+}
+
+/** 读取表格当前列数。 */
+function resolveTableColumnCount(table: Table): number {
+  const firstRow = table.rows[0]
+
+  return Math.max(1, firstRow?.cells.reduce((count, cell) => count + (cell.gridSpan ?? 1), 0) ?? table.grid?.length ?? 1)
 }

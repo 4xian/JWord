@@ -10,6 +10,7 @@ import { createJWordUi } from '@4xian/jword-ui'
 
 import { createDemoControls, loadInitialDemoText } from './demo-controls'
 import { createDemoMediaSupport } from './demo-media'
+import { createDemoTableSupport } from './demo-table'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
 
@@ -33,6 +34,7 @@ const editor = createEditor({
   }
 })
 const demoMedia = createDemoMediaSupport()
+const demoTable = createDemoTableSupport(editor)
 
 editor.mount(editorHost)
 
@@ -42,7 +44,8 @@ const jwordUi = createJWordUi({
   toolbarHost,
   liveRegionHost: statusHost,
   assistiveMirrorHost,
-  media: demoMedia.media
+  media: demoMedia.media,
+  table: demoTable.table
 })
 const demoControls = createDemoControls({
   editor,
@@ -59,7 +62,8 @@ window.__jwordDemo = Object.freeze({
   selectImageByResourceId: (resourceId: string) => {
     selectImageByResourceId(editor, resourceId)
   },
-  media: demoMedia.hooks
+  media: demoMedia.hooks,
+  table: demoTable.hooks
 })
 
 requestAnimationFrame(() => {
@@ -71,6 +75,7 @@ window.addEventListener(
   () => {
     demoControls.destroy()
     demoMedia.destroy()
+    demoTable.destroy()
     jwordUi.destroy()
     delete window.__jwordDemo
     editor.destroy()

@@ -395,24 +395,30 @@
 
 #### Iteration 2 - 表格纵线（Step 4.4-4.7）
 
-- [ ] 定义 table / row / cell / grid / border / cell props / cell text content 的 model。
-- [ ] 明确 cell anchor、selection、caret、history 语义，禁止把表格当“一个大块文本”绕过去。
-- [ ] 实现表格 operation：
+- [x] 定义 table / row / cell / grid / border / cell props / cell text content 的 model。
+  - 完成 2026-05-19：`packages/core` 已新增简单表格 T1 model 与 projection，覆盖 table、row、cell、grid、border、cell props 和 cell 内 paragraph/run 文本。
+- [x] 明确 cell anchor、selection、caret、history 语义，禁止把表格当“一个大块文本”绕过去。
+  - 完成 2026-05-19：表格内文本继续使用 cell 内 paragraph/run anchor，真实浏览器输入通过 hidden textarea 写入 cell run；删除行列后 UI adapter 会把选区续接到仍存活单元格，避免后续表格命令失去 target。
+- [x] 实现表格 operation：
   - 插入表格
   - 插入 / 删除行列
   - 合并单元格
   - 更新边框
   - 单元格文本编辑
-- [ ] 实现表格 layout / render：
+  - 完成 2026-05-19：已新增 insert/delete row/column、merge、border、cell text command builders 和 transaction adapter，focused core tests 覆盖 Y.Doc -> projection 闭环。
+- [x] 实现表格 layout / render：
   - grid 几何
   - cell content layout
   - 跨页基础策略
   - cell 内 hit-test
-- [ ] 在 `packages/ui/src/table/` 实现表格 UI：
+  - 完成 2026-05-19：已补表格 layout box、canvas 边框绘制、cell content layout、基础跨页保底策略和 cell hit-test focused 测试。
+- [x] 在 `packages/ui/src/table/` 实现表格 UI：
   - 行列选中
   - 插入 / 删除菜单
   - 边框基础控件
+  - 完成 2026-05-19：`packages/ui/src/table/` 已接入官方 table toolbar，vanilla demo 只保留 adapter 装配和测试钩子；三浏览器 focused E2E 与 Kimi WebBridge 真实浏览器干净标签已验证插入、输入、行列删除、合并、边框和 undo/redo 主路径。
 - [ ] 补表格 fixture、Undo/Redo 回归、三浏览器 E2E 与 visual baseline。
+  - 进展 2026-05-19：已补 focused core tests 与三浏览器 focused E2E；visual baseline 仍保留到 Step 4.17 统一补齐。
 
 #### Iteration 3 - 批注与超链接（Step 4.8-4.10）
 
@@ -482,10 +488,10 @@
 - [x] Step 4.1：实现资源表和 ResourceAdapter，定义图片上传、替换、失败恢复、白名单 URL 策略。
 - [x] Step 4.2：实现 inline image 的 model、operation、layout、render、resize handle。
 - [x] Step 4.3：实现图片插入 UI 和上传状态 UI，失败时保留用户可恢复状态。
-- [ ] Step 4.4：实现简单表格 model：table、row、cell、grid、border、cell props、cell text content。
-- [ ] Step 4.5：实现表格 operation：插入表格、插入/删除行列、合并单元格、更新边框、单元格文本编辑。
-- [ ] Step 4.6：实现表格 layout/render，支持跨页基础策略和 cell 内 hit-test。
-- [ ] Step 4.7：实现表格 UI：选中行列、插入删除菜单、边框基础控件。
+- [x] Step 4.4：实现简单表格 model：table、row、cell、grid、border、cell props、cell text content。
+- [x] Step 4.5：实现表格 operation：插入表格、插入/删除行列、合并单元格、更新边框、单元格文本编辑。
+- [x] Step 4.6：实现表格 layout/render，支持跨页基础策略和 cell 内 hit-test。
+- [x] Step 4.7：实现表格 UI：选中行列、插入删除菜单、边框基础控件。
 - [ ] Step 4.8：实现批注 model 和 operation：添加、回复、解决、重新打开、删除、定位。
 - [ ] Step 4.9：实现批注侧边栏，批注 anchor 随文本编辑稳定移动。
 - [ ] Step 4.10：实现超链接 model、protocol allowlist、编辑弹窗、打开行为。
@@ -499,7 +505,8 @@
 
 ### 验收
 
-- [ ] 表格内文本编辑与 undo/redo 正确。
+- [x] 表格内文本编辑与 undo/redo 正确。
+  - 完成 2026-05-19：focused 三浏览器 E2E 与 Kimi WebBridge 干净标签验证了表格内输入、行列操作、合并、边框，以及 undo/redo 回退与恢复合并/边框状态。
 - [ ] 图片上传成功可替换资源，失败可恢复。
 - [ ] 批注 anchor 在文本编辑后仍定位正确。
 - [ ] 查找替换不会绕过 transaction pipeline。

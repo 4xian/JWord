@@ -226,6 +226,108 @@ export interface JWordMediaOptions {
   readonly description?: string
 }
 
+/** 表格工具栏的作用范围。 */
+export type JWordTableSelectionScope = 'cell' | 'row' | 'column'
+
+/** 表格边框基础预设。 */
+export type JWordTableBorderPreset =
+  | 'all'
+  | 'outer'
+  | 'innerHorizontal'
+  | 'innerVertical'
+  | 'none'
+
+/** 当前激活的表格目标快照。 */
+export interface JWordTableSelectionTarget {
+  readonly tableId: string
+  readonly sectionId: string
+  readonly rowIndex: number
+  readonly columnIndex: number
+  readonly cellIndex: number
+  readonly rowCount: number
+  readonly columnCount: number
+  readonly rowCellCount: number
+  readonly cellId: string
+  readonly blockId: string
+  readonly runId: string
+  readonly cellGridSpan: number
+}
+
+/** 表格命令的最小上下文。 */
+export interface JWordTableCommandContext {
+  readonly editor: Editor
+  readonly projection: DocumentProjection
+  readonly selection: SelectionState | null
+}
+
+/** 插入表格请求。 */
+export interface JWordTableInsertRequest extends JWordTableCommandContext {
+  readonly rows: number
+  readonly columns: number
+}
+
+/** 基于当前表格目标的命令请求。 */
+export interface JWordTableTargetCommandRequest extends JWordTableCommandContext {
+  readonly target: JWordTableSelectionTarget
+}
+
+/** 行操作请求。 */
+export interface JWordTableRowCommandRequest extends JWordTableTargetCommandRequest {
+  readonly placement: 'before' | 'after'
+}
+
+/** 列操作请求。 */
+export interface JWordTableColumnCommandRequest extends JWordTableTargetCommandRequest {
+  readonly placement: 'before' | 'after'
+}
+
+/** 边框更新请求。 */
+export interface JWordTableBorderCommandRequest extends JWordTableTargetCommandRequest {
+  readonly scope: JWordTableSelectionScope
+  readonly preset: JWordTableBorderPreset
+}
+
+/** 表格命令执行结果。 */
+export interface JWordTableCommandResult {
+  readonly kind: 'applied' | 'deferred'
+  readonly message?: string
+}
+
+/** 表格 command 对接边界。 */
+export interface JWordTableCommandAdapter {
+  resolveActiveTableTarget?(
+    input: JWordTableCommandContext
+  ): JWordTableSelectionTarget | null
+  insertTable?(
+    request: JWordTableInsertRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+  insertRow?(
+    request: JWordTableRowCommandRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+  deleteRow?(
+    request: JWordTableTargetCommandRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+  insertColumn?(
+    request: JWordTableColumnCommandRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+  deleteColumn?(
+    request: JWordTableTargetCommandRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+  mergeCellWithRight?(
+    request: JWordTableTargetCommandRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+  applyBorderPreset?(
+    request: JWordTableBorderCommandRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+}
+
+/** Gate 4 Iteration 2 官方表格 UI 配置。 */
+export interface JWordTableOptions {
+  readonly commands: JWordTableCommandAdapter
+  readonly title?: string
+  readonly description?: string
+}
+
 /** createJWordUi 的装配输入。 */
 export interface CreateJWordUiOptions {
   /** 已创建并可供 UI 调用的 core editor facade。 */
@@ -242,6 +344,8 @@ export interface CreateJWordUiOptions {
   readonly toolbar?: JWordToolbarOptions
   /** Gate 4 第一版图片 panel。 */
   readonly media?: JWordMediaOptions
+  /** Gate 4 Iteration 2 表格工具。 */
+  readonly table?: JWordTableOptions
 }
 
 /** live region 控制器的最小协作边界。 */
@@ -310,6 +414,44 @@ export interface JWordMediaPanelElements {
   readonly urlDialogError: HTMLElement
 }
 
+/** 表格 panel 暴露给宿主和浏览器测试的节点。 */
+export interface JWordTablePanelElements {
+  /** 表格工具根宿主。 */
+  readonly host: HTMLElement
+  /** 当前目标摘要。 */
+  readonly summary: HTMLElement
+  /** 插入表格的行数输入。 */
+  readonly insertRowsInput: HTMLInputElement
+  /** 插入表格的列数输入。 */
+  readonly insertColumnsInput: HTMLInputElement
+  /** 插入表格确认按钮。 */
+  readonly insertConfirmButton: HTMLButtonElement
+  /** 作用范围：单元格。 */
+  readonly scopeCellButton: HTMLButtonElement
+  /** 作用范围：整行。 */
+  readonly scopeRowButton: HTMLButtonElement
+  /** 作用范围：整列。 */
+  readonly scopeColumnButton: HTMLButtonElement
+  /** 在当前行上方插入。 */
+  readonly insertRowBeforeButton: HTMLButtonElement
+  /** 在当前行下方插入。 */
+  readonly insertRowAfterButton: HTMLButtonElement
+  /** 删除当前行。 */
+  readonly deleteRowButton: HTMLButtonElement
+  /** 在当前列左侧插入。 */
+  readonly insertColumnBeforeButton: HTMLButtonElement
+  /** 在当前列右侧插入。 */
+  readonly insertColumnAfterButton: HTMLButtonElement
+  /** 删除当前列。 */
+  readonly deleteColumnButton: HTMLButtonElement
+  /** 合并当前单元格与右侧单元格。 */
+  readonly mergeRightButton: HTMLButtonElement
+  /** 边框预设下拉。 */
+  readonly borderPresetSelect: HTMLSelectElement
+  /** 应用边框按钮。 */
+  readonly applyBorderButton: HTMLButtonElement
+}
+
 /** 选区浮动工具栏与右键菜单对外暴露的最小句柄。 */
 export interface JWordSelectionActionElements {
   /** selection-actions 根宿主。 */
@@ -324,6 +466,8 @@ export interface JWordSelectionActionElements {
 export interface JWordUiElements extends JWordToolbarElements {
   /** Gate 4 第一版图片 panel；未启用时为 null。 */
   readonly mediaPanel: JWordMediaPanelElements | null
+  /** Gate 4 Iteration 2 表格 panel；未启用时为 null。 */
+  readonly tablePanel: JWordTablePanelElements | null
   /** Gate 4 选区浮层；editorHost 未提供时为 null。 */
   readonly selectionActions: JWordSelectionActionElements | null
 }

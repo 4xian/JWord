@@ -1007,21 +1007,21 @@ describe('Gate 2 布局', () => {
       rowCount: 1,
       cellCount: 2,
       rows: [
-        {
+        expect.objectContaining({
           rowId: 'row-layout-boundary-1',
           cells: [
-            {
+            expect.objectContaining({
               cellId: 'cell-layout-boundary-1',
               gridSpan: 1,
               blockIds: ['cell-layout-paragraph-1']
-            },
-            {
+            }),
+            expect.objectContaining({
               cellId: 'cell-layout-boundary-2',
               gridSpan: 2,
               blockIds: []
-            }
+            })
           ]
-        }
+        })
       ]
     }))
   })

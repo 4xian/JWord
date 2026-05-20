@@ -5,7 +5,6 @@
  * 性能/安全约束：当前实现按容器扫描定位，适合 Gate 1 骨架验证，不访问 DOM，不保留外部可写状态。
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
  */
-
 import * as Y from 'yjs'
 
 import {
@@ -41,16 +40,11 @@ import type {
   ResourceId,
   RunContainer,
   RunRecord,
-  RunRecordStructureInput,
   RunRecordValue,
   SectionRecord,
-  StyleId,
-  TableCellRecord,
-  TableCellRecordValue,
-  TableRowRecord,
-  TableRowRecordValue
+  StyleId
 } from '../model/document-store'
-import type { Block, Paragraph, Run, Table, TableCell, TableRow, TextInline } from '../model/types'
+import type { Block, Run } from '../model/types'
 import type { BlockInsertPlacement, Operation, TextPosition } from './transaction'
 import {
   migrateTextAnchorsAfterSplit,
@@ -59,6 +53,15 @@ import {
 import type { BlockId, CommentId, GraphemeIndex, RevisionId, RunId, SectionId } from '../model/position'
 import { createGraphemeIndex } from '../model/position'
 import type { ResourceUrlPolicy } from '../resources/types'
+import {
+  createBlockRecordFromModel,
+  createImageRunRecord,
+  createSplitRunRecord,
+  createTrailingTextRunRecord,
+  shouldInsertTrailingTextRun,
+  syncRunResourceIds
+} from './block-record-factory'
+import { applyTableOperation } from './table-operation-adapter'
 
 /**
  * Operation 到 Y.Doc 的最小 adapter。
@@ -154,6 +157,30 @@ export function applyOperation(
       break
     case 'setImageRotation':
       setImageRotation(store, operation.runId, operation.rotationDegrees)
+      break
+    case 'insertTable':
+      insertBlock(store, operation.sectionId, operation.placement, operation.table)
+      break
+    case 'insertTableRow':
+      applyTableOperation(store, operation)
+      break
+    case 'deleteTableRow':
+      applyTableOperation(store, operation)
+      break
+    case 'insertTableColumn':
+      applyTableOperation(store, operation)
+      break
+    case 'deleteTableColumn':
+      applyTableOperation(store, operation)
+      break
+    case 'mergeTableCells':
+      applyTableOperation(store, operation)
+      break
+    case 'setTableBorder':
+      applyTableOperation(store, operation)
+      break
+    case 'setTableCellText':
+      applyTableOperation(store, operation)
       break
   }
 }
@@ -748,147 +775,11 @@ function findRunLocationInParagraph(block: BlockRecord, runId: RunId): RunLocati
   return undefined
 }
 
-function createBlockRecordFromModel(block: Block): BlockRecord {
-  if (block.kind === 'paragraph') {
-    return createParagraphRecordFromModel(block)
-  }
-
-  return createTableRecordFromModel(block)
-}
-
-function createParagraphRecordFromModel(paragraph: Paragraph): BlockRecord {
-  const record = new Y.Map<BlockRecordValue>() as BlockRecord
-  const properties = createPropertyMap(paragraph.properties ?? {})
-  const runs = new Y.Array<RunRecord>()
-
-  record.set(DOCUMENT_STORE_FIELDS.block.kind, 'paragraph')
-  record.set(DOCUMENT_STORE_FIELDS.block.id, paragraph.id as BlockId)
-  record.set(DOCUMENT_STORE_FIELDS.block.properties, properties)
-  record.set(DOCUMENT_STORE_FIELDS.block.runs, runs)
-  record.set(DOCUMENT_STORE_FIELDS.block.resourceIds, new Y.Array<ResourceId>())
-  record.set(DOCUMENT_STORE_FIELDS.block.styleIds, new Y.Array<StyleId>())
-  record.set(DOCUMENT_STORE_FIELDS.block.commentIds, new Y.Array<CommentId>())
-  record.set(DOCUMENT_STORE_FIELDS.block.revisionIds, new Y.Array<RevisionId>())
-  runs.push(paragraph.runs.map(createRunRecordFromModel))
-
-  return record
-}
-
-function createRunRecordFromModel(run: Run): RunRecord {
-  const structureInput: RunRecordStructureInput = {
-    ...(run.properties === undefined ? {} : { properties: run.properties }),
-    ...(run.field === undefined ? {} : { field: run.field }),
-    ...(run.link === undefined ? {} : { link: run.link }),
-    ...(run.revisionId === undefined ? {} : { revisionId: run.revisionId }),
-    inlines: run.inlines
-  }
-
-  const record = createRunRecord(run.id as RunId, collectText(run), structureInput)
-
-  return record
-}
-
-function createTableRecordFromModel(table: Table): BlockRecord {
-  const record = new Y.Map<BlockRecordValue>() as BlockRecord
-  const rows = new Y.Array<TableRowRecord>()
-
-  record.set(DOCUMENT_STORE_FIELDS.block.kind, 'table')
-  record.set(DOCUMENT_STORE_FIELDS.block.id, table.id as BlockId)
-  record.set(DOCUMENT_STORE_FIELDS.block.properties, createPropertyMap(table.properties ?? {}))
-  record.set(DOCUMENT_STORE_FIELDS.block.rows, rows)
-  record.set(DOCUMENT_STORE_FIELDS.block.resourceIds, new Y.Array<ResourceId>())
-  record.set(DOCUMENT_STORE_FIELDS.block.styleIds, new Y.Array<StyleId>())
-  record.set(DOCUMENT_STORE_FIELDS.block.commentIds, new Y.Array<CommentId>())
-  record.set(DOCUMENT_STORE_FIELDS.block.revisionIds, new Y.Array<RevisionId>())
-  rows.push(table.rows.map(createTableRowRecordFromModel))
-
-  return record
-}
-
-function createTableRowRecordFromModel(row: TableRow): TableRowRecord {
-  const record = new Y.Map<TableRowRecordValue>() as TableRowRecord
-  const cells = new Y.Array<TableCellRecord>()
-
-  record.set(DOCUMENT_STORE_FIELDS.tableRow.id, row.id)
-  record.set(DOCUMENT_STORE_FIELDS.tableRow.properties, createPropertyMap(row.properties ?? {}))
-  record.set(DOCUMENT_STORE_FIELDS.tableRow.cells, cells)
-  cells.push(row.cells.map(createTableCellRecordFromModel))
-
-  return record
-}
-
-function createTableCellRecordFromModel(cell: TableCell): TableCellRecord {
-  const record = new Y.Map<TableCellRecordValue>() as TableCellRecord
-  const blocks = new Y.Array<BlockRecord>()
-
-  record.set(DOCUMENT_STORE_FIELDS.tableCell.id, cell.id)
-  record.set(DOCUMENT_STORE_FIELDS.tableCell.properties, createPropertyMap(cell.properties ?? {}))
-  record.set(DOCUMENT_STORE_FIELDS.tableCell.gridSpan, cell.gridSpan ?? 1)
-  record.set(DOCUMENT_STORE_FIELDS.tableCell.blocks, blocks)
-  blocks.push(cell.blocks.map(createBlockRecordFromModel))
-
-  return record
-}
-
 function cloneRunRecord(run: RunRecord): RunRecord {
   const id = readRequiredString(run, DOCUMENT_STORE_FIELDS.run.id) as RunId
   const text = getRunText(run).toString()
 
   return createSplitRunRecord(id, text, run)
-}
-
-function createImageRunRecord(runId: RunId, image: Extract<Run['inlines'][number], { kind: 'image' }>): RunRecord {
-  const record = createRunRecord(runId, '', {
-    inlines: [image]
-  })
-
-  syncRunResourceIds(record, [image])
-
-  return record
-}
-
-/**
- * 图片尾侧缺少文本容器时，补一个最小空 run 作为后续输入落点。
- */
-function createTrailingTextRunRecord(runId: RunId, source: RunRecord): RunRecord {
-  return runSupportsTextContainer(source)
-    ? createSplitRunRecord(runId, '', source)
-    : createRunRecord(runId, '')
-}
-
-function shouldInsertTrailingTextRun(container: RunContainer, insertIndex: number): boolean {
-  return !runSupportsTextContainer(container.get(insertIndex))
-}
-
-function runSupportsTextContainer(run: RunRecord | undefined): boolean {
-  if (run === undefined) {
-    return false
-  }
-
-  const inlines = getRunInlines(run)
-
-  return inlines === undefined || inlines.some((inline) => inline.kind === 'text')
-}
-
-function createSplitRunRecord(runId: RunId, textValue: string, source: RunRecord): RunRecord {
-  const field = getRunField(source)
-  const link = getRunLink(source)
-  const revisionId = getRunRevisionId(source)
-  const inlines = getRunInlines(source)
-  const structureInput: RunRecordStructureInput = {
-    ...(field === undefined ? {} : { field }),
-    ...(link === undefined ? {} : { link }),
-    ...(revisionId === undefined ? {} : { revisionId }),
-    ...(inlines === undefined ? {} : { inlines })
-  }
-
-  const clone = createRunRecord(runId, textValue, structureInput)
-  const properties = clonePropertyMap(readPropertyMap(source, DOCUMENT_STORE_FIELDS.run.properties))
-
-  clone.set(DOCUMENT_STORE_FIELDS.run.properties, properties)
-  syncRunResourceIds(clone, inlines ?? [])
-
-  return clone
 }
 
 function splitRunAtGraphemeIndex(
@@ -919,13 +810,6 @@ function splitRunAtGraphemeIndex(
     index: runLocation.index + 1,
     blockId: runLocation.blockId
   }
-}
-
-function collectText(run: Run): string {
-  return run.inlines
-    .filter((inline): inline is TextInline => inline.kind === 'text')
-    .map((inline) => inline.text)
-    .join('')
 }
 
 function updateImageRun(
@@ -982,19 +866,6 @@ function setProperties(record: SharedMapReader, fieldName: string, properties: R
   for (const [key, value] of Object.entries(properties)) {
     target.set(key, toDocumentStoreJson(value))
   }
-}
-
-function syncRunResourceIds(run: RunRecord, inlines: readonly Run['inlines'][number][]): void {
-  const nextIds = inlines
-    .filter((inline): inline is Extract<Run['inlines'][number], { kind: 'image' }> => inline.kind === 'image')
-    .map((inline) => inline.resourceId as ResourceId)
-  const resourceIds = new Y.Array<ResourceId>()
-
-  if (nextIds.length > 0) {
-    resourceIds.push(nextIds)
-  }
-
-  run.set(DOCUMENT_STORE_FIELDS.run.resourceIds, resourceIds)
 }
 
 function copyProperties(source: SharedMapReader, target: SharedMapReader, fieldName: string): void {

@@ -14,6 +14,7 @@ import type {
   LayoutLookupCache,
   LayoutRect,
   LineBox,
+  TableBox,
   TextFragment
 } from './types'
 
@@ -45,6 +46,12 @@ export function hitTestDocumentLayout(
     x: page.x + point.x,
     y: page.y + point.y
   }
+  const tableHit = hitTestTableBoxes(page.blocks.filter((block): block is TableBox => block.kind === 'table'), absolutePoint.x, absolutePoint.y)
+
+  if (tableHit !== undefined) {
+    return tableHit
+  }
+
   const line = page.lines.find((candidate) =>
     absolutePoint.y >= candidate.y && absolutePoint.y <= candidate.y + candidate.height
   ) ?? findNearestLine(page.lines, absolutePoint.y)
@@ -105,6 +112,15 @@ export function hitTestDocumentLayoutTextHit(
     x: page.x + point.x,
     y: page.y + point.y
   }
+  const tableHit = hitTestTableBoxes(page.blocks.filter((block): block is TableBox => block.kind === 'table'), absolutePoint.x, absolutePoint.y)
+
+  if (tableHit !== undefined) {
+    return {
+      position: tableHit,
+      bias: 'none'
+    }
+  }
+
   const line = page.lines.find((candidate) =>
     absolutePoint.y >= candidate.y && absolutePoint.y <= candidate.y + candidate.height
   ) ?? findNearestLine(page.lines, absolutePoint.y)
@@ -161,6 +177,37 @@ export function hitTestDocumentLayoutTextHit(
     position: resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x) ?? lastFragment.end,
     bias: 'none'
   }
+}
+
+/** 命中表格单元格并返回其首个文本位置。 */
+function hitTestTableBoxes(
+  tables: readonly TableBox[],
+  absoluteX: number,
+  absoluteY: number
+): TextPosition | undefined {
+  for (const table of tables) {
+    if (!isPointInsideRect(table, absoluteX, absoluteY)) {
+      continue
+    }
+
+    for (const row of table.rows) {
+      for (const cell of row.cells) {
+        if (cell.textPosition !== undefined && isPointInsideRect(cell, absoluteX, absoluteY)) {
+          return cell.textPosition
+        }
+      }
+    }
+  }
+
+  return undefined
+}
+
+/** 判断点是否在布局矩形内。 */
+function isPointInsideRect(rect: LayoutRect, absoluteX: number, absoluteY: number): boolean {
+  return absoluteX >= rect.x
+    && absoluteX <= rect.x + rect.width
+    && absoluteY >= rect.y
+    && absoluteY <= rect.y + rect.height
 }
 
 /**
