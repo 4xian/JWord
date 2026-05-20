@@ -19,9 +19,19 @@ export interface SelectionActionPosition {
 export interface CreateSelectionActionsControllerOptions {
   readonly editor: Editor
   readonly editorHost: HTMLElement
+  readonly colorFormat: SelectionActionsColorFormatController
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
+}
+
+/** 由主 toolbar 提供的颜色格式提交能力，selection-actions 只负责复用。 */
+export interface SelectionActionsColorFormatController {
+  applyColorFromSelection(
+    property: 'textColor' | 'backgroundColor',
+    selection: SelectionState | null,
+    value: string
+  ): void
 }
 
 /** 浮动工具栏与右键菜单的只读渲染状态。 */
@@ -41,6 +51,12 @@ export interface SelectionActionsViewState {
   readonly cutDisabled: boolean
   readonly copyDisabled: boolean
   readonly clearDisabled: boolean
+}
+
+/** 浮动工具栏冻结状态。 */
+export interface StickyFloatingToolbarState {
+  readonly selectionKey: string | null
+  readonly position: SelectionActionPosition | null
 }
 
 /** selection-actions controller 对外暴露的最小句柄。 */

@@ -379,7 +379,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
         this.scheduleDeferredPointerSelectionRender(POINTER_MULTI_CLICK_GRACE_MS)
         this.scheduleDeferredPointerSelectionFinalize(POINTER_MULTI_CLICK_GRACE_MS)
       } else {
-        this.scheduleDeferredPointerSelectionFinalize()
+        this.finalizeMountedPointerSelection()
       }
     }
 

@@ -61,6 +61,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     : createSelectionActionsController({
       editor: options.editor,
       editorHost: options.editorHost,
+      colorFormat: toolbar.colorFormat,
       assistive: {
         liveRegion
       }

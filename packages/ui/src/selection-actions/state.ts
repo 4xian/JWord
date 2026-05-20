@@ -10,7 +10,7 @@ import { isSelectionCollapsed, twipsToCssPx } from '@4xian/jword-core'
 import { DEFAULT_BACKGROUND_COLOR, DEFAULT_TEXT_COLOR } from '../toolbar/builtin-tools'
 import { normalizeHexColor, readSelectionFormattingState } from '../toolbar/state'
 import type { ToolbarPressedState } from '../toolbar/state'
-import type { SelectionActionPosition, SelectionActionsViewState } from './types'
+import type { SelectionActionPosition, SelectionActionsViewState, StickyFloatingToolbarState } from './types'
 
 /** 判断当前选区是否为可格式化的有效非折叠文本选区。 */
 export function hasActiveTextSelection(selection: SelectionState | null): selection is SelectionState {
@@ -102,9 +102,14 @@ export function buildSelectionActionsViewState(input: Readonly<{
   dismissedSelectionKey: string | null
   contextSelection: SelectionState | null
   contextPoint: SelectionActionPosition | null
+  stickyFloatingToolbar: StickyFloatingToolbarState
 }>): SelectionActionsViewState {
   const currentSelection = input.editor.getSelection()
   const currentSelectionKey = readSelectionKey(input.editor, currentSelection)
+  const usesStickyFloatingPosition =
+    currentSelectionKey.length > 0
+    && currentSelectionKey === input.stickyFloatingToolbar.selectionKey
+    && input.stickyFloatingToolbar.position !== null
   const floatingVisible =
     input.interactiveFocus
     && input.contextPoint === null
@@ -116,7 +121,9 @@ export function buildSelectionActionsViewState(input: Readonly<{
     : null
   const floatingPosition = !floatingVisible || currentSelection === null
     ? null
-    : readFloatingToolbarPosition(input.editor, input.editorHost, currentSelection)
+    : usesStickyFloatingPosition
+      ? input.stickyFloatingToolbar.position
+      : readFloatingToolbarPosition(input.editor, input.editorHost, currentSelection)
   const contextFormatting = input.contextSelection === null
     ? null
     : readSelectionFormattingState(input.editor, input.contextSelection)

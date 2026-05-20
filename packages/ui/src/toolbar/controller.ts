@@ -24,6 +24,7 @@ import type {
   JWordToolbarControlElement,
   JWordToolbarElements
 } from '../types'
+import type { SelectionActionsColorFormatController } from '../selection-actions/types'
 import type { LiveRegionController } from '../assistive/live-region'
 import type { TextMirrorController } from '../assistive/text-mirror'
 import {
@@ -68,6 +69,7 @@ interface ToolbarControllerHandle {
   readonly elements: JWordToolbarElements
   readonly mediaHost: HTMLElement | null
   readonly tableHost: HTMLElement | null
+  readonly colorFormat: SelectionActionsColorFormatController
   refresh(): void
   destroy(): void
 }
@@ -171,8 +173,8 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
         restoreEditorFocusSoon()
       })
     }
-    const bindToolbarColorChange = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
-      bindColorChange(control, () => {
+    const bindToolbarColorInput = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
+      bindColorInput(control, () => {
         handler()
         restoreEditorFocusSoon()
       })
@@ -280,12 +282,12 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       applyFontSizeStep(1)
     })
     bindColorClick(dom.controls['format.textColor'], () => {
-      frozenColorSelections.text = cloneSelection(editor.getSelection())
+      captureColorSelection('textColor', cloneSelection(editor.getSelection()))
     })
     bindColorClick(dom.controls['format.backgroundColor'], () => {
-      frozenColorSelections.background = cloneSelection(editor.getSelection())
+      captureColorSelection('backgroundColor', cloneSelection(editor.getSelection()))
     })
-    bindToolbarColorChange(dom.controls['format.textColor'], () => {
+    bindToolbarColorInput(dom.controls['format.textColor'], () => {
       const control = readColor(dom.controls['format.textColor'])
 
       if (control === null) {
@@ -294,7 +296,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
       applyColorFormatFromFrozenSelection('textColor', '文字颜色', control.value.toLowerCase())
     })
-    bindToolbarColorChange(dom.controls['format.backgroundColor'], () => {
+    bindToolbarColorInput(dom.controls['format.backgroundColor'], () => {
       const control = readColor(dom.controls['format.backgroundColor'])
 
       if (control === null) {
@@ -523,6 +525,30 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       selectionAfter: selection
     })
     clearFrozenColorSelection(property)
+  }
+
+  /** 捕获颜色控件打开时的选区，供 picker change 阶段复用。 */
+  function captureColorSelection(property: 'textColor' | 'backgroundColor', selection: SelectionState | null): void {
+    if (property === 'textColor') {
+      frozenColorSelections.text = selection
+      return
+    }
+
+    frozenColorSelections.background = selection
+  }
+
+  /** 对内部 UI 子模块暴露同一套颜色提交能力。 */
+  function applyColorFromSelection(
+    property: 'textColor' | 'backgroundColor',
+    selection: SelectionState | null,
+    value: string
+  ): void {
+    captureColorSelection(property, cloneSelection(selection))
+    applyColorFormatFromFrozenSelection(
+      property,
+      property === 'textColor' ? '文字颜色' : '背景色',
+      value
+    )
   }
 
   /** 应用字号格式。 */
@@ -835,6 +861,9 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     elements: dom,
     mediaHost,
     tableHost,
+    colorFormat: {
+      applyColorFromSelection
+    },
     refresh,
     destroy(): void {
       unsubscribeEditor()
@@ -883,12 +912,13 @@ function bindColorClick(control: JWordToolbarControlElement | undefined, handler
   control.addEventListener('click', handler)
 }
 
-/** 在颜色控件上绑定 change 事件。 */
-function bindColorChange(control: JWordToolbarControlElement | undefined, handler: () => void): void {
+/** 在颜色控件上绑定即时 input 与最终 change 事件。 */
+function bindColorInput(control: JWordToolbarControlElement | undefined, handler: () => void): void {
   if (!(control instanceof HTMLInputElement)) {
     return
   }
 
+  control.addEventListener('input', handler)
   control.addEventListener('change', handler)
 }
 
