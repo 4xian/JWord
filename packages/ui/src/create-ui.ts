@@ -49,7 +49,8 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     ? null
     : createTableController({
       editor: options.editor,
-      host: options.toolbarHost,
+      toolbarHost: toolbar.tableHost ?? options.toolbarHost,
+      editorHost: options.editorHost ?? options.toolbarHost,
       table: options.table,
       assistive: {
         liveRegion

@@ -18,8 +18,10 @@ import {
   buildInsertTableRowCommand,
   buildMergeTableCellsCommand,
   buildSetTableBorderCommand,
+  buildSetTableColumnWidthCommand,
   buildSetTableCellBorderCommand,
-  buildSetTableCellTextCommand
+  buildSetTableCellTextCommand,
+  buildSetTableRowHeightCommand
 } from '../../src/index'
 import type { DocumentProjection } from '../../src/model/projection'
 
@@ -40,9 +42,12 @@ describe('table command builders', () => {
         },
         table: {
           kind: 'table',
-          grid: [2400, 2400],
+          grid: [1800, 1800],
           rows: [
             {
+              properties: {
+                heightTwips: 480
+              },
               id: expect.any(String),
               cells: [
                 {
@@ -80,6 +85,9 @@ describe('table command builders', () => {
               ]
             },
             {
+              properties: {
+                heightTwips: 480
+              },
               id: expect.any(String),
               cells: [
                 {
@@ -129,11 +137,14 @@ describe('table command builders', () => {
     const deleteRow = buildDeleteTableRowCommand(projection, 'table-builder', 0)
     const insertColumn = buildInsertTableColumnCommand(projection, 'table-builder', 1)
     const deleteColumn = buildDeleteTableColumnCommand(projection, 'table-builder', 0)
+    const setColumnWidth = buildSetTableColumnWidthCommand(projection, 'table-builder', 1, 2600)
+    const setRowHeight = buildSetTableRowHeightCommand(projection, 'table-builder', 0, 600)
 
     expect(insertRow?.operations[0]).toMatchObject({
       kind: 'insertTableRow',
       tableId: 'table-builder',
       rowIndex: 1,
+      rowHeightTwips: 480,
       rowId: expect.any(String),
       cellIds: expect.arrayContaining([expect.any(String), expect.any(String)]),
       paragraphIds: expect.arrayContaining([expect.any(String), expect.any(String)]),
@@ -162,6 +173,24 @@ describe('table command builders', () => {
         kind: 'deleteTableColumn',
         tableId: 'table-builder',
         columnIndex: 0
+      }]
+    })
+    expect(setColumnWidth).toEqual({
+      name: 'setTableColumnWidth',
+      operations: [{
+        kind: 'setTableColumnWidth',
+        tableId: 'table-builder',
+        columnIndex: 1,
+        widthTwips: 2600
+      }]
+    })
+    expect(setRowHeight).toEqual({
+      name: 'setTableRowHeight',
+      operations: [{
+        kind: 'setTableRowHeight',
+        tableId: 'table-builder',
+        rowIndex: 0,
+        heightTwips: 600
       }]
     })
   })
@@ -281,10 +310,13 @@ function createTableProjection(): DocumentProjection {
             {
               kind: 'table',
               id: 'table-builder',
-              grid: [2400, 2400],
+              grid: [1800, 1800],
               rows: [
                 {
                   id: 'table-builder-row-1',
+                  properties: {
+                    heightTwips: 480
+                  },
                   cells: [
                     {
                       id: 'table-builder-cell-1-1',
@@ -322,6 +354,9 @@ function createTableProjection(): DocumentProjection {
                 },
                 {
                   id: 'table-builder-row-2',
+                  properties: {
+                    heightTwips: 480
+                  },
                   cells: [
                     {
                       id: 'table-builder-cell-2-1',

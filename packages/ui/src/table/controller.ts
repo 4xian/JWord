@@ -5,7 +5,7 @@
  * 性能/安全约束：所有表格写入都必须继续走 editor facade 的 transaction pipeline，不旁路修改 projection。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.7。
  */
-import type { Editor } from '@4xian/jword-core'
+import { twipsToCssPx, type DocumentLayout, type Editor, type LayoutBox } from '@4xian/jword-core'
 import type {
   JWordTableBorderPreset,
   JWordTableCommandContext,
@@ -29,7 +29,8 @@ import {
 
 interface CreateTableControllerOptions {
   readonly editor: Editor
-  readonly host: HTMLElement
+  readonly toolbarHost: HTMLElement
+  readonly editorHost: HTMLElement
   readonly table: JWordTableOptions
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
@@ -42,16 +43,27 @@ interface TableControllerHandle {
   destroy(): void
 }
 
+type TableLayoutBox = Extract<DocumentLayout['pages'][number]['blocks'][number], { kind: 'table' }>
+
 /** 创建 Gate 4 表格工具栏 controller。 */
 export function createTableController(options: CreateTableControllerOptions): TableControllerHandle {
-  const dom = createTablePanelDom(options.host, options.table.title ?? '表格')
+  const dom = createTablePanelDom(
+    options.toolbarHost,
+    options.editorHost,
+    options.table.title ?? '表格'
+  )
   const commands = options.table.commands
   const liveRegion = options.assistive.liveRegion
   let insertRows = 2
   let insertColumns = 2
+  let previewRows = 1
+  let previewColumns = 1
+  let insertMenuOpen = false
+  let customSizeDialogOpen = false
   let scope: JWordTableSelectionScope = 'cell'
   let borderPreset: JWordTableBorderPreset = 'all'
   let busy = false
+  let overlayVisible = false
   const unsubscribeEditor = options.editor.subscribe((event) => {
     if (event.kind === 'selectionChange' || event.kind === 'transaction') {
       refresh()
@@ -87,19 +99,35 @@ export function createTableController(options: CreateTableControllerOptions): Ta
   /** 用当前状态重绘表格工具。 */
   function refresh(): void {
     const target = readTarget()
+    const layout = options.editor.getLayout()
+    const overlayGeometry = target === null
+      ? null
+      : resolveTableOverlayGeometry(layout, options.editorHost, target)
+    const targetAvailable = target !== null
+
+    if (!targetAvailable) {
+      overlayVisible = false
+    }
 
     renderTablePanel(dom, {
       summary: readTableSelectionSummary(target, scope),
       insertRows,
       insertColumns,
+      previewRows,
+      previewColumns,
+      insertMenuOpen,
+      customSizeDialogOpen,
+      quickToolsVisible: overlayVisible,
       scope,
       borderPreset,
-      targetAvailable: target !== null,
+      targetAvailable,
       canDeleteRow: canDeleteTargetRow(target),
       canDeleteColumn: canDeleteTargetColumn(target),
       canMergeRight: canMergeCellWithRight(target),
       busy
     })
+
+    syncOverlay(dom, overlayGeometry, targetAvailable)
   }
 
   /** 在一次操作完成后把焦点还给 editor。 */
@@ -141,6 +169,73 @@ export function createTableController(options: CreateTableControllerOptions): Ta
 
   /** 绑定所有 DOM 事件。 */
   function bindEvents(): void {
+    dom.insertTriggerButton.addEventListener('click', () => {
+      if (busy) {
+        return
+      }
+
+      insertMenuOpen = !insertMenuOpen
+      if (insertMenuOpen) {
+        customSizeDialogOpen = false
+        overlayVisible = false
+      }
+      refresh()
+    })
+    dom.topAnchor.addEventListener('click', () => {
+      if (busy || readTarget() === null) {
+        return
+      }
+
+      insertMenuOpen = false
+      customSizeDialogOpen = false
+      overlayVisible = true
+      refresh()
+      restoreEditorFocusSoon()
+    })
+    dom.leftAnchor.addEventListener('click', () => {
+      if (busy || readTarget() === null) {
+        return
+      }
+
+      insertMenuOpen = false
+      customSizeDialogOpen = false
+      overlayVisible = true
+      refresh()
+      restoreEditorFocusSoon()
+    })
+    for (const button of dom.insertPreviewButtons) {
+      button.addEventListener('pointerenter', () => {
+        previewRows = readPreviewDimension(button.dataset.jwordRows, previewRows)
+        previewColumns = readPreviewDimension(button.dataset.jwordColumns, previewColumns)
+        insertRows = previewRows
+        insertColumns = previewColumns
+        refresh()
+      })
+      button.addEventListener('click', () => {
+        previewRows = readPreviewDimension(button.dataset.jwordRows, previewRows)
+        previewColumns = readPreviewDimension(button.dataset.jwordColumns, previewColumns)
+        insertRows = previewRows
+        insertColumns = previewColumns
+        customSizeDialogOpen = false
+        insertMenuOpen = false
+        void runInsertTableAction()
+      })
+    }
+    dom.customSizeButton.addEventListener('click', () => {
+      if (busy) {
+        return
+      }
+
+      customSizeDialogOpen = true
+      refresh()
+      dom.insertRowsInput.focus()
+    })
+    dom.customSizeCancelButton.addEventListener('click', () => {
+      customSizeDialogOpen = false
+      refresh()
+    })
+    document.addEventListener('pointerdown', handleOutsidePointerDown)
+    document.addEventListener('keydown', handleGlobalKeyDown)
     dom.insertRowsInput.addEventListener('change', () => {
       insertRows = normalizeTableDimension(dom.insertRowsInput.value, insertRows)
       refresh()
@@ -152,17 +247,10 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     dom.insertConfirmButton.addEventListener('click', () => {
       insertRows = normalizeTableDimension(dom.insertRowsInput.value, insertRows)
       insertColumns = normalizeTableDimension(dom.insertColumnsInput.value, insertColumns)
+      customSizeDialogOpen = false
+      insertMenuOpen = false
 
-      void runAction('插入表格', () => {
-        return commands.insertTable?.({
-          ...readCommandContext(),
-          rows: insertRows,
-          columns: insertColumns
-        }) ?? {
-          kind: 'deferred',
-          message: readDefaultDeferredMessage('插入表格')
-        }
-      })
+      void runInsertTableAction()
     })
     dom.scopeCellButton.addEventListener('click', () => {
       if (busy || readTarget() === null) {
@@ -307,6 +395,56 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     })
   }
 
+  /** 执行插入表格命令。 */
+  function runInsertTableAction(): Promise<void> {
+    return runAction('插入表格', () => {
+      return commands.insertTable?.({
+        ...readCommandContext(),
+        rows: insertRows,
+        columns: insertColumns
+      }) ?? {
+        kind: 'deferred',
+        message: readDefaultDeferredMessage('插入表格')
+      }
+    })
+  }
+
+  /** 点击组件外部时关闭插入面板。 */
+  function handleOutsidePointerDown(event: PointerEvent): void {
+    if (
+      !(event.target instanceof Node)
+      || dom.host.contains(event.target)
+      || dom.overlay.contains(event.target)
+    ) {
+      return
+    }
+
+    if (!insertMenuOpen && !customSizeDialogOpen && !overlayVisible) {
+      return
+    }
+
+    insertMenuOpen = false
+    customSizeDialogOpen = false
+    overlayVisible = false
+    refresh()
+  }
+
+  /** Escape 收起表格下拉或二级弹窗。 */
+  function handleGlobalKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape') {
+      return
+    }
+
+    if (!insertMenuOpen && !customSizeDialogOpen && !overlayVisible) {
+      return
+    }
+
+    insertMenuOpen = false
+    customSizeDialogOpen = false
+    overlayVisible = false
+    refresh()
+  }
+
   /** 统一执行“必须依赖当前表格目标”的动作。 */
   async function runTargetAction(
     actionLabel: string,
@@ -331,9 +469,108 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     refresh,
     destroy(): void {
       unsubscribeEditor()
+      document.removeEventListener('pointerdown', handleOutsidePointerDown)
+      document.removeEventListener('keydown', handleGlobalKeyDown)
       destroyTablePanel(dom)
     }
   }
+}
+
+/** 把表格辅助层定位到当前命中的表格附近。 */
+function syncOverlay(
+  dom: JWordTablePanelElements,
+  geometry: Readonly<{
+    left: number
+    top: number
+    width: number
+    height: number
+  }> | null,
+  targetAvailable: boolean
+): void {
+  dom.overlay.hidden = !targetAvailable || geometry === null
+
+  if (!targetAvailable || geometry === null) {
+    return
+  }
+
+  dom.overlay.style.left = `${geometry.left}px`
+  dom.overlay.style.top = `${geometry.top}px`
+  dom.overlay.style.width = `${geometry.width}px`
+  dom.overlay.style.height = `${geometry.height}px`
+}
+
+/** 解析当前表格在 editorHost 里的几何。 */
+function resolveTableOverlayGeometry(
+  layout: DocumentLayout,
+  editorHost: HTMLElement,
+  target: JWordTableSelectionTarget
+): Readonly<{
+  left: number
+  top: number
+  width: number
+  height: number
+}> | null {
+  const canvasContainer = editorHost.querySelector<HTMLElement>('[data-jword-canvas-container]')
+  if (canvasContainer === null) {
+    return null
+  }
+
+  const tableBox = findTableBox(layout, target.tableId)
+  if (tableBox === null) {
+    return null
+  }
+
+  const pageElement = canvasContainer.querySelector<HTMLElement>(`[data-jword-page="${tableBox.pageIndex}"]`)
+  const page = layout.pages[tableBox.pageIndex]
+  if (pageElement === null || page === undefined) {
+    return null
+  }
+
+  const scale = resolvePageScale(pageElement, page)
+  const left = pageElement.offsetLeft + twipsToCssPx(tableBox.x - page.x, scale)
+  const top = pageElement.offsetTop + twipsToCssPx(tableBox.y - page.y, scale)
+  const width = twipsToCssPx(tableBox.width, scale)
+  const height = twipsToCssPx(tableBox.height, scale)
+
+  return {
+    left,
+    top,
+    width,
+    height
+  }
+}
+
+/** 读取表格 box。 */
+function findTableBox(layout: DocumentLayout, tableId: string): TableLayoutBox | null {
+  for (const page of layout.pages) {
+    const table = page.blocks.find((block) => block.kind === 'table' && block.tableId === tableId)
+
+    if (table !== undefined && table.kind === 'table') {
+      return table
+    }
+  }
+
+  return null
+}
+
+/** 从 DOM 反推页面 scale。 */
+function resolvePageScale(pageElement: HTMLElement, page: LayoutBox): number {
+  const baseWidthPx = twipsToCssPx(page.width)
+
+  if (baseWidthPx <= 0) {
+    return 1
+  }
+
+  return pageElement.clientWidth / baseWidthPx
+}
+
+/** 读取预览网格上的行列值。 */
+function readPreviewDimension(value: string | undefined, fallback: number): number {
+  if (value === undefined) {
+    return fallback
+  }
+
+  return normalizeTableDimension(value, fallback)
 }
 
 /** 归一化 table controller 的异常消息。 */

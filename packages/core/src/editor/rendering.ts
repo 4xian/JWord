@@ -373,6 +373,8 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
     case 'deleteTableRow':
     case 'insertTableColumn':
     case 'deleteTableColumn':
+    case 'setTableColumnWidth':
+    case 'setTableRowHeight':
     case 'mergeTableCells':
     case 'setTableBorder':
       return findBlockPageIndexes(layout, operation.tableId)

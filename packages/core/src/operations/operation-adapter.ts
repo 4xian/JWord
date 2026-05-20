@@ -173,6 +173,12 @@ export function applyOperation(
     case 'deleteTableColumn':
       applyTableOperation(store, operation)
       break
+    case 'setTableColumnWidth':
+      applyTableOperation(store, operation)
+      break
+    case 'setTableRowHeight':
+      applyTableOperation(store, operation)
+      break
     case 'mergeTableCells':
       applyTableOperation(store, operation)
       break

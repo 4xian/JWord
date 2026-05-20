@@ -16,9 +16,14 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   await waitForTableDemoReady(page)
 
   const summary = page.locator('[data-jword-table-summary="true"]')
+  const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
+  const insertPreviewLabel = page.locator('[data-jword-table-insert-preview-label="true"]')
+  const insertPreviewCell2x2 = page.locator('[data-jword-table-preview-cell="true"][data-jword-rows="2"][data-jword-columns="2"]')
+  const customSizeButton = page.locator('[data-jword-table-custom-size="true"]')
+  const customSizeDialog = page.locator('[data-jword-table-custom-size-dialog="true"]')
   const rowsInput = page.locator('[data-jword-table-insert-rows="true"]')
   const columnsInput = page.locator('[data-jword-table-insert-columns="true"]')
-  const insertButton = page.locator('[data-jword-table-insert-confirm="true"]')
+  const customSizeCancelButton = page.locator('[data-jword-table-custom-size-cancel="true"]')
   const insertRowAfterButton = page.locator('[data-jword-table-action="insert-row-after"]')
   const insertColumnAfterButton = page.locator('[data-jword-table-action="insert-column-after"]')
   const deleteRowButton = page.locator('[data-jword-table-action="delete-row"]')
@@ -32,9 +37,10 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   const undoButton = page.getByRole('button', { name: '撤销' })
   const redoButton = page.getByRole('button', { name: '重做' })
 
-  await rowsInput.fill('2')
-  await columnsInput.fill('2')
-  await clickToolbarAction(insertButton)
+  await clickToolbarAction(insertTrigger)
+  await insertPreviewCell2x2.hover()
+  await expect(insertPreviewLabel).toContainText('2 x 2')
+  await clickToolbarAction(insertPreviewCell2x2)
 
   await expect(summary).toContainText('2 x 2')
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
@@ -44,6 +50,14 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
     firstCellGridSpan: 1,
     firstCellText: ''
   })
+
+  await clickToolbarAction(insertTrigger)
+  await clickToolbarAction(customSizeButton)
+  await expect(customSizeDialog).toBeVisible()
+  await rowsInput.fill('3')
+  await columnsInput.fill('4')
+  await clickToolbarAction(customSizeCancelButton)
+  await expect(customSizeDialog).toBeHidden()
 
   await expect.poll(() => {
     return page.evaluate(() => window.__jwordDemo?.table.setCellText(0, 0, '单元格A1') ?? false)
@@ -110,6 +124,67 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   })
 })
 
+test('Gate 4 table click resize and context actions keep table editable', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('/')
+  await waitForTableDemoReady(page)
+
+  const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
+  const insertPreviewCell2x2 = page.locator('[data-jword-table-preview-cell="true"][data-jword-rows="2"][data-jword-columns="2"]')
+
+  await clickToolbarAction(insertTrigger)
+  await clickToolbarAction(insertPreviewCell2x2)
+
+  const firstCellPoint = await readTableCellViewportPoint(page, 0, 0)
+
+  await page.mouse.click(firstCellPoint.x, firstCellPoint.y)
+
+  await expect.poll(() => readCurrentCaretSnapshot(page)).toMatchObject({
+    blockId: 'paragraph-table-0-0'
+  })
+
+  const beforeResize = await readFirstTableState(page)
+
+  await dragResizeHandle(page, '[data-jword-table-resize-handle="column-0"]', 24, 0)
+  await dragResizeHandle(page, '[data-jword-table-resize-handle="row-0"]', 0, 16)
+
+  await expect.poll(() => readFirstTableState(page)).toMatchObject({
+    rowCount: 2,
+    columnCount: 2
+  })
+  await expect.poll(() => readFirstTableState(page)).toSatisfy((state) => {
+    return state !== null
+      && beforeResize !== null
+      && (state.firstColumnWidthTwips ?? 0) > (beforeResize.firstColumnWidthTwips ?? 0)
+      && (state.firstRowHeightTwips ?? 0) > (beforeResize.firstRowHeightTwips ?? 0)
+  })
+
+  await page.mouse.click(firstCellPoint.x, firstCellPoint.y, {
+    button: 'right'
+  })
+  await clickToolbarAction(page.locator('[data-jword-context-action="table.insert-row-after"]'))
+  await expect.poll(() => readFirstTableState(page)).toMatchObject({
+    rowCount: 3
+  })
+
+  await page.mouse.click(firstCellPoint.x, firstCellPoint.y, {
+    button: 'right'
+  })
+  await clickToolbarAction(page.locator('[data-jword-context-action="table.insert-column-after"]'))
+  await expect.poll(() => readFirstTableState(page)).toMatchObject({
+    columnCount: 3
+  })
+
+  await page.mouse.click(firstCellPoint.x, firstCellPoint.y, {
+    button: 'right'
+  })
+  await clickToolbarAction(page.locator('[data-jword-context-action="table.merge-right"]'))
+  await expect.poll(() => readFirstTableState(page)).toMatchObject({
+    firstRowCellCount: 2,
+    firstCellGridSpan: 2
+  })
+})
+
 /** 等待 demo、toolbar 与 table UI 都完成挂载。 */
 async function waitForTableDemoReady(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__jwordDemo !== undefined)
@@ -122,6 +197,31 @@ async function clickToolbarAction(locator: Locator): Promise<void> {
   await locator.click({
     noWaitAfter: true
   })
+}
+
+/** 拖拽表格 resize handle。 */
+async function dragResizeHandle(
+  page: Page,
+  selector: string,
+  deltaX: number,
+  deltaY: number
+): Promise<void> {
+  const handle = page.locator(selector)
+  const box = await handle.boundingBox()
+
+  if (box === null) {
+    throw new Error(`Missing resize handle: ${selector}`)
+  }
+
+  const startX = box.x + box.width / 2
+  const startY = box.y + box.height / 2
+
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+  await page.mouse.move(startX + deltaX, startY + deltaY, {
+    steps: 8
+  })
+  await page.mouse.up()
 }
 
 /** 通过 demo hook 把选区重新放回指定单元格。 */
@@ -140,6 +240,70 @@ async function selectDemoTableCell(page: Page, rowIndex: number, columnIndex: nu
   }).not.toBeNull()
 }
 
+/** 读取指定单元格在视口内的点击点。 */
+async function readTableCellViewportPoint(
+  page: Page,
+  rowIndex: number,
+  columnIndex: number
+): Promise<{
+  x: number
+  y: number
+}> {
+  return page.evaluate(({ nextRowIndex, nextColumnIndex }) => {
+    const editor = window.__jwordDemo?.editor
+    const editorHost = document.querySelector<HTMLElement>('#jword-editor')
+    const canvasContainer = editorHost?.querySelector<HTMLElement>('[data-jword-canvas-container]')
+    const layout = editor?.getLayout()
+    const pageBox = layout?.pages[0]
+    const table = pageBox?.blocks.find((block) => block.kind === 'table')
+    const row = table?.kind === 'table' ? table.rows[nextRowIndex] : undefined
+    const cell = row?.cells[nextColumnIndex]
+    const pageElement = canvasContainer?.querySelector<HTMLElement>('[data-jword-page="0"]')
+
+    if (editor === undefined || editorHost === null || canvasContainer === null || pageBox === undefined || table?.kind !== 'table' || cell === undefined || pageElement === null) {
+      throw new Error('Unable to resolve table cell viewport point.')
+    }
+
+    const hostRect = editorHost.getBoundingClientRect()
+    const pageRect = pageElement.getBoundingClientRect()
+    const scale = pageRect.width / (pageBox.width / 1440 * 96)
+    const toPx = (twips: number) => twips / 1440 * 96 * scale
+
+    return {
+      x: pageRect.left + toPx(cell.x - pageBox.x + cell.width / 2),
+      y: pageRect.top + toPx(cell.y - pageBox.y + cell.height / 2)
+    }
+  }, {
+    nextRowIndex: rowIndex,
+    nextColumnIndex: columnIndex
+  })
+}
+
+/** 读取当前光标快照，确认表格点击后已有有效 caret。 */
+async function readCurrentCaretSnapshot(page: Page): Promise<{
+  blockId: string | null
+  runId: string | null
+  caretHeight: number | null
+} | null> {
+  return page.evaluate(() => {
+    const editor = window.__jwordDemo?.editor
+    const selection = editor?.getSelection()
+    const focus = selection?.focus
+    const position = focus === undefined ? undefined : editor?.resolveTextPosition(focus)
+    const caretRect = focus === undefined ? undefined : editor?.getCaretRect(focus)
+
+    if (editor === undefined || selection === null || focus === undefined || position === undefined || caretRect === undefined) {
+      return null
+    }
+
+    return {
+      blockId: position.blockId,
+      runId: position.runId,
+      caretHeight: caretRect.height
+    }
+  })
+}
+
 /** 读取当前首个表格的最小投影快照。 */
 async function readFirstTableState(page: Page): Promise<{
   rowCount: number
@@ -148,6 +312,8 @@ async function readFirstTableState(page: Page): Promise<{
   firstCellGridSpan: number
   firstCellText: string
   firstCellBorderColor: string | null
+  firstColumnWidthTwips: number | null
+  firstRowHeightTwips: number | null
 } | null> {
   return page.evaluate(() => {
     const projection = window.__jwordDemo?.editor.getProjection()
@@ -180,7 +346,9 @@ async function readFirstTableState(page: Page): Promise<{
       firstRowCellCount,
       firstCellGridSpan,
       firstCellText,
-      firstCellBorderColor
+      firstCellBorderColor,
+      firstColumnWidthTwips: table.grid?.[0] ?? null,
+      firstRowHeightTwips: table.rows[0]?.properties?.heightTwips ?? null
     }
   })
 }

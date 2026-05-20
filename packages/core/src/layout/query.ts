@@ -205,9 +205,9 @@ function hitTestTableBoxes(
 /** 判断点是否在布局矩形内。 */
 function isPointInsideRect(rect: LayoutRect, absoluteX: number, absoluteY: number): boolean {
   return absoluteX >= rect.x
-    && absoluteX <= rect.x + rect.width
+    && absoluteX < rect.x + rect.width
     && absoluteY >= rect.y
-    && absoluteY <= rect.y + rect.height
+    && absoluteY < rect.y + rect.height
 }
 
 /**
@@ -244,13 +244,15 @@ export function getCaretRect(layout: DocumentLayout, position: TextPosition): La
   const located = locatePosition(layout, position)
 
   if (located === undefined) {
-    return undefined
+    const tableCellRect = locateTableCellRect(layout, position)
+
+    return tableCellRect
   }
 
   const target = located.fragment ?? located.inline
 
   if (target === undefined) {
-    return undefined
+    return locateTableCellRect(layout, position)
   }
 
   return {
@@ -262,6 +264,35 @@ export function getCaretRect(layout: DocumentLayout, position: TextPosition): La
     width: 0,
     height: located.fragment?.height ?? DEFAULT_CARET_HEIGHT_TWIPS
   }
+}
+
+/** 读取表格单元格命中的 caret 矩形。 */
+function locateTableCellRect(layout: DocumentLayout, position: TextPosition): LayoutRect | undefined {
+  for (const page of layout.pages) {
+    for (const block of page.blocks) {
+      if (block.kind !== 'table') {
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          if (cell.textPosition === undefined || !isSamePosition(cell.textPosition, position)) {
+            continue
+          }
+
+          return {
+            pageIndex: page.pageIndex,
+            x: cell.x,
+            y: cell.y,
+            width: 0,
+            height: cell.height
+          }
+        }
+      }
+    }
+  }
+
+  return undefined
 }
 
 /**

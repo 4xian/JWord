@@ -67,6 +67,7 @@ interface CreateToolbarControllerOptions extends CreateJWordUiOptions {
 interface ToolbarControllerHandle {
   readonly elements: JWordToolbarElements
   readonly mediaHost: HTMLElement | null
+  readonly tableHost: HTMLElement | null
   refresh(): void
   destroy(): void
 }
@@ -77,7 +78,10 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
   const dom = createToolbarDom(options.toolbarHost, toolbarConfig)
   const mediaHost = options.media === undefined
     ? null
-    : createToolbarMediaHost(dom.bar)
+    : createToolbarExtensionHost(dom.bar, 'media')
+  const tableHost = options.table === undefined
+    ? null
+    : createToolbarExtensionHost(dom.bar, 'table')
   const assistive = options.assistive
   const editor = options.editor
   let suppressSelectionAnnouncementsUntil = 0
@@ -830,6 +834,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
   return {
     elements: dom,
     mediaHost,
+    tableHost,
     refresh,
     destroy(): void {
       unsubscribeEditor()
@@ -840,12 +845,12 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
   }
 }
 
-/** 为图片入口补一个挂到 toolbar bar 末尾的独立分组。 */
-function createToolbarMediaHost(bar: HTMLElement): HTMLElement {
+/** 为 Gate 4 扩展入口补一个挂到 toolbar bar 末尾的独立分组。 */
+function createToolbarExtensionHost(bar: HTMLElement, kind: 'media' | 'table'): HTMLElement {
   const group = document.createElement('div')
 
   group.className = 'jw-toolbar__group'
-  group.setAttribute('data-jword-media-host', 'true')
+  group.setAttribute(`data-jword-${kind}-host`, 'true')
   bar.append(group)
 
   return group

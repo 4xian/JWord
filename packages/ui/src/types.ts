@@ -418,6 +418,28 @@ export interface JWordMediaPanelElements {
 export interface JWordTablePanelElements {
   /** 表格工具根宿主。 */
   readonly host: HTMLElement
+  /** 表格独立辅助层根宿主。 */
+  readonly overlay: HTMLElement
+  /** toolbar 上的插入表格触发按钮。 */
+  readonly insertTriggerButton: HTMLButtonElement
+  /** 插入表格下拉面板。 */
+  readonly insertMenu: HTMLElement
+  /** 预览网格当前尺寸文案。 */
+  readonly insertPreviewLabel: HTMLElement
+  /** 3 x 9 预览网格按钮。 */
+  readonly insertPreviewButtons: readonly HTMLButtonElement[]
+  /** 自定义行列弹窗。 */
+  readonly customSizeDialog: HTMLElement
+  /** 自定义行列入口按钮。 */
+  readonly customSizeButton: HTMLButtonElement
+  /** 自定义行列取消按钮。 */
+  readonly customSizeCancelButton: HTMLButtonElement
+  /** 表格上方辅助边区入口。 */
+  readonly topAnchor: HTMLButtonElement
+  /** 表格左侧辅助边区入口。 */
+  readonly leftAnchor: HTMLButtonElement
+  /** 表格命中后的快捷工具区。 */
+  readonly quickTools: HTMLElement
   /** 当前目标摘要。 */
   readonly summary: HTMLElement
   /** 插入表格的行数输入。 */

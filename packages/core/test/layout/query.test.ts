@@ -402,6 +402,7 @@ describe('Gate 2 命中测试 and 矩形映射', () => {
     })).toEqual([])
     expect((getCaretRect(layout, position!)?.height ?? 0)).toBeLessThan(imageInline?.height ?? Number.POSITIVE_INFINITY)
   })
+
 })
 
 function createSingleLineLayout() {

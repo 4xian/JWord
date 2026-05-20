@@ -44,6 +44,7 @@ export type ToolbarIconName =
   | 'comment'
   | 'caretDown'
   | 'check'
+  | 'table'
 
 interface ToolbarIconPathDefinition {
   readonly d: string
@@ -375,6 +376,18 @@ const TOOLBAR_ICON_DEFINITIONS = Object.freeze<Record<ToolbarIconName, ToolbarIc
         d: 'M6.5 5h11A2.5 2.5 0 0 1 20 7.5v7A2.5 2.5 0 0 1 17.5 17H10l-3.93 2.62A.75.75 0 0 1 5 19v-2.09A2.5 2.5 0 0 1 4 14.5v-7A2.5 2.5 0 0 1 6.5 5m0 1.25a1.25 1.25 0 0 0-1.25 1.25v7c0 .56.46 1.25 1.25 1.25H6.25v1.84l3.25-2.17h8A1.25 1.25 0 0 0 18.75 14.5v-7a1.25 1.25 0 0 0-1.25-1.25z',
         fillRule: 'evenodd',
         clipRule: 'evenodd'
+      }
+    ]
+  },
+  table: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M5.5 5.5h13v13h-13zm5 0v13m5-13v13M5.5 10.5h13m-13 5h13',
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: '1.4',
+        strokeLinejoin: 'round'
       }
     ]
   },

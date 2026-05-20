@@ -39,6 +39,8 @@ export type OperationKind =
   | 'deleteTableRow'
   | 'insertTableColumn'
   | 'deleteTableColumn'
+  | 'setTableColumnWidth'
+  | 'setTableRowHeight'
   | 'mergeTableCells'
   | 'setTableBorder'
   | 'setTableCellText'
@@ -64,6 +66,8 @@ const OPERATION_KINDS = new Set<OperationKind>([
   'deleteTableRow',
   'insertTableColumn',
   'deleteTableColumn',
+  'setTableColumnWidth',
+  'setTableRowHeight',
   'mergeTableCells',
   'setTableBorder',
   'setTableCellText'
@@ -220,6 +224,7 @@ export interface InsertTableOperation extends OperationBase<'insertTable'> {
 export interface InsertTableRowOperation extends OperationBase<'insertTableRow'> {
   readonly tableId: string
   readonly rowIndex: number
+  readonly rowHeightTwips?: number
   readonly rowId: string
   readonly cellIds: readonly string[]
   readonly paragraphIds: readonly string[]
@@ -246,6 +251,20 @@ export interface InsertTableColumnOperation extends OperationBase<'insertTableCo
 export interface DeleteTableColumnOperation extends OperationBase<'deleteTableColumn'> {
   readonly tableId: string
   readonly columnIndex: number
+}
+
+/** 设置表格列宽。 */
+export interface SetTableColumnWidthOperation extends OperationBase<'setTableColumnWidth'> {
+  readonly tableId: string
+  readonly columnIndex: number
+  readonly widthTwips: number
+}
+
+/** 设置表格行高。 */
+export interface SetTableRowHeightOperation extends OperationBase<'setTableRowHeight'> {
+  readonly tableId: string
+  readonly rowIndex: number
+  readonly heightTwips: number
 }
 
 /** 合并同一行内连续单元格。 */
@@ -294,6 +313,8 @@ export type Operation =
   | DeleteTableRowOperation
   | InsertTableColumnOperation
   | DeleteTableColumnOperation
+  | SetTableColumnWidthOperation
+  | SetTableRowHeightOperation
   | MergeTableCellsOperation
   | SetTableBorderOperation
   | SetTableCellTextOperation

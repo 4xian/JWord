@@ -33,6 +33,8 @@ type TableOperation = Extract<Operation, {
     | 'deleteTableRow'
     | 'insertTableColumn'
     | 'deleteTableColumn'
+    | 'setTableColumnWidth'
+    | 'setTableRowHeight'
     | 'mergeTableCells'
     | 'setTableBorder'
     | 'setTableCellText'
@@ -69,6 +71,12 @@ export function applyTableOperation(store: DocumentStore, operation: TableOperat
     case 'deleteTableColumn':
       deleteTableColumn(store, operation)
       break
+    case 'setTableColumnWidth':
+      setTableColumnWidth(store, operation)
+      break
+    case 'setTableRowHeight':
+      setTableRowHeight(store, operation)
+      break
     case 'mergeTableCells':
       mergeTableCells(store, operation)
       break
@@ -87,12 +95,14 @@ function insertTableRow(store: DocumentStore, operation: Extract<Operation, { ki
   const rows = getTableRows(table)
   const columnCount = resolveTableColumnCount(table)
   const index = Math.max(0, Math.min(operation.rowIndex, rows.length))
+  const inheritedHeightTwips = readInsertionRowHeight(table, index)
   const row = createTableRowRecordFromModel(createTableTextRowModel(
     operation.rowId,
     columnCount,
     operation.cellIds,
     operation.paragraphIds,
-    operation.runIds
+    operation.runIds,
+    normalizeTableRowHeight(operation.rowHeightTwips ?? inheritedHeightTwips)
   ))
 
   rows.insert(index, [row])
@@ -185,6 +195,33 @@ function deleteTableColumn(store: DocumentStore, operation: Extract<Operation, {
   }
 }
 
+/** 设置指定列宽。 */
+function setTableColumnWidth(store: DocumentStore, operation: Extract<Operation, { kind: 'setTableColumnWidth' }>): void {
+  const table = findTableRecord(store, operation.tableId)
+  const columnCount = resolveTableColumnCount(table)
+  const columnIndex = Math.max(0, Math.min(operation.columnIndex, columnCount - 1))
+  const nextGrid = readTableGridValues(table, columnCount)
+
+  nextGrid[columnIndex] = normalizeTableColumnWidth(operation.widthTwips)
+  setProperties(table, DOCUMENT_STORE_FIELDS.block.properties, {
+    grid: nextGrid
+  })
+}
+
+/** 设置指定行高。 */
+function setTableRowHeight(store: DocumentStore, operation: Extract<Operation, { kind: 'setTableRowHeight' }>): void {
+  const table = findTableRecord(store, operation.tableId)
+  const row = getTableRows(table).get(operation.rowIndex)
+
+  if (row === undefined) {
+    return
+  }
+
+  setProperties(row, DOCUMENT_STORE_FIELDS.tableRow.properties, {
+    heightTwips: normalizeTableRowHeight(operation.heightTwips)
+  })
+}
+
 /** 合并同一行内的连续单元格。 */
 function mergeTableCells(store: DocumentStore, operation: Extract<Operation, { kind: 'mergeTableCells' }>): void {
   const table = findTableRecord(store, operation.tableId)
@@ -267,10 +304,16 @@ function createTableTextRowModel(
   columnCount: number,
   cellIds: readonly string[],
   paragraphIds: readonly string[],
-  runIds: readonly string[]
+  runIds: readonly string[],
+  rowHeightTwips?: number
 ): TableRow {
   return {
     id: rowId,
+    ...(rowHeightTwips === undefined ? {} : {
+      properties: {
+        heightTwips: rowHeightTwips
+      }
+    }),
     cells: Array.from({ length: columnCount }, (_, columnIndex) =>
       createTableTextCellModel(
         cellIds[columnIndex] ?? `${rowId}-cell-${columnIndex}`,
@@ -329,14 +372,40 @@ function readTableGridValues(table: BlockRecord, fallbackCount = 0): number[] {
     return [...grid]
   }
 
-  return Array.from({ length: Math.max(0, fallbackCount) }, () => 2400)
+  return Array.from({ length: Math.max(0, fallbackCount) }, () => 1800)
 }
 
 /** 规范化列宽，避免把非法值写进 grid。 */
 function normalizeTableColumnWidth(widthTwips: number | undefined): number {
   return typeof widthTwips === 'number' && Number.isFinite(widthTwips) && widthTwips > 0
     ? Math.round(widthTwips)
-    : 2400
+    : 1800
+}
+
+/** 规范化行高，避免把非法值写入 row properties。 */
+function normalizeTableRowHeight(heightTwips: number | undefined): number {
+  return typeof heightTwips === 'number' && Number.isFinite(heightTwips) && heightTwips > 0
+    ? Math.round(heightTwips)
+    : 480
+}
+
+/** 插入新行时优先继承相邻行高，没有相邻行时回退默认值。 */
+function readInsertionRowHeight(table: BlockRecord, rowIndex: number): number {
+  const rows = getTableRows(table)
+  const row = rows.get(Math.min(rowIndex, rows.length - 1))
+    ?? rows.get(Math.max(0, rowIndex - 1))
+
+  return readTableRowHeight(row)
+}
+
+/** 读取表格行高，缺失时回退默认值。 */
+function readTableRowHeight(row: SharedMapReader | undefined): number {
+  const properties = row === undefined ? undefined : readPropertyMap(row, DOCUMENT_STORE_FIELDS.tableRow.properties)
+  const value = properties?.get('heightTwips')
+
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : 480
 }
 
 /** 读取单元格 gridSpan，缺失时回退到 1。 */

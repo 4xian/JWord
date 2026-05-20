@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import * as Y from 'yjs'
 
 import { renderPageCanvas } from '../../src/canvas/renderer'
 import type { CanvasLike, CanvasRenderingContextLike } from '../../src/canvas/pool'
@@ -18,7 +19,20 @@ import {
   hitTestDocumentLayout,
   layoutDocument
 } from '../../src/layout/runtime'
+import {
+  DOCUMENT_STORE_FIELDS,
+  createDocumentStore,
+  createSectionRecord
+} from '../../src/model/document-store'
+import type { DocumentId, SectionId } from '../../src/model/position'
 import type { DocumentProjection } from '../../src/model/projection'
+import { createDocumentProjection } from '../../src/model/projection'
+import {
+  buildInsertTableCommand,
+  buildSetTableColumnWidthCommand,
+  buildSetTableRowHeightCommand
+} from '../../src/operations/command-builders'
+import { createTransactionPipeline } from '../../src/operations/transaction'
 
 describe('table layout render hit-test', () => {
   it('emits table cell geometry, renders borders and hits the first cell text position', () => {
@@ -84,9 +98,154 @@ describe('table layout render hit-test', () => {
     })
 
     expect(canvas.calls).toContain('fillStyle:#94a3b8')
-    expect(canvas.calls).toContain('fillStyle:#2563eb')
     expect(canvas.calls.some((call) => call.startsWith('fillText:A1,'))).toBe(true)
     expect(canvas.calls.some((call) => call.startsWith('fillText:B1,'))).toBe(true)
+  })
+
+  it('uses smaller default column width and taller default row height for inserted tables', () => {
+    const { pipeline, projection } = createTransactionFixture()
+    const insertCommand = buildInsertTableCommand(projection, null, {
+      rows: 2,
+      columns: 2
+    })
+
+    expect(insertCommand?.operations[0]).toMatchObject({
+      kind: 'insertTable',
+      table: {
+        grid: [1800, 1800],
+        rows: [{
+          properties: {
+            heightTwips: 480
+          }
+        }, {
+          properties: {
+            heightTwips: 480
+          }
+        }]
+      }
+    })
+
+    if (insertCommand === null) {
+      throw new Error('expected insert table command')
+    }
+
+    const result = pipeline.run(insertCommand, {
+      origin: 'layout-test'
+    })
+    const tableProjection = findProjectedTable(result.projection)
+    const tableLayout = findLaidOutTable(layoutDocument({
+      projection: result.projection,
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    }))
+
+    expect(tableProjection?.grid).toEqual([1800, 1800])
+    expect(tableProjection?.rows[0]?.properties).toMatchObject({
+      heightTwips: 480
+    })
+    expect(tableLayout).toMatchObject({
+      grid: [1800, 1800],
+      height: 960
+    })
+    expect(tableLayout?.rows[0]?.height).toBe(480)
+    expect(tableLayout?.rows[1]?.y).toBe((tableLayout?.y ?? 0) + 480)
+    expect(tableLayout?.rows[0]?.cells[0]?.width).toBe(1800)
+  })
+
+  it('updates layout after setting table column width and row height through commands', () => {
+    const { pipeline, projection } = createTransactionFixture()
+    const insertCommand = buildInsertTableCommand(projection, null, {
+      rows: 1,
+      columns: 2
+    })
+
+    if (insertCommand === null) {
+      throw new Error('expected insert table command')
+    }
+
+    const inserted = pipeline.run(insertCommand, {
+      origin: 'layout-test'
+    }).projection
+    const tableId = findProjectedTable(inserted)?.id
+
+    if (tableId === undefined) {
+      throw new Error('expected inserted table id')
+    }
+
+    const setColumnWidthCommand = buildSetTableColumnWidthCommand(inserted, tableId, 0, 2100)
+
+    expect(setColumnWidthCommand).toEqual({
+      name: 'setTableColumnWidth',
+      operations: [{
+        kind: 'setTableColumnWidth',
+        tableId,
+        columnIndex: 0,
+        widthTwips: 2100
+      }]
+    })
+
+    if (setColumnWidthCommand === null) {
+      throw new Error('expected set table column width command')
+    }
+
+    const resizedColumns = pipeline.run(setColumnWidthCommand, {
+      origin: 'layout-test'
+    }).projection
+    const setRowHeightCommand = buildSetTableRowHeightCommand(resizedColumns, tableId, 0, 600)
+
+    expect(setRowHeightCommand).toEqual({
+      name: 'setTableRowHeight',
+      operations: [{
+        kind: 'setTableRowHeight',
+        tableId,
+        rowIndex: 0,
+        heightTwips: 600
+      }]
+    })
+
+    if (setRowHeightCommand === null) {
+      throw new Error('expected set table row height command')
+    }
+
+    const resizedLayout = findLaidOutTable(layoutDocument({
+      projection: pipeline.run(setRowHeightCommand, {
+        origin: 'layout-test'
+      }).projection,
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    }))
+
+    expect(resizedLayout).toMatchObject({
+      grid: [2100, 1800],
+      height: 600
+    })
+    expect(resizedLayout?.rows[0]?.height).toBe(600)
+    expect(resizedLayout?.rows[0]?.cells[0]?.width).toBe(2100)
+    expect(resizedLayout?.rows[0]?.cells[1]?.width).toBe(1800)
   })
 })
 
@@ -231,4 +390,33 @@ function createMockContext(calls: string[]): CanvasRenderingContextLike {
       calls.push(`setTransform:${a},${b},${c},${d},${e},${f}`)
     }
   }
+}
+
+function createTransactionFixture(): Readonly<{
+  pipeline: ReturnType<typeof createTransactionPipeline>
+  projection: DocumentProjection
+}> {
+  const doc = new Y.Doc()
+  const store = createDocumentStore(doc)
+  const section = createSectionRecord('section-transaction-layout' as SectionId)
+
+  store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-transaction-layout' as DocumentId)
+  store.sections.push([section])
+
+  return {
+    pipeline: createTransactionPipeline(doc),
+    projection: createDocumentProjection(store)
+  }
+}
+
+function findProjectedTable(projection: DocumentProjection) {
+  return projection.document.sections
+    .flatMap((section) => section.blocks)
+    .find((block) => block.kind === 'table')
+}
+
+function findLaidOutTable(layout: ReturnType<typeof layoutDocument>) {
+  return layout.pages
+    .flatMap((page) => page.blocks)
+    .find((block) => block.kind === 'table')
 }

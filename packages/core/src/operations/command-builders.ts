@@ -603,6 +603,7 @@ export function buildInsertTableRowCommand(
       kind: 'insertTableRow',
       tableId,
       rowIndex,
+      rowHeightTwips: readTableRowHeight(table.rows[Math.max(0, Math.min(rowIndex, table.rows.length - 1))] ?? table.rows[rowIndex - 1]),
       rowId: allocateGeneratedModelId(usedIds, `${tableId}-row`),
       cellIds: createGeneratedIdList(usedIds, `${tableId}-cell`, columnCount),
       paragraphIds: createGeneratedIdList(usedIds, `${tableId}-paragraph`, columnCount),
@@ -653,7 +654,7 @@ export function buildInsertTableColumnCommand(
       kind: 'insertTableColumn',
       tableId,
       columnIndex,
-      columnWidthTwips: table.grid?.[Math.max(0, Math.min(columnIndex, (table.grid?.length ?? 1) - 1))] ?? 2400,
+      columnWidthTwips: table.grid?.[Math.max(0, Math.min(columnIndex, (table.grid?.length ?? 1) - 1))] ?? 1800,
       cellIds: createGeneratedIdList(usedIds, `${tableId}-cell`, table.rows.length),
       paragraphIds: createGeneratedIdList(usedIds, `${tableId}-paragraph`, table.rows.length),
       runIds: createGeneratedIdList(usedIds, `${tableId}-run`, table.rows.length)
@@ -679,6 +680,70 @@ export function buildDeleteTableColumnCommand(
       kind: 'deleteTableColumn',
       tableId,
       columnIndex
+    }]
+  }
+}
+
+/** 构造设置表格列宽命令。 */
+export function buildSetTableColumnWidthCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  columnIndex: number,
+  widthTwips: number
+): Command | null {
+  const table = findTableById(projection, tableId)
+  const columnCount = table === null ? 0 : resolveTableColumnCount(table)
+
+  if (table === null || columnIndex < 0 || columnIndex >= columnCount) {
+    return null
+  }
+
+  const nextWidthTwips = normalizeTableColumnWidth(widthTwips)
+  const currentWidthTwips = table.grid?.[columnIndex] ?? 1800
+
+  if (currentWidthTwips === nextWidthTwips) {
+    return null
+  }
+
+  return {
+    name: 'setTableColumnWidth',
+    operations: [{
+      kind: 'setTableColumnWidth',
+      tableId,
+      columnIndex,
+      widthTwips: nextWidthTwips
+    }]
+  }
+}
+
+/** 构造设置表格行高命令。 */
+export function buildSetTableRowHeightCommand(
+  projection: DocumentProjection,
+  tableId: string,
+  rowIndex: number,
+  heightTwips: number
+): Command | null {
+  const table = findTableById(projection, tableId)
+  const row = table?.rows[rowIndex]
+
+  if (table === null || row === undefined) {
+    return null
+  }
+
+  const nextHeightTwips = normalizeTableRowHeight(heightTwips)
+  const currentHeightTwips = readTableRowHeight(row)
+
+  if (currentHeightTwips === nextHeightTwips) {
+    return null
+  }
+
+  return {
+    name: 'setTableRowHeight',
+    operations: [{
+      kind: 'setTableRowHeight',
+      tableId,
+      rowIndex,
+      heightTwips: nextHeightTwips
     }]
   }
 }
@@ -1168,7 +1233,7 @@ function createSimpleTableModel(
   return {
     kind: 'table',
     id: tableId,
-    grid: Array.from({ length: columns }, () => 2400),
+    grid: Array.from({ length: columns }, () => 1800),
     border: {
       color: '#6b7280',
       widthTwips: 15
@@ -1178,6 +1243,9 @@ function createSimpleTableModel(
 
       return {
         id: rowId,
+        properties: {
+          heightTwips: 480
+        },
         cells: Array.from({ length: columns }, () => {
           const cellId = allocateGeneratedModelId(usedIds, `${tableId}-cell`)
           const paragraphId = allocateGeneratedModelId(usedIds, `${tableId}-paragraph`)
@@ -1322,4 +1390,24 @@ function resolveTableColumnCount(table: Table): number {
   const firstRow = table.rows[0]
 
   return Math.max(1, firstRow?.cells.reduce((count, cell) => count + (cell.gridSpan ?? 1), 0) ?? table.grid?.length ?? 1)
+}
+
+function readTableRowHeight(row: Table['rows'][number] | undefined): number {
+  const value = row?.properties?.heightTwips
+
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : 480
+}
+
+function normalizeTableColumnWidth(widthTwips: number): number {
+  return Number.isFinite(widthTwips) && widthTwips > 0
+    ? Math.round(widthTwips)
+    : 1800
+}
+
+function normalizeTableRowHeight(heightTwips: number): number {
+  return Number.isFinite(heightTwips) && heightTwips > 0
+    ? Math.round(heightTwips)
+    : 480
 }

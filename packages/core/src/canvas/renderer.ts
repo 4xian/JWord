@@ -123,12 +123,10 @@ function renderTableBox(
   const borderWidth = Math.max(1, Math.round(twipsToCssPx(table.border?.widthTwips ?? 15, drawingScale)))
 
   context.fillStyle = borderColor
-  renderRectBorder(context, page, table, drawingScale, borderWidth)
+  renderTableGrid(context, page, table, drawingScale, borderWidth)
 
   for (const row of table.rows) {
     for (const cell of row.cells) {
-      context.fillStyle = cell.border?.color ?? borderColor
-      renderRectBorder(context, page, cell, drawingScale, borderWidth)
       if (cell.text.length === 0) {
         continue
       }
@@ -142,6 +140,44 @@ function renderTableBox(
         toCanvasY(page, cell.y + Math.min(cell.height - 60, 300), drawingScale)
       )
     }
+  }
+}
+
+/** 单次绘制表格网格线，避免相邻单元格重复描边导致内部线变粗。 */
+function renderTableGrid(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  table: TableBox,
+  drawingScale: number,
+  borderWidth: number
+): void {
+  const verticalLines = new Set<number>()
+  const horizontalLines = new Set<number>()
+
+  verticalLines.add(table.x)
+  verticalLines.add(table.x + table.width)
+  horizontalLines.add(table.y)
+  horizontalLines.add(table.y + table.height)
+
+  for (const row of table.rows) {
+    horizontalLines.add(row.y)
+    horizontalLines.add(row.y + row.height)
+    for (const cell of row.cells) {
+      verticalLines.add(cell.x)
+      verticalLines.add(cell.x + cell.width)
+    }
+  }
+
+  const tableY = toCanvasY(page, table.y, drawingScale)
+  const tableHeight = Math.max(1, twipsToCssPx(table.height, drawingScale))
+  for (const x of [...verticalLines].sort((left, right) => left - right)) {
+    context.fillRect(toCanvasX(page, x, drawingScale), tableY, borderWidth, tableHeight)
+  }
+
+  const tableX = toCanvasX(page, table.x, drawingScale)
+  const tableWidth = Math.max(1, twipsToCssPx(table.width, drawingScale))
+  for (const y of [...horizontalLines].sort((top, bottom) => top - bottom)) {
+    context.fillRect(tableX, toCanvasY(page, y, drawingScale), tableWidth, borderWidth)
   }
 }
 

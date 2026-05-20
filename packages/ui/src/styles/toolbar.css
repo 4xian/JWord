@@ -311,17 +311,9 @@
 }
 
 .jw-table-toolbar {
-  display: flex;
-  flex-direction: column;
-  padding: 10px 12px;
-  border: 1px solid #e8ebef;
-  border-radius: 10px;
-  background: #ffffff;
-  box-shadow: 0 2px 8px rgb(31 41 55 / 4%);
-}
-
-.jw-table-toolbar > * + * {
-  margin-top: 8px;
+  position: relative;
+  align-items: center;
+  display: inline-flex;
 }
 
 .jw-table-toolbar__row {
@@ -334,21 +326,196 @@
   margin-left: 6px;
 }
 
-.jw-table-toolbar__title {
-  color: #2f3743;
-  font-size: 13px;
-  line-height: 1.2;
+.jw-table-toolbar__trigger {
+  min-width: 32px;
+  padding: 0 4px;
 }
 
-.jw-table-toolbar__inline-fields {
+.jw-table-toolbar__insert-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  width: 236px;
+  padding: 10px;
+  border: 1px solid #e4e7eb;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgb(25 35 52 / 14%);
+}
+
+.jw-table-toolbar__insert-menu > * + * {
+  margin-top: 8px;
+}
+
+.jw-table-toolbar__insert-menu[hidden],
+.jw-table-toolbar__dialog[hidden],
+.jw-table-panel__overlay[hidden],
+.jw-table-panel__anchor[hidden],
+.jw-table-panel__quick-tools[hidden] {
+  display: none;
+}
+
+.jw-table-toolbar__preview-label {
+  display: block;
+  margin: 0;
+  color: #2f3743;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.jw-table-toolbar__preview {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.jw-table-toolbar__preview-row {
+  display: flex;
+}
+
+.jw-table-toolbar__preview-row + .jw-table-toolbar__preview-row {
+  margin-top: 3px;
+}
+
+.jw-table-toolbar__preview-cell {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #cfd6e0;
+  border-radius: 2px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.jw-table-toolbar__preview-cell + .jw-table-toolbar__preview-cell {
+  margin-left: 3px;
+}
+
+.jw-table-toolbar__preview-cell[data-jword-active='true'] {
+  border-color: #2f6fcc;
+  background: #eaf2ff;
+}
+
+.jw-table-toolbar__preview-cell:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.jw-table-toolbar__dialog {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 0;
+  z-index: 41;
+}
+
+.jw-table-toolbar__dialog-card {
+  width: 250px;
+  padding: 12px;
+  border: 1px solid #e4e7eb;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgb(25 35 52 / 14%);
+}
+
+.jw-table-toolbar__dialog-title {
+  margin: 0 0 10px;
+  color: #2f3743;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.jw-table-toolbar__dialog-actions {
+  justify-content: flex-end;
+}
+
+.jw-table-panel__overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 44;
+  pointer-events: none;
+}
+
+.jw-table-panel__anchor {
+  position: absolute;
+  border: 1px solid #b9c9e6;
+  background: rgb(47 111 204 / 10%);
+  pointer-events: auto;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.jw-table-panel__anchor:hover:enabled {
+  border-color: #2f6fcc;
+  background: rgb(47 111 204 / 16%);
+  box-shadow: 0 8px 18px rgb(25 35 52 / 12%);
+}
+
+.jw-table-panel__anchor:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.jw-table-panel__anchor--top {
+  left: 0;
+  top: -14px;
+  width: 100%;
+  height: 12px;
+  border-radius: 8px 8px 0 0;
+}
+
+.jw-table-panel__anchor--left {
+  left: -14px;
+  top: 0;
+  width: 12px;
+  height: 100%;
+  border-radius: 8px 0 0 8px;
+}
+
+.jw-table-panel__quick-tools {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 16px);
+  min-width: 520px;
+  max-width: min(720px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 98%);
+  box-shadow: 0 12px 28px rgb(25 35 52 / 14%);
+  pointer-events: auto;
+}
+
+.jw-table-toolbar__quick-tools > * + * {
+  margin-top: 8px;
+}
+
+.jw-table-toolbar__group-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  margin-left: auto;
 }
 
-.jw-table-toolbar__inline-fields > * + * {
+.jw-table-toolbar__group-row > * + * {
   margin-left: 6px;
+}
+
+.jw-table-toolbar__group-row--between {
+  justify-content: space-between;
+}
+
+.jw-table-toolbar__group-row--between > * + * {
+  margin-left: 12px;
+}
+
+.jw-table-toolbar__group-row--end {
+  margin-left: auto;
 }
 
 .jw-table-toolbar__field {

@@ -513,9 +513,9 @@ function layoutTable(
 ): void {
   flushLine(cursor)
 
-  const tableHeight = Math.max(cssPxToTwips(24), table.rows.length * cssPxToTwips(24))
-  const rowHeight = Math.max(cssPxToTwips(24), Math.round(tableHeight / Math.max(1, table.rows.length)))
   const grid = resolveTableGrid(table, pageConfig)
+  const rowHeights = table.rows.map((row) => resolveTableRowHeight(row))
+  const tableHeight = rowHeights.reduce((sum, height) => sum + height, 0)
 
   if (cursor.y + tableHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
     startNewPage(cursor, pages, pageConfig)
@@ -538,12 +538,14 @@ function layoutTable(
     rows: Object.freeze(table.rows.map((row, rowIndex) => {
       let cellX = tableX
       let gridIndex = 0
+      const rowY = tableY + sumRowHeights(rowHeights, rowIndex)
+      const rowHeight = rowHeights[rowIndex] ?? resolveTableRowHeight(row)
 
       return Object.freeze({
         rowId: row.id,
         pageIndex: cursor.page.pageIndex,
         x: tableX,
-        y: tableY + (rowIndex * rowHeight),
+        y: rowY,
         width: tableWidth,
         height: rowHeight,
         cells: Object.freeze(row.cells.map((cell) => {
@@ -555,7 +557,7 @@ function layoutTable(
             cellId: cell.id,
             pageIndex: cursor.page.pageIndex,
             x: cellX,
-            y: tableY + (rowIndex * rowHeight),
+            y: rowY,
             width,
             height: rowHeight,
             gridSpan,
@@ -590,7 +592,7 @@ function resolveTableGrid(table: Table, pageConfig: PageConfig): readonly number
   }
 
   const columnCount = Math.max(1, table.rows[0]?.cells.reduce((count, cell) => count + (cell.gridSpan ?? 1), 0) ?? 1)
-  const columnWidth = Math.floor(pageConfig.contentWidthTwips / columnCount)
+  const columnWidth = Math.min(1800, Math.floor(pageConfig.contentWidthTwips / columnCount))
 
   return Array.from({ length: columnCount }, () => columnWidth)
 }
@@ -600,6 +602,19 @@ function sumGridWidth(grid: readonly number[], startIndex: number, gridSpan: num
   return grid.slice(startIndex, startIndex + gridSpan).reduce((sum, width) => sum + width, 0)
     || grid[startIndex]
     || cssPxToTwips(96)
+}
+
+/** 读取表格行高，缺失时回退到更高的默认行高。 */
+function resolveTableRowHeight(row: Table['rows'][number]): number {
+  const value = row.properties?.heightTwips
+
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : 480
+}
+
+function sumRowHeights(rowHeights: readonly number[], endExclusive: number): number {
+  return rowHeights.slice(0, endExclusive).reduce((sum, height) => sum + height, 0)
 }
 
 /** 读取单元格纯文本。 */
