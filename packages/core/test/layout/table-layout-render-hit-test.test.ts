@@ -33,6 +33,7 @@ import {
   buildSetTableRowHeightCommand
 } from '../../src/operations/command-builders'
 import { createTransactionPipeline } from '../../src/operations/transaction'
+import type { Section, Table, TableRow } from '../../src/model/types'
 
 describe('table layout render hit-test', () => {
   it('emits table cell geometry, renders borders and hits the first cell text position', () => {
@@ -76,6 +77,14 @@ describe('table layout render hit-test', () => {
       }
     })
     expect(firstCell?.text).toBe('A1')
+    expect(firstCell?.fragments[0]).toMatchObject({
+      text: 'A1',
+      x: (firstCell?.x ?? 0) + 120
+    })
+    const firstFragmentTopInset = (firstCell?.fragments[0]?.y ?? 0) - (firstCell?.y ?? 0)
+    const firstFragmentBottomInset = ((firstCell?.y ?? 0) + (firstCell?.height ?? 0)) - (((firstCell?.fragments[0]?.y ?? 0) + (firstCell?.fragments[0]?.height ?? 0)))
+
+    expect(Math.abs(firstFragmentTopInset - firstFragmentBottomInset)).toBeLessThanOrEqual(1)
 
     const hit = hitTestDocumentLayout(layout, {
       pageIndex: 0,
@@ -100,6 +109,144 @@ describe('table layout render hit-test', () => {
     expect(canvas.calls).toContain('fillStyle:#94a3b8')
     expect(canvas.calls.some((call) => call.startsWith('fillText:A1,'))).toBe(true)
     expect(canvas.calls.some((call) => call.startsWith('fillText:B1,'))).toBe(true)
+  })
+
+  it('wraps long table cell text by cell width and grows row height', () => {
+    const layout = layoutDocument({
+      projection: createLongTableProjection(),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 5000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const table = layout.pages[0]?.blocks.find((block) => block.kind === 'table')
+    const firstCell = table?.rows[0]?.cells[0]
+    const fragmentRows = new Set(firstCell?.fragments.map((fragment) => fragment.y))
+
+    expect(firstCell?.fragments.length).toBeGreaterThan(1)
+    expect(fragmentRows.size).toBeGreaterThan(1)
+    expect(table?.rows[0]?.height).toBeGreaterThan(600)
+  })
+
+  it('centers single-line cell text vertically inside a taller row while keeping left alignment', () => {
+    const layout = layoutDocument({
+      projection: createVerticallyCenteredTableProjection(),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const table = layout.pages[0]?.blocks.find((block) => block.kind === 'table')
+    const firstCell = table?.rows[0]?.cells[0]
+    const firstFragment = firstCell?.fragments[0]
+
+    expect(firstFragment).toBeDefined()
+    expect(firstFragment?.x).toBe((firstCell?.x ?? 0) + 120)
+
+    const topInset = (firstFragment?.y ?? 0) - (firstCell?.y ?? 0)
+    const bottomInset = ((firstCell?.y ?? 0) + (firstCell?.height ?? 0)) - ((firstFragment?.y ?? 0) + (firstFragment?.height ?? 0))
+
+    expect(Math.abs(topInset - bottomInset)).toBeLessThanOrEqual(1)
+  })
+
+  it('renders table fragment backgrounds and decorations after selection overlays', () => {
+    const layout = layoutDocument({
+      projection: createStyledTableProjection(),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const page = layout.pages[0]
+    const table = page?.blocks.find((block) => block.kind === 'table')
+    const fragment = table?.rows[0]?.cells[0]?.fragments[0]
+    const canvas = createMockCanvas()
+
+    expect(fragment).toBeDefined()
+
+    renderPageCanvas({
+      canvas,
+      page: page!,
+      selectionRects: fragment === undefined
+        ? []
+        : [{
+            pageIndex: fragment.pageIndex,
+            x: fragment.x,
+            y: fragment.y,
+            width: fragment.width,
+            height: fragment.height
+          }]
+    })
+
+    const backgroundIndex = canvas.calls.findIndex((call) => call === 'fillStyle:#00ff00')
+    const selectionIndex = canvas.calls.findIndex((call) => call === 'fillStyle:#cfe3ff')
+    const textIndex = canvas.calls.findIndex((call) => call.startsWith('fillText:Styled,'))
+    const decorationRectCount = canvas.calls
+      .slice(Math.max(0, textIndex + 1))
+      .filter((call) => call.startsWith('fillRect:'))
+      .length
+
+    expect(backgroundIndex).toBeGreaterThanOrEqual(0)
+    expect(selectionIndex).toBeGreaterThan(backgroundIndex)
+    expect(textIndex).toBeGreaterThan(selectionIndex)
+    expect(decorationRectCount).toBeGreaterThanOrEqual(2)
+  })
+
+  it('keeps paragraph breaks inside table cells on separate lines and grows row height', () => {
+    const layout = layoutDocument({
+      projection: createMultiParagraphTableProjection(),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 5000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const table = layout.pages[0]?.blocks.find((block) => block.kind === 'table')
+    const firstCell = table?.rows[0]?.cells[0]
+    const fragmentRows = new Set(firstCell?.fragments.map((fragment) => fragment.y))
+
+    expect(firstCell?.fragments.map((fragment) => fragment.text)).toEqual(['Alpha', 'Beta'])
+    expect(fragmentRows.size).toBe(2)
+    expect(table?.rows[0]?.height).toBeGreaterThan(600)
   })
 
   it('uses smaller default column width and taller default row height for inserted tables', () => {
@@ -323,6 +470,207 @@ function createTableProjection(): DocumentProjection {
           ]
         }
       ]
+    }
+  }
+}
+
+/** 创建需要在单元格内换行的表格 projection。 */
+function createLongTableProjection(): DocumentProjection {
+  const projection = createTableProjection()
+  const section = projection.document.sections[0]
+  const table = section?.blocks[0]
+  const firstRow = table?.kind === 'table' ? table.rows[0] : undefined
+  const cell = firstRow?.cells[0]
+  const paragraph = cell?.blocks[0]
+  const run = paragraph?.kind === 'paragraph' ? paragraph.runs[0] : undefined
+  const inline = run?.inlines[0]?.kind === 'text'
+    ? {
+      ...run.inlines[0],
+      text: 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz'
+    }
+    : undefined
+
+  if (section === undefined || table?.kind !== 'table' || firstRow === undefined || cell === undefined || paragraph?.kind !== 'paragraph' || run === undefined || inline === undefined) {
+    return projection
+  }
+
+  const nextRow: TableRow = {
+    ...firstRow,
+    cells: [{
+      ...cell,
+      blocks: [{
+        ...paragraph,
+        runs: [{
+          ...run,
+          inlines: [inline]
+        }]
+      }]
+    }, ...firstRow.cells.slice(1)]
+  }
+  const nextTable: Table = {
+    ...table,
+    grid: [720, 1800],
+    rows: [nextRow, ...table.rows.slice(1)]
+  }
+  const nextSection: Section = {
+    ...section,
+    kind: 'section',
+    blocks: [nextTable]
+  }
+
+  return {
+    ...projection,
+    document: {
+      ...projection.document,
+      sections: [nextSection]
+    }
+  }
+}
+
+/** 创建带显式高行高的单行表格 projection，用于验证单元格文字竖向居中。 */
+function createVerticallyCenteredTableProjection(): DocumentProjection {
+  const projection = createTableProjection()
+  const section = projection.document.sections[0]
+  const table = section?.blocks[0]
+  const firstRow = table?.kind === 'table' ? table.rows[0] : undefined
+
+  if (section === undefined || table?.kind !== 'table' || firstRow === undefined) {
+    return projection
+  }
+
+  const nextRow: TableRow = {
+    ...firstRow,
+    properties: {
+      ...(firstRow.properties ?? {}),
+      heightTwips: 1200
+    }
+  }
+  const nextTable: Table = {
+    ...table,
+    rows: [nextRow, ...table.rows.slice(1)]
+  }
+
+  return {
+    ...projection,
+    document: {
+      ...projection.document,
+      sections: [{
+        ...section,
+        kind: 'section',
+        blocks: [nextTable]
+      }]
+    }
+  }
+}
+
+/** 创建带背景色、删除线和下划线的表格 projection，用于验证 table fragment 渲染。 */
+function createStyledTableProjection(): DocumentProjection {
+  const projection = createTableProjection()
+  const section = projection.document.sections[0]
+  const table = section?.blocks[0]
+  const firstRow = table?.kind === 'table' ? table.rows[0] : undefined
+  const cell = firstRow?.cells[0]
+  const paragraph = cell?.blocks[0]
+  const run = paragraph?.kind === 'paragraph' ? paragraph.runs[0] : undefined
+
+  if (section === undefined || table?.kind !== 'table' || firstRow === undefined || cell === undefined || paragraph?.kind !== 'paragraph' || run === undefined) {
+    return projection
+  }
+
+  const nextRow: TableRow = {
+    ...firstRow,
+    cells: [{
+      ...cell,
+      blocks: [{
+        ...paragraph,
+        runs: [{
+          ...run,
+          properties: {
+            ...(run.properties ?? {}),
+            color: '#ff0000',
+            backgroundColor: '#00ff00',
+            underline: true,
+            strike: true
+          },
+          inlines: [{ kind: 'text', text: 'Styled' }]
+        }]
+      }]
+    }, ...firstRow.cells.slice(1)]
+  }
+
+  return {
+    ...projection,
+    document: {
+      ...projection.document,
+      sections: [{
+        ...section,
+        kind: 'section',
+        blocks: [{
+          ...table,
+          rows: [nextRow, ...table.rows.slice(1)]
+        }]
+      }]
+    }
+  }
+}
+
+/** 创建包含两段文本的单元格 projection，用于验证表格内 Enter 分段后的高度增长。 */
+function createMultiParagraphTableProjection(): DocumentProjection {
+  const projection = createTableProjection()
+  const section = projection.document.sections[0]
+  const table = section?.blocks[0]
+  const firstRow = table?.kind === 'table' ? table.rows[0] : undefined
+  const cell = firstRow?.cells[0]
+
+  if (section === undefined || table?.kind !== 'table' || firstRow === undefined || cell === undefined) {
+    return projection
+  }
+
+  const nextRow: TableRow = {
+    ...firstRow,
+    cells: [{
+      ...cell,
+      blocks: [
+        {
+          kind: 'paragraph',
+          id: 'cell-layout-paragraph-enter-1',
+          runs: [{
+            kind: 'run',
+            id: 'cell-layout-run-enter-1',
+            properties: {
+              fontSizePx: 16
+            },
+            inlines: [{ kind: 'text', text: 'Alpha' }]
+          }]
+        },
+        {
+          kind: 'paragraph',
+          id: 'cell-layout-paragraph-enter-2',
+          runs: [{
+            kind: 'run',
+            id: 'cell-layout-run-enter-2',
+            properties: {
+              fontSizePx: 16
+            },
+            inlines: [{ kind: 'text', text: 'Beta' }]
+          }]
+        }
+      ]
+    }, ...firstRow.cells.slice(1)]
+  }
+
+  return {
+    ...projection,
+    document: {
+      ...projection.document,
+      sections: [{
+        ...section,
+        kind: 'section',
+        blocks: [{
+          ...table,
+          rows: [nextRow, ...table.rows.slice(1)]
+        }]
+      }]
     }
   }
 }

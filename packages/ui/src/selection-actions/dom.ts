@@ -81,8 +81,12 @@ export function renderSelectionActionsDom(dom: SelectionActionsDom, state: Selec
   setToggleState(dom.formatControls.strike, state.formatEnabled, state.strikePressed)
   dom.formatControls.textColor.disabled = !state.formatEnabled
   dom.formatControls.backgroundColor.disabled = !state.formatEnabled
-  dom.formatControls.textColor.value = state.textColorValue
-  dom.formatControls.backgroundColor.value = state.backgroundColorValue
+  if (state.activeColorPicker !== 'text') {
+    dom.formatControls.textColor.value = state.textColorValue
+  }
+  if (state.activeColorPicker !== 'background') {
+    dom.formatControls.backgroundColor.value = state.backgroundColorValue
+  }
   syncColorControl(dom.formatControls.textColor, state.textColorValue)
   syncColorControl(dom.formatControls.backgroundColor, state.backgroundColorValue)
 

@@ -102,10 +102,13 @@ export function buildSelectionActionsViewState(input: Readonly<{
   dismissedSelectionKey: string | null
   contextSelection: SelectionState | null
   contextPoint: SelectionActionPosition | null
+  colorSelection: SelectionState | null
+  activeColorPicker: 'text' | 'background' | null
   stickyFloatingToolbar: StickyFloatingToolbarState
 }>): SelectionActionsViewState {
   const currentSelection = input.editor.getSelection()
-  const currentSelectionKey = readSelectionKey(input.editor, currentSelection)
+  const floatingSelection = input.colorSelection ?? currentSelection
+  const currentSelectionKey = readSelectionKey(input.editor, floatingSelection)
   const usesStickyFloatingPosition =
     currentSelectionKey.length > 0
     && currentSelectionKey === input.stickyFloatingToolbar.selectionKey
@@ -113,17 +116,17 @@ export function buildSelectionActionsViewState(input: Readonly<{
   const floatingVisible =
     input.interactiveFocus
     && input.contextPoint === null
-    && hasActiveTextSelection(currentSelection)
+    && hasActiveTextSelection(floatingSelection)
     && currentSelectionKey.length > 0
     && currentSelectionKey !== input.dismissedSelectionKey
-  const floatingFormatting = floatingVisible && currentSelection !== null
-    ? readSelectionFormattingState(input.editor, currentSelection)
+  const floatingFormatting = floatingVisible && floatingSelection !== null
+    ? readSelectionFormattingState(input.editor, floatingSelection)
     : null
-  const floatingPosition = !floatingVisible || currentSelection === null
+  const floatingPosition = !floatingVisible || floatingSelection === null
     ? null
     : usesStickyFloatingPosition
       ? input.stickyFloatingToolbar.position
-      : readFloatingToolbarPosition(input.editor, input.editorHost, currentSelection)
+      : readFloatingToolbarPosition(input.editor, input.editorHost, floatingSelection)
   const contextFormatting = input.contextSelection === null
     ? null
     : readSelectionFormattingState(input.editor, input.contextSelection)
@@ -141,6 +144,7 @@ export function buildSelectionActionsViewState(input: Readonly<{
     strikePressed: readPressedState(floatingFormatting?.run?.strike),
     textColorValue: normalizeHexColor(floatingFormatting?.run?.color.value ?? '') ?? DEFAULT_TEXT_COLOR,
     backgroundColorValue: normalizeHexColor(floatingFormatting?.run?.backgroundColor.value ?? '') ?? DEFAULT_BACKGROUND_COLOR,
+    activeColorPicker: input.activeColorPicker,
     cutDisabled: contextFormatting?.run === null,
     copyDisabled: contextFormatting?.run === null,
     clearDisabled: contextFormatting?.run === null

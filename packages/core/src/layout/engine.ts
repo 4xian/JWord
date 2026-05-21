@@ -45,11 +45,14 @@ import type {
   LayoutInput,
   MutablePageBox,
   PageBreakBox,
-  TableBox
+  TableBox,
+  TextFragment
 } from './types'
 
 const DEFAULT_TABLE_COLUMN_WIDTH_TWIPS = 1500
 const DEFAULT_TABLE_ROW_HEIGHT_TWIPS = 600
+const TABLE_CELL_PADDING_X_TWIPS = 120
+const TABLE_CELL_PADDING_Y_TWIPS = 90
 
 /**
  * 从只读投影生成分页布局。
@@ -145,7 +148,7 @@ function layoutBlock(
   assignPageSectionBoundary(cursor.page, section)
 
   if (block.kind === 'table') {
-    layoutTable(block, section, cursor, pages, input.pageConfig)
+    layoutTable(block, section, cursor, pages, input.pageConfig, input)
     return false
   }
 
@@ -512,12 +515,16 @@ function layoutTable(
   section: Section,
   cursor: LayoutCursor,
   pages: MutablePageBox[],
-  pageConfig: PageConfig
+  pageConfig: PageConfig,
+  input: LayoutInput
 ): void {
   flushLine(cursor)
 
   const grid = resolveTableGrid(table, pageConfig)
-  const rowHeights = table.rows.map((row) => resolveTableRowHeight(row))
+  const rowPlans = table.rows.map((row) => createTableRowLayoutPlan(row, section, grid, input))
+  const rowHeights = table.rows.map((row, rowIndex) => {
+    return Math.max(resolveTableRowHeight(row), rowPlans[rowIndex]?.height ?? 0)
+  })
   const tableHeight = rowHeights.reduce((sum, height) => sum + height, 0)
 
   if (cursor.y + tableHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
@@ -551,11 +558,18 @@ function layoutTable(
         y: rowY,
         width: tableWidth,
         height: rowHeight,
-        cells: Object.freeze(row.cells.map((cell) => {
+        cells: Object.freeze(row.cells.map((cell, cellIndex) => {
           const gridSpan = cell.gridSpan ?? 1
           const width = sumGridWidth(grid, gridIndex, gridSpan)
           const text = readTableCellText(cell)
           const textPosition = readTableCellTextPosition(section.id, cell)
+          const fragments = createPositionedTableCellFragments(
+            rowPlans[rowIndex]?.cells[cellIndex]?.fragments ?? [],
+            cursor.page.pageIndex,
+            cellX,
+            rowY,
+            rowHeight
+          )
           const cellBox = Object.freeze({
             cellId: cell.id,
             pageIndex: cursor.page.pageIndex,
@@ -567,6 +581,7 @@ function layoutTable(
             ...(cell.border === undefined ? {} : { border: cell.border }),
             blockIds: Object.freeze(cell.blocks.map((block) => block.id)),
             text,
+            fragments,
             ...(textPosition === undefined ? {} : { textPosition })
           })
 
@@ -586,6 +601,238 @@ function layoutTable(
   cursor.page.blocks.push(tableBox)
   cursor.y += tableHeight
   cursor.x = cursor.page.contentRect.x
+}
+
+/** 创建单行表格的单元格文本布局计划。 */
+function createTableRowLayoutPlan(
+  row: Table['rows'][number],
+  section: Section,
+  grid: readonly number[],
+  input: LayoutInput
+): Readonly<{
+  height: number
+  cells: readonly Readonly<{
+    fragments: readonly TextFragment[]
+  }>[]
+}> {
+  let gridIndex = 0
+  const cells = row.cells.map((cell) => {
+    const gridSpan = cell.gridSpan ?? 1
+    const width = sumGridWidth(grid, gridIndex, gridSpan)
+    const fragments = layoutTableCellTextFragments(cell, section, input, width)
+
+    gridIndex += gridSpan
+
+    return Object.freeze({
+      fragments
+    })
+  })
+  const height = cells.reduce((value, cell) => {
+    const lastFragment = cell.fragments[cell.fragments.length - 1]
+
+    return Math.max(
+      value,
+      lastFragment === undefined
+        ? 0
+        : lastFragment.y + lastFragment.height + TABLE_CELL_PADDING_Y_TWIPS
+    )
+  }, DEFAULT_TABLE_ROW_HEIGHT_TWIPS)
+
+  return Object.freeze({
+    height,
+    cells: Object.freeze(cells)
+  })
+}
+
+/** 生成单元格内相对坐标的文本片段，宽度按单元格内容区约束换行。 */
+function layoutTableCellTextFragments(
+  cell: TableCell,
+  section: Section,
+  input: LayoutInput,
+  cellWidth: number
+): readonly TextFragment[] {
+  const maxTextWidth = Math.max(1, cellWidth - (TABLE_CELL_PADDING_X_TWIPS * 2))
+  const fragments: TextFragment[] = []
+  let lineY = TABLE_CELL_PADDING_Y_TWIPS
+  let lineX = TABLE_CELL_PADDING_X_TWIPS
+  let lineHeight = 0
+
+  for (const block of cell.blocks) {
+    if (block.kind !== 'paragraph') {
+      continue
+    }
+
+    const blockFragmentStartIndex = fragments.length
+
+    for (const run of block.runs) {
+      const style = readRunStyle(block, run.properties)
+      let runGraphemeIndex = 0
+
+      for (const inline of run.inlines) {
+        if (inline.kind !== 'text') {
+          continue
+        }
+
+        for (const segment of segmentTextForLayout(inline.text, runGraphemeIndex)) {
+          const measuredSegments = measureTextSegmentForLayout({
+            fontManager: input.fontManager,
+            segment,
+            style,
+            maxWidth: maxTextWidth
+          })
+
+          for (const measured of measuredSegments) {
+            if (lineX > TABLE_CELL_PADDING_X_TWIPS && lineX + measured.width > TABLE_CELL_PADDING_X_TWIPS + maxTextWidth) {
+              lineY += Math.max(lineHeight, measured.height, 1)
+              lineX = TABLE_CELL_PADDING_X_TWIPS
+              lineHeight = 0
+            }
+
+            const fragment: TextFragment = Object.freeze({
+              kind: 'textFragment',
+              pageIndex: 0,
+              sectionId: section.id,
+              blockId: block.id,
+              runId: run.id,
+              text: measured.text,
+              start: {
+                sectionId: section.id,
+                blockId: block.id,
+                runId: run.id,
+                graphemeIndex: measured.startGraphemeIndex
+              },
+              end: {
+                sectionId: section.id,
+                blockId: block.id,
+                runId: run.id,
+                graphemeIndex: measured.endGraphemeIndex
+              },
+              style: measured.style,
+              x: lineX,
+              y: lineY,
+              width: measured.width,
+              height: measured.height,
+              baseline: lineY + measured.baseline,
+              advanceTwips: measured.advanceTwips
+            })
+
+            fragments.push(fragment)
+            lineX += measured.width
+            lineHeight = Math.max(lineHeight, measured.height)
+          }
+
+          runGraphemeIndex = segment.endGraphemeIndex
+        }
+      }
+    }
+
+    if (fragments.length === blockFragmentStartIndex) {
+      const emptyFragment = createEmptyTableCellFragment(block, section, input, lineX, lineY)
+
+      if (emptyFragment !== undefined) {
+        fragments.push(emptyFragment)
+        lineHeight = Math.max(lineHeight, emptyFragment.height)
+      }
+    }
+
+    if (fragments.length > blockFragmentStartIndex) {
+      lineY += Math.max(lineHeight, cssPxToTwips(16))
+      lineX = TABLE_CELL_PADDING_X_TWIPS
+      lineHeight = 0
+    }
+  }
+
+  return Object.freeze(fragments)
+}
+
+/** 把单元格相对文本片段平移到页面绝对坐标。 */
+function createPositionedTableCellFragments(
+  fragments: readonly TextFragment[],
+  pageIndex: number,
+  cellX: number,
+  cellY: number,
+  cellHeight: number
+): readonly TextFragment[] {
+  const verticalOffset = resolveTableCellContentVerticalOffset(fragments, cellHeight)
+
+  return Object.freeze(fragments.map((fragment) => Object.freeze({
+    ...fragment,
+    pageIndex,
+    x: cellX + fragment.x,
+    y: cellY + fragment.y + verticalOffset,
+    baseline: cellY + fragment.baseline + verticalOffset
+  })))
+}
+
+/** 为纯空表格段落补一个零宽文本锚点，保证 Enter 后空行可见且可定位。 */
+function createEmptyTableCellFragment(
+  paragraph: Paragraph,
+  section: Section,
+  input: LayoutInput,
+  x: number,
+  y: number
+): TextFragment | undefined {
+  if (!isVisuallyEmptyParagraph(paragraph)) {
+    return undefined
+  }
+
+  const firstRun = paragraph.runs[0]
+
+  if (firstRun === undefined) {
+    return undefined
+  }
+
+  const measured = input.fontManager.measureText('', readRunStyle(paragraph, firstRun.properties))
+  const height = cssPxToTwips(measured.heightCssPx)
+  const baseline = cssPxToTwips(measured.baselineCssPx)
+
+  return Object.freeze({
+    kind: 'textFragment',
+    pageIndex: 0,
+    sectionId: section.id,
+    blockId: paragraph.id,
+    runId: firstRun.id,
+    text: '',
+    start: {
+      sectionId: section.id,
+      blockId: paragraph.id,
+      runId: firstRun.id,
+      graphemeIndex: 0
+    },
+    end: {
+      sectionId: section.id,
+      blockId: paragraph.id,
+      runId: firstRun.id,
+      graphemeIndex: 0
+    },
+    style: measured.resolvedFont,
+    x,
+    y,
+    width: 0,
+    height,
+    baseline: y + baseline,
+    advanceTwips: Object.freeze([0])
+  })
+}
+
+/** 计算单元格内容块的竖向居中偏移；自适应高度时保持原有 padding 语义。 */
+function resolveTableCellContentVerticalOffset(
+  fragments: readonly TextFragment[],
+  cellHeight: number
+): number {
+  const firstFragment = fragments[0]
+  const lastFragment = fragments[fragments.length - 1]
+
+  if (firstFragment === undefined || lastFragment === undefined) {
+    return 0
+  }
+
+  const contentTop = Math.min(...fragments.map((fragment) => fragment.y))
+  const contentBottom = Math.max(...fragments.map((fragment) => fragment.y + fragment.height))
+  const contentHeight = contentBottom - contentTop
+  const centeredTop = Math.max(0, Math.round((cellHeight - contentHeight) / 2))
+
+  return centeredTop - contentTop
 }
 
 /** 读取表格列宽，未声明时平均分配正文宽度。 */

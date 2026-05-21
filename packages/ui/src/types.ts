@@ -466,12 +466,6 @@ export interface JWordTablePanelElements {
   readonly insertColumnsInput: HTMLInputElement
   /** 插入表格确认按钮。 */
   readonly insertConfirmButton: HTMLButtonElement
-  /** 作用范围：单元格。 */
-  readonly scopeCellButton: HTMLButtonElement
-  /** 作用范围：整行。 */
-  readonly scopeRowButton: HTMLButtonElement
-  /** 作用范围：整列。 */
-  readonly scopeColumnButton: HTMLButtonElement
   /** 在当前行上方插入。 */
   readonly insertRowBeforeButton: HTMLButtonElement
   /** 在当前行下方插入。 */
@@ -486,10 +480,6 @@ export interface JWordTablePanelElements {
   readonly deleteColumnButton: HTMLButtonElement
   /** 合并当前单元格与右侧单元格。 */
   readonly mergeRightButton: HTMLButtonElement
-  /** 边框预设下拉。 */
-  readonly borderPresetSelect: HTMLSelectElement
-  /** 应用边框按钮。 */
-  readonly applyBorderButton: HTMLButtonElement
 }
 
 /** 选区浮动工具栏与右键菜单对外暴露的最小句柄。 */

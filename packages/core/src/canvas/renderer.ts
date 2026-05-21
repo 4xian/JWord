@@ -124,23 +124,6 @@ function renderTableBox(
 
   context.fillStyle = borderColor
   renderTableGrid(context, page, table, drawingScale, borderWidth)
-
-  for (const row of table.rows) {
-    for (const cell of row.cells) {
-      if (cell.text.length === 0) {
-        continue
-      }
-
-      context.fillStyle = DEFAULT_CANVAS_TEXT_COLOR
-      context.font = `${Math.max(11, Math.round(13 * drawingScale))}px sans-serif`
-      context.textBaseline = 'alphabetic'
-      context.fillText(
-        cell.text.slice(0, 60),
-        toCanvasX(page, cell.x + 120, drawingScale),
-        toCanvasY(page, cell.y + Math.min(cell.height - 60, 300), drawingScale)
-      )
-    }
-  }
 }
 
 /** 单次绘制表格网格线，避免相邻单元格重复描边导致内部线变粗。 */
@@ -223,20 +206,18 @@ function renderTextBackgrounds(
   page: LayoutBox,
   drawingScale: number
 ): void {
-  for (const line of page.lines) {
-    for (const fragment of line.fragments) {
-      if (fragment.style.backgroundColor === undefined) {
-        continue
-      }
-
-      context.fillStyle = fragment.style.backgroundColor
-      context.fillRect(
-        toCanvasX(page, fragment.x, drawingScale),
-        toCanvasY(page, fragment.y, drawingScale),
-        twipsToCssPx(fragment.width, drawingScale),
-        twipsToCssPx(fragment.height, drawingScale)
-      )
+  for (const fragment of iteratePageTextFragments(page)) {
+    if (fragment.style.backgroundColor === undefined) {
+      continue
     }
+
+    context.fillStyle = fragment.style.backgroundColor
+    context.fillRect(
+      toCanvasX(page, fragment.x, drawingScale),
+      toCanvasY(page, fragment.y, drawingScale),
+      twipsToCssPx(fragment.width, drawingScale),
+      twipsToCssPx(fragment.height, drawingScale)
+    )
   }
 }
 
@@ -245,18 +226,49 @@ function renderTextFragments(
   page: LayoutBox,
   drawingScale: number
 ): void {
+  for (const fragment of iteratePageTextFragments(page)) {
+    renderTextFragment(context, page, fragment, drawingScale)
+  }
+}
+
+/** 统一绘制单个文本片段，供正文和表格复用。 */
+function renderTextFragment(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  fragment: TextFragment,
+  drawingScale: number
+): void {
+  const x = toCanvasX(page, fragment.x, drawingScale)
+  const baseline = toCanvasY(page, fragment.baseline, drawingScale)
+    + readCanvasBaselineShiftPx(fragment, drawingScale)
+  const width = twipsToCssPx(fragment.width, drawingScale)
+
+  context.fillStyle = fragment.style.color ?? DEFAULT_CANVAS_TEXT_COLOR
+  context.font = formatCanvasFont(fragment, drawingScale)
+  context.textBaseline = 'alphabetic'
+  context.fillText(fragment.text, x, baseline)
+  renderTextDecoration(context, fragment, x, baseline, width, drawingScale)
+}
+
+/** 统一遍历正文与表格中的文本片段，避免 table fragment 丢失样式。 */
+function* iteratePageTextFragments(page: LayoutBox): Iterable<TextFragment> {
   for (const line of page.lines) {
     for (const fragment of line.fragments) {
-      const x = toCanvasX(page, fragment.x, drawingScale)
-      const baseline = toCanvasY(page, fragment.baseline, drawingScale)
-        + readCanvasBaselineShiftPx(fragment, drawingScale)
-      const width = twipsToCssPx(fragment.width, drawingScale)
+      yield fragment
+    }
+  }
 
-      context.fillStyle = fragment.style.color ?? DEFAULT_CANVAS_TEXT_COLOR
-      context.font = formatCanvasFont(fragment, drawingScale)
-      context.textBaseline = 'alphabetic'
-      context.fillText(fragment.text, x, baseline)
-      renderTextDecoration(context, fragment, x, baseline, width, drawingScale)
+  for (const block of page.blocks) {
+    if (block.kind !== 'table') {
+      continue
+    }
+
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        for (const fragment of cell.fragments) {
+          yield fragment
+        }
+      }
     }
   }
 }

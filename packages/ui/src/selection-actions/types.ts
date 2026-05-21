@@ -48,6 +48,7 @@ export interface SelectionActionsViewState {
   readonly strikePressed: ToolbarPressedState
   readonly textColorValue: string
   readonly backgroundColorValue: string
+  readonly activeColorPicker: 'text' | 'background' | null
   readonly cutDisabled: boolean
   readonly copyDisabled: boolean
   readonly clearDisabled: boolean

@@ -293,12 +293,7 @@ function setTableCellText(store: DocumentStore, operation: Extract<Operation, { 
   if (operation.text.length > 0) {
     text.insert(0, operation.text)
   }
-  setRunStructure(run, {
-    inlines: [{
-      kind: 'text',
-      text: operation.text
-    }]
-  })
+  run.delete(DOCUMENT_STORE_FIELDS.run.inlines)
 }
 
 /** 创建一行带空文本段落的单元格模型。 */

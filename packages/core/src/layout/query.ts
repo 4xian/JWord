@@ -192,7 +192,17 @@ function hitTestTableBoxes(
 
     for (const row of table.rows) {
       for (const cell of row.cells) {
-        if (cell.textPosition !== undefined && isPointInsideRect(cell, absoluteX, absoluteY)) {
+        if (!isPointInsideRect(cell, absoluteX, absoluteY)) {
+          continue
+        }
+
+        const fragmentHit = hitTestTableCellFragments(cell.fragments, absoluteX, absoluteY)
+
+        if (fragmentHit !== undefined) {
+          return fragmentHit
+        }
+
+        if (cell.textPosition !== undefined) {
           return cell.textPosition
         }
       }
@@ -200,6 +210,36 @@ function hitTestTableBoxes(
   }
 
   return undefined
+}
+
+/** 命中单元格内文本片段，返回最接近的文本位置。 */
+function hitTestTableCellFragments(
+  fragments: readonly TextFragment[],
+  absoluteX: number,
+  absoluteY: number
+): TextPosition | undefined {
+  const lineFragments = fragments.filter((fragment) =>
+    absoluteY >= fragment.y && absoluteY <= fragment.y + fragment.height
+  )
+  const candidates = lineFragments.length > 0 ? lineFragments : fragments
+  const firstFragment = candidates[0]
+  const lastFragment = candidates[candidates.length - 1]
+
+  if (firstFragment === undefined || lastFragment === undefined) {
+    return undefined
+  }
+
+  if (absoluteX <= firstFragment.x) {
+    return firstFragment.start
+  }
+
+  for (const fragment of candidates) {
+    if (absoluteX <= fragment.x + fragment.width) {
+      return positionInFragment(fragment, absoluteX)
+    }
+  }
+
+  return lastFragment.end
 }
 
 /** 判断点是否在布局矩形内。 */
@@ -262,7 +302,7 @@ export function getCaretRect(layout: DocumentLayout, position: TextPosition): La
       : offsetInFragment(located.fragment, position),
     y: located.fragment?.y ?? located.inline?.y ?? located.line.y,
     width: 0,
-    height: located.fragment?.height ?? DEFAULT_CARET_HEIGHT_TWIPS
+    height: located.fragment?.height ?? located.inline?.height ?? DEFAULT_CARET_HEIGHT_TWIPS
   }
 }
 
@@ -282,10 +322,10 @@ function locateTableCellRect(layout: DocumentLayout, position: TextPosition): La
 
           return {
             pageIndex: page.pageIndex,
-            x: cell.x,
-            y: cell.y,
+            x: cell.x + cssPxToTwips(8),
+            y: cell.y + cssPxToTwips(6),
             width: 0,
-            height: cell.height
+            height: Math.min(cell.height, DEFAULT_CARET_HEIGHT_TWIPS)
           }
         }
       }
@@ -335,9 +375,77 @@ export function getSelectionRects(layout: DocumentLayout, range: TextRange): rea
         rects.push(lineRect)
       }
     }
+
+    for (const line of createTableFragmentLines(page.blocks.filter((block): block is TableBox => block.kind === 'table'))) {
+      const lineRect = getLineSelectionRect(layout, line, ordered.anchor, ordered.focus)
+
+      if (lineRect !== undefined) {
+        rects.push(lineRect)
+      }
+    }
   }
 
   return Object.freeze(rects)
+}
+
+/** 为表格单元格文本片段创建可复用的查询行。 */
+function createTableFragmentLine(fragment: TextFragment): LineBox {
+  return {
+    kind: 'line',
+    pageIndex: fragment.pageIndex,
+    sectionId: fragment.sectionId,
+    paragraphId: fragment.blockId,
+    x: fragment.x,
+    y: fragment.y,
+    width: fragment.width,
+    height: fragment.height,
+    baseline: fragment.baseline,
+    fragments: Object.freeze([fragment]),
+    inlines: Object.freeze([])
+  }
+}
+
+/** 把表格单元格片段按同一行聚合，供选区矩形查询复用。 */
+function createTableFragmentLines(tables: readonly TableBox[]): readonly LineBox[] {
+  const lines = new Map<string, TextFragment[]>()
+
+  for (const table of tables) {
+    for (const row of table.rows) {
+      for (const cell of row.cells) {
+        for (const fragment of cell.fragments) {
+          const key = `${fragment.pageIndex}\u0000${fragment.blockId}\u0000${fragment.y}`
+          const fragments = lines.get(key) ?? []
+
+          fragments.push(fragment)
+          lines.set(key, fragments)
+        }
+      }
+    }
+  }
+
+  return Object.freeze([...lines.values()].map((fragments) => {
+    const sortedFragments = [...fragments].sort((left, right) => left.x - right.x)
+    const first = sortedFragments[0]
+    const last = sortedFragments[sortedFragments.length - 1]
+
+    if (first === undefined || last === undefined) {
+      throw new Error('表格文本行缺少片段。')
+    }
+
+    return Object.freeze({
+      kind: 'line' as const,
+      pageIndex: first.pageIndex,
+      sectionId: first.sectionId,
+      paragraphId: first.blockId,
+      x: first.x,
+      y: Math.min(...sortedFragments.map((fragment) => fragment.y)),
+      width: (last.x + last.width) - first.x,
+      height: Math.max(...sortedFragments.map((fragment) => fragment.y + fragment.height)) - first.y,
+      baseline: Math.max(...sortedFragments.map((fragment) => fragment.baseline)),
+      fragments: Object.freeze(sortedFragments),
+      inlines: Object.freeze([])
+    })
+  }))
 }
 
 function positionInFragment(fragment: TextFragment, x: number): TextPosition {
@@ -442,7 +550,7 @@ export function locatePosition(
         const line = layout.pages[fragment.pageIndex]?.lines.find((candidate) => {
           return candidate.paragraphId === fragment.blockId
             && candidate.fragments.some((item) => item === fragment)
-        })
+        }) ?? createTableFragmentLine(fragment)
 
         if (line !== undefined) {
           fragmentCandidates.push({
@@ -800,6 +908,30 @@ function readLayoutLookupCache(layout: DocumentLayout): LayoutLookupCache {
         }
 
         order += 1
+      }
+    }
+
+    for (const block of page.blocks) {
+      if (block.kind !== 'table') {
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          for (const fragment of cell.fragments) {
+            const containerKey = createTextContainerKey(fragment.start)
+            const fragments = fragmentsByContainerKey.get(containerKey) ?? []
+
+            fragments.push(fragment)
+            fragmentsByContainerKey.set(containerKey, fragments)
+
+            if (!containerOrderByKey.has(containerKey)) {
+              containerOrderByKey.set(containerKey, order)
+            }
+
+            order += 1
+          }
+        }
       }
     }
   }

@@ -6,8 +6,7 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.7。
  */
 import { createToolbarIcon } from '../toolbar/icons'
-import type { JWordTableBorderPreset, JWordTablePanelElements, JWordTableSelectionScope } from '../types'
-import { readBorderPresetLabel } from './state'
+import type { JWordTablePanelElements } from '../types'
 
 export interface TablePanelDom extends JWordTablePanelElements {}
 
@@ -19,9 +18,8 @@ interface TablePanelViewState {
   readonly previewColumns: number
   readonly insertMenuOpen: boolean
   readonly customSizeDialogOpen: boolean
+  readonly helperAnchorsVisible: boolean
   readonly quickToolsVisible: boolean
-  readonly scope: JWordTableSelectionScope
-  readonly borderPreset: JWordTableBorderPreset
   readonly targetAvailable: boolean
   readonly canDeleteRow: boolean
   readonly canDeleteColumn: boolean
@@ -40,11 +38,13 @@ export function createTablePanelDom(
 ): JWordTablePanelElements {
   const root = document.createElement('div')
   const insertTriggerButton = document.createElement('button')
+  const insertTriggerLabel = document.createElement('span')
   const insertMenu = document.createElement('div')
   const insertPreviewLabel = document.createElement('p')
   const preview = document.createElement('div')
   const customSizeButton = createButton('自定义行列', 'data-jword-table-custom-size')
   const customSizeDialog = document.createElement('div')
+  const customSizeDialogPanel = document.createElement('div')
   const customSizeDialogTitle = document.createElement('p')
   const insertRowsInput = createNumberInput('行数', 'data-jword-table-insert-rows')
   const insertColumnsInput = createNumberInput('列数', 'data-jword-table-insert-columns')
@@ -56,21 +56,13 @@ export function createTablePanelDom(
   const quickTools = document.createElement('div')
   const summary = document.createElement('p')
   const actionRow = createRow()
-  const secondaryRow = createRow()
-  const scopeGroup = createRow()
-  const borderGroup = createRow()
-  const scopeCellButton = createButton('单元格', 'data-jword-table-scope', 'cell')
-  const scopeRowButton = createButton('行', 'data-jword-table-scope', 'row')
-  const scopeColumnButton = createButton('列', 'data-jword-table-scope', 'column')
-  const insertRowBeforeButton = createButton('上方插入行', 'data-jword-table-action', 'insert-row-before')
-  const insertRowAfterButton = createButton('下方插入行', 'data-jword-table-action', 'insert-row-after')
-  const deleteRowButton = createButton('删除行', 'data-jword-table-action', 'delete-row')
-  const insertColumnBeforeButton = createButton('左侧插入列', 'data-jword-table-action', 'insert-column-before')
-  const insertColumnAfterButton = createButton('右侧插入列', 'data-jword-table-action', 'insert-column-after')
-  const deleteColumnButton = createButton('删除列', 'data-jword-table-action', 'delete-column')
-  const mergeRightButton = createButton('向右合并', 'data-jword-table-action', 'merge-right')
-  const borderPresetSelect = document.createElement('select')
-  const applyBorderButton = createButton('边框', 'data-jword-table-apply-border')
+  const insertRowBeforeButton = createIconButton('上方插入行', 'data-jword-table-action', 'insert-row-before')
+  const insertRowAfterButton = createIconButton('下方插入行', 'data-jword-table-action', 'insert-row-after')
+  const deleteRowButton = createIconButton('删除行', 'data-jword-table-action', 'delete-row')
+  const insertColumnBeforeButton = createIconButton('左侧插入列', 'data-jword-table-action', 'insert-column-before')
+  const insertColumnAfterButton = createIconButton('右侧插入列', 'data-jword-table-action', 'insert-column-after')
+  const deleteColumnButton = createIconButton('删除列', 'data-jword-table-action', 'delete-column')
+  const mergeRightButton = createIconButton('向右合并', 'data-jword-table-action', 'merge-right')
   const insertPreviewButtons: HTMLButtonElement[] = []
 
   root.className = 'jw-table-toolbar'
@@ -82,7 +74,9 @@ export function createTablePanelDom(
   insertTriggerButton.setAttribute('aria-haspopup', 'menu')
   insertTriggerButton.setAttribute('aria-expanded', 'false')
   insertTriggerButton.setAttribute('data-jword-table-insert-trigger', 'true')
-  insertTriggerButton.append(createToolbarIcon('table'))
+  insertTriggerLabel.className = 'jw-table-toolbar__trigger-label'
+  insertTriggerLabel.textContent = title
+  insertTriggerButton.append(createToolbarIcon('table'), insertTriggerLabel)
 
   insertMenu.className = 'jw-table-toolbar__insert-menu'
   insertMenu.setAttribute('data-jword-table-insert-menu', 'true')
@@ -117,10 +111,12 @@ export function createTablePanelDom(
   customSizeDialog.className = 'jw-table-toolbar__dialog'
   customSizeDialog.setAttribute('data-jword-table-custom-size-dialog', 'true')
   customSizeDialog.hidden = true
+  customSizeDialogPanel.className = 'jw-table-toolbar__dialog-panel'
   customSizeDialogTitle.className = 'jw-table-toolbar__dialog-title'
   customSizeDialogTitle.textContent = '自定义表格尺寸'
 
   const customSizeFields = createRow()
+  customSizeFields.classList.add('jw-table-toolbar__dialog-fields')
   customSizeFields.append(
     createField('行数', insertRowsInput),
     createField('列数', insertColumnsInput)
@@ -128,10 +124,13 @@ export function createTablePanelDom(
 
   const customSizeActions = createRow()
   customSizeActions.className = 'jw-table-toolbar__dialog-actions'
+  customSizeCancelButton.classList.add('jw-table-toolbar__dialog-button', 'jw-table-toolbar__dialog-button--secondary')
+  insertConfirmButton.classList.add('jw-table-toolbar__dialog-button', 'jw-table-toolbar__dialog-button--primary')
   customSizeActions.append(customSizeCancelButton, insertConfirmButton)
 
-  customSizeDialog.append(customSizeDialogTitle, customSizeFields, customSizeActions)
-  insertMenu.append(insertPreviewLabel, preview, customSizeButton, customSizeDialog)
+  customSizeDialogPanel.append(customSizeDialogTitle, customSizeFields, customSizeActions)
+  customSizeDialog.append(customSizeDialogPanel)
+  insertMenu.append(insertPreviewLabel, preview, customSizeButton)
 
   overlay.className = 'jw-table-panel__overlay'
   overlay.setAttribute('data-jword-table-overlay', 'true')
@@ -141,11 +140,13 @@ export function createTablePanelDom(
   topAnchor.className = 'jw-table-panel__anchor jw-table-panel__anchor--top'
   topAnchor.setAttribute('aria-label', '打开表格顶部快捷工具')
   topAnchor.setAttribute('data-jword-table-anchor', 'top')
+  topAnchor.setAttribute('data-jword-table-anchor-role', 'helper')
 
   leftAnchor.type = 'button'
   leftAnchor.className = 'jw-table-panel__anchor jw-table-panel__anchor--left'
   leftAnchor.setAttribute('aria-label', '打开表格左侧快捷工具')
   leftAnchor.setAttribute('data-jword-table-anchor', 'left')
+  leftAnchor.setAttribute('data-jword-table-anchor-role', 'helper')
 
   quickTools.className = 'jw-table-panel__quick-tools jw-table-toolbar__quick-tools'
   quickTools.setAttribute('data-jword-table-quick-tools', 'true')
@@ -153,23 +154,7 @@ export function createTablePanelDom(
 
   summary.className = 'jw-table-toolbar__summary'
   summary.setAttribute('data-jword-table-summary', 'true')
-
-  scopeGroup.className = 'jw-table-toolbar__group-row'
-  scopeCellButton.classList.add('jw-table-toolbar__scope-button')
-  scopeRowButton.classList.add('jw-table-toolbar__scope-button')
-  scopeColumnButton.classList.add('jw-table-toolbar__scope-button')
-  scopeGroup.append(scopeCellButton, scopeRowButton, scopeColumnButton)
-
-  borderPresetSelect.className = 'jw-table-toolbar__select'
-  borderPresetSelect.setAttribute('aria-label', '表格边框预设')
-  borderPresetSelect.setAttribute('data-jword-table-border-preset', 'true')
-  for (const preset of ['all', 'outer', 'innerHorizontal', 'innerVertical', 'none'] as const) {
-    const option = document.createElement('option')
-
-    option.value = preset
-    option.textContent = readBorderPresetLabel(preset)
-    borderPresetSelect.append(option)
-  }
+  summary.hidden = true
 
   insertRowBeforeButton.classList.add('jw-table-toolbar__action-button')
   insertRowAfterButton.classList.add('jw-table-toolbar__action-button')
@@ -178,9 +163,16 @@ export function createTablePanelDom(
   insertColumnAfterButton.classList.add('jw-table-toolbar__action-button')
   deleteColumnButton.classList.add('jw-table-toolbar__action-button')
   mergeRightButton.classList.add('jw-table-toolbar__action-button')
-  applyBorderButton.classList.add('jw-table-toolbar__action-button')
 
-  actionRow.className = 'jw-table-toolbar__group-row'
+  decorateActionButton(insertRowBeforeButton, createTableActionGlyph('row-before'))
+  decorateActionButton(insertRowAfterButton, createTableActionGlyph('row-after'))
+  decorateActionButton(deleteRowButton, createTableActionGlyph('row-delete'))
+  decorateActionButton(insertColumnBeforeButton, createTableActionGlyph('column-before'))
+  decorateActionButton(insertColumnAfterButton, createTableActionGlyph('column-after'))
+  decorateActionButton(deleteColumnButton, createTableActionGlyph('column-delete'))
+  decorateActionButton(mergeRightButton, createTableActionGlyph('merge-right'))
+
+  actionRow.className = 'jw-table-toolbar__group-row jw-table-toolbar__action-row'
   actionRow.append(
     insertRowBeforeButton,
     insertRowAfterButton,
@@ -191,18 +183,13 @@ export function createTablePanelDom(
     mergeRightButton
   )
 
-  borderGroup.className = 'jw-table-toolbar__group-row jw-table-toolbar__group-row--end'
-  borderGroup.append(borderPresetSelect, applyBorderButton)
-
-  secondaryRow.className = 'jw-table-toolbar__group-row jw-table-toolbar__group-row--between'
-  secondaryRow.append(scopeGroup, borderGroup)
-
-  quickTools.append(summary, actionRow, secondaryRow)
+  quickTools.append(actionRow)
   overlay.append(topAnchor, leftAnchor, quickTools)
 
   root.append(insertTriggerButton, insertMenu)
   host.append(root)
   resolveOverlayMountHost(overlayHost).append(overlay)
+  resolveDialogMountHost(overlayHost).append(customSizeDialog)
 
   return {
     host: root,
@@ -221,18 +208,13 @@ export function createTablePanelDom(
     insertRowsInput,
     insertColumnsInput,
     insertConfirmButton,
-    scopeCellButton,
-    scopeRowButton,
-    scopeColumnButton,
     insertRowBeforeButton,
     insertRowAfterButton,
     deleteRowButton,
     insertColumnBeforeButton,
     insertColumnAfterButton,
     deleteColumnButton,
-    mergeRightButton,
-    borderPresetSelect,
-    applyBorderButton
+    mergeRightButton
   }
 }
 
@@ -244,14 +226,12 @@ export function renderTablePanel(dom: JWordTablePanelElements, state: TablePanel
   dom.insertPreviewLabel.textContent = `${state.previewRows} x ${state.previewColumns}`
   dom.customSizeDialog.hidden = !state.customSizeDialogOpen
   dom.quickTools.hidden = !state.targetAvailable || !state.quickToolsVisible
-  dom.topAnchor.hidden = !state.targetAvailable
-  dom.leftAnchor.hidden = !state.targetAvailable
+  dom.topAnchor.hidden = !state.targetAvailable || !state.helperAnchorsVisible
+  dom.leftAnchor.hidden = !state.targetAvailable || !state.helperAnchorsVisible
+  dom.summary.hidden = true
   dom.summary.textContent = state.summary
   dom.insertRowsInput.value = String(state.insertRows)
   dom.insertColumnsInput.value = String(state.insertColumns)
-  syncPressedState(dom.scopeCellButton, state.scope === 'cell')
-  syncPressedState(dom.scopeRowButton, state.scope === 'row')
-  syncPressedState(dom.scopeColumnButton, state.scope === 'column')
   dom.insertTriggerButton.disabled = state.busy
   dom.customSizeButton.disabled = state.busy
   dom.insertRowsInput.disabled = state.busy
@@ -260,9 +240,6 @@ export function renderTablePanel(dom: JWordTablePanelElements, state: TablePanel
   dom.customSizeCancelButton.disabled = state.busy
   dom.topAnchor.disabled = state.busy || !state.targetAvailable
   dom.leftAnchor.disabled = state.busy || !state.targetAvailable
-  dom.scopeCellButton.disabled = state.busy || !state.targetAvailable
-  dom.scopeRowButton.disabled = state.busy || !state.targetAvailable
-  dom.scopeColumnButton.disabled = state.busy || !state.targetAvailable
   dom.insertRowBeforeButton.disabled = state.busy || !state.targetAvailable
   dom.insertRowAfterButton.disabled = state.busy || !state.targetAvailable
   dom.deleteRowButton.disabled = state.busy || !state.canDeleteRow
@@ -270,9 +247,6 @@ export function renderTablePanel(dom: JWordTablePanelElements, state: TablePanel
   dom.insertColumnAfterButton.disabled = state.busy || !state.targetAvailable
   dom.deleteColumnButton.disabled = state.busy || !state.canDeleteColumn
   dom.mergeRightButton.disabled = state.busy || !state.canMergeRight
-  dom.borderPresetSelect.value = state.borderPreset
-  dom.borderPresetSelect.disabled = state.busy || !state.targetAvailable
-  dom.applyBorderButton.disabled = state.busy || !state.targetAvailable
 
   for (const button of dom.insertPreviewButtons) {
     const row = Number.parseInt(button.dataset.jwordRows ?? '0', 10)
@@ -286,6 +260,7 @@ export function renderTablePanel(dom: JWordTablePanelElements, state: TablePanel
 
 /** 销毁表格工具 DOM。 */
 export function destroyTablePanel(dom: JWordTablePanelElements): void {
+  dom.customSizeDialog.remove()
   dom.overlay.remove()
   dom.host.remove()
 }
@@ -313,7 +288,18 @@ function createButton(label: string, dataAttribute: string, dataValue = 'true'):
   button.className = 'jw-toolbar__button jw-table-toolbar__button'
   button.textContent = label
   button.setAttribute('aria-label', label)
+  button.title = label
   button.setAttribute(dataAttribute, dataValue)
+
+  return button
+}
+
+/** 创建图标动作按钮。 */
+function createIconButton(label: string, dataAttribute: string, dataValue = 'true'): HTMLButtonElement {
+  const button = createButton(label, dataAttribute, dataValue)
+
+  button.classList.add('jw-table-toolbar__icon-button')
+  button.replaceChildren()
 
   return button
 }
@@ -345,8 +331,104 @@ function resolveOverlayMountHost(overlayHost: HTMLElement): HTMLElement {
   return overlayHost.querySelector<HTMLElement>('[data-jword-canvas-container]') ?? overlayHost
 }
 
-/** 同步 scope 按钮的按下状态。 */
-function syncPressedState(button: HTMLButtonElement, pressed: boolean): void {
-  button.setAttribute('aria-pressed', String(pressed))
-  button.setAttribute('data-jword-active', String(pressed))
+/** 解析自定义尺寸弹层挂载宿主。 */
+function resolveDialogMountHost(overlayHost: HTMLElement): HTMLElement {
+  return overlayHost
+}
+
+type TableActionGlyphKind =
+  | 'row-before'
+  | 'row-after'
+  | 'row-delete'
+  | 'column-before'
+  | 'column-after'
+  | 'column-delete'
+  | 'merge-right'
+
+/** 为动作按钮挂载图标化内容。 */
+function decorateActionButton(button: HTMLButtonElement, glyph: HTMLElement): void {
+  button.replaceChildren(glyph)
+}
+
+/** 创建表格动作图标。 */
+function createTableActionGlyph(kind: TableActionGlyphKind): HTMLElement {
+  const glyph = document.createElement('span')
+  const baseIcon = createToolbarIcon(resolveTableActionBaseIcon(kind))
+
+  glyph.className = 'jw-table-toolbar__glyph'
+  glyph.setAttribute('aria-hidden', 'true')
+  baseIcon.classList.add('jw-table-toolbar__glyph-icon')
+  glyph.append(baseIcon)
+
+  const badge = createTableActionBadge(kind)
+
+  if (badge !== null) {
+    glyph.append(badge)
+  }
+
+  return glyph
+}
+
+/** 读取动作图标的底图。 */
+function resolveTableActionBaseIcon(kind: TableActionGlyphKind): Parameters<typeof createToolbarIcon>[0] {
+  if (kind === 'row-delete' || kind === 'column-delete') {
+    return 'trash'
+  }
+
+  if (kind === 'merge-right') {
+    return 'layout'
+  }
+
+  return 'table'
+}
+
+/** 创建动作图标右下角的小标记。 */
+function createTableActionBadge(kind: TableActionGlyphKind): HTMLElement | null {
+  const badge = document.createElement('span')
+
+  badge.className = 'jw-table-toolbar__glyph-badge'
+
+  if (kind === 'merge-right') {
+    badge.classList.add('jw-table-toolbar__glyph-badge--arrow')
+    badge.textContent = '→'
+    return badge
+  }
+
+  if (kind === 'row-before') {
+    badge.classList.add('jw-table-toolbar__glyph-badge--edge-top')
+    badge.textContent = '+'
+    return badge
+  }
+
+  if (kind === 'row-after') {
+    badge.classList.add('jw-table-toolbar__glyph-badge--edge-bottom')
+    badge.textContent = '+'
+    return badge
+  }
+
+  if (kind === 'column-before') {
+    badge.classList.add('jw-table-toolbar__glyph-badge--edge-left')
+    badge.textContent = '+'
+    return badge
+  }
+
+  if (kind === 'column-after') {
+    badge.classList.add('jw-table-toolbar__glyph-badge--edge-right')
+    badge.textContent = '+'
+    return badge
+  }
+
+  if (kind === 'row-delete') {
+    badge.classList.add('jw-table-toolbar__glyph-badge--row-delete')
+    badge.textContent = '−'
+    return badge
+  }
+
+  if (kind === 'column-delete') {
+    badge.classList.add('jw-table-toolbar__glyph-badge--column-delete')
+    badge.textContent = '−'
+    return badge
+  }
+
+  return null
 }

@@ -62,9 +62,9 @@ describe('table caret render hit targeted', () => {
     })
     expect(caret).toMatchObject({
       pageIndex: 0,
-      x: secondCell?.x,
-      y: secondCell?.y,
-      height: secondCell?.height
+      x: secondCell?.fragments[0]?.x,
+      y: secondCell?.fragments[0]?.y,
+      height: secondCell?.fragments[0]?.height
     })
   })
 
@@ -88,9 +88,9 @@ describe('table caret render hit targeted', () => {
     })
     expect(caret).toMatchObject({
       pageIndex: 0,
-      x: firstCell?.x,
-      y: firstCell?.y,
-      height: firstCell?.height
+      x: firstCell?.fragments[0]?.x,
+      y: firstCell?.fragments[0]?.y,
+      height: firstCell?.fragments[0]?.height
     })
   })
 })

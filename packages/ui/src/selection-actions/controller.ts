@@ -5,17 +5,17 @@
  * 性能/安全约束：所有动作继续走 facade/transaction pipeline，右键菜单只绑定稳定选区快照，不沿用旧状态。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区浮层收尾项。
  */
-import type { Command, Editor, Run, SelectionState } from '@4xian/jword-core'
+import type { Command, DocumentProjection, Editor, Paragraph, Run, SelectionState } from '@4xian/jword-core'
 import {
   buildSetBackgroundColorCommand,
   buildSetBoldCommand,
   buildSetItalicCommand,
+  createSelectionState,
   buildSetStrikeCommand,
   buildSetSubscriptCommand,
   buildSetSuperscriptCommand,
   buildSetTextColorCommand,
-  buildSetUnderlineCommand,
-  createSelectionState
+  buildSetUnderlineCommand
 } from '@4xian/jword-core'
 import type { JWordSelectionActionElements } from '../types'
 import { DEFAULT_BACKGROUND_COLOR, DEFAULT_TEXT_COLOR } from '../toolbar/builtin-tools'
@@ -48,7 +48,6 @@ export function createSelectionActionsController(
 ): SelectionActionsControllerHandle {
   const editor = options.editor
   const editorHost = options.editorHost
-  const colorFormat = options.colorFormat
   const dom = createSelectionActionsDom(editorHost)
   const hiddenTextarea = requireHiddenTextarea(editorHost)
   const canvasContainer = requireCanvasContainer(editorHost)
@@ -114,6 +113,8 @@ export function createSelectionActionsController(
       return
     }
 
+    const colorSelection = openColorPicker === null ? null : readFrozenColorSelection(openColorPicker)
+
     renderSelectionActionsDom(dom, buildSelectionActionsViewState({
       editor,
       editorHost,
@@ -121,6 +122,8 @@ export function createSelectionActionsController(
       dismissedSelectionKey,
       contextSelection: stableContextSelection.selection,
       contextPoint: stableContextSelection.point,
+      colorSelection,
+      activeColorPicker: openColorPicker,
       stickyFloatingToolbar: {
         selectionKey: stickyFloatingSelectionKey,
         position: stickyFloatingPosition
@@ -167,6 +170,49 @@ export function createSelectionActionsController(
       || readInteractiveFocus(editorHost, dom.host, document.activeElement)
   }
 
+  /** 在当前投影中递归定位普通段落或表格单元格段落。 */
+  function findParagraphById(
+    projection: DocumentProjection,
+    sectionId: string,
+    blockId: string
+  ): Paragraph | null {
+    const section = projection.document.sections.find((item) => item.id === sectionId)
+
+    return section === undefined ? null : findParagraphInBlocks(section.blocks, blockId)
+  }
+
+  /** 在 block 树中查找段落。 */
+  function findParagraphInBlocks(blocks: DocumentProjection['document']['sections'][number]['blocks'], blockId: string): Paragraph | null {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph' && block.id === blockId) {
+        return block
+      }
+
+      if (block.kind !== 'table') {
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          const nested = findParagraphInBlocks(cell.blocks, blockId)
+
+          if (nested !== null) {
+            return nested
+          }
+        }
+      }
+    }
+
+    return null
+  }
+
+  /** 读取 run 内文本 grapheme 长度。 */
+  function readRunGraphemeLength(run: Run): number {
+    return run.inlines.reduce((length, inline) => {
+      return inline.kind === 'text' ? length + Array.from(inline.text).length : length
+    }, 0)
+  }
+
   /** 清空当前浮动工具栏冻结锚点。 */
   function clearStickyFloatingToolbar(): void {
     stickyFloatingSelectionKey = null
@@ -209,6 +255,108 @@ export function createSelectionActionsController(
     render()
   }
 
+  /** 创建格式命令前的段落内选区快照，抵抗 run split 后旧 anchor 失效。 */
+  function createSelectionRebindSnapshot(selection: SelectionState): SelectionRebindSnapshot | null {
+    const anchor = createSelectionRebindEndpoint(selection.anchor)
+    const focus = createSelectionRebindEndpoint(selection.focus)
+
+    if (anchor === null || focus === null) {
+      return null
+    }
+
+    return {
+      anchor,
+      focus,
+      affinity: selection.affinity
+    }
+  }
+
+  /** 把旧选区端点转换成段落内绝对 grapheme 位置。 */
+  function createSelectionRebindEndpoint(anchor: SelectionState['anchor']): SelectionRebindEndpoint | null {
+    const position = editor.resolveTextPosition(anchor)
+    const paragraph = findParagraphById(editor.getProjection(), position.sectionId, position.blockId)
+
+    if (paragraph === null) {
+      return null
+    }
+
+    let paragraphGraphemeIndex = position.graphemeIndex
+
+    for (const run of paragraph.runs) {
+      if (run.id === position.runId) {
+        return {
+          sectionId: position.sectionId,
+          blockId: position.blockId,
+          paragraphGraphemeIndex,
+          ...(position.assoc === undefined ? {} : { assoc: position.assoc })
+        }
+      }
+
+      paragraphGraphemeIndex += readRunGraphemeLength(run)
+    }
+
+    return null
+  }
+
+  /** 格式命令执行后按段落内绝对位置重建当前选区。 */
+  function restoreSelectionFromRebindSnapshot(snapshot: SelectionRebindSnapshot | null): void {
+    if (snapshot === null) {
+      return
+    }
+
+    const anchor = restoreSelectionRebindEndpoint(snapshot.anchor)
+    const focus = restoreSelectionRebindEndpoint(snapshot.focus)
+
+    if (anchor === null || focus === null) {
+      return
+    }
+
+    editor.setSelection(createSelectionState(anchor, focus, {
+      affinity: snapshot.affinity
+    }))
+  }
+
+  /** 把段落内绝对 grapheme 位置映射回当前 projection 的具体 run。 */
+  function restoreSelectionRebindEndpoint(endpoint: SelectionRebindEndpoint): SelectionState['anchor'] | null {
+    const paragraph = findParagraphById(editor.getProjection(), endpoint.sectionId, endpoint.blockId)
+
+    if (paragraph === null || paragraph.runs.length === 0) {
+      return null
+    }
+
+    let remainingIndex = endpoint.paragraphGraphemeIndex
+
+    for (const run of paragraph.runs) {
+      const length = readRunGraphemeLength(run)
+
+      if (remainingIndex <= length) {
+        return editor.createTextAnchor({
+          sectionId: endpoint.sectionId,
+          blockId: endpoint.blockId,
+          runId: run.id,
+          graphemeIndex: remainingIndex,
+          ...(endpoint.assoc === undefined ? {} : { assoc: endpoint.assoc })
+        })
+      }
+
+      remainingIndex -= length
+    }
+
+    const lastRun = paragraph.runs[paragraph.runs.length - 1]
+
+    if (lastRun === undefined) {
+      return null
+    }
+
+    return editor.createTextAnchor({
+      sectionId: endpoint.sectionId,
+      blockId: endpoint.blockId,
+      runId: lastRun.id,
+      graphemeIndex: readRunGraphemeLength(lastRun),
+      ...(endpoint.assoc === undefined ? {} : { assoc: endpoint.assoc })
+    })
+  }
+
   /** 回到编辑器主交互区时收起当前选区的浮动工具栏。 */
   function dismissFloatingToolbarForCurrentSelection(): void {
     const selection = editor.getSelection()
@@ -229,18 +377,51 @@ export function createSelectionActionsController(
     return hasActiveTextSelection(selection) ? selection : null
   }
 
+  /** 读取当前颜色控件已冻结的选区。 */
+  function readFrozenColorSelection(kind: 'text' | 'background'): SelectionState | null {
+    return kind === 'text' ? frozenColorSelections.text : frozenColorSelections.background
+  }
+
+  /** 写入当前颜色控件已冻结的选区。 */
+  function writeFrozenColorSelection(kind: 'text' | 'background', selection: SelectionState | null): void {
+    if (kind === 'text') {
+      frozenColorSelections.text = selection
+      return
+    }
+
+    frozenColorSelections.background = selection
+  }
+
+  /** 捕获颜色控件选区，避免空选区覆盖 pointerdown 阶段已冻结的有效选区。 */
+  function captureColorSelection(kind: 'text' | 'background'): SelectionState | null {
+    const activeSelection = readActiveSelectionSnapshot()
+
+    if (activeSelection !== null) {
+      writeFrozenColorSelection(kind, activeSelection)
+      return activeSelection
+    }
+
+    const frozenSelection = readFrozenColorSelection(kind)
+
+    if (frozenSelection !== null) {
+      editor.setSelection(frozenSelection)
+    }
+
+    return frozenSelection
+  }
+
   /** 统一执行基于选区快照的 facade command。 */
   function executeSelectionCommand(selection: SelectionState | null, command: Command | null): boolean {
     if (selection === null || command === null) {
       return false
     }
 
-    const rebindSnapshot = createSelectionRebindSnapshot(editor, selection)
+    const rebindSnapshot = createSelectionRebindSnapshot(selection)
 
     editor.executeCommand(command, {
       selectionAfter: selection
     })
-    restoreSelectionFromRebindSnapshot(editor, rebindSnapshot)
+    restoreSelectionFromRebindSnapshot(rebindSnapshot)
 
     return true
   }
@@ -315,145 +496,25 @@ export function createSelectionActionsController(
       return
     }
 
-    colorFormat.applyColorFromSelection(kind === 'text' ? 'textColor' : 'backgroundColor', selection, value)
+    const command = kind === 'text'
+      ? buildSetTextColorCommand(editor.getProjection(), selection, value)
+      : buildSetBackgroundColorCommand(editor.getProjection(), selection, value)
+
+    if (!executeSelectionCommand(selection, command)) {
+      announce('BLOCKED: 当前选区未生成可执行的颜色命令。')
+      return
+    }
+
+    const reboundSelection = cloneSelection(editor.getSelection()) ?? selection
+
+    writeFrozenColorSelection(kind, readActiveSelectionSnapshot() ?? reboundSelection)
 
     if (!keepPickerOpen && openColorPicker === kind) {
       openColorPicker = null
     }
 
-    keepFloatingToolbarAtStickyPosition(selection)
+    keepFloatingToolbarAtStickyPosition(readFrozenColorSelection(kind) ?? selection)
     stableContextSelection.point = null
-  }
-
-  /** 把命令前的 run 内索引快照归一成段落绝对 grapheme 偏移，供格式命令后重绑选区。 */
-  function createSelectionRebindSnapshot(
-    editorInstance: Editor,
-    selection: SelectionState
-  ): SelectionRebindSnapshot | null {
-    const anchor = createSelectionRebindEndpoint(editorInstance, selection.anchor)
-    const focus = createSelectionRebindEndpoint(editorInstance, selection.focus)
-
-    if (anchor === null || focus === null) {
-      return null
-    }
-
-    return {
-      anchor,
-      focus,
-      affinity: selection.affinity
-    }
-  }
-
-  /** 在格式命令拆分 run 后，把旧选区重新映射到当前 projection 上的新 run。 */
-  function restoreSelectionFromRebindSnapshot(
-    editorInstance: Editor,
-    snapshot: SelectionRebindSnapshot | null
-  ): void {
-    if (snapshot === null) {
-      return
-    }
-
-    const anchor = restoreSelectionRebindEndpoint(editorInstance, snapshot.anchor)
-    const focus = restoreSelectionRebindEndpoint(editorInstance, snapshot.focus)
-
-    if (anchor === null || focus === null) {
-      return
-    }
-
-    editorInstance.setSelection(createSelectionState(anchor, focus, {
-      affinity: snapshot.affinity
-    }))
-  }
-
-  /** 读取锚点所在段落内的绝对 grapheme 偏移。 */
-  function createSelectionRebindEndpoint(
-    editorInstance: Editor,
-    anchor: SelectionState['anchor']
-  ): SelectionRebindEndpoint | null {
-    const position = editorInstance.resolveTextPosition(anchor)
-    const projection = editorInstance.getProjection()
-    const paragraph = projection.document.sections
-      .find((section) => section.id === position.sectionId)
-      ?.blocks.find((block) => block.id === position.blockId)
-
-    if (paragraph === undefined || paragraph.kind !== 'paragraph') {
-      return null
-    }
-
-    let paragraphGraphemeIndex = position.graphemeIndex
-
-    for (const run of paragraph.runs) {
-      if (run.id === position.runId) {
-        return {
-          sectionId: position.sectionId,
-          blockId: position.blockId,
-          paragraphGraphemeIndex,
-          ...(position.assoc === undefined ? {} : { assoc: position.assoc })
-        }
-      }
-
-      paragraphGraphemeIndex += readRunGraphemeLength(run)
-    }
-
-    return null
-  }
-
-  /** 把段落绝对 grapheme 偏移重新映射成当前 projection 上的具体 run 锚点。 */
-  function restoreSelectionRebindEndpoint(
-    editorInstance: Editor,
-    endpoint: SelectionRebindEndpoint
-  ): SelectionState['anchor'] | null {
-    const projection = editorInstance.getProjection()
-    const paragraph = projection.document.sections
-      .find((section) => section.id === endpoint.sectionId)
-      ?.blocks.find((block) => block.id === endpoint.blockId)
-
-    if (paragraph === undefined || paragraph.kind !== 'paragraph' || paragraph.runs.length === 0) {
-      return null
-    }
-
-    let remainingIndex = endpoint.paragraphGraphemeIndex
-
-    for (const run of paragraph.runs) {
-      const graphemeLength = readRunGraphemeLength(run)
-
-      if (remainingIndex <= graphemeLength) {
-        return editorInstance.createTextAnchor({
-          sectionId: endpoint.sectionId,
-          blockId: endpoint.blockId,
-          runId: run.id,
-          graphemeIndex: remainingIndex,
-          ...(endpoint.assoc === undefined ? {} : { assoc: endpoint.assoc })
-        })
-      }
-
-      remainingIndex -= graphemeLength
-    }
-
-    const lastRun = paragraph.runs[paragraph.runs.length - 1]
-
-    if (lastRun === undefined) {
-      return null
-    }
-
-    return editorInstance.createTextAnchor({
-      sectionId: endpoint.sectionId,
-      blockId: endpoint.blockId,
-      runId: lastRun.id,
-      graphemeIndex: readRunGraphemeLength(lastRun),
-      ...(endpoint.assoc === undefined ? {} : { assoc: endpoint.assoc })
-    })
-  }
-
-  /** 读取 paragraph run 的 grapheme 长度，避免 rebind 逻辑依赖 core 私有 helper。 */
-  function readRunGraphemeLength(run: Run): number {
-    return run.inlines.reduce((length, inline) => {
-      if (inline.kind !== 'text') {
-        return length
-      }
-
-      return length + Array.from(inline.text).length
-    }, 0)
   }
 
   /** 清除当前稳定选区上的常见 run 级格式，但保留段落语义与标题结构。 */
@@ -624,21 +685,19 @@ export function createSelectionActionsController(
     bindColorInput(dom.formatControls.backgroundColor, 'background')
     dom.formatControls.textColor.addEventListener('focus', () => {
       openColorPicker = 'text'
-      keepFloatingToolbarVisible(readActiveSelectionSnapshot())
+      keepFloatingToolbarVisible(captureColorSelection('text'))
     }, { signal: signalController.signal })
     dom.formatControls.backgroundColor.addEventListener('focus', () => {
       openColorPicker = 'background'
-      keepFloatingToolbarVisible(readActiveSelectionSnapshot())
+      keepFloatingToolbarVisible(captureColorSelection('background'))
     }, { signal: signalController.signal })
     dom.formatControls.textColor.addEventListener('click', () => {
-      frozenColorSelections.text = readActiveSelectionSnapshot()
       openColorPicker = 'text'
-      keepFloatingToolbarVisible(frozenColorSelections.text)
+      keepFloatingToolbarVisible(captureColorSelection('text'))
     }, { signal: signalController.signal })
     dom.formatControls.backgroundColor.addEventListener('click', () => {
-      frozenColorSelections.background = readActiveSelectionSnapshot()
       openColorPicker = 'background'
-      keepFloatingToolbarVisible(frozenColorSelections.background)
+      keepFloatingToolbarVisible(captureColorSelection('background'))
     }, { signal: signalController.signal })
     bindColorPreview(dom.formatControls.textColor, 'text')
     bindColorPreview(dom.formatControls.backgroundColor, 'background')
@@ -662,14 +721,7 @@ export function createSelectionActionsController(
     kind: 'text' | 'background'
   ): void {
     const armPicker = () => {
-      const selection = readActiveSelectionSnapshot()
-
-      if (kind === 'text') {
-        frozenColorSelections.text = selection
-      } else {
-        frozenColorSelections.background = selection
-      }
-
+      const selection = captureColorSelection(kind)
       openColorPicker = kind
       keepFloatingToolbarVisible(selection)
     }
@@ -684,13 +736,29 @@ export function createSelectionActionsController(
     kind: 'text' | 'background'
   ): void {
     const applyPreview = (event: Event) => {
-      const selection = kind === 'text' ? frozenColorSelections.text : frozenColorSelections.background
+      const selection = readFrozenColorSelection(kind)
 
       applyColorFormat(selection, kind, target.value, event.type === 'input')
+      syncColorPreview(kind, target.value)
     }
 
     target.addEventListener('input', applyPreview, { signal: signalController.signal })
     target.addEventListener('change', applyPreview, { signal: signalController.signal })
+  }
+
+  /** 让原生颜色 picker 打开期间的可视色条跟随当前选择值。 */
+  function syncColorPreview(kind: 'text' | 'background', rawValue: string): void {
+    const value = normalizeHexColor(rawValue)
+
+    if (value === null) {
+      return
+    }
+
+    const target = kind === 'text'
+      ? dom.formatControls.textColor
+      : dom.formatControls.backgroundColor
+
+    target.parentElement?.style.setProperty('--jw-selection-toolbar-color', value)
   }
 
   /** 绑定右键菜单动作。 */

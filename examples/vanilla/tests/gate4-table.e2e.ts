@@ -1,6 +1,6 @@
 /**
  * @fileoverview 职责: 用真实浏览器冻结 Gate 4 表格 UI、demo adapter 与撤销重做的最小验收路径。
- * 边界: 只覆盖插入表格、单元格文本编辑、行列增删、合并、边框基础控件与 undo/redo，不验证后续跨页布局或 cell hit-test。
+ * 边界: 只覆盖插入表格、单元格文本编辑、行列增删、合并与 undo/redo，不验证后续跨页布局或 cell hit-test。
  * 协作: examples/vanilla/src/main.ts、demo table support、packages/ui/src/table/* 与现有 toolbar history 控件。
  * 约束: 断言必须来自真实 DOM 或 editor.getProjection()，不读取 controller 私有状态。
  * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.7。
@@ -11,11 +11,10 @@ import type { Locator } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
 
-test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo', async ({ page }) => {
+test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page }) => {
   await page.goto('/')
   await waitForTableDemoReady(page)
 
-  const summary = page.locator('[data-jword-table-summary="true"]')
   const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
   const insertPreviewLabel = page.locator('[data-jword-table-insert-preview-label="true"]')
   const insertPreviewCell2x2 = page.locator('[data-jword-table-preview-cell="true"][data-jword-rows="2"][data-jword-columns="2"]')
@@ -30,11 +29,6 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   const deleteRowButton = page.locator('[data-jword-table-action="delete-row"]')
   const deleteColumnButton = page.locator('[data-jword-table-action="delete-column"]')
   const mergeRightButton = page.locator('[data-jword-table-action="merge-right"]')
-  const scopeRowButton = page.locator('[data-jword-table-scope="row"]')
-  const scopeColumnButton = page.locator('[data-jword-table-scope="column"]')
-  const scopeCellButton = page.locator('[data-jword-table-scope="cell"]')
-  const borderPreset = page.locator('[data-jword-table-border-preset="true"]')
-  const applyBorderButton = page.locator('[data-jword-table-apply-border="true"]')
   const undoButton = page.getByRole('button', { name: '撤销' })
   const redoButton = page.getByRole('button', { name: '重做' })
 
@@ -43,7 +37,6 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   await expect(insertPreviewLabel).toContainText('2 x 2')
   await clickToolbarAction(insertPreviewCell2x2)
 
-  await expect(summary).toContainText('2 x 2')
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     rowCount: 2,
     columnCount: 2,
@@ -55,6 +48,7 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   await clickToolbarAction(insertTrigger)
   await clickToolbarAction(customSizeButton)
   await expect(customSizeDialog).toBeVisible()
+  await expectTableDialogAnchoredToEditor(page, customSizeDialog)
   await rowsInput.fill('3')
   await columnsInput.fill('4')
   await clickToolbarAction(customSizeCancelButton)
@@ -68,7 +62,9 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
     firstCellText: '单元格A1'
   })
 
+  await selectDemoTableCell(page, 0, 0)
   await clickToolbarAction(topAnchor)
+  await expect(page.locator('[data-jword-table-summary="true"]')).toBeHidden()
   await clickToolbarAction(insertRowAfterButton)
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     rowCount: 3
@@ -81,8 +77,6 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   })
 
   await clickToolbarAction(topAnchor)
-  await clickToolbarAction(scopeRowButton)
-  await expect(scopeRowButton).toHaveAttribute('aria-pressed', 'true')
   await clickToolbarAction(deleteRowButton)
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     rowCount: 2
@@ -90,8 +84,6 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
 
   await selectDemoTableCell(page, 0, 0)
   await clickToolbarAction(topAnchor)
-  await clickToolbarAction(scopeColumnButton)
-  await expect(scopeColumnButton).toHaveAttribute('aria-pressed', 'true')
   await clickToolbarAction(deleteColumnButton)
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     columnCount: 2
@@ -99,22 +91,15 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
 
   await selectDemoTableCell(page, 0, 0)
   await clickToolbarAction(topAnchor)
-  await clickToolbarAction(scopeCellButton)
-  await expect(scopeCellButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('[data-jword-table-scope]')).toHaveCount(0)
+  await expect(page.locator('[data-jword-table-border-preset="true"]')).toHaveCount(0)
+  await expect(page.locator('[data-jword-table-apply-border="true"]')).toHaveCount(0)
   await clickToolbarAction(mergeRightButton)
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     firstRowCellCount: 1,
     firstCellGridSpan: 2
   })
 
-  await clickToolbarAction(topAnchor)
-  await borderPreset.selectOption('all')
-  await clickToolbarAction(applyBorderButton)
-  await expect.poll(() => readFirstTableState(page)).toMatchObject({
-    firstCellBorderColor: '#374151'
-  })
-
-  await undoButton.click()
   await undoButton.click()
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     firstRowCellCount: 2,
@@ -123,11 +108,10 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   })
 
   await redoButton.click()
-  await redoButton.click()
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     firstRowCellCount: 1,
     firstCellGridSpan: 2,
-    firstCellBorderColor: '#374151'
+    firstCellBorderColor: null
   })
 })
 
@@ -152,6 +136,9 @@ test('Gate 4 table click resize and context actions keep table editable', async 
 
   const beforeResize = await readFirstTableState(page)
 
+  await expect(page.locator('[data-jword-table-resize-handle-segment]')).toHaveCount(0)
+  await dragResizeHandleWithPreview(page, '[data-jword-table-resize-handle="column-0"]', 24, 0, 'column')
+  await dragResizeHandleWithPreview(page, '[data-jword-table-resize-handle="row-0"]', 0, 16, 'row')
   await dragResizeHandle(page, '[data-jword-table-resize-handle="column-0"]', 24, 0)
   await dragResizeHandle(page, '[data-jword-table-resize-handle="row-0"]', 0, 16)
 
@@ -231,15 +218,87 @@ async function dragResizeHandle(
     throw new Error(`Missing resize handle: ${selector}`)
   }
 
-  const startX = box.x + box.width / 2
-  const startY = box.y + box.height / 2
+  const startPoint = readResizeHandleStartPoint(selector, box)
 
-  await page.mouse.move(startX, startY)
+  await page.mouse.move(startPoint.x, startPoint.y)
   await page.mouse.down()
-  await page.mouse.move(startX + deltaX, startY + deltaY, {
+  await page.mouse.move(startPoint.x + deltaX, startPoint.y + deltaY, {
     steps: 8
   })
   await page.mouse.up()
+}
+
+/** 拖拽 resize handle 时检查蓝色预览线已出现。 */
+async function dragResizeHandleWithPreview(
+  page: Page,
+  selector: string,
+  deltaX: number,
+  deltaY: number,
+  axis: 'column' | 'row'
+): Promise<void> {
+  const handle = page.locator(selector)
+  const preview = page.locator('[data-jword-table-resize-preview="true"]')
+  const box = await handle.boundingBox()
+
+  if (box === null) {
+    throw new Error(`Missing resize handle: ${selector}`)
+  }
+
+  const startPoint = readResizeHandleStartPoint(selector, box, axis)
+
+  await page.mouse.move(startPoint.x, startPoint.y)
+  await page.mouse.down()
+  await page.mouse.move(startPoint.x + deltaX, startPoint.y + deltaY, {
+    steps: 6
+  })
+  await expect(preview).toBeVisible()
+  await expect(preview).toHaveAttribute('data-jword-table-resize-preview-axis', axis)
+
+  const previewBox = await preview.boundingBox()
+
+  if (previewBox === null) {
+    throw new Error('Missing resize preview line.')
+  }
+
+  if (axis === 'column') {
+    expect(previewBox.width).toBeLessThanOrEqual(4)
+    expect(previewBox.height).toBeGreaterThan(20)
+  } else {
+    expect(previewBox.height).toBeLessThanOrEqual(4)
+    expect(previewBox.width).toBeGreaterThan(20)
+  }
+
+  await page.mouse.up()
+  await expect(preview).toBeHidden()
+}
+
+/** 为行列 resize handle 选择一个尽量避开交叉区的拖拽起点。 */
+function readResizeHandleStartPoint(
+  selector: string,
+  box: {
+    x: number
+    y: number
+    width: number
+    height: number
+  },
+  axis?: 'column' | 'row'
+): {
+  x: number
+  y: number
+} {
+  const resolvedAxis = axis ?? (selector.includes('column-') ? 'column' : 'row')
+
+  if (resolvedAxis === 'column') {
+    return {
+      x: box.x + box.width / 2,
+      y: box.y + Math.min(4, box.height / 4)
+    }
+  }
+
+  return {
+    x: box.x + Math.min(4, box.width / 4),
+    y: box.y + box.height / 2
+  }
 }
 
 /** 通过 demo hook 把选区重新放回指定单元格。 */
@@ -256,6 +315,33 @@ async function selectDemoTableCell(page: Page, rowIndex: number, columnIndex: nu
   await expect.poll(() => {
     return page.evaluate(() => window.__jwordDemo?.table.readActiveTarget())
   }).not.toBeNull()
+
+  const point = await readTableCellViewportPoint(page, rowIndex, columnIndex)
+
+  await page.mouse.click(point.x, point.y)
+  await expect(page.locator('[data-jword-table-anchor="top"]')).toBeVisible()
+  await expect(page.locator('[data-jword-table-quick-tools="true"]')).toBeHidden()
+}
+
+/** 确认自定义尺寸弹层以编辑器区域而不是全屏视口为定位基准。 */
+async function expectTableDialogAnchoredToEditor(page: Page, dialog: Locator): Promise<void> {
+  const editorBox = await page.locator('#jword-editor').boundingBox()
+  const dialogBox = await dialog.boundingBox()
+  const viewport = page.viewportSize()
+
+  expect(editorBox).not.toBeNull()
+  expect(dialogBox).not.toBeNull()
+  expect(viewport).not.toBeNull()
+
+  if (editorBox === null || dialogBox === null || viewport === null) {
+    throw new Error('Missing editor or dialog geometry.')
+  }
+
+  expect(Math.abs(dialogBox.x - editorBox.x)).toBeLessThanOrEqual(2)
+  expect(Math.abs(dialogBox.y - editorBox.y)).toBeLessThanOrEqual(2)
+  expect(Math.abs(dialogBox.width - editorBox.width)).toBeLessThanOrEqual(2)
+  expect(dialogBox.width).toBeLessThan(viewport.width)
+  expect(dialogBox.height).toBeLessThan(viewport.height)
 }
 
 /** 读取指定单元格在视口内的点击点。 */

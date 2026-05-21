@@ -108,6 +108,7 @@ export interface TableCellBox extends LayoutRect {
   readonly border?: TableBorder
   readonly blockIds: readonly string[]
   readonly text: string
+  readonly fragments: readonly TextFragment[]
   readonly textPosition?: TextPosition
 }
 

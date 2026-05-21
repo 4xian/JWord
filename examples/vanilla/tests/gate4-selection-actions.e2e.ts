@@ -32,7 +32,7 @@ test('Gate 4 selection actions appear immediately after middle pointer drag on a
   await page.mouse.up()
 
   await expect(page.locator('[data-jword-floating-toolbar="true"]')).toBeVisible()
-  await expect.poll(async () => page.locator('[data-jword-selection-summary]').textContent()).toContain('18→28')
+  await expect.poll(() => readCurrentSelectionRange(page)).toBe('18→28')
 
   await page.locator('[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.bold"]').click()
   await expect.poll(() => readSelectionBold(page)).toBe(true)
@@ -307,6 +307,23 @@ async function readClientPointForGrapheme(
   }, {
     targetGraphemeIndex: graphemeIndex,
     targetPageIndex: pageIndex
+  })
+}
+
+/** 读取当前 editor 选区的 grapheme 范围，避免依赖 demo 调试摘要是否展示。 */
+async function readCurrentSelectionRange(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const editor = window.__jwordDemo?.editor
+    const selection = editor?.getSelection()
+
+    if (editor === undefined || selection === undefined || selection === null) {
+      return ''
+    }
+
+    const anchor = editor.resolveTextPosition(selection.anchor)
+    const focus = editor.resolveTextPosition(selection.focus)
+
+    return `${anchor.graphemeIndex}→${focus.graphemeIndex}`
   })
 }
 

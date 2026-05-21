@@ -44,6 +44,9 @@ const jwordUi = createJWordUi({
   toolbarHost,
   liveRegionHost: statusHost,
   assistiveMirrorHost,
+  toolbar: {
+    showSummaries: false
+  },
   media: demoMedia.media,
   table: demoTable.table
 })
@@ -73,7 +76,7 @@ requestAnimationFrame(() => {
 window.addEventListener(
   'beforeunload',
   () => {
-    demoControls.destroy()
+    // demoControls.destroy()
     demoMedia.destroy()
     demoTable.destroy()
     jwordUi.destroy()

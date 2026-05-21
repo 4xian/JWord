@@ -7,7 +7,12 @@
  * 约束：断言基于公开 DOM selector、selection formatting state 和 projection，不读取 controller 私有状态。
  */
 
-import { createEditor, createSelectionState } from '@4xian/jword-core'
+import {
+  buildInsertTableCommand,
+  buildSetTableCellTextCommand,
+  createEditor,
+  createSelectionState
+} from '@4xian/jword-core'
 import { describe, expect, test } from 'vitest'
 
 import { createJWordUi } from '../src/create-ui'
@@ -133,7 +138,95 @@ describe('selection actions controller', () => {
       harness.destroy()
     }
   })
+
+  test('keeps table selection rebound and formatting state in sync for underline strike and colors', async () => {
+    const harness = createHarness('before table')
+
+    try {
+      const tableTarget = insertSingleCellTable(harness.editor, 'abcdef')
+      const floatingToolbar = getRequiredElement(harness.editorHost, '[data-jword-floating-toolbar="true"]')
+      const underlineButton = getRequiredElement(
+        harness.editorHost,
+        '[data-jword-selection-action="format.underline"]'
+      ) as HTMLButtonElement
+      const strikeButton = getRequiredElement(
+        harness.editorHost,
+        '[data-jword-selection-action="format.strike"]'
+      ) as HTMLButtonElement
+      const textColor = getRequiredElement(
+        harness.editorHost,
+        '[data-jword-selection-action="format.textColor"]'
+      ) as HTMLInputElement
+      const backgroundColor = getRequiredElement(
+        harness.editorHost,
+        '[data-jword-selection-action="format.backgroundColor"]'
+      ) as HTMLInputElement
+
+      dispatchFocus(harness.textarea)
+      harness.editor.setSelection(createTableSelection(harness.editor, tableTarget, 1, 4))
+
+      expect(floatingToolbar.hidden).toBe(false)
+
+      underlineButton.click()
+      expectSelectionRange(harness.editor, tableTarget, 1, 4)
+      expect(harness.editor.getSelectionFormattingState().run?.underline.value).toBe(true)
+
+      strikeButton.click()
+      expectSelectionRange(harness.editor, tableTarget, 1, 4)
+      expect(harness.editor.getSelectionFormattingState().run?.strike.value).toBe(true)
+
+      textColor.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true
+      }))
+      harness.editor.setSelection(null)
+      textColor.dispatchEvent(new MouseEvent('click', {
+        bubbles: true
+      }))
+      textColor.value = '#cc2200'
+      textColor.dispatchEvent(new Event('input', {
+        bubbles: true
+      }))
+      expectSelectionRange(harness.editor, tableTarget, 1, 4)
+      expect(harness.editor.getSelectionFormattingState().run?.color.value).toBe('#cc2200')
+      textColor.value = '#2255cc'
+      textColor.dispatchEvent(new Event('input', {
+        bubbles: true
+      }))
+      expectSelectionRange(harness.editor, tableTarget, 1, 4)
+      expect(harness.editor.getSelectionFormattingState().run?.color.value).toBe('#2255cc')
+
+      backgroundColor.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true
+      }))
+      harness.editor.setSelection(null)
+      backgroundColor.dispatchEvent(new MouseEvent('click', {
+        bubbles: true
+      }))
+      backgroundColor.value = '#00aa66'
+      backgroundColor.dispatchEvent(new Event('input', {
+        bubbles: true
+      }))
+      expectSelectionRange(harness.editor, tableTarget, 1, 4)
+      expect(harness.editor.getSelectionFormattingState().run?.backgroundColor.value).toBe('#00aa66')
+      backgroundColor.value = '#ffcc33'
+      backgroundColor.dispatchEvent(new Event('input', {
+        bubbles: true
+      }))
+      expectSelectionRange(harness.editor, tableTarget, 1, 4)
+      expect(harness.editor.getSelectionFormattingState().run?.backgroundColor.value).toBe('#ffcc33')
+    } finally {
+      harness.destroy()
+    }
+  })
 })
+
+interface TableTextTarget {
+  readonly sectionId: string
+  readonly blockId: string
+  readonly runId: string
+  readonly cellId: string
+  readonly tableId: string
+}
 
 interface Harness {
   readonly editor: ReturnType<typeof createEditor>
@@ -207,6 +300,171 @@ function createSelection(editor: ReturnType<typeof createEditor>, anchorIndex: n
   })
 
   return createSelectionState(anchor, focus)
+}
+
+/** 在测试 editor 中插入一个 1x1 表格并写入单元格文本。 */
+function insertSingleCellTable(editor: ReturnType<typeof createEditor>, text: string): TableTextTarget {
+  const insertCommand = buildInsertTableCommand(editor.getProjection(), null, {
+    rows: 1,
+    columns: 1
+  })
+
+  if (insertCommand === null) {
+    throw new Error('无法插入测试表格')
+  }
+
+  editor.executeCommand(insertCommand)
+
+  const insertedTable = editor.getProjection().document.sections[0]?.blocks.find((block) => block.kind === 'table')
+  const insertedCell = insertedTable?.rows[0]?.cells[0]
+
+  if (insertedTable === undefined || insertedCell === undefined) {
+    throw new Error('缺少测试表格单元格')
+  }
+
+  const setTextCommand = buildSetTableCellTextCommand(editor.getProjection(), insertedTable.id, insertedCell.id, text)
+
+  if (setTextCommand === null) {
+    throw new Error('无法写入测试表格文本')
+  }
+
+  editor.executeCommand(setTextCommand)
+
+  const refreshedTable = editor.getProjection().document.sections[0]?.blocks.find((block) => block.kind === 'table')
+  const refreshedCell = refreshedTable?.rows[0]?.cells[0]
+  const paragraph = refreshedCell?.blocks[0]
+  const run = paragraph?.kind === 'paragraph' ? paragraph.runs[0] : undefined
+
+  if (refreshedTable === undefined || refreshedCell === undefined || paragraph?.kind !== 'paragraph' || run === undefined) {
+    throw new Error('缺少测试表格文本目标')
+  }
+
+  return {
+    sectionId: 'section-1',
+    tableId: refreshedTable.id,
+    cellId: refreshedCell.id,
+    blockId: paragraph.id,
+    runId: run.id
+  }
+}
+
+/** 基于表格单元格中的首个段落构造测试选区。 */
+function createTableSelection(
+  editor: ReturnType<typeof createEditor>,
+  target: TableTextTarget,
+  anchorIndex: number,
+  focusIndex: number
+) {
+  const anchor = editor.createTextAnchor({
+    sectionId: target.sectionId,
+    blockId: target.blockId,
+    runId: target.runId,
+    graphemeIndex: anchorIndex
+  })
+  const focus = editor.createTextAnchor({
+    sectionId: target.sectionId,
+    blockId: target.blockId,
+    runId: target.runId,
+    graphemeIndex: focusIndex
+  })
+
+  return createSelectionState(anchor, focus)
+}
+
+/** 断言表格格式命令后选区仍绑定在同一段落和 grapheme 范围。 */
+function expectSelectionRange(
+  editor: ReturnType<typeof createEditor>,
+  target: TableTextTarget,
+  anchorIndex: number,
+  focusIndex: number
+): void {
+  const selection = editor.getSelection()
+
+  expect(selection).not.toBeNull()
+
+  if (selection === null) {
+    return
+  }
+
+  const anchor = editor.resolveTextPosition(selection.anchor)
+  const focus = editor.resolveTextPosition(selection.focus)
+  const projection = editor.getProjection()
+  const paragraph = findParagraphById(projection.document.sections[0]?.blocks ?? [], target.blockId)
+
+  if (paragraph === null) {
+    throw new Error('缺少目标段落')
+  }
+
+  const resolvedAnchorIndex = resolveParagraphGraphemeIndex(paragraph, anchor.runId, anchor.graphemeIndex)
+  const resolvedFocusIndex = resolveParagraphGraphemeIndex(paragraph, focus.runId, focus.graphemeIndex)
+
+  expect({
+    blockId: anchor.blockId,
+    graphemeIndex: resolvedAnchorIndex
+  }).toEqual({
+    blockId: target.blockId,
+    graphemeIndex: anchorIndex
+  })
+  expect({
+    blockId: focus.blockId,
+    graphemeIndex: resolvedFocusIndex
+  }).toEqual({
+    blockId: target.blockId,
+    graphemeIndex: focusIndex
+  })
+}
+
+/** 在 block 树中递归查找目标段落。 */
+function findParagraphById(
+  blocks: readonly import('@4xian/jword-core').Block[],
+  blockId: string
+): import('@4xian/jword-core').Paragraph | null {
+  for (const block of blocks) {
+    if (block.kind === 'paragraph' && block.id === blockId) {
+      return block
+    }
+
+    if (block.kind !== 'table') {
+      continue
+    }
+
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        const paragraph = findParagraphById(cell.blocks, blockId)
+
+        if (paragraph !== null) {
+          return paragraph
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+/** 把 run 内 grapheme 偏移还原成段落绝对偏移。 */
+function resolveParagraphGraphemeIndex(
+  paragraph: import('@4xian/jword-core').Paragraph,
+  runId: string,
+  graphemeIndex: number
+): number {
+  let paragraphGraphemeIndex = graphemeIndex
+
+  for (const run of paragraph.runs) {
+    if (run.id === runId) {
+      return paragraphGraphemeIndex
+    }
+
+    paragraphGraphemeIndex += run.inlines.reduce((length, inline) => {
+      if (inline.kind !== 'text') {
+        return length
+      }
+
+      return length + Array.from(inline.text).length
+    }, 0)
+  }
+
+  throw new Error(`缺少目标 run: ${runId}`)
 }
 
 /** 触发 editor hidden textarea 的聚焦态。 */

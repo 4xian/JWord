@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildSetUnderlineCommand,
   buildDeleteTableColumnCommand,
   buildDeleteTableRowCommand,
   buildInsertTableColumnCommand,
@@ -21,7 +22,9 @@ import {
   buildSetTableColumnWidthCommand,
   buildSetTableCellBorderCommand,
   buildSetTableCellTextCommand,
-  buildSetTableRowHeightCommand
+  buildSetTableRowHeightCommand,
+  createEditor,
+  createSelectionState
 } from '../../src/index'
 import {
   DOCUMENT_STORE_FIELDS,
@@ -201,5 +204,108 @@ describe('table vertical slice transaction pipeline', () => {
         }
       ]
     })
+  })
+
+  it('splits table cell plain text runs correctly after partial formatting', () => {
+    const editor = createEditor({ initialText: 'before table' })
+
+    try {
+      const insertCommand = buildInsertTableCommand(editor.getProjection(), null, {
+        rows: 1,
+        columns: 1
+      })
+
+      if (insertCommand === null) {
+        throw new Error('无法插入测试表格')
+      }
+
+      editor.executeCommand(insertCommand)
+
+      const insertedTable = editor.getProjection().document.sections[0]?.blocks[1]
+
+      if (insertedTable?.kind !== 'table') {
+        throw new Error('缺少测试表格')
+      }
+
+      const cell = insertedTable.rows[0]?.cells[0]
+
+      if (cell === undefined) {
+        throw new Error('缺少测试单元格')
+      }
+
+      const setTextCommand = buildSetTableCellTextCommand(editor.getProjection(), insertedTable.id, cell.id, 'abcdef')
+
+      if (setTextCommand === null) {
+        throw new Error('无法写入测试单元格文本')
+      }
+
+      editor.executeCommand(setTextCommand)
+
+      const tableAfterText = editor.getProjection().document.sections[0]?.blocks[1]
+
+      if (tableAfterText?.kind !== 'table') {
+        throw new Error('缺少写字后的测试表格')
+      }
+
+      const paragraph = tableAfterText.rows[0]?.cells[0]?.blocks[0]
+
+      if (paragraph?.kind !== 'paragraph') {
+        throw new Error('缺少测试段落')
+      }
+
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: paragraph.id,
+        runId: paragraph.runs[0]?.id ?? '',
+        graphemeIndex: 1
+      })
+      const focus = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: paragraph.id,
+        runId: paragraph.runs[0]?.id ?? '',
+        graphemeIndex: 4
+      })
+      const selection = createSelectionState(anchor, focus)
+      const underlineCommand = buildSetUnderlineCommand(editor.getProjection(), selection, true)
+
+      if (underlineCommand === null) {
+        throw new Error('无法生成表格格式命令')
+      }
+
+      editor.executeCommand(underlineCommand, {
+        selectionAfter: selection
+      })
+
+      const formattedTable = editor.getProjection().document.sections[0]?.blocks[1]
+
+      if (formattedTable?.kind !== 'table') {
+        throw new Error('缺少格式化后的测试表格')
+      }
+
+      const formattedParagraph = formattedTable.rows[0]?.cells[0]?.blocks[0]
+
+      expect(formattedParagraph).toMatchObject({
+        kind: 'paragraph',
+        runs: [
+          {
+            kind: 'run',
+            inlines: [{ kind: 'text', text: 'a' }]
+          },
+          {
+            kind: 'run',
+            properties: {
+              underline: true
+            },
+            inlines: [{ kind: 'text', text: 'bcd' }]
+          },
+          {
+            kind: 'run',
+            inlines: [{ kind: 'text', text: 'ef' }]
+          }
+        ]
+      })
+    } finally {
+      editor.destroy()
+    }
   })
 })
