@@ -24,6 +24,8 @@ import { countGraphemes } from '../shared/grapheme'
 import { createJWordError } from '../shared/errors'
 
 let tableCommandSequence = 0
+const DEFAULT_TABLE_COLUMN_WIDTH_TWIPS = 1500
+const DEFAULT_TABLE_ROW_HEIGHT_TWIPS = 600
 
 /**
  * 构造加粗命令。
@@ -654,7 +656,7 @@ export function buildInsertTableColumnCommand(
       kind: 'insertTableColumn',
       tableId,
       columnIndex,
-      columnWidthTwips: table.grid?.[Math.max(0, Math.min(columnIndex, (table.grid?.length ?? 1) - 1))] ?? 1800,
+      columnWidthTwips: table.grid?.[Math.max(0, Math.min(columnIndex, (table.grid?.length ?? 1) - 1))] ?? DEFAULT_TABLE_COLUMN_WIDTH_TWIPS,
       cellIds: createGeneratedIdList(usedIds, `${tableId}-cell`, table.rows.length),
       paragraphIds: createGeneratedIdList(usedIds, `${tableId}-paragraph`, table.rows.length),
       runIds: createGeneratedIdList(usedIds, `${tableId}-run`, table.rows.length)
@@ -699,7 +701,7 @@ export function buildSetTableColumnWidthCommand(
   }
 
   const nextWidthTwips = normalizeTableColumnWidth(widthTwips)
-  const currentWidthTwips = table.grid?.[columnIndex] ?? 1800
+  const currentWidthTwips = table.grid?.[columnIndex] ?? DEFAULT_TABLE_COLUMN_WIDTH_TWIPS
 
   if (currentWidthTwips === nextWidthTwips) {
     return null
@@ -1233,7 +1235,7 @@ function createSimpleTableModel(
   return {
     kind: 'table',
     id: tableId,
-    grid: Array.from({ length: columns }, () => 1800),
+    grid: Array.from({ length: columns }, () => DEFAULT_TABLE_COLUMN_WIDTH_TWIPS),
     border: {
       color: '#6b7280',
       widthTwips: 15
@@ -1244,7 +1246,7 @@ function createSimpleTableModel(
       return {
         id: rowId,
         properties: {
-          heightTwips: 480
+          heightTwips: DEFAULT_TABLE_ROW_HEIGHT_TWIPS
         },
         cells: Array.from({ length: columns }, () => {
           const cellId = allocateGeneratedModelId(usedIds, `${tableId}-cell`)
@@ -1397,17 +1399,17 @@ function readTableRowHeight(row: Table['rows'][number] | undefined): number {
 
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.round(value)
-    : 480
+    : DEFAULT_TABLE_ROW_HEIGHT_TWIPS
 }
 
 function normalizeTableColumnWidth(widthTwips: number): number {
   return Number.isFinite(widthTwips) && widthTwips > 0
     ? Math.round(widthTwips)
-    : 1800
+    : DEFAULT_TABLE_COLUMN_WIDTH_TWIPS
 }
 
 function normalizeTableRowHeight(heightTwips: number): number {
   return Number.isFinite(heightTwips) && heightTwips > 0
     ? Math.round(heightTwips)
-    : 480
+    : DEFAULT_TABLE_ROW_HEIGHT_TWIPS
 }

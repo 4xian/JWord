@@ -112,14 +112,14 @@ describe('table layout render hit-test', () => {
     expect(insertCommand?.operations[0]).toMatchObject({
       kind: 'insertTable',
       table: {
-        grid: [1800, 1800],
+        grid: [1500, 1500],
         rows: [{
           properties: {
-            heightTwips: 480
+            heightTwips: 600
           }
         }, {
           properties: {
-            heightTwips: 480
+            heightTwips: 600
           }
         }]
       }
@@ -151,17 +151,17 @@ describe('table layout render hit-test', () => {
       })
     }))
 
-    expect(tableProjection?.grid).toEqual([1800, 1800])
+    expect(tableProjection?.grid).toEqual([1500, 1500])
     expect(tableProjection?.rows[0]?.properties).toMatchObject({
-      heightTwips: 480
+      heightTwips: 600
     })
     expect(tableLayout).toMatchObject({
-      grid: [1800, 1800],
-      height: 960
+      grid: [1500, 1500],
+      height: 1200
     })
-    expect(tableLayout?.rows[0]?.height).toBe(480)
-    expect(tableLayout?.rows[1]?.y).toBe((tableLayout?.y ?? 0) + 480)
-    expect(tableLayout?.rows[0]?.cells[0]?.width).toBe(1800)
+    expect(tableLayout?.rows[0]?.height).toBe(600)
+    expect(tableLayout?.rows[1]?.y).toBe((tableLayout?.y ?? 0) + 600)
+    expect(tableLayout?.rows[0]?.cells[0]?.width).toBe(1500)
   })
 
   it('updates layout after setting table column width and row height through commands', () => {
@@ -203,7 +203,7 @@ describe('table layout render hit-test', () => {
     const resizedColumns = pipeline.run(setColumnWidthCommand, {
       origin: 'layout-test'
     }).projection
-    const setRowHeightCommand = buildSetTableRowHeightCommand(resizedColumns, tableId, 0, 600)
+    const setRowHeightCommand = buildSetTableRowHeightCommand(resizedColumns, tableId, 0, 720)
 
     expect(setRowHeightCommand).toEqual({
       name: 'setTableRowHeight',
@@ -211,7 +211,7 @@ describe('table layout render hit-test', () => {
         kind: 'setTableRowHeight',
         tableId,
         rowIndex: 0,
-        heightTwips: 600
+        heightTwips: 720
       }]
     })
 
@@ -240,12 +240,12 @@ describe('table layout render hit-test', () => {
     }))
 
     expect(resizedLayout).toMatchObject({
-      grid: [2100, 1800],
-      height: 600
+      grid: [2100, 1500],
+      height: 720
     })
-    expect(resizedLayout?.rows[0]?.height).toBe(600)
+    expect(resizedLayout?.rows[0]?.height).toBe(720)
     expect(resizedLayout?.rows[0]?.cells[0]?.width).toBe(2100)
-    expect(resizedLayout?.rows[0]?.cells[1]?.width).toBe(1800)
+    expect(resizedLayout?.rows[0]?.cells[1]?.width).toBe(1500)
   })
 })
 

@@ -56,6 +56,9 @@ interface VisualTableCell {
   readonly gridSpan: number
 }
 
+const DEFAULT_TABLE_COLUMN_WIDTH_TWIPS = 1500
+const DEFAULT_TABLE_ROW_HEIGHT_TWIPS = 600
+
 /** 应用单个表格 operation。 */
 export function applyTableOperation(store: DocumentStore, operation: TableOperation): void {
   switch (operation.kind) {
@@ -372,21 +375,21 @@ function readTableGridValues(table: BlockRecord, fallbackCount = 0): number[] {
     return [...grid]
   }
 
-  return Array.from({ length: Math.max(0, fallbackCount) }, () => 1800)
+  return Array.from({ length: Math.max(0, fallbackCount) }, () => DEFAULT_TABLE_COLUMN_WIDTH_TWIPS)
 }
 
 /** 规范化列宽，避免把非法值写进 grid。 */
 function normalizeTableColumnWidth(widthTwips: number | undefined): number {
   return typeof widthTwips === 'number' && Number.isFinite(widthTwips) && widthTwips > 0
     ? Math.round(widthTwips)
-    : 1800
+    : DEFAULT_TABLE_COLUMN_WIDTH_TWIPS
 }
 
 /** 规范化行高，避免把非法值写入 row properties。 */
 function normalizeTableRowHeight(heightTwips: number | undefined): number {
   return typeof heightTwips === 'number' && Number.isFinite(heightTwips) && heightTwips > 0
     ? Math.round(heightTwips)
-    : 480
+    : DEFAULT_TABLE_ROW_HEIGHT_TWIPS
 }
 
 /** 插入新行时优先继承相邻行高，没有相邻行时回退默认值。 */
@@ -405,7 +408,7 @@ function readTableRowHeight(row: SharedMapReader | undefined): number {
 
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.round(value)
-    : 480
+    : DEFAULT_TABLE_ROW_HEIGHT_TWIPS
 }
 
 /** 读取单元格 gridSpan，缺失时回退到 1。 */

@@ -13,6 +13,8 @@ import {
   buildInsertTableRowCommand,
   buildMergeTableCellsCommand,
   buildSetTableBorderCommand,
+  buildSetTableColumnWidthCommand,
+  buildSetTableRowHeightCommand,
   createSelectionState,
   type Block,
   type Command,
@@ -108,6 +110,32 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
       }
 
       return result
+    },
+    setColumnWidth(request) {
+      return executeTableCommand(
+        buildSetTableColumnWidthCommand(
+          request.projection,
+          request.target.tableId,
+          request.columnIndex,
+          request.widthTwips
+        ),
+        request.editor,
+        '当前表格无法更新列宽。',
+        '已更新表格列宽。'
+      )
+    },
+    setRowHeight(request) {
+      return executeTableCommand(
+        buildSetTableRowHeightCommand(
+          request.projection,
+          request.target.tableId,
+          request.rowIndex,
+          request.heightTwips
+        ),
+        request.editor,
+        '当前表格无法更新行高。',
+        '已更新表格行高。'
+      )
     },
     mergeCellWithRight(request) {
       return executeTableCommand(

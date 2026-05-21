@@ -42,11 +42,11 @@ describe('table command builders', () => {
         },
         table: {
           kind: 'table',
-          grid: [1800, 1800],
+          grid: [1500, 1500],
           rows: [
             {
               properties: {
-                heightTwips: 480
+                heightTwips: 600
               },
               id: expect.any(String),
               cells: [
@@ -86,7 +86,7 @@ describe('table command builders', () => {
             },
             {
               properties: {
-                heightTwips: 480
+                heightTwips: 600
               },
               id: expect.any(String),
               cells: [
@@ -162,7 +162,7 @@ describe('table command builders', () => {
       kind: 'insertTableColumn',
       tableId: 'table-builder',
       columnIndex: 1,
-      columnWidthTwips: 2400,
+      columnWidthTwips: 1800,
       cellIds: expect.arrayContaining([expect.any(String)]),
       paragraphIds: expect.arrayContaining([expect.any(String)]),
       runIds: expect.arrayContaining([expect.any(String)])

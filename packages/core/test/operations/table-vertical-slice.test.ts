@@ -61,11 +61,11 @@ describe('table vertical slice transaction pipeline', () => {
     const insertedTable = insertResult.projection.document.sections[0]?.blocks[1] as Table
 
     expect(insertedTable.id).toBeDefined()
-    expect(insertedTable.grid).toEqual([1800, 1800])
+    expect(insertedTable.grid).toEqual([1500, 1500])
     expect(insertedTable.rows).toHaveLength(2)
     expect(insertedTable.rows[0]?.cells).toHaveLength(2)
     expect(insertedTable.rows[0]?.properties).toEqual({
-      heightTwips: 480
+      heightTwips: 600
     })
 
     const tableId = insertedTable.id
@@ -110,7 +110,7 @@ describe('table vertical slice transaction pipeline', () => {
     const insertedRowTable = insertRowResult.projection.document.sections[0]?.blocks[1] as Table
 
     expect(insertedRowTable.rows[1]?.properties).toEqual({
-      heightTwips: 480
+      heightTwips: 600
     })
 
     const insertColumnResult = pipeline.run(
@@ -122,7 +122,7 @@ describe('table vertical slice transaction pipeline', () => {
       { origin: 'test-table-slice' }
     )
     const resizedRowResult = pipeline.run(
-      buildSetTableRowHeightCommand(resizedColumnResult.projection, tableId, 0, 600)!,
+      buildSetTableRowHeightCommand(resizedColumnResult.projection, tableId, 0, 720)!,
       { origin: 'test-table-slice' }
     )
     const mergeResult = pipeline.run(
@@ -181,10 +181,10 @@ describe('table vertical slice transaction pipeline', () => {
       color: '#0f172a',
       widthTwips: 18
     })
-    expect(projectedTable.grid).toEqual([2100, 1800])
+    expect(projectedTable.grid).toEqual([2100, 1500])
     expect(projectedTable.rows).toHaveLength(2)
     expect(firstRow?.properties).toEqual({
-      heightTwips: 600
+      heightTwips: 720
     })
     expect(firstRow?.cells).toHaveLength(1)
     expect(firstCell?.gridSpan).toBe(2)

@@ -48,6 +48,9 @@ import type {
   TableBox
 } from './types'
 
+const DEFAULT_TABLE_COLUMN_WIDTH_TWIPS = 1500
+const DEFAULT_TABLE_ROW_HEIGHT_TWIPS = 600
+
 /**
  * 从只读投影生成分页布局。
  *
@@ -592,7 +595,7 @@ function resolveTableGrid(table: Table, pageConfig: PageConfig): readonly number
   }
 
   const columnCount = Math.max(1, table.rows[0]?.cells.reduce((count, cell) => count + (cell.gridSpan ?? 1), 0) ?? 1)
-  const columnWidth = Math.min(1800, Math.floor(pageConfig.contentWidthTwips / columnCount))
+  const columnWidth = Math.min(DEFAULT_TABLE_COLUMN_WIDTH_TWIPS, Math.floor(pageConfig.contentWidthTwips / columnCount))
 
   return Array.from({ length: columnCount }, () => columnWidth)
 }
@@ -610,7 +613,7 @@ function resolveTableRowHeight(row: Table['rows'][number]): number {
 
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.round(value)
-    : 480
+    : DEFAULT_TABLE_ROW_HEIGHT_TWIPS
 }
 
 function sumRowHeights(rowHeights: readonly number[], endExclusive: number): number {
@@ -642,6 +645,13 @@ function readTableCellTextPosition(sectionId: string, cell: TableCell): TextPosi
           runId: run.id,
           graphemeIndex: 0
         }
+      }
+
+      return {
+        sectionId,
+        blockId: block.id,
+        runId: run.id,
+        graphemeIndex: 0
       }
     }
   }

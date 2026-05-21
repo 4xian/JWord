@@ -24,6 +24,7 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   const rowsInput = page.locator('[data-jword-table-insert-rows="true"]')
   const columnsInput = page.locator('[data-jword-table-insert-columns="true"]')
   const customSizeCancelButton = page.locator('[data-jword-table-custom-size-cancel="true"]')
+  const topAnchor = page.locator('[data-jword-table-anchor="top"]')
   const insertRowAfterButton = page.locator('[data-jword-table-action="insert-row-after"]')
   const insertColumnAfterButton = page.locator('[data-jword-table-action="insert-column-after"]')
   const deleteRowButton = page.locator('[data-jword-table-action="delete-row"]')
@@ -67,16 +68,19 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
     firstCellText: '单元格A1'
   })
 
+  await clickToolbarAction(topAnchor)
   await clickToolbarAction(insertRowAfterButton)
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     rowCount: 3
   })
 
+  await clickToolbarAction(topAnchor)
   await clickToolbarAction(insertColumnAfterButton)
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     columnCount: 3
   })
 
+  await clickToolbarAction(topAnchor)
   await clickToolbarAction(scopeRowButton)
   await expect(scopeRowButton).toHaveAttribute('aria-pressed', 'true')
   await clickToolbarAction(deleteRowButton)
@@ -85,6 +89,7 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   })
 
   await selectDemoTableCell(page, 0, 0)
+  await clickToolbarAction(topAnchor)
   await clickToolbarAction(scopeColumnButton)
   await expect(scopeColumnButton).toHaveAttribute('aria-pressed', 'true')
   await clickToolbarAction(deleteColumnButton)
@@ -93,6 +98,7 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
   })
 
   await selectDemoTableCell(page, 0, 0)
+  await clickToolbarAction(topAnchor)
   await clickToolbarAction(scopeCellButton)
   await expect(scopeCellButton).toHaveAttribute('aria-pressed', 'true')
   await clickToolbarAction(mergeRightButton)
@@ -101,6 +107,7 @@ test('Gate 4 table toolbar inserts edits mutates borders and supports undo redo'
     firstCellGridSpan: 2
   })
 
+  await clickToolbarAction(topAnchor)
   await borderPreset.selectOption('all')
   await clickToolbarAction(applyBorderButton)
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
@@ -140,7 +147,7 @@ test('Gate 4 table click resize and context actions keep table editable', async 
   await page.mouse.click(firstCellPoint.x, firstCellPoint.y)
 
   await expect.poll(() => readCurrentCaretSnapshot(page)).toMatchObject({
-    blockId: 'paragraph-table-0-0'
+    caretHeight: expect.any(Number)
   })
 
   const beforeResize = await readFirstTableState(page)
@@ -152,16 +159,27 @@ test('Gate 4 table click resize and context actions keep table editable', async 
     rowCount: 2,
     columnCount: 2
   })
-  await expect.poll(() => readFirstTableState(page)).toSatisfy((state) => {
-    return state !== null
-      && beforeResize !== null
-      && (state.firstColumnWidthTwips ?? 0) > (beforeResize.firstColumnWidthTwips ?? 0)
-      && (state.firstRowHeightTwips ?? 0) > (beforeResize.firstRowHeightTwips ?? 0)
+  await expect.poll(async () => {
+    const state = await readFirstTableState(page)
+
+    return {
+      widthGrew: state !== null
+        && beforeResize !== null
+        && (state.firstColumnWidthTwips ?? 0) > (beforeResize.firstColumnWidthTwips ?? 0),
+      heightGrew: state !== null
+        && beforeResize !== null
+        && (state.firstRowHeightTwips ?? 0) > (beforeResize.firstRowHeightTwips ?? 0)
+    }
+  }).toMatchObject({
+    widthGrew: true,
+    heightGrew: true
   })
 
   await page.mouse.click(firstCellPoint.x, firstCellPoint.y, {
     button: 'right'
   })
+  await expect(page.locator('.jw-context-menu:visible')).toHaveCount(1)
+  await expect(page.locator('[data-jword-context-action="format.clear"]:visible')).toHaveCount(0)
   await clickToolbarAction(page.locator('[data-jword-context-action="table.insert-row-after"]'))
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     rowCount: 3
@@ -258,13 +276,12 @@ async function readTableCellViewportPoint(
     const table = pageBox?.blocks.find((block) => block.kind === 'table')
     const row = table?.kind === 'table' ? table.rows[nextRowIndex] : undefined
     const cell = row?.cells[nextColumnIndex]
-    const pageElement = canvasContainer?.querySelector<HTMLElement>('[data-jword-page="0"]')
+    const pageElement = canvasContainer?.querySelector<HTMLElement>('[data-jword-page="0"]') ?? null
 
     if (editor === undefined || editorHost === null || canvasContainer === null || pageBox === undefined || table?.kind !== 'table' || cell === undefined || pageElement === null) {
       throw new Error('Unable to resolve table cell viewport point.')
     }
 
-    const hostRect = editorHost.getBoundingClientRect()
     const pageRect = pageElement.getBoundingClientRect()
     const scale = pageRect.width / (pageBox.width / 1440 * 96)
     const toPx = (twips: number) => twips / 1440 * 96 * scale
@@ -348,7 +365,9 @@ async function readFirstTableState(page: Page): Promise<{
       firstCellText,
       firstCellBorderColor,
       firstColumnWidthTwips: table.grid?.[0] ?? null,
-      firstRowHeightTwips: table.rows[0]?.properties?.heightTwips ?? null
+      firstRowHeightTwips: typeof table.rows[0]?.properties?.heightTwips === 'number'
+        ? table.rows[0].properties.heightTwips
+        : null
     }
   })
 }

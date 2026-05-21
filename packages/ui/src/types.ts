@@ -281,6 +281,18 @@ export interface JWordTableColumnCommandRequest extends JWordTableTargetCommandR
   readonly placement: 'before' | 'after'
 }
 
+/** 列宽更新请求。 */
+export interface JWordTableColumnResizeRequest extends JWordTableTargetCommandRequest {
+  readonly columnIndex: number
+  readonly widthTwips: number
+}
+
+/** 行高更新请求。 */
+export interface JWordTableRowResizeRequest extends JWordTableTargetCommandRequest {
+  readonly rowIndex: number
+  readonly heightTwips: number
+}
+
 /** 边框更新请求。 */
 export interface JWordTableBorderCommandRequest extends JWordTableTargetCommandRequest {
   readonly scope: JWordTableSelectionScope
@@ -312,6 +324,12 @@ export interface JWordTableCommandAdapter {
   ): JWordTableCommandResult | Promise<JWordTableCommandResult>
   deleteColumn?(
     request: JWordTableTargetCommandRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+  setColumnWidth?(
+    request: JWordTableColumnResizeRequest
+  ): JWordTableCommandResult | Promise<JWordTableCommandResult>
+  setRowHeight?(
+    request: JWordTableRowResizeRequest
   ): JWordTableCommandResult | Promise<JWordTableCommandResult>
   mergeCellWithRight?(
     request: JWordTableTargetCommandRequest
