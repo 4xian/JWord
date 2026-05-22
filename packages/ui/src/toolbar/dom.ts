@@ -99,7 +99,11 @@ export function createToolbarDom(host: HTMLElement, config: ResolvedToolbarConfi
 }
 
 /** 根据最新状态重绘工具栏。 */
-export function renderToolbarState(dom: ToolbarDom, state: ToolbarState): void {
+export function renderToolbarState(
+  dom: ToolbarDom,
+  state: ToolbarState,
+  activeColorPicker: 'textColor' | 'backgroundColor' | null = null
+): void {
   setActionButtonState(dom.controls['history.undo'], state.canUndo)
   setActionButtonState(dom.controls['history.redo'], state.canRedo)
   setSelectState(dom.controls['document.pagePreset'], false, state.pagePresetValue, 'value')
@@ -113,8 +117,20 @@ export function renderToolbarState(dom: ToolbarDom, state: ToolbarState): void {
   setSelectState(dom.controls['format.fontSize'], !state.runFormatEnabled, state.fontSizeValue, state.fontSizeState)
   setActionButtonState(dom.controls['format.fontSizeDecrease'], state.runFormatEnabled)
   setActionButtonState(dom.controls['format.fontSizeIncrease'], state.runFormatEnabled)
-  setColorState(dom.controls['format.textColor'], !state.runFormatEnabled, state.textColorValue, state.textColorState)
-  setColorState(dom.controls['format.backgroundColor'], !state.runFormatEnabled, state.backgroundColorValue, state.backgroundColorState)
+  setColorState(
+    dom.controls['format.textColor'],
+    !state.runFormatEnabled,
+    state.textColorValue,
+    state.textColorState,
+    activeColorPicker === 'textColor'
+  )
+  setColorState(
+    dom.controls['format.backgroundColor'],
+    !state.runFormatEnabled,
+    state.backgroundColorValue,
+    state.backgroundColorState,
+    activeColorPicker === 'backgroundColor'
+  )
   setSelectState(dom.controls['paragraph.alignment'], !state.paragraphFormatEnabled, state.paragraphAlignmentValue, state.paragraphAlignmentState)
   setActionButtonState(dom.controls['paragraph.indentDecrease'], state.paragraphFormatEnabled)
   setActionButtonState(dom.controls['paragraph.indentIncrease'], state.paragraphFormatEnabled)
@@ -727,16 +743,19 @@ function setColorState(
   control: JWordToolbarControlElement | undefined,
   disabled: boolean,
   value: string,
-  state: string
+  state: string,
+  preserveInputValue = false
 ): void {
   if (!(control instanceof HTMLInputElement)) {
     return
   }
 
   control.disabled = disabled
-  control.value = value
+  if (!preserveInputValue) {
+    control.value = value
+  }
   control.setAttribute('data-jword-state', state)
   control.parentElement?.setAttribute('data-jword-state', state)
   control.parentElement?.setAttribute('data-jword-disabled', String(disabled))
-  control.parentElement?.style.setProperty('--jw-toolbar-color', value)
+  control.parentElement?.style.setProperty('--jw-toolbar-color', preserveInputValue ? control.value : value)
 }

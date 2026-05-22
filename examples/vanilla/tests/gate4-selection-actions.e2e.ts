@@ -117,6 +117,40 @@ test('Gate 4 selection actions reuse toolbar color state for text and background
   })
 })
 
+test('Gate 4 selection actions keep final text and background colors after preview and editor refocus', async ({ page }) => {
+  await page.goto('/')
+  await waitForSelectionActionDemoReady(page)
+  await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
+
+  const selection = await readTextSelectionTarget(page, 0, 3)
+  const hiddenTextarea = page.locator('[data-jword-hidden-textarea]')
+
+  await hiddenTextarea.focus()
+  await selectTextRange(page, selection)
+  await expect(page.locator('[data-jword-floating-toolbar="true"]')).toBeVisible()
+
+  await page.locator('[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.textColor"]').click()
+  await previewColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.textColor"]', '#cc2200')
+  await applyColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.textColor"]', '#2255cc')
+  await page.locator('#jword-editor').click()
+
+  await expect.poll(() => readFirstRenderedFragmentStyle(page)).toMatchObject({
+    color: '#2255cc'
+  })
+
+  await hiddenTextarea.focus()
+  await selectTextRange(page, selection)
+  await page.locator('[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.backgroundColor"]').click()
+  await previewColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.backgroundColor"]', '#00aa66')
+  await applyColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.backgroundColor"]', '#66aa00')
+  await page.locator('#jword-editor').click()
+
+  await expect.poll(() => readFirstRenderedFragmentStyle(page)).toMatchObject({
+    color: '#2255cc',
+    backgroundColor: '#66aa00'
+  })
+})
+
 test('Gate 4 selection actions show hide rebind and handle shortcut plus context clear', async ({ page }) => {
   await page.goto('/')
   await waitForSelectionActionDemoReady(page)
@@ -411,6 +445,7 @@ async function applyColorValue(page: Page, selector: string, value: string): Pro
 
     node.dispatchEvent(new Event('click', { bubbles: true }))
     node.value = nextValue as string
+    node.dispatchEvent(new Event('input', { bubbles: true }))
     node.dispatchEvent(new Event('change', { bubbles: true }))
   }, value)
 }

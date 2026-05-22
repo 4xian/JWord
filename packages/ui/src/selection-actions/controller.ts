@@ -701,18 +701,6 @@ export function createSelectionActionsController(
     }, { signal: signalController.signal })
     bindColorPreview(dom.formatControls.textColor, 'text')
     bindColorPreview(dom.formatControls.backgroundColor, 'background')
-    dom.formatControls.textColor.addEventListener('blur', () => {
-      if (openColorPicker === 'text') {
-        openColorPicker = null
-      }
-      updateInteractiveFocus()
-    }, { signal: signalController.signal })
-    dom.formatControls.backgroundColor.addEventListener('blur', () => {
-      if (openColorPicker === 'background') {
-        openColorPicker = null
-      }
-      updateInteractiveFocus()
-    }, { signal: signalController.signal })
   }
 
   /** 在颜色控件的 pointerdown/mousedown 阶段先冻结选区，避免 hidden textarea blur 抢先把浮层收起。 */

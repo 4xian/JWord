@@ -92,6 +92,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     text: null as SelectionState | null,
     background: null as SelectionState | null
   }
+  let openColorPicker: 'textColor' | 'backgroundColor' | null = null
   const unsubscribeEditor = editor.subscribe((event) => {
     if (event.kind === 'selectionChange') {
       render()
@@ -126,7 +127,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
   /** 只重绘 toolbar，不触发额外 assistive 副作用。 */
   function render(): void {
-    renderToolbarState(dom, buildToolbarState(editor))
+    renderToolbarState(dom, buildToolbarState(editor), openColorPicker)
   }
 
   /** 同步 assistive text mirror。 */
@@ -169,15 +170,16 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     }
     const bindToolbarSelect = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
       bindSelect(control, () => {
+        openColorPicker = null
         handler()
         restoreEditorFocusSoon()
       })
     }
-    const bindToolbarColorInput = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
-      bindColorInput(control, () => {
-        handler()
-        restoreEditorFocusSoon()
-      })
+    const bindToolbarColorInput = (
+      control: JWordToolbarControlElement | undefined,
+      handler: (event: Event) => void
+    ) => {
+      bindColorInput(control, handler)
     }
 
     bindToolbarButton(dom.controls['history.undo'], () => {
@@ -282,28 +284,42 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       applyFontSizeStep(1)
     })
     bindColorClick(dom.controls['format.textColor'], () => {
-      captureColorSelection('textColor', cloneSelection(editor.getSelection()))
+      openColorPicker = 'textColor'
+      captureColorSelection('textColor')
     })
     bindColorClick(dom.controls['format.backgroundColor'], () => {
-      captureColorSelection('backgroundColor', cloneSelection(editor.getSelection()))
+      openColorPicker = 'backgroundColor'
+      captureColorSelection('backgroundColor')
     })
-    bindToolbarColorInput(dom.controls['format.textColor'], () => {
+    bindToolbarColorInput(dom.controls['format.textColor'], (event) => {
       const control = readColor(dom.controls['format.textColor'])
 
       if (control === null) {
         return
       }
 
+      openColorPicker = 'textColor'
       applyColorFormatFromFrozenSelection('textColor', '文字颜色', control.value.toLowerCase())
+
+      if (event.type === 'change') {
+        openColorPicker = null
+        render()
+      }
     })
-    bindToolbarColorInput(dom.controls['format.backgroundColor'], () => {
+    bindToolbarColorInput(dom.controls['format.backgroundColor'], (event) => {
       const control = readColor(dom.controls['format.backgroundColor'])
 
       if (control === null) {
         return
       }
 
+      openColorPicker = 'backgroundColor'
       applyColorFormatFromFrozenSelection('backgroundColor', '背景色', control.value.toLowerCase())
+
+      if (event.type === 'change') {
+        openColorPicker = null
+        render()
+      }
     })
     bindToolbarSelect(dom.controls['paragraph.alignment'], () => {
       const control = readSelect(dom.controls['paragraph.alignment'])
@@ -489,23 +505,25 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     label: string,
     value: string
   ): void {
-    const selection = property === 'textColor'
-      ? frozenColorSelections.text ?? editor.getSelection()
-      : frozenColorSelections.background ?? editor.getSelection()
+    const frozenSelection = readFrozenColorSelection(property)
+    const activeSelection = cloneSelection(editor.getSelection())
+    const selection = frozenSelection ?? activeSelection
     const formattingState = selection === null ? null : readSelectionFormattingState(editor, selection)
     const normalizedValue = normalizeHexColor(value) ?? value
+
+    if (activeSelection === null && frozenSelection !== null) {
+      editor.setSelection(frozenSelection)
+    }
 
     if (selection === null || formattingState === null || formattingState.run === null) {
       announce(`BLOCKED: ${label} 需要当前有可格式化的文本选区。`)
       render()
-      clearFrozenColorSelection(property)
       return
     }
 
     if (isRunStringFormatAlreadyApplied(formattingState, property, normalizedValue)) {
       announce(`${label} 已经处于目标状态。`)
       render()
-      clearFrozenColorSelection(property)
       return
     }
 
@@ -516,7 +534,6 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     if (command === null) {
       announce(`BLOCKED: ${label} 当前没有可应用的文本目标。`)
       render()
-      clearFrozenColorSelection(property)
       return
     }
 
@@ -524,17 +541,25 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     editor.executeCommand(command, {
       selectionAfter: selection
     })
-    clearFrozenColorSelection(property)
+    writeFrozenColorSelection(property, cloneSelection(editor.getSelection()) ?? selection)
   }
 
   /** 捕获颜色控件打开时的选区，供 picker change 阶段复用。 */
-  function captureColorSelection(property: 'textColor' | 'backgroundColor', selection: SelectionState | null): void {
-    if (property === 'textColor') {
-      frozenColorSelections.text = selection
-      return
+  function captureColorSelection(property: 'textColor' | 'backgroundColor'): SelectionState | null {
+    const activeSelection = cloneSelection(editor.getSelection())
+
+    if (activeSelection !== null) {
+      writeFrozenColorSelection(property, activeSelection)
+      return activeSelection
     }
 
-    frozenColorSelections.background = selection
+    const frozenSelection = readFrozenColorSelection(property)
+
+    if (frozenSelection !== null) {
+      editor.setSelection(frozenSelection)
+    }
+
+    return frozenSelection
   }
 
   /** 对内部 UI 子模块暴露同一套颜色提交能力。 */
@@ -543,7 +568,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     selection: SelectionState | null,
     value: string
   ): void {
-    captureColorSelection(property, cloneSelection(selection))
+    writeFrozenColorSelection(property, cloneSelection(selection))
     applyColorFormatFromFrozenSelection(
       property,
       property === 'textColor' ? '文字颜色' : '背景色',
@@ -838,14 +863,19 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     editor.setParagraphList(value)
   }
 
-  /** 清除单次颜色冻结快照。 */
-  function clearFrozenColorSelection(property: 'textColor' | 'backgroundColor'): void {
+  /** 读取颜色控件冻结快照。 */
+  function readFrozenColorSelection(property: 'textColor' | 'backgroundColor'): SelectionState | null {
+    return property === 'textColor' ? frozenColorSelections.text : frozenColorSelections.background
+  }
+
+  /** 写入颜色控件冻结快照。 */
+  function writeFrozenColorSelection(property: 'textColor' | 'backgroundColor', selection: SelectionState | null): void {
     if (property === 'textColor') {
-      frozenColorSelections.text = null
+      frozenColorSelections.text = selection
       return
     }
 
-    frozenColorSelections.background = null
+    frozenColorSelections.background = selection
   }
 
   /** 对宿主暴露的手动刷新入口，同时同步隐藏 mirror。 */
@@ -903,17 +933,19 @@ function bindSelect(control: JWordToolbarControlElement | undefined, handler: ()
   control.addEventListener('change', handler)
 }
 
-/** 在颜色控件上绑定 click 事件。 */
+/** 在颜色控件上绑定打开 picker 前后的关键事件。 */
 function bindColorClick(control: JWordToolbarControlElement | undefined, handler: () => void): void {
   if (!(control instanceof HTMLInputElement)) {
     return
   }
 
+  control.addEventListener('pointerdown', handler)
+  control.addEventListener('mousedown', handler)
   control.addEventListener('click', handler)
 }
 
 /** 在颜色控件上绑定即时 input 与最终 change 事件。 */
-function bindColorInput(control: JWordToolbarControlElement | undefined, handler: () => void): void {
+function bindColorInput(control: JWordToolbarControlElement | undefined, handler: (event: Event) => void): void {
   if (!(control instanceof HTMLInputElement)) {
     return
   }

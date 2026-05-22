@@ -289,10 +289,11 @@ test('Gate 3 toolbar color picker keeps applying to the selection captured when 
   await page.getByRole('button', { name: '选择首页片段' }).click()
 
   const textColorInput = page.locator('[data-jword-format-text-color]')
+  const backgroundColorInput = page.locator('[data-jword-format-background-color]')
 
-  await textColorInput.click()
+  await textColorInput.dispatchEvent('pointerdown')
+  await textColorInput.dispatchEvent('mousedown')
   await collapseSelectionAtSecondParagraphStart(page)
-  await expect(page.locator('[data-jword-selection-summary]')).toContainText('paragraph-2')
 
   await applyColorValue(page, '[data-jword-format-text-color]', '#3366ff')
 
@@ -301,6 +302,39 @@ test('Gate 3 toolbar color picker keeps applying to the selection captured when 
   })
   expect(await readSecondParagraphFirstRunStyle(page)).not.toHaveProperty('color')
   await expect(textColorInput).toHaveValue('#3366ff')
+
+  await selectFirstFragmentRange(page)
+  await backgroundColorInput.dispatchEvent('pointerdown')
+  await backgroundColorInput.dispatchEvent('mousedown')
+  await collapseSelectionAtSecondParagraphStart(page)
+
+  await applyColorValue(page, '[data-jword-format-background-color]', '#ff66cc')
+
+  expect(await readFirstRunStyle(page)).toMatchObject({
+    color: '#3366ff',
+    backgroundColor: '#ff66cc'
+  })
+  expect(await readSecondParagraphFirstRunStyle(page)).not.toHaveProperty('backgroundColor')
+  await expect(backgroundColorInput).toHaveValue('#ff66cc')
+})
+
+test('Gate 3 toolbar color picker accepts repeated palette and hue-strip changes without reverting to defaults', async ({ page }) => {
+  await page.goto('/')
+  await waitForDemoReady(page)
+  await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
+  await page.getByRole('button', { name: '选择首页片段' }).click()
+
+  await applyColorValue(page, '[data-jword-format-text-color]', '#3366ff')
+  await applyColorValue(page, '[data-jword-format-text-color]', '#ff5500')
+  await applyColorValue(page, '[data-jword-format-background-color]', '#99cc00')
+  await applyColorValue(page, '[data-jword-format-background-color]', '#6633ff')
+
+  expect(await readFirstRunStyle(page)).toMatchObject({
+    color: '#ff5500',
+    backgroundColor: '#6633ff'
+  })
+  await expect(page.locator('[data-jword-format-text-color]')).toHaveValue('#ff5500')
+  await expect(page.locator('[data-jword-format-background-color]')).toHaveValue('#6633ff')
 })
 
 test('Gate 3 toolbar paragraph alignment dropdown changes real line geometry', async ({ page }) => {
@@ -1126,6 +1160,7 @@ async function applyColorValue(page: Page, selector: string, value: string): Pro
     const node = input as HTMLInputElement
 
     node.value = nextValue as string
+    node.dispatchEvent(new Event('input', { bubbles: true }))
     node.dispatchEvent(new Event('change', { bubbles: true }))
   }, value)
 }
