@@ -87,8 +87,14 @@ export function renderSelectionActionsDom(dom: SelectionActionsDom, state: Selec
   if (state.activeColorPicker !== 'background') {
     dom.formatControls.backgroundColor.value = state.backgroundColorValue
   }
-  syncColorControl(dom.formatControls.textColor, state.textColorValue)
-  syncColorControl(dom.formatControls.backgroundColor, state.backgroundColorValue)
+  syncColorControl(
+    dom.formatControls.textColor,
+    state.activeColorPicker === 'text' ? dom.formatControls.textColor.value : state.textColorValue
+  )
+  syncColorControl(
+    dom.formatControls.backgroundColor,
+    state.activeColorPicker === 'background' ? dom.formatControls.backgroundColor.value : state.backgroundColorValue
+  )
 
   dom.contextControls.cut.disabled = state.cutDisabled
   dom.contextControls.copy.disabled = state.copyDisabled

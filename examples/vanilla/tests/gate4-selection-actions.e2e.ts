@@ -130,8 +130,8 @@ test('Gate 4 selection actions keep final text and background colors after previ
   await expect(page.locator('[data-jword-floating-toolbar="true"]')).toBeVisible()
 
   await page.locator('[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.textColor"]').click()
-  await previewColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.textColor"]', '#cc2200')
-  await applyColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.textColor"]', '#2255cc')
+  await finalizeColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.textColor"]', '#cc2200')
+  await previewColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.textColor"]', '#2255cc')
   await page.locator('#jword-editor').click()
 
   await expect.poll(() => readFirstRenderedFragmentStyle(page)).toMatchObject({
@@ -141,8 +141,8 @@ test('Gate 4 selection actions keep final text and background colors after previ
   await hiddenTextarea.focus()
   await selectTextRange(page, selection)
   await page.locator('[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.backgroundColor"]').click()
-  await previewColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.backgroundColor"]', '#00aa66')
-  await applyColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.backgroundColor"]', '#66aa00')
+  await finalizeColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.backgroundColor"]', '#00aa66')
+  await previewColorValue(page, '[data-jword-floating-toolbar="true"] [data-jword-selection-action="format.backgroundColor"]', '#66aa00')
   await page.locator('#jword-editor').click()
 
   await expect.poll(() => readFirstRenderedFragmentStyle(page)).toMatchObject({
@@ -446,6 +446,16 @@ async function applyColorValue(page: Page, selector: string, value: string): Pro
     node.dispatchEvent(new Event('click', { bubbles: true }))
     node.value = nextValue as string
     node.dispatchEvent(new Event('input', { bubbles: true }))
+    node.dispatchEvent(new Event('change', { bubbles: true }))
+  }, value)
+}
+
+/** 模拟原生颜色面板派发 change 后仍保持面板打开的中间状态。 */
+async function finalizeColorValue(page: Page, selector: string, value: string): Promise<void> {
+  await page.locator(selector).evaluate((input, nextValue) => {
+    const node = input as HTMLInputElement
+
+    node.value = nextValue as string
     node.dispatchEvent(new Event('change', { bubbles: true }))
   }, value)
 }

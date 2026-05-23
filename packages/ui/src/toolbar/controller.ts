@@ -25,6 +25,7 @@ import type {
   JWordToolbarElements
 } from '../types'
 import type { SelectionActionsColorFormatController } from '../selection-actions/types'
+import { createSelectionRebindSnapshot, restoreSelectionFromRebindSnapshot } from '../selection-rebind'
 import type { LiveRegionController } from '../assistive/live-region'
 import type { TextMirrorController } from '../assistive/text-mirror'
 import {
@@ -86,11 +87,24 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     : createToolbarExtensionHost(dom.bar, 'table')
   const assistive = options.assistive
   const editor = options.editor
+  const signalController = new AbortController()
   let suppressSelectionAnnouncementsUntil = 0
   let suppressAfterToolbarTransaction = false
   const frozenColorSelections = {
     text: null as SelectionState | null,
     background: null as SelectionState | null
+  }
+  const activeColorValues = {
+    text: null as string | null,
+    background: null as string | null
+  }
+  const activeColorInputSeen = {
+    text: false,
+    background: false
+  }
+  const activeColorReturnedToEditor = {
+    text: false,
+    background: false
   }
   let openColorPicker: 'textColor' | 'backgroundColor' | null = null
   const unsubscribeEditor = editor.subscribe((event) => {
@@ -181,6 +195,16 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     ) => {
       bindColorInput(control, handler)
     }
+
+    options.editorHost?.addEventListener('mousedown', () => {
+      if (openColorPicker === null) {
+        return
+      }
+
+      writeActiveColorReturnedToEditor(openColorPicker, true)
+      openColorPicker = null
+      render()
+    }, { signal: signalController.signal })
 
     bindToolbarButton(dom.controls['history.undo'], () => {
       markToolbarTransaction()
@@ -299,12 +323,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       }
 
       openColorPicker = 'textColor'
-      applyColorFormatFromFrozenSelection('textColor', '文字颜色', control.value.toLowerCase())
-
-      if (event.type === 'change') {
-        openColorPicker = null
-        render()
-      }
+      applyColorFormatFromFrozenSelection('textColor', '文字颜色', readActiveColorValue('textColor', control.value, event.type))
     })
     bindToolbarColorInput(dom.controls['format.backgroundColor'], (event) => {
       const control = readColor(dom.controls['format.backgroundColor'])
@@ -314,12 +333,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       }
 
       openColorPicker = 'backgroundColor'
-      applyColorFormatFromFrozenSelection('backgroundColor', '背景色', control.value.toLowerCase())
-
-      if (event.type === 'change') {
-        openColorPicker = null
-        render()
-      }
+      applyColorFormatFromFrozenSelection('backgroundColor', '背景色', readActiveColorValue('backgroundColor', control.value, event.type))
     })
     bindToolbarSelect(dom.controls['paragraph.alignment'], () => {
       const control = readSelect(dom.controls['paragraph.alignment'])
@@ -538,10 +552,15 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     }
 
     markToolbarTransaction()
+    const rebindSnapshot = createSelectionRebindSnapshot(editor, selection)
+
     editor.executeCommand(command, {
       selectionAfter: selection
     })
-    writeFrozenColorSelection(property, cloneSelection(editor.getSelection()) ?? selection)
+    const reboundSelection = restoreSelectionFromRebindSnapshot(editor, rebindSnapshot)
+
+    writeFrozenColorSelection(property, cloneSelection(reboundSelection) ?? cloneSelection(editor.getSelection()) ?? selection)
+    writeActiveColorValue(property, normalizedValue)
   }
 
   /** 捕获颜色控件打开时的选区，供 picker change 阶段复用。 */
@@ -550,6 +569,14 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
     if (activeSelection !== null) {
       writeFrozenColorSelection(property, activeSelection)
+      const control = readColor(dom.controls[property === 'textColor' ? 'format.textColor' : 'format.backgroundColor'])
+
+      if (control !== null) {
+        writeActiveColorValue(property, control.value)
+        writeActiveColorInputSeen(property, false)
+        writeActiveColorReturnedToEditor(property, false)
+      }
+
       return activeSelection
     }
 
@@ -878,6 +905,64 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     frozenColorSelections.background = selection
   }
 
+  /** 读取当前颜色 picker 会话中的最后有效颜色，避免 editor mousedown render 后迟到 change 读到默认值。 */
+  function readActiveColorValue(property: 'textColor' | 'backgroundColor', rawValue: string, eventType: string): string {
+    const value = normalizeHexColor(rawValue)
+    const inputSeen = property === 'textColor'
+      ? activeColorInputSeen.text
+      : activeColorInputSeen.background
+    const returnedToEditor = property === 'textColor'
+      ? activeColorReturnedToEditor.text
+      : activeColorReturnedToEditor.background
+
+    if (eventType === 'change' && inputSeen && returnedToEditor) {
+      return property === 'textColor'
+        ? activeColorValues.text ?? rawValue
+        : activeColorValues.background ?? rawValue
+    }
+
+    if (value !== null) {
+      writeActiveColorValue(property, value)
+      writeActiveColorInputSeen(property, eventType === 'input')
+      writeActiveColorReturnedToEditor(property, false)
+      return value
+    }
+
+    return property === 'textColor'
+      ? activeColorValues.text ?? rawValue
+      : activeColorValues.background ?? rawValue
+  }
+
+  /** 写入当前颜色 picker 会话中的最后有效颜色。 */
+  function writeActiveColorValue(property: 'textColor' | 'backgroundColor', value: string): void {
+    if (property === 'textColor') {
+      activeColorValues.text = value
+      return
+    }
+
+    activeColorValues.background = value
+  }
+
+  /** 记录当前 picker 会话是否已经通过 input 实时预览过。 */
+  function writeActiveColorInputSeen(property: 'textColor' | 'backgroundColor', value: boolean): void {
+    if (property === 'textColor') {
+      activeColorInputSeen.text = value
+      return
+    }
+
+    activeColorInputSeen.background = value
+  }
+
+  /** 记录当前 picker 会话是否已由用户点回编辑器收口。 */
+  function writeActiveColorReturnedToEditor(property: 'textColor' | 'backgroundColor', value: boolean): void {
+    if (property === 'textColor') {
+      activeColorReturnedToEditor.text = value
+      return
+    }
+
+    activeColorReturnedToEditor.background = value
+  }
+
   /** 对宿主暴露的手动刷新入口，同时同步隐藏 mirror。 */
   function refresh(): void {
     render()
@@ -896,6 +981,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     },
     refresh,
     destroy(): void {
+      signalController.abort()
       unsubscribeEditor()
       assistive.liveRegion.destroy()
       assistive.textMirror?.destroy()

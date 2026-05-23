@@ -5,12 +5,11 @@
  * 性能/安全约束：所有动作继续走 facade/transaction pipeline，右键菜单只绑定稳定选区快照，不沿用旧状态。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区浮层收尾项。
  */
-import type { Command, DocumentProjection, Editor, Paragraph, Run, SelectionState } from '@4xian/jword-core'
+import type { Command, SelectionState } from '@4xian/jword-core'
 import {
   buildSetBackgroundColorCommand,
   buildSetBoldCommand,
   buildSetItalicCommand,
-  createSelectionState,
   buildSetStrikeCommand,
   buildSetSubscriptCommand,
   buildSetSuperscriptCommand,
@@ -18,6 +17,7 @@ import {
   buildSetUnderlineCommand
 } from '@4xian/jword-core'
 import type { JWordSelectionActionElements } from '../types'
+import { createSelectionRebindSnapshot, restoreSelectionFromRebindSnapshot } from '../selection-rebind'
 import { DEFAULT_BACKGROUND_COLOR, DEFAULT_TEXT_COLOR } from '../toolbar/builtin-tools'
 import { cloneSelection, normalizeHexColor, readSelectionFormattingState } from '../toolbar/state'
 import { createSelectionActionsDom, destroySelectionActionsDom, renderSelectionActionsDom } from './dom'
@@ -29,25 +29,13 @@ interface ClipboardBuffer {
   htmlText: string
 }
 
-interface SelectionRebindSnapshot {
-  readonly anchor: SelectionRebindEndpoint
-  readonly focus: SelectionRebindEndpoint
-  readonly affinity: SelectionState['affinity']
-}
-
-interface SelectionRebindEndpoint {
-  readonly sectionId: string
-  readonly blockId: string
-  readonly paragraphGraphemeIndex: number
-  readonly assoc?: number
-}
-
 /** 创建 Gate 4 选区浮层 controller。 */
 export function createSelectionActionsController(
   options: CreateSelectionActionsControllerOptions
 ): SelectionActionsControllerHandle {
   const editor = options.editor
   const editorHost = options.editorHost
+  const colorFormat = options.colorFormat
   const dom = createSelectionActionsDom(editorHost)
   const hiddenTextarea = requireHiddenTextarea(editorHost)
   const canvasContainer = requireCanvasContainer(editorHost)
@@ -60,6 +48,18 @@ export function createSelectionActionsController(
   const frozenColorSelections = {
     text: null as SelectionState | null,
     background: null as SelectionState | null
+  }
+  const activeColorValues = {
+    text: null as string | null,
+    background: null as string | null
+  }
+  const activeColorInputSeen = {
+    text: false,
+    background: false
+  }
+  const activeColorReturnedToEditor = {
+    text: false,
+    background: false
   }
   let dismissedSelectionKey: string | null = null
   let stickyFloatingSelectionKey: string | null = null
@@ -170,49 +170,6 @@ export function createSelectionActionsController(
       || readInteractiveFocus(editorHost, dom.host, document.activeElement)
   }
 
-  /** 在当前投影中递归定位普通段落或表格单元格段落。 */
-  function findParagraphById(
-    projection: DocumentProjection,
-    sectionId: string,
-    blockId: string
-  ): Paragraph | null {
-    const section = projection.document.sections.find((item) => item.id === sectionId)
-
-    return section === undefined ? null : findParagraphInBlocks(section.blocks, blockId)
-  }
-
-  /** 在 block 树中查找段落。 */
-  function findParagraphInBlocks(blocks: DocumentProjection['document']['sections'][number]['blocks'], blockId: string): Paragraph | null {
-    for (const block of blocks) {
-      if (block.kind === 'paragraph' && block.id === blockId) {
-        return block
-      }
-
-      if (block.kind !== 'table') {
-        continue
-      }
-
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          const nested = findParagraphInBlocks(cell.blocks, blockId)
-
-          if (nested !== null) {
-            return nested
-          }
-        }
-      }
-    }
-
-    return null
-  }
-
-  /** 读取 run 内文本 grapheme 长度。 */
-  function readRunGraphemeLength(run: Run): number {
-    return run.inlines.reduce((length, inline) => {
-      return inline.kind === 'text' ? length + Array.from(inline.text).length : length
-    }, 0)
-  }
-
   /** 清空当前浮动工具栏冻结锚点。 */
   function clearStickyFloatingToolbar(): void {
     stickyFloatingSelectionKey = null
@@ -253,108 +210,6 @@ export function createSelectionActionsController(
     dismissedSelectionKey = null
     interactiveFocus = true
     render()
-  }
-
-  /** 创建格式命令前的段落内选区快照，抵抗 run split 后旧 anchor 失效。 */
-  function createSelectionRebindSnapshot(selection: SelectionState): SelectionRebindSnapshot | null {
-    const anchor = createSelectionRebindEndpoint(selection.anchor)
-    const focus = createSelectionRebindEndpoint(selection.focus)
-
-    if (anchor === null || focus === null) {
-      return null
-    }
-
-    return {
-      anchor,
-      focus,
-      affinity: selection.affinity
-    }
-  }
-
-  /** 把旧选区端点转换成段落内绝对 grapheme 位置。 */
-  function createSelectionRebindEndpoint(anchor: SelectionState['anchor']): SelectionRebindEndpoint | null {
-    const position = editor.resolveTextPosition(anchor)
-    const paragraph = findParagraphById(editor.getProjection(), position.sectionId, position.blockId)
-
-    if (paragraph === null) {
-      return null
-    }
-
-    let paragraphGraphemeIndex = position.graphemeIndex
-
-    for (const run of paragraph.runs) {
-      if (run.id === position.runId) {
-        return {
-          sectionId: position.sectionId,
-          blockId: position.blockId,
-          paragraphGraphemeIndex,
-          ...(position.assoc === undefined ? {} : { assoc: position.assoc })
-        }
-      }
-
-      paragraphGraphemeIndex += readRunGraphemeLength(run)
-    }
-
-    return null
-  }
-
-  /** 格式命令执行后按段落内绝对位置重建当前选区。 */
-  function restoreSelectionFromRebindSnapshot(snapshot: SelectionRebindSnapshot | null): void {
-    if (snapshot === null) {
-      return
-    }
-
-    const anchor = restoreSelectionRebindEndpoint(snapshot.anchor)
-    const focus = restoreSelectionRebindEndpoint(snapshot.focus)
-
-    if (anchor === null || focus === null) {
-      return
-    }
-
-    editor.setSelection(createSelectionState(anchor, focus, {
-      affinity: snapshot.affinity
-    }))
-  }
-
-  /** 把段落内绝对 grapheme 位置映射回当前 projection 的具体 run。 */
-  function restoreSelectionRebindEndpoint(endpoint: SelectionRebindEndpoint): SelectionState['anchor'] | null {
-    const paragraph = findParagraphById(editor.getProjection(), endpoint.sectionId, endpoint.blockId)
-
-    if (paragraph === null || paragraph.runs.length === 0) {
-      return null
-    }
-
-    let remainingIndex = endpoint.paragraphGraphemeIndex
-
-    for (const run of paragraph.runs) {
-      const length = readRunGraphemeLength(run)
-
-      if (remainingIndex <= length) {
-        return editor.createTextAnchor({
-          sectionId: endpoint.sectionId,
-          blockId: endpoint.blockId,
-          runId: run.id,
-          graphemeIndex: remainingIndex,
-          ...(endpoint.assoc === undefined ? {} : { assoc: endpoint.assoc })
-        })
-      }
-
-      remainingIndex -= length
-    }
-
-    const lastRun = paragraph.runs[paragraph.runs.length - 1]
-
-    if (lastRun === undefined) {
-      return null
-    }
-
-    return editor.createTextAnchor({
-      sectionId: endpoint.sectionId,
-      blockId: endpoint.blockId,
-      runId: lastRun.id,
-      graphemeIndex: readRunGraphemeLength(lastRun),
-      ...(endpoint.assoc === undefined ? {} : { assoc: endpoint.assoc })
-    })
   }
 
   /** 回到编辑器主交互区时收起当前选区的浮动工具栏。 */
@@ -398,6 +253,13 @@ export function createSelectionActionsController(
 
     if (activeSelection !== null) {
       writeFrozenColorSelection(kind, activeSelection)
+      const control = kind === 'text'
+        ? dom.formatControls.textColor
+        : dom.formatControls.backgroundColor
+
+      writeActiveColorValue(kind, control.value)
+      writeActiveColorInputSeen(kind, false)
+      writeActiveColorReturnedToEditor(kind, false)
       return activeSelection
     }
 
@@ -416,12 +278,12 @@ export function createSelectionActionsController(
       return false
     }
 
-    const rebindSnapshot = createSelectionRebindSnapshot(selection)
+    const rebindSnapshot = createSelectionRebindSnapshot(editor, selection)
 
     editor.executeCommand(command, {
       selectionAfter: selection
     })
-    restoreSelectionFromRebindSnapshot(rebindSnapshot)
+    restoreSelectionFromRebindSnapshot(editor, rebindSnapshot)
 
     return true
   }
@@ -496,18 +358,16 @@ export function createSelectionActionsController(
       return
     }
 
-    const command = kind === 'text'
-      ? buildSetTextColorCommand(editor.getProjection(), selection, value)
-      : buildSetBackgroundColorCommand(editor.getProjection(), selection, value)
+    const rebindSnapshot = createSelectionRebindSnapshot(editor, selection)
 
-    if (!executeSelectionCommand(selection, command)) {
-      announce('BLOCKED: 当前选区未生成可执行的颜色命令。')
-      return
-    }
-
-    const reboundSelection = cloneSelection(editor.getSelection()) ?? selection
-
-    writeFrozenColorSelection(kind, readActiveSelectionSnapshot() ?? reboundSelection)
+    colorFormat.applyColorFromSelection(
+      kind === 'text' ? 'textColor' : 'backgroundColor',
+      selection,
+      value
+    )
+    restoreSelectionFromRebindSnapshot(editor, rebindSnapshot)
+    writeFrozenColorSelection(kind, readActiveSelectionSnapshot() ?? selection)
+    writeActiveColorValue(kind, value)
 
     if (!keepPickerOpen && openColorPicker === kind) {
       openColorPicker = null
@@ -725,9 +585,10 @@ export function createSelectionActionsController(
   ): void {
     const applyPreview = (event: Event) => {
       const selection = readFrozenColorSelection(kind)
+      const value = readActiveColorValue(kind, target.value, event.type)
 
-      applyColorFormat(selection, kind, target.value, event.type === 'input')
-      syncColorPreview(kind, target.value)
+      applyColorFormat(selection, kind, value, true)
+      syncColorPreview(kind, value)
     }
 
     target.addEventListener('input', applyPreview, { signal: signalController.signal })
@@ -747,6 +608,64 @@ export function createSelectionActionsController(
       : dom.formatControls.backgroundColor
 
     target.parentElement?.style.setProperty('--jw-selection-toolbar-color', value)
+  }
+
+  /** 读取当前颜色 picker 会话中的最后有效颜色，避免 editor mousedown render 后迟到 change 读到默认值。 */
+  function readActiveColorValue(kind: 'text' | 'background', rawValue: string, eventType: string): string {
+    const value = normalizeHexColor(rawValue)
+    const inputSeen = kind === 'text'
+      ? activeColorInputSeen.text
+      : activeColorInputSeen.background
+    const returnedToEditor = kind === 'text'
+      ? activeColorReturnedToEditor.text
+      : activeColorReturnedToEditor.background
+
+    if (eventType === 'change' && inputSeen && returnedToEditor) {
+      return kind === 'text'
+        ? activeColorValues.text ?? rawValue
+        : activeColorValues.background ?? rawValue
+    }
+
+    if (value !== null) {
+      writeActiveColorValue(kind, value)
+      writeActiveColorInputSeen(kind, eventType === 'input')
+      writeActiveColorReturnedToEditor(kind, false)
+      return value
+    }
+
+    return kind === 'text'
+      ? activeColorValues.text ?? rawValue
+      : activeColorValues.background ?? rawValue
+  }
+
+  /** 写入当前颜色 picker 会话中的最后有效颜色。 */
+  function writeActiveColorValue(kind: 'text' | 'background', value: string): void {
+    if (kind === 'text') {
+      activeColorValues.text = value
+      return
+    }
+
+    activeColorValues.background = value
+  }
+
+  /** 记录当前 picker 会话是否已经通过 input 实时预览过。 */
+  function writeActiveColorInputSeen(kind: 'text' | 'background', value: boolean): void {
+    if (kind === 'text') {
+      activeColorInputSeen.text = value
+      return
+    }
+
+    activeColorInputSeen.background = value
+  }
+
+  /** 记录当前 picker 会话是否已由用户点回编辑器收口。 */
+  function writeActiveColorReturnedToEditor(kind: 'text' | 'background', value: boolean): void {
+    if (kind === 'text') {
+      activeColorReturnedToEditor.text = value
+      return
+    }
+
+    activeColorReturnedToEditor.background = value
   }
 
   /** 绑定右键菜单动作。 */
@@ -820,6 +739,9 @@ export function createSelectionActionsController(
       }
 
       if (!dom.host.contains(event.target)) {
+        if (openColorPicker !== null) {
+          writeActiveColorReturnedToEditor(openColorPicker, true)
+        }
         dismissFloatingToolbarForCurrentSelection()
       }
 

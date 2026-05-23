@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  *
- * 职责：验证 Gate 2 画布渲染器 每页独立绘制，并遵守背景、选区、文本、光标的视觉层级。
+ * 职责：验证 Gate 2 画布渲染器 每页独立绘制，并遵守页面背景、选区、文本背景、文本、光标的视觉层级。
  * 边界：只覆盖只读 布局盒到画布 指令的转换，不覆盖布局生成、命中测试和矩形映射 或真实浏览器画布。
  * 协作模块：渲染器消费布局盒，结合 视口虚拟器和画布池 管理每页 canvas。
  * 性能/安全约束：测试使用确定性 mock canvas，不访问 DOM，不创建真实图形资源，不使用单长 canvas。
@@ -17,7 +17,7 @@ import type { CanvasLike, CanvasRenderingContextLike } from '../../src/canvas/po
 import type { LayoutBox } from '../../src/layout/runtime'
 
 describe('renderPageCanvas', () => {
-  it('按 page background、selection、text、caret 顺序绘制单页 canvas', () => {
+  it('按 page background、selection、text background、text、caret 顺序绘制单页 canvas', () => {
     const canvas = createMockCanvas()
     const page = createPageLayout(0, '你好 JWord') satisfies LayoutBox
 
@@ -56,6 +56,30 @@ describe('renderPageCanvas', () => {
       'fillStyle:#111827',
       'fillRect:130,96,2,18'
     ])
+  })
+
+  it('在选区高亮之上绘制 run 背景，保证背景色选择时可实时预览', () => {
+    const canvas = createMockCanvas()
+    const page = createPageLayout(0, '背景色', {
+      backgroundColor: '#00aa66'
+    }) satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page,
+      selectionRects: [
+        {
+          pageIndex: 0,
+          x: cssPxToTwips(72),
+          y: cssPxToTwips(96),
+          width: cssPxToTwips(48),
+          height: cssPxToTwips(18)
+        }
+      ]
+    })
+
+    expect(canvas.calls.indexOf('fillStyle:#cfe3ff')).toBeLessThan(canvas.calls.indexOf('fillStyle:#00aa66'))
+    expect(canvas.calls.indexOf('fillStyle:#00aa66')).toBeLessThan(canvas.calls.indexOf('fillText:背景色,72,110'))
   })
 
   it('在高 DPR 屏幕上放大 backing store，但保持页面 CSS 尺寸不变', () => {

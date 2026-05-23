@@ -194,6 +194,22 @@ describe('selection actions controller', () => {
       }))
       expectSelectionRange(harness.editor, tableTarget, 1, 4)
       expect(harness.editor.getSelectionFormattingState().run?.color.value).toBe('#2255cc')
+      textColor.value = '#cc5500'
+      textColor.dispatchEvent(new Event('change', {
+        bubbles: true
+      }))
+      textColor.value = '#0055cc'
+      textColor.dispatchEvent(new Event('input', {
+        bubbles: true
+      }))
+      harness.editorHost.dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true
+      }))
+      textColor.dispatchEvent(new Event('change', {
+        bubbles: true
+      }))
+      expectSelectionRange(harness.editor, tableTarget, 1, 4)
+      expect(harness.editor.getSelectionFormattingState().run?.color.value).toBe('#0055cc')
 
       backgroundColor.dispatchEvent(new PointerEvent('pointerdown', {
         bubbles: true
@@ -214,6 +230,22 @@ describe('selection actions controller', () => {
       }))
       expectSelectionRange(harness.editor, tableTarget, 1, 4)
       expect(harness.editor.getSelectionFormattingState().run?.backgroundColor.value).toBe('#ffcc33')
+      backgroundColor.value = '#99cc00'
+      backgroundColor.dispatchEvent(new Event('change', {
+        bubbles: true
+      }))
+      backgroundColor.value = '#6633ff'
+      backgroundColor.dispatchEvent(new Event('input', {
+        bubbles: true
+      }))
+      harness.editorHost.dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true
+      }))
+      backgroundColor.dispatchEvent(new Event('change', {
+        bubbles: true
+      }))
+      expectSelectionRange(harness.editor, tableTarget, 1, 4)
+      expect(harness.editor.getSelectionFormattingState().run?.backgroundColor.value).toBe('#6633ff')
     } finally {
       harness.destroy()
     }

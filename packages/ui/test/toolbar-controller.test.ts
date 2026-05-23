@@ -112,6 +112,81 @@ describe('toolbar controller focus restore', () => {
       toolbarHost.remove()
     }
   })
+
+  test('keeps color picker selection alive across change and input until editor is clicked', async () => {
+    const editorHost = document.createElement('div')
+    const toolbarHost = document.createElement('div')
+    const editor = createEditor({ initialText: 'abcdef' })
+
+    document.body.append(editorHost, toolbarHost)
+
+    try {
+      editor.mount(editorHost)
+      editor.focus()
+      editor.setSelection(createSelection(editor, 1, 4))
+
+      const controller = createToolbarController({
+        editor,
+        toolbarHost,
+        editorHost,
+        assistive: {
+          liveRegion: createStubLiveRegion(),
+          textMirror: null
+        }
+      })
+      const textColor = toolbarHost.querySelector<HTMLInputElement>('[data-jword-format-text-color]')
+      const backgroundColor = toolbarHost.querySelector<HTMLInputElement>('[data-jword-format-background-color]')
+
+      expect(textColor).toBeInstanceOf(HTMLInputElement)
+      expect(backgroundColor).toBeInstanceOf(HTMLInputElement)
+
+      if (textColor === null || backgroundColor === null) {
+        throw new Error('缺少颜色控件')
+      }
+
+      textColor.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+      editor.setSelection(null)
+      textColor.value = '#3366ff'
+      textColor.dispatchEvent(new Event('change', { bubbles: true }))
+      textColor.value = '#ff5500'
+      textColor.dispatchEvent(new Event('input', { bubbles: true }))
+      editorHost.dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true
+      }))
+      textColor.dispatchEvent(new Event('change', { bubbles: true }))
+
+      expect(editor.getSelectionFormattingState().run?.color.value).toBe('#ff5500')
+      expect(textColor.value).toBe('#ff5500')
+
+      backgroundColor.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+      editor.setSelection(null)
+      backgroundColor.value = '#99cc00'
+      backgroundColor.dispatchEvent(new Event('change', { bubbles: true }))
+      backgroundColor.value = '#6633ff'
+      backgroundColor.dispatchEvent(new Event('input', { bubbles: true }))
+      editorHost.dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true
+      }))
+      backgroundColor.dispatchEvent(new Event('change', { bubbles: true }))
+
+      expect(editor.getSelectionFormattingState().run?.backgroundColor.value).toBe('#6633ff')
+      expect(backgroundColor.value).toBe('#6633ff')
+
+      editorHost.dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true
+      }))
+      await Promise.resolve()
+
+      expect(textColor.value).toBe('#ff5500')
+      expect(backgroundColor.value).toBe('#6633ff')
+
+      controller.destroy()
+    } finally {
+      editor.destroy()
+      editorHost.remove()
+      toolbarHost.remove()
+    }
+  })
 })
 
 function getHiddenTextarea(host: HTMLElement): HTMLTextAreaElement {
@@ -146,6 +221,25 @@ function createCollapsedSelection(editor: ReturnType<typeof createEditor>, graph
   })
 
   return createSelectionState(anchor, anchor)
+}
+
+function createSelection(editor: ReturnType<typeof createEditor>, anchorIndex: number, focusIndex: number) {
+  const paragraph = editor.getProjection().document.sections[0]?.blocks[0]
+  const runId = paragraph?.kind === 'paragraph' ? paragraph.runs[0]?.id : undefined
+  const anchor = editor.createTextAnchor({
+    sectionId: 'section-1',
+    blockId: paragraph?.id ?? 'paragraph-1',
+    runId: runId ?? 'run-1',
+    graphemeIndex: anchorIndex
+  })
+  const focus = editor.createTextAnchor({
+    sectionId: 'section-1',
+    blockId: paragraph?.id ?? 'paragraph-1',
+    runId: runId ?? 'run-1',
+    graphemeIndex: focusIndex
+  })
+
+  return createSelectionState(anchor, focus)
 }
 
 function readFirstParagraphRunProperties(editor: ReturnType<typeof createEditor>) {

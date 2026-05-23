@@ -194,6 +194,48 @@ describe('toolbar select dom', () => {
       destroyToolbarDom(dom)
     }
   })
+
+  test('preserves active color input value while picker is open', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.textColor', 'format.backgroundColor']
+    }))
+
+    try {
+      const textColor = host.querySelector<HTMLInputElement>('[data-jword-format-text-color]')
+      const backgroundColor = host.querySelector<HTMLInputElement>('[data-jword-format-background-color]')
+
+      expect(textColor).toBeInstanceOf(HTMLInputElement)
+      expect(backgroundColor).toBeInstanceOf(HTMLInputElement)
+
+      if (textColor === null || backgroundColor === null) {
+        throw new Error('缺少颜色控件')
+      }
+
+      textColor.value = '#3366ff'
+      backgroundColor.value = '#99cc00'
+      renderToolbarState(dom, createToolbarState({
+        textColorValue: '#111111',
+        backgroundColorValue: '#fff59d'
+      }), 'textColor')
+
+      expect(textColor.value).toBe('#3366ff')
+      expect(textColor.parentElement?.style.getPropertyValue('--jw-toolbar-color')).toBe('#3366ff')
+      expect(backgroundColor.value).toBe('#fff59d')
+      expect(backgroundColor.parentElement?.style.getPropertyValue('--jw-toolbar-color')).toBe('#fff59d')
+
+      renderToolbarState(dom, createToolbarState({
+        textColorValue: '#111111',
+        backgroundColorValue: '#fff59d'
+      }), 'backgroundColor')
+
+      expect(textColor.value).toBe('#111111')
+      expect(backgroundColor.value).toBe('#fff59d')
+      expect(backgroundColor.parentElement?.style.getPropertyValue('--jw-toolbar-color')).toBe('#fff59d')
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
 })
 
 function createToolbarState(overrides: Partial<ToolbarState> = {}): ToolbarState {

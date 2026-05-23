@@ -79,9 +79,9 @@ export function renderPageCanvas(input: RenderPageInput): void {
   context.fillStyle = input.backgroundColor ?? '#ffffff'
   context.fillRect(0, 0, supportsTransform ? cssWidth : canvasWidth, supportsTransform ? cssHeight : canvasHeight)
 
+  renderSelectionRects(context, input, drawingScale)
   renderTextBackgrounds(context, input.page, drawingScale)
   renderTables(context, input.page, drawingScale)
-  renderSelectionRects(context, input, drawingScale)
   renderParagraphListMarkers(context, input.page, drawingScale)
   renderTextFragments(context, input.page, drawingScale)
   renderInlineObjects(context, input.page, drawingScale, input.imageResourceResolver)
