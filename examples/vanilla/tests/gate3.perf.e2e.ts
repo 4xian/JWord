@@ -12,7 +12,7 @@ interface Gate3PerfMetrics {
   readonly gate2ScrollMs: number
   readonly largeDocumentInsertP95Ms: number
   readonly alphaLoadMs: number
-  readonly selectionSummarySyncMs: number
+  readonly selectionSyncMs: number
   readonly toggleBoldP95Ms: number
   readonly undoP95Ms: number
   readonly redoP95Ms: number
@@ -26,7 +26,7 @@ const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
   gate2ScrollMs: 120,
   largeDocumentInsertP95Ms: 140,
   alphaLoadMs: 80,
-  selectionSummarySyncMs: 140,
+  selectionSyncMs: 140,
   toggleBoldP95Ms: 140,
   undoP95Ms: 140,
   redoP95Ms: 140
@@ -60,7 +60,7 @@ test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ 
   expect(metrics.gate2ScrollMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.gate2ScrollMs)
   expect(metrics.largeDocumentInsertP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.largeDocumentInsertP95Ms)
   expect(metrics.alphaLoadMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.alphaLoadMs)
-  expect(metrics.selectionSummarySyncMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.selectionSummarySyncMs)
+  expect(metrics.selectionSyncMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.selectionSyncMs)
   expect(metrics.toggleBoldP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.toggleBoldP95Ms)
   expect(metrics.undoP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.undoP95Ms)
   expect(metrics.redoP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.redoP95Ms)
@@ -376,7 +376,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       )
     }
 
-    const selectionSummarySyncMs = await runAndMeasure(
+    const selectionSyncMs = await runAndMeasure(
       '同步首页片段选区',
       () => selectSampleButton.click(),
       () => hasActiveTextSelection()
@@ -428,7 +428,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       gate2ScrollMs: Number(gate2ScrollMs.toFixed(2)),
       largeDocumentInsertP95Ms: readP95(largeDocumentInsertSamples),
       alphaLoadMs: Number(alphaLoadMs.toFixed(2)),
-      selectionSummarySyncMs: Number(selectionSummarySyncMs.toFixed(2)),
+      selectionSyncMs: Number(selectionSyncMs.toFixed(2)),
       toggleBoldP95Ms: readP95(toggleBoldSamples),
       undoP95Ms: readP95(undoSamples),
       redoP95Ms: readP95(redoSamples)

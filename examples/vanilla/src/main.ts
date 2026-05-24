@@ -5,7 +5,12 @@
  * 性能/安全约束：只在入口层访问宿主 DOM，不回退到旧的 toolbar 内联实现。
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
  */
-import { buildAddRevisionMetadataCommand, createEditor, createSelectionState } from '@4xian/jword-core'
+import {
+  buildAddRevisionMetadataCommand,
+  buildInsertLinkCommand,
+  createEditor,
+  createSelectionState
+} from '@4xian/jword-core'
 import { createJWordUi } from '@4xian/jword-ui'
 
 import { createDemoControls, loadInitialDemoText } from './demo-controls'
@@ -26,6 +31,7 @@ const assistiveMirrorHost = requireElement<HTMLElement>(
   '#jword-assistive-mirror',
   'JWord vanilla demo requires #jword-assistive-mirror.'
 )
+const readonlyMode = new URLSearchParams(window.location.search).get('readonly') === 'true'
 
 const initialDemoText = await loadInitialDemoText()
 const editor = createEditor({
@@ -53,9 +59,16 @@ const jwordUi = createJWordUi({
   toolbarHost,
   liveRegionHost: statusHost,
   assistiveMirrorHost,
-  toolbar: {
-    showSummaries: false
-  },
+  // toolbar: false,
+  ...(readonlyMode
+    ? {
+        readonly: {
+          enabled: true,
+          hideToolbar: false,
+          allowNavigation: true
+        }
+      }
+    : {}),
   user: {
     currentUser: {
       id: 'demo-user',
@@ -107,6 +120,7 @@ const demoControls = createDemoControls({
 })
 
 window.__jwordDemo = Object.freeze({
+  readonly: readonlyMode,
   editor,
   selectTextRange: demoControls.selectTextRange,
   selectImageByResourceId: (resourceId: string) => {
@@ -118,6 +132,24 @@ window.__jwordDemo = Object.freeze({
     readThreadCount: () => editor.getProjection().document.comments?.length ?? 0
   },
   link: {
+    /** 为只读浏览器回归预置一段链接文本。 */
+    seedFirstRunLink(target: string) {
+      const selection = createFirstRunSelection(editor, 1, 3)
+      const command = buildInsertLinkCommand(editor.getProjection(), selection, {
+        target
+      })
+
+      if (command === null) {
+        return false
+      }
+
+      editor.executeCommand(command, {
+        selectionAfter: selection
+      })
+      jwordUi.refresh()
+
+      return true
+    },
     readActiveLink: () => {
       const selection = editor.getSelection()
 
@@ -177,9 +209,11 @@ window.__jwordDemo = Object.freeze({
   }
 })
 
-requestAnimationFrame(() => {
-  editor.focus()
-})
+if (!readonlyMode) {
+  requestAnimationFrame(() => {
+    editor.focus()
+  })
+}
 
 window.addEventListener(
   'beforeunload',
@@ -244,4 +278,30 @@ function selectImageByResourceId(editorInstance: typeof editor, resourceId: stri
   }
 
   throw new Error(`未找到资源 ${resourceId} 对应的图片 run`)
+}
+
+/** 构造 demo 首段首个 run 的文本选区。 */
+function createFirstRunSelection(editorInstance: typeof editor, anchorIndex: number, focusIndex: number) {
+  const section = editorInstance.getProjection().document.sections[0]
+  const block = section?.blocks[0]
+  const run = block?.kind === 'paragraph' ? block.runs[0] : undefined
+
+  if (section === undefined || block === undefined || block.kind !== 'paragraph' || run === undefined) {
+    throw new Error('缺少首段链接测试目标。')
+  }
+
+  const anchor = editorInstance.createTextAnchor({
+    sectionId: section.id,
+    blockId: block.id,
+    runId: run.id,
+    graphemeIndex: anchorIndex
+  })
+  const focus = editorInstance.createTextAnchor({
+    sectionId: section.id,
+    blockId: block.id,
+    runId: run.id,
+    graphemeIndex: focusIndex
+  })
+
+  return createSelectionState(anchor, focus)
 }

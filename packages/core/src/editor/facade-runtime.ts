@@ -29,6 +29,7 @@ import {
 import { createCanvasPool } from '../canvas/pool'
 import { createDocumentProjection } from '../model/projection'
 import { createMountedCanvasImageResourceResolver } from '../resources/canvas-image-resolver'
+import { countGraphemes } from '../shared/grapheme'
 import { createJWordError } from '../shared/errors'
 import { createSelectionFormattingState } from '../model/formatting-state'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
@@ -648,7 +649,9 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
       return
     }
 
-    const anchor = this.resolveInitialFocusAnchor()
+    const anchor = this.initialFocusPosition === 'start'
+      ? this.resolveInitialStartFocusAnchor()
+      : this.resolveInitialEndFocusAnchor()
 
     if (anchor === undefined) {
       return
@@ -916,7 +919,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     }
   }
 
-  protected resolveInitialFocusAnchor(): AnchorRef | undefined {
+  protected resolveInitialStartFocusAnchor(): AnchorRef | undefined {
     for (const section of this.currentProjection.document.sections) {
       const target = this.findFirstFocusableRunInBlocks(section.id, section.blocks)
 
@@ -926,6 +929,24 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
           blockId: target.blockId,
           runId: target.runId,
           graphemeIndex: 0
+        })
+      }
+    }
+
+    return undefined
+  }
+
+  /** 解析首次 focus 时的文档末尾锚点。 */
+  protected resolveInitialEndFocusAnchor(): AnchorRef | undefined {
+    for (const section of [...this.currentProjection.document.sections].reverse()) {
+      const target = this.findLastFocusableRunInBlocks(section.id, section.blocks)
+
+      if (target !== undefined) {
+        return this.createTextAnchor({
+          sectionId: target.sectionId,
+          blockId: target.blockId,
+          runId: target.run.id,
+          graphemeIndex: countGraphemes(this.readRunText(target.run))
         })
       }
     }
@@ -971,8 +992,55 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     return undefined
   }
 
+  /** 从 block 树尾部寻找最后一个可聚焦 run。 */
+  protected findLastFocusableRunInBlocks(
+    sectionId: string,
+    blocks: readonly Block[]
+  ): Readonly<{
+    sectionId: string
+    blockId: string
+    run: Run
+  }> | undefined {
+    for (const block of [...blocks].reverse()) {
+      if (block.kind === 'paragraph') {
+        const preferredRun = [...block.runs].reverse().find((run) => this.isFocusableRun(run))
+        const run = preferredRun ?? block.runs.at(-1)
+
+        if (run !== undefined) {
+          return {
+            sectionId,
+            blockId: block.id,
+            run
+          }
+        }
+
+        continue
+      }
+
+      for (const row of [...block.rows].reverse()) {
+        for (const cell of [...row.cells].reverse()) {
+          const target = this.findLastFocusableRunInBlocks(sectionId, cell.blocks)
+
+          if (target !== undefined) {
+            return target
+          }
+        }
+      }
+    }
+
+    return undefined
+  }
+
+  /** 判断 run 是否可承载文本光标。 */
   protected isFocusableRun(run: Run): boolean {
     return run.inlines.some((inline) => inline.kind === 'text')
+  }
+
+  /** 读取 run 中所有文本 inline 的纯文本。 */
+  protected readRunText(run: Run): string {
+    return run.inlines
+      .flatMap((inline) => inline.kind === 'text' ? [inline.text] : [])
+      .join('')
   }
 
   protected commitSelection(

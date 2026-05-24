@@ -28,5 +28,6 @@ export type {
   EditorRichTextRun,
   EditorTextAnchorInput,
   EditorUser,
-  EditorUserInput
+  EditorUserInput,
+  InitialFocusPosition
 } from './types'

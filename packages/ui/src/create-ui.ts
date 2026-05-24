@@ -49,6 +49,8 @@ import { createImageSelectionController } from './media/image-selection-controll
 import { createMobileReadonlyPreview } from './mobile/readonly-preview'
 import type { CreateMobileReadonlyPreviewOptions } from './mobile/readonly-preview'
 import { createPasteController } from './paste/controller'
+import { createJWordInteractionGuard } from './readonly/interaction-guard'
+import type { JWordInteractionGuard } from './readonly/interaction-guard'
 import { createRevisionController } from './revisions/controller'
 import { createSelectionActionsController } from './selection-actions/controller'
 import { createTableController } from './table/controller'
@@ -56,6 +58,7 @@ import { createToolbarController } from './toolbar/controller'
 import type {
   CreateJWordUiOptions,
   JWordCommentsOptions,
+  JWordReadonlyOptions,
   JWordToolbarControlElement,
   JWordToolbarToolId,
   JWordUiInstance,
@@ -120,9 +123,18 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   let headingOutlineVisible = false
   let pendingLinkSelection: SelectionState | null = null
   let unsubscribeCommentsGeometry = (): void => {}
+  const readonlyOptions = normalizeReadonlyOptions(options.readonly)
+  const toolbarEntryAvailable = options.toolbar !== false
+  const readonlyEditingBlocked = readonlyOptions.enabled === true
+  const readonlyNavigationAllowed = readonlyOptions.allowNavigation !== false
 
   /** 从当前选区打开批注草稿。 */
   function openCommentFromSelection(selection: SelectionState | null = options.editor.getSelection()): void {
+    if (readonlyOptions.enabled === true) {
+      liveRegion.announce('BLOCKED: 当前为只读模式。', { force: true })
+      return
+    }
+
     if (commentsHandle === null) {
       liveRegion.announce('BLOCKED: 当前宿主未启用批注侧栏。', { force: true })
       return
@@ -149,6 +161,11 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
 
   /** 从当前选区打开链接弹窗。 */
   function openLinkFromSelection(selection: SelectionState | null = options.editor.getSelection()): void {
+    if (readonlyOptions.enabled === true) {
+      liveRegion.announce('BLOCKED: 当前为只读模式。', { force: true })
+      return
+    }
+
     if (linkHandle === null) {
       liveRegion.announce('BLOCKED: 当前宿主未启用链接弹窗。', { force: true })
       return
@@ -179,6 +196,11 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
 
   /** 用当前链接选区打开编辑弹窗。 */
   function editLinkFromSelection(selection: SelectionState | null): void {
+    if (readonlyOptions.enabled === true) {
+      liveRegion.announce('BLOCKED: 当前为只读模式。', { force: true })
+      return
+    }
+
     if (linkHandle === null) {
       liveRegion.announce('BLOCKED: 当前宿主未启用链接弹窗。', { force: true })
       return
@@ -198,6 +220,11 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
 
   /** 删除当前链接选区命中的链接。 */
   function removeLinkFromSelection(selection: SelectionState | null): void {
+    if (readonlyOptions.enabled === true) {
+      liveRegion.announce('BLOCKED: 当前为只读模式。', { force: true })
+      return
+    }
+
     const command = buildDeleteLinkCommand(options.editor.getProjection(), selection)
 
     if (command === null) {
@@ -252,23 +279,35 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       }
     }
   })
-  const media = options.media === undefined
+  const mountedEditorHost = options.editorHost
+  const interactionGuard = createJWordInteractionGuard({
+    editorHost: mountedEditorHost ?? options.toolbarHost,
+    toolbarHost: options.toolbarHost,
+    controls: toolbar.elements.controls,
+    readonly: readonlyOptions,
+    assistive: {
+      liveRegion
+    }
+  })
+  const media = options.media === undefined || toolbar.mediaHost === null
     ? null
     : createMediaController({
       editor: options.editor,
-      host: toolbar.mediaHost ?? options.toolbarHost,
+      host: toolbar.mediaHost,
       media: options.media,
+      readonly: options.readonly,
       assistive: {
         liveRegion
       }
     })
-  const table = options.table === undefined
+  const table = options.table === undefined || toolbar.tableHost === null
     ? null
     : createTableController({
       editor: options.editor,
-      toolbarHost: toolbar.tableHost ?? options.toolbarHost,
+      toolbarHost: toolbar.tableHost,
       editorHost: options.editorHost ?? options.toolbarHost,
       table: options.table,
+      readonly: options.readonly,
       assistive: {
         liveRegion
       }
@@ -278,6 +317,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     : createLinkController({
       host: options.link.host ?? options.editorHost ?? toolbar.linkHost ?? options.toolbarHost,
       viewportHost: options.editorHost,
+      readonly: options.readonly,
       policy: options.link.policy,
       adapter: {
         openLink(linkDraft): Promise<void> | void {
@@ -323,7 +363,21 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   })
   linkHandle = link
   const editorHost = options.editorHost
-  const headingOutlineMount = resolveHeadingOutlineMount(options.headingOutline, editorHost, options.toolbarHost)
+  const shouldCreateHeadingOutline = options.headingOutline !== undefined
+    && toolbarEntryAvailable
+    && (!readonlyEditingBlocked || readonlyNavigationAllowed)
+  const shouldCreateFindReplace = options.findReplace !== undefined
+    && toolbarEntryAvailable
+    && (!readonlyEditingBlocked || readonlyNavigationAllowed)
+  const shouldCreateHeaderFooter = options.headerFooter !== undefined
+    && toolbarEntryAvailable
+    && !readonlyEditingBlocked
+  const shouldCreateRevisions = options.revisions !== undefined
+    && toolbarEntryAvailable
+    && !readonlyEditingBlocked
+  const headingOutlineMount = shouldCreateHeadingOutline
+    ? resolveHeadingOutlineMount(options.headingOutline, editorHost, options.toolbarHost)
+    : null
   const linkOverlay = link === null || editorHost === undefined
     ? null
     : createLinkAnchorOverlay(options.editor, editorHost, (target) => {
@@ -332,11 +386,12 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       options.editor.setSelection(target.selection)
       link.toggleQuickTools(target.draft)
     })
-  const headerFooter = options.headerFooter === undefined
+  const headerFooter = !shouldCreateHeaderFooter || options.headerFooter === undefined
     ? null
     : createHeaderFooterController({
       editor: options.editor,
       host: toolbar.panelHost ?? options.headerFooter.host,
+      readonly: options.readonly,
       announce(message): void {
         liveRegion.announce(message)
       }
@@ -374,11 +429,12 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
           headingOutlineVisible = headingOutline.isVisible()
         }
       }
-  const findReplace = options.findReplace === undefined
+  const findReplace = !shouldCreateFindReplace || options.findReplace === undefined
     ? null
     : createFindReplaceController({
       editor: options.editor,
       host: toolbar.panelHost ?? options.findReplace.host,
+      readonly: options.readonly,
       ...(options.editorHost === undefined ? {} : { editorHost: options.editorHost }),
       scrollToRange(range): void {
         scrollTextRangeIntoView(options.editor, options.editorHost, range)
@@ -394,7 +450,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
           findReplace.toggleVisible()
         }
       }
-  const revisions = options.revisions === undefined
+  const revisions = !shouldCreateRevisions || options.revisions === undefined
     ? null
     : createRevisionController({
       editor: options.editor,
@@ -418,6 +474,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       resolveUser: options.user?.resolveUser,
       permissions: commentsMount.options.permissions,
       formatCreatedAt: commentsMount.options.formatCreatedAt,
+      readonly: options.readonly,
       threads: commentsMount.options.threads ?? readCommentThreads(options.editor),
       adapter: {
         createThread(request): void {
@@ -484,6 +541,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     : createSelectionActionsController({
       editor: options.editor,
       editorHost: options.editorHost,
+      readonly: options.readonly,
       colorFormat: toolbar.colorFormat,
       insertActions: {
         openComment: openCommentFromSelection,
@@ -519,9 +577,9 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     : createImageSelectionController({
       editor: options.editor,
       editorHost: options.editorHost,
+      readonly: options.readonly,
       commands: options.media?.commands
     })
-  const mountedEditorHost = options.editorHost
   const paste = mountedEditorHost === undefined
     ? null
     : createPasteController({
@@ -537,7 +595,8 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       options,
       mountedEditorHost,
       toolbar.elements.controls,
-      liveRegion
+      liveRegion,
+      interactionGuard
     ))
   const unsubscribeEditor = options.editor.subscribe((event) => {
     if (event.kind === 'transaction') {
@@ -547,7 +606,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       linkOverlay?.sync()
       syncDefaultCommentsRailGeometry(commentsMount, commentsHandle, options.editor, options.editorHost, pendingCommentSelections)
       syncActiveLink(linkHandle, options.editor)
-      syncToolbarLinkInsertAvailability(toolbar, options.editor)
+      syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
       headingOutline?.refresh()
       findReplace?.refresh()
       return
@@ -555,13 +614,13 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
 
     if (event.kind === 'selectionChange') {
       syncActiveLink(linkHandle, options.editor)
-      syncToolbarLinkInsertAvailability(toolbar, options.editor)
+      syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
       revisions?.refresh()
     }
   })
   commentsOverlay?.sync()
   linkOverlay?.sync()
-  syncToolbarLinkInsertAvailability(toolbar, options.editor)
+  syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
 
   return {
     elements: {
@@ -591,7 +650,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       commentsOverlay?.sync()
       syncDefaultCommentsRailGeometry(commentsMount, commentsHandle, options.editor, options.editorHost, pendingCommentSelections)
       syncActiveLink(linkHandle, options.editor)
-      syncToolbarLinkInsertAvailability(toolbar, options.editor)
+      syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
     },
     destroy(): void {
       unsubscribeEditor()
@@ -612,6 +671,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       link?.destroy()
       table?.destroy()
       media?.destroy()
+      interactionGuard.destroy()
       toolbar.destroy()
     }
   }
@@ -689,18 +749,39 @@ function buildMobileReadonlyPreviewOptions(
   options: CreateJWordUiOptions,
   editorHost: HTMLElement,
   controls: Partial<Record<JWordToolbarToolId, JWordToolbarControlElement>>,
-  liveRegion: JWordUiLiveRegionController | null
+  liveRegion: JWordUiLiveRegionController | null,
+  interactionGuard: JWordInteractionGuard
 ): CreateMobileReadonlyPreviewOptions {
+  const readonlyOptions = normalizeReadonlyOptions(options.readonly)
+
   return {
     editorHost,
     toolbarHost: options.toolbarHost,
     controls,
+    ...(readonlyOptions.enabled === true ? { interactionGuard } : {}),
     ...(options.readonlyPreview?.mobile === undefined ? {} : { enabled: options.readonlyPreview.mobile }),
     ...(options.readonlyPreview?.maxWidthPx === undefined ? {} : { maxWidthPx: options.readonlyPreview.maxWidthPx }),
     assistive: {
       liveRegion
     }
   }
+}
+
+/** 规范化宿主级只读配置。 */
+function normalizeReadonlyOptions(input: CreateJWordUiOptions['readonly']): JWordReadonlyOptions {
+  if (input === true) {
+    return {
+      enabled: true
+    }
+  }
+
+  if (input === false || input === undefined) {
+    return {
+      enabled: false
+    }
+  }
+
+  return input
 }
 
 /** 执行批注 thread 更新命令。 */
@@ -1556,7 +1637,8 @@ function syncActiveLink(handle: LinkControllerHandle | null, editor: Editor): vo
 /** 根据当前链接命中态禁用顶部插入链接入口。 */
 function syncToolbarLinkInsertAvailability(
   toolbar: { readonly elements: { readonly controls: Partial<Record<JWordToolbarToolId, JWordToolbarControlElement>> } },
-  editor: Editor
+  editor: Editor,
+  readonly: boolean
 ): void {
   const control = toolbar.elements.controls['insert.link']
 
@@ -1564,7 +1646,7 @@ function syncToolbarLinkInsertAvailability(
     return
   }
 
-  const disabled = readActiveLinkDraftFromSelection(editor, editor.getSelection()) !== null
+  const disabled = readonly || readActiveLinkDraftFromSelection(editor, editor.getSelection()) !== null
 
   control.disabled = disabled
   control.setAttribute('aria-disabled', String(disabled))

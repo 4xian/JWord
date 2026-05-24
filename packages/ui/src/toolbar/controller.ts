@@ -21,8 +21,10 @@ import {
 } from '@4xian/jword-core'
 import type {
   CreateJWordUiOptions,
+  JWordReadonlyMode,
   JWordToolbarControlElement,
-  JWordToolbarElements
+  JWordToolbarElements,
+  JWordToolbarToolId
 } from '../types'
 import type { SelectionActionsColorFormatController } from '../selection-actions/types'
 import { createSelectionRebindSnapshot, restoreSelectionFromRebindSnapshot } from '../selection-rebind'
@@ -95,25 +97,36 @@ interface ToolbarControllerHandle {
 
 /** 创建并接管官方 toolbar。 */
 export function createToolbarController(options: CreateToolbarControllerOptions): ToolbarControllerHandle {
-  const toolbarConfig = resolveToolbarConfig(options.toolbar)
+  const toolbarHidden = options.toolbar === false
+  const previousToolbarHidden = options.toolbarHost.hidden
+  const toolbarConfig = resolveToolbarConfig(toolbarHidden
+    ? {
+        visibleTools: []
+      }
+    : options.toolbar)
   const dom = createToolbarDom(options.toolbarHost, toolbarConfig)
-  const mediaHost = options.media === undefined
+  if (toolbarHidden) {
+    options.toolbarHost.hidden = true
+  }
+  const mediaHost = options.media === undefined || toolbarHidden
     ? null
     : createToolbarExtensionHost(dom.bar, 'media')
-  const tableHost = options.table === undefined
+  const tableHost = options.table === undefined || toolbarHidden
     ? null
     : createToolbarExtensionHost(dom.bar, 'table')
-  const linkHost = options.link === undefined
+  const linkHost = options.link === undefined || toolbarHidden
     ? null
     : createToolbarExtensionHost(dom.bar, 'link')
-  const panelHost = options.headerFooter === undefined
+  const panelHost = toolbarHidden
+    || (options.headerFooter === undefined
     && options.headingOutline === undefined
     && options.findReplace === undefined
-    && options.revisions === undefined
+    && options.revisions === undefined)
     ? null
     : createToolbarExtensionHost(dom.bar, 'panel')
   const assistive = options.assistive
   const editor = options.editor
+  const readonlyMode = normalizeReadonlyMode(options.readonly)
   const signalController = new AbortController()
   let suppressSelectionAnnouncementsUntil = 0
   let suppressAfterToolbarTransaction = false
@@ -168,10 +181,97 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
   /** 只重绘 toolbar，不触发额外 assistive 副作用。 */
   function render(): void {
+    if (readonlyMode.enabled) {
+      renderToolbarState(dom, buildToolbarState(editor), null, {
+        headingOutline: false,
+        headingOutlineAvailable: readonlyMode.allowNavigation && readHeadingOutlineAvailable()
+      })
+
+      disableReadonlyToolbarControls()
+      return
+    }
+
     renderToolbarState(dom, buildToolbarState(editor), openColorPicker, {
       headingOutline: options.panelState?.headingOutline?.() === true,
       headingOutlineAvailable: readHeadingOutlineAvailable()
     })
+  }
+
+  /** 只读模式下禁用编辑入口。 */
+  function disableReadonlyToolbarControls(): void {
+    const editableToolIds = [
+      'history.undo',
+      'history.redo',
+      'document.pagePreset',
+      'document.findReplace',
+      'document.headingOutline',
+      'format.bold',
+      'format.italic',
+      'format.underline',
+      'format.strike',
+      'format.superscript',
+      'format.subscript',
+      'format.fontFamily',
+      'format.fontSize',
+      'format.fontSizeDecrease',
+      'format.fontSizeIncrease',
+      'format.textColor',
+      'format.backgroundColor',
+      'paragraph.alignment',
+      'paragraph.indentDecrease',
+      'paragraph.indentIncrease',
+      'paragraph.indentLeft',
+      'paragraph.lineHeight',
+      'paragraph.spacingBefore',
+      'paragraph.spacingAfter',
+      'paragraph.firstLineIndent',
+      'paragraph.hangingIndent',
+      'paragraph.style',
+      'paragraph.list',
+      'insert.comment',
+      'insert.link',
+      'document.headerFooter',
+      'document.footer',
+      'document.pageNumber',
+      'document.revisions'
+    ] as const
+
+    for (const toolId of editableToolIds) {
+      const control = dom.controls[toolId]
+
+      if (control !== undefined) {
+        if (readonlyMode.allowNavigation && isReadonlyNavigationTool(toolId)) {
+          continue
+        }
+
+        const disabled = true
+
+        control.disabled = disabled
+        syncReadonlyToolbarControlDisabledState(control, disabled)
+      }
+    }
+  }
+
+  /** 判断只读模式下由导航渲染状态自行决定的工具。 */
+  function isReadonlyNavigationTool(toolId: JWordToolbarToolId): boolean {
+    return toolId === 'document.findReplace' || toolId === 'document.headingOutline'
+  }
+
+  /** 同步只读禁用态到自绘 select / color 外层控件。 */
+  function syncReadonlyToolbarControlDisabledState(control: JWordToolbarControlElement, disabled: boolean): void {
+    if (control instanceof HTMLSelectElement) {
+      const trigger = control.parentElement?.querySelector<HTMLButtonElement>('.jw-toolbar__select-trigger')
+
+      control.parentElement?.setAttribute('data-jword-disabled', String(disabled))
+      if (trigger !== null && trigger !== undefined) {
+        trigger.disabled = disabled
+      }
+      return
+    }
+
+    if (control instanceof HTMLInputElement && control.type === 'color') {
+      control.parentElement?.setAttribute('data-jword-disabled', String(disabled))
+    }
   }
 
   /** 读取目录按钮当前是否有可打开的目录项。 */
@@ -295,10 +395,20 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       announce(readPagePresetAnnouncement(nextPreset, nextPageConfig), true)
     })
     bindToolbarButton(dom.controls['document.findReplace'], () => {
+      if (readonlyMode.enabled && !readonlyMode.allowNavigation) {
+        announce('当前为只读模式。')
+        return
+      }
+
       options.panelActions?.toggleFindReplace?.()
       render()
     }, { restoreEditorFocus: false })
     bindToolbarButton(dom.controls['document.headingOutline'], () => {
+      if (readonlyMode.enabled && !readonlyMode.allowNavigation) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (!readHeadingOutlineAvailable()) {
         render()
         return
@@ -308,22 +418,47 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       render()
     }, { restoreEditorFocus: false })
     bindToolbarButton(dom.controls['document.headerFooter'], (control) => {
+      if (readonlyMode.enabled) {
+        announce('当前为只读模式。')
+        return
+      }
+
       options.panelActions?.toggleHeaderFooter?.(control)
       render()
     }, { restoreEditorFocus: false })
     bindToolbarButton(dom.controls['document.footer'], (control) => {
+      if (readonlyMode.enabled) {
+        announce('当前为只读模式。')
+        return
+      }
+
       options.panelActions?.toggleFooter?.(control)
       render()
     }, { restoreEditorFocus: false })
     bindToolbarButton(dom.controls['document.pageNumber'], (control) => {
+      if (readonlyMode.enabled) {
+        announce('当前为只读模式。')
+        return
+      }
+
       options.panelActions?.togglePageNumber?.(control)
       render()
     }, { restoreEditorFocus: false })
     bindToolbarButton(dom.controls['document.revisions'], () => {
+      if (readonlyMode.enabled) {
+        announce('当前为只读模式。')
+        return
+      }
+
       options.panelActions?.toggleRevisions?.()
       render()
     }, { restoreEditorFocus: false })
     bindToolbarButton(dom.controls['insert.comment'], () => {
+      if (readonlyMode.enabled) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (options.insertActions?.openComment === undefined) {
         announce('BLOCKED: 当前宿主未启用批注侧栏。')
         return
@@ -332,6 +467,11 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       options.insertActions.openComment()
     }, { restoreEditorFocus: false })
     bindToolbarButton(dom.controls['insert.link'], () => {
+      if (readonlyMode.enabled) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (options.insertActions?.openLink === undefined) {
         announce('BLOCKED: 当前宿主未启用链接弹窗。')
         return
@@ -1094,6 +1234,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       unsubscribeEditor()
       assistive.liveRegion.destroy()
       assistive.textMirror?.destroy()
+      options.toolbarHost.hidden = previousToolbarHidden
       destroyToolbarDom(dom)
     }
   }
@@ -1333,6 +1474,28 @@ function collectSelectedParagraphs(editor: Editor, selection: SelectionState): r
   const endIndex = Math.max(anchorIndex, focusIndex)
 
   return paragraphs.slice(startIndex, endIndex + 1)
+}
+
+/** 规范化只读配置。 */
+function normalizeReadonlyMode(readonly: JWordReadonlyMode): Readonly<{ enabled: boolean, allowNavigation: boolean }> {
+  if (readonly === true) {
+    return {
+      enabled: true,
+      allowNavigation: true
+    }
+  }
+
+  if (readonly === false || readonly === undefined) {
+    return {
+      enabled: false,
+      allowNavigation: true
+    }
+  }
+
+  return {
+    enabled: readonly.enabled === true,
+    allowNavigation: readonly.allowNavigation !== false
+  }
 }
 
 /** 把 block 树拍平成文档顺序段落数组。 */

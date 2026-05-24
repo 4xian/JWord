@@ -42,6 +42,32 @@ interface SelectionVisualProbe {
   readonly selectionPixels: number
 }
 
+interface InitialFocusProbe {
+  readonly matches: boolean
+  readonly position: {
+    readonly sectionId: string
+    readonly blockId: string
+    readonly runId: string
+    readonly graphemeIndex: number
+  }
+  readonly expected: {
+    readonly sectionId: string
+    readonly blockId: string
+    readonly runId: string
+    readonly graphemeIndex: number
+  }
+}
+
+test('Gate 3 runtime seeds the first focus caret at the document tail by default', async ({ page }) => {
+  await page.goto('/')
+  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
+
+  await expect.poll(() => readInitialFocusProbe(page)).toMatchObject({
+    matches: true
+  })
+})
+
 test('Gate 3 runtime keyboard input updates projection, selection and undo/redo state', async ({ page }) => {
   await page.goto('/?fixture=gate2')
   await waitForGate3AlphaReady(page)
@@ -372,7 +398,7 @@ test('Gate 3 runtime composition chain defers insertion until compositionend and
 
   expect(compositionProbe.textBeforeEnd).toBe(beforeText)
   expect(compositionProbe.textAfterEnd.startsWith('你好Alpha toolbar sample')).toBe(true)
-  expect(compositionProbe.selectionSummary).toContain('2→2')
+  expect(compositionProbe.selectionDescription).toContain('2→2')
 })
 
 test('Gate 3 selector contract stays explicit for later toolbar integration', async ({ page }) => {
@@ -442,6 +468,58 @@ async function waitForGate3LargeFixtureReady(page: Page): Promise<void> {
   await expect.poll(async () => {
     return page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)
   }).toBeGreaterThan(0)
+}
+
+async function readInitialFocusProbe(page: Page): Promise<InitialFocusProbe | null> {
+  return page.evaluate(() => {
+    const demo = window.__jwordDemo
+    const selection = demo?.editor.getSelection() ?? null
+
+    if (demo === undefined || selection === null) {
+      return null
+    }
+
+    const projection = demo.editor.getProjection()
+    const position = demo.editor.resolveTextPosition(selection.focus)
+    const readRunTextLength = (run: { readonly inlines: readonly { readonly kind: string, readonly text?: string }[] }): number =>
+      [...run.inlines
+        .flatMap((inline) => inline.kind === 'text' && inline.text !== undefined ? [inline.text] : [])
+        .join('')].length
+
+    for (const section of [...projection.document.sections].reverse()) {
+      for (const block of [...section.blocks].reverse()) {
+        if (block.kind !== 'paragraph') {
+          continue
+        }
+
+        const run = [...block.runs].reverse().find((candidate) =>
+          candidate.inlines.some((inline) => inline.kind === 'text')
+        ) ?? block.runs.at(-1)
+
+        if (run === undefined) {
+          continue
+        }
+
+        const expected = {
+          sectionId: section.id,
+          blockId: block.id,
+          runId: run.id,
+          graphemeIndex: readRunTextLength(run)
+        }
+
+        return {
+          matches: position.sectionId === expected.sectionId
+            && position.blockId === expected.blockId
+            && position.runId === expected.runId
+            && position.graphemeIndex === expected.graphemeIndex,
+          position,
+          expected
+        }
+      }
+    }
+
+    return null
+  })
 }
 
 async function readPlainText(page: Page): Promise<string> {
@@ -981,12 +1059,12 @@ async function runCompositionSequence(
 ): Promise<Readonly<{
   textBeforeEnd: string
   textAfterEnd: string
-  selectionSummary: string
+  selectionDescription: string
 }>> {
   return page.evaluate(({ firstData, finalData }) => {
     const input = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
     const readText = (): string => document.querySelector<HTMLElement>('[data-jword-ui-text-mirror]')?.textContent ?? ''
-    const readSummary = (): string => {
+    const readSelectionDescription = (): string => {
       const demo = window.__jwordDemo
       const selection = demo?.editor.getSelection() ?? null
 
@@ -1036,7 +1114,7 @@ async function runCompositionSequence(
     return {
       textBeforeEnd,
       textAfterEnd: readText(),
-      selectionSummary: readSummary()
+      selectionDescription: readSelectionDescription()
     }
   }, {
     firstData: composingText,

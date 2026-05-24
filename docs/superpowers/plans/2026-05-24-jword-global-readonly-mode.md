@@ -204,7 +204,7 @@ const BLOCKED_EDIT_EVENTS = [
 - Modify: `packages/ui/src/types.ts`
 - Test: `packages/ui/test/readonly-interaction-guard.test.ts`
 
-- [ ] **Step 1: 写 focused test**
+- [x] **Step 1: 写 focused test**
 
 覆盖：
 
@@ -213,7 +213,7 @@ const BLOCKED_EDIT_EVENTS = [
 - toolbar controls disabled。
 - destroy 后恢复 toolbar hidden 和 textarea readOnly。
 
-- [ ] **Step 2: 实现 guard**
+- [x] **Step 2: 实现 guard**
 
 最小实现：
 
@@ -222,7 +222,7 @@ const BLOCKED_EDIT_EVENTS = [
 - capture 阻断 `BLOCKED_EDIT_EVENTS`。
 - `blockEdit()` 统一播报“当前为只读模式。”。
 
-- [ ] **Step 3: 运行 focused test**
+- [x] **Step 3: 运行 focused test**
 
 Run:
 
@@ -239,7 +239,7 @@ Expected: tests pass。
 - Modify: `packages/ui/src/mobile/readonly-preview.ts`
 - Test: `packages/ui/test/create-ui-paste-readonly.test.ts`
 
-- [ ] **Step 1: 写入口级 test**
+- [x] **Step 1: 写入口级 test**
 
 覆盖：
 
@@ -248,7 +248,7 @@ Expected: tests pass。
 - projection 不变。
 - `readonlyPreview.mobile` 现有测试仍通过。
 
-- [ ] **Step 2: 在 create-ui 创建 guard**
+- [x] **Step 2: 在 create-ui 创建 guard**
 
 规则：
 
@@ -256,11 +256,11 @@ Expected: tests pass。
 - 如果 `readonly` 是对象，按对象字段构造。
 - 如果没传，guard 为 disabled handle，避免其他 controller 判断 null。
 
-- [ ] **Step 3: 调整 mobile readonly preview**
+- [x] **Step 3: 调整 mobile readonly preview**
 
 移动预览继续保留移动 attribute 和 maxWidth 判断，但事件阻断和控件禁用复用 guard 能力，避免两套只读逻辑分叉。
 
-- [ ] **Step 4: 运行入口测试**
+- [x] **Step 4: 运行入口测试**
 
 Run:
 
@@ -279,28 +279,28 @@ Expected: tests pass。
 - Test: `packages/ui/test/toolbar-controller.test.ts`
 - Test: `packages/ui/test/selection-actions-controller.test.ts`
 
-- [ ] **Step 1: toolbar test**
+- [x] **Step 1: toolbar test**
 
 覆盖：
 
 - 只读下格式按钮、插入链接、批注、表格、图片、页眉页脚、页码禁用。
 - 目录按钮和查找按钮可按 `allowNavigation` 保持可用。
 
-- [ ] **Step 2: selection-actions test**
+- [x] **Step 2: selection-actions test**
 
 覆盖：
 
 - 只读下非折叠选区不显示浮动格式工具栏。
 - 只读下右键菜单不显示编辑动作。
 
-- [ ] **Step 3: 实现 controller 接入**
+- [x] **Step 3: 实现 controller 接入**
 
 规则：
 
 - 所有编辑 handler 开头调用 `if (!guard.canEdit()) { guard.blockEdit(); return }`。
 - 渲染层也根据 readonly 隐藏编辑工具，避免用户看到可点入口。
 
-- [ ] **Step 4: 运行 focused tests**
+- [x] **Step 4: 运行 focused tests**
 
 Run:
 
@@ -322,7 +322,7 @@ Expected: tests pass。
 - Modify: `packages/ui/src/header-footer/controller.ts`
 - Tests: existing focused tests under `packages/ui/test/`
 
-- [ ] **Step 1: 查找替换只读规则**
+- [x] **Step 1: 查找替换只读规则**
 
 只读下：
 
@@ -330,7 +330,7 @@ Expected: tests pass。
 - 替换、全部替换禁用。
 - overlay 高亮不受影响。
 
-- [ ] **Step 2: 表格/图片只读规则**
+- [x] **Step 2: 表格/图片只读规则**
 
 只读下：
 
@@ -338,7 +338,7 @@ Expected: tests pass。
 - 不显示 image handles / drag ghost / delete reset rotate。
 - 插入图片入口禁用。
 
-- [ ] **Step 3: 批注/链接/页眉页脚只读规则**
+- [x] **Step 3: 批注/链接/页眉页脚只读规则**
 
 只读下：
 
@@ -346,7 +346,7 @@ Expected: tests pass。
 - 链接可打开，不可插入、编辑、删除。
 - 页眉页脚和页码菜单不允许写入。
 
-- [ ] **Step 4: 运行 focused tests**
+- [x] **Step 4: 运行 focused tests**
 
 Run:
 
@@ -362,11 +362,11 @@ Expected: tests pass。
 - Create: `examples/vanilla/tests/gate4-readonly.e2e.ts`
 - Modify: `examples/vanilla/src/main.ts`
 
-- [ ] **Step 1: 增加 demo 测试入口**
+- [x] **Step 1: 增加 demo 测试入口**
 
 通过 query 参数或 `window.__jwordDemo` test hook 开启 readonly，不把只读模式做成第二套 demo。
 
-- [ ] **Step 2: 写 Playwright 测试**
+- [x] **Step 2: 写 Playwright 测试**
 
 覆盖：
 
@@ -376,7 +376,7 @@ Expected: tests pass。
 - 目录跳转和查找定位按 `allowNavigation` 规则工作。
 - 链接只允许打开，不允许编辑/删除。
 
-- [ ] **Step 3: 运行浏览器验证**
+- [x] **Step 3: 运行浏览器验证**
 
 Run:
 
@@ -388,7 +388,7 @@ Expected: tests pass。
 
 ### Task 6: 收口验证
 
-- [ ] **Step 1: UI typecheck**
+- [x] **Step 1: UI typecheck**
 
 Run:
 
@@ -398,7 +398,7 @@ pnpm --filter @4xian/jword-ui typecheck
 
 Expected: pass。
 
-- [ ] **Step 2: focused readonly matrix**
+- [x] **Step 2: focused readonly matrix**
 
 Run:
 
@@ -408,7 +408,7 @@ pnpm exec vitest run packages/ui/test/readonly-interaction-guard.test.ts package
 
 Expected: pass。
 
-- [ ] **Step 3: 真实浏览器 proof**
+- [x] **Step 3: 真实浏览器 proof**
 
 优先使用 Kimi WebBridge 或 Playwright Chromium，在真实页面验证：
 

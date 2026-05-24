@@ -15,6 +15,7 @@ import type {
   JWordMediaResource,
   JWordMediaUploadFile,
   JWordMediaUploadSource,
+  JWordReadonlyMode,
   JWordUiLiveRegionController
 } from '../types'
 import {
@@ -39,6 +40,7 @@ interface CreateMediaControllerOptions {
   readonly editor: Editor
   readonly host: HTMLElement
   readonly media: JWordMediaOptions
+  readonly readonly?: JWordReadonlyMode
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
@@ -57,6 +59,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   const commands = options.media.commands
   const liveRegion = options.assistive.liveRegion
   const signalController = new AbortController()
+  const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   let items: MediaPanelItemState[] = []
   let menuOpen = false
   let urlDialogOpen = false
@@ -85,11 +88,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   /** 用当前内存状态刷新 toolbar 图片入口。 */
   function refresh(): void {
     renderMediaPanel(dom, {
-      menuOpen,
-      urlDialogOpen,
+      menuOpen: readonlyMode ? false : menuOpen,
+      urlDialogOpen: readonlyMode ? false : urlDialogOpen,
       urlValue: urlDraft,
       urlError,
-      busy
+      busy: busy || readonlyMode
     })
   }
 
@@ -118,6 +121,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
 
   /** 打开 URL 弹框。 */
   function openUrlDialog(): void {
+    if (readonlyMode) {
+      announce('当前为只读模式。')
+      return
+    }
+
     menuOpen = false
     urlDialogOpen = true
     urlDraft = ''
@@ -231,6 +239,12 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
 
   /** 提交当前文件输入。 */
   function submitSelectedFile(file: JWordMediaUploadFile): void {
+    if (readonlyMode) {
+      announce('当前为只读模式。')
+      resetMediaFileInput(dom)
+      return
+    }
+
     const pendingItem = createPendingMediaPanelItem({
       source: {
         kind: 'file',
@@ -247,6 +261,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
 
   /** 提交当前 URL 输入。 */
   function submitCurrentUrl(): void {
+    if (readonlyMode) {
+      announce('当前为只读模式。')
+      return
+    }
+
     if (busy) {
       return
     }
@@ -295,6 +314,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   /** 绑定 toolbar 级事件。 */
   function bindEvents(): void {
     dom.triggerButton.addEventListener('click', () => {
+      if (readonlyMode) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (busy) {
         return
       }
@@ -303,6 +327,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
       refresh()
     }, { signal: signalController.signal })
     dom.fileActionButton.addEventListener('click', () => {
+      if (readonlyMode) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (busy) {
         return
       }
@@ -311,6 +340,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
       dom.fileInput.click()
     }, { signal: signalController.signal })
     dom.urlActionButton.addEventListener('click', () => {
+      if (readonlyMode) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (busy) {
         return
       }

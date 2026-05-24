@@ -19,6 +19,7 @@ import {
 } from '@4xian/jword-core'
 import { createFindReplaceDom, destroyFindReplaceDom } from './dom'
 import type { JWordFindReplacePanelElements } from '../types'
+import type { JWordReadonlyMode } from '../types'
 
 export interface CreateFindReplaceControllerOptions {
   readonly editor: Editor
@@ -26,6 +27,7 @@ export interface CreateFindReplaceControllerOptions {
   readonly editorHost?: HTMLElement
   readonly announce?: (message: string) => void
   readonly scrollToRange?: (range: TextRange) => void
+  readonly readonly?: JWordReadonlyMode
 }
 
 export interface FindReplaceControllerHandle {
@@ -45,6 +47,7 @@ export function createFindReplaceController(
 ): FindReplaceControllerHandle {
   const elements = createFindReplaceDom(options.host)
   const signalController = new AbortController()
+  const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   let matches: readonly FindTextMatch[] = []
   let activeIndex = -1
   let lastMessage = ''
@@ -210,12 +213,13 @@ export function createFindReplaceController(
 
     const hasQuery = elements.queryInput.value.trim().length > 0
     const hasMatches = matches.length > 0
+    const canReplace = !readonlyMode
 
     elements.findButton.disabled = !hasQuery
     elements.previousButton.disabled = !hasMatches
     elements.nextButton.disabled = !hasMatches
-    elements.replaceButton.disabled = !hasMatches
-    elements.replaceAllButton.disabled = !hasQuery
+    elements.replaceButton.disabled = !hasMatches || !canReplace
+    elements.replaceAllButton.disabled = !hasQuery || !canReplace
     elements.status.hidden = !hasMatches
     elements.status.textContent = hasMatches ? readMatchIndexText(matches.length, activeIndex) : ''
     syncOverlay(options, overlayState, matches, activeIndex, destroyed)

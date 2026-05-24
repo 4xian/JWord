@@ -46,6 +46,7 @@ export interface JWordDemoRevisionInput {
 declare global {
   interface Window {
     __jwordDemo?: Readonly<{
+      readonly readonly: boolean
       readonly editor: Editor
       readonly selectTextRange: (input: JWordDemoSelectionInput) => SelectionState
       readonly selectImageByResourceId: (resourceId: string) => void
@@ -77,6 +78,7 @@ declare global {
         readThreadCount(): number
       }
       readonly link: {
+        seedFirstRunLink(target: string): boolean
         readActiveLink(): {
           readonly target: string
           readonly tooltip?: string

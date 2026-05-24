@@ -122,6 +122,30 @@ describe('createJWordUi find replace integration', () => {
     }
   })
 
+  test('全局只读下允许查找定位但禁用替换动作', () => {
+    const harness = createHarness({
+      readonly: true
+    })
+
+    try {
+      const openButton = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-open-find-replace]')
+
+      expect(openButton?.disabled).toBe(false)
+
+      openButton?.click()
+      fillInput(harness.ui.elements.findReplacePanel!.queryInput, 'alpha')
+      fillInput(harness.ui.elements.findReplacePanel!.replacementInput, 'A')
+      harness.ui.elements.findReplacePanel!.findButton.click()
+
+      expect(harness.ui.elements.findReplacePanel!.status.textContent).toBe('1 / 2')
+      expect(harness.ui.elements.findReplacePanel!.replaceButton.disabled).toBe(true)
+      expect(harness.ui.elements.findReplacePanel!.replaceAllButton.disabled).toBe(true)
+      expect(readDocumentText(harness.editor)).toBe('alpha beta alpha')
+    } finally {
+      harness.destroy()
+    }
+  })
+
   test('外部点击和工具栏再次关闭都会清空查找替换草稿', () => {
     const harness = createHarness()
     const outsideTarget = document.createElement('button')
@@ -172,7 +196,7 @@ interface Harness {
 }
 
 /** 创建入口级 UI 测试环境。 */
-function createHarness(): Harness {
+function createHarness(options: { readonly?: boolean } = {}): Harness {
   const editorHost = document.createElement('div')
   const toolbarHost = document.createElement('div')
   const liveRegionHost = document.createElement('div')
@@ -186,6 +210,7 @@ function createHarness(): Harness {
     editorHost,
     toolbarHost,
     liveRegionHost,
+    ...(options.readonly === undefined ? {} : { readonly: options.readonly }),
     findReplace: {
       host: findReplaceHost
     }

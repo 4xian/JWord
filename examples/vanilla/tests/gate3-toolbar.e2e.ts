@@ -6,7 +6,7 @@
  * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 3 Step 3.8、3.9、3.10、3.12。
  */
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import type { RangeRef } from '@4xian/jword-core'
 
 interface ParagraphRenderProbe {
@@ -52,7 +52,9 @@ test('Gate 3 toolbar renders real controls and mirrors current selection state',
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
   await expect(page.getByRole('button', { name: '撤销' })).toBeDisabled()
   await expect(page.getByRole('button', { name: '重做' })).toBeDisabled()
-  await expect(page.locator('[data-jword-selection-summary]')).toContainText('无选区')
+  await expect(page.locator('[data-jword-selection-summary]')).toHaveCount(0)
+  await expect(page.locator('[data-jword-run-summary]')).toHaveCount(0)
+  await expect(page.locator('[data-jword-blocked-summary]')).toHaveCount(0)
 
   const mirrorLength = await page.evaluate(() =>
     document.querySelector<HTMLElement>('[data-jword-ui-text-mirror]')?.textContent?.length ?? 0
@@ -65,10 +67,10 @@ test('Gate 3 toolbar renders real controls and mirrors current selection state',
   await expect(textMirror).toContainText('English text')
   await expect(textMirror).toContainText('13579')
   await expect(page.getByRole('button', { name: '选择首页片段' })).toBeEnabled()
-  await expect(page.getByRole('button', { name: '减小字号' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '增大字号' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '减少缩进' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '增加缩进' })).toBeVisible()
+  await expect(readOfficialToolbar(page).getByRole('button', { name: '减小字号' })).toBeVisible()
+  await expect(readOfficialToolbar(page).getByRole('button', { name: '增大字号' })).toBeVisible()
+  await expect(readOfficialToolbar(page).getByRole('button', { name: '减少缩进' })).toBeVisible()
+  await expect(readOfficialToolbar(page).getByRole('button', { name: '增加缩进' })).toBeVisible()
   await expect(page.locator('[data-jword-paragraph-indent-left]')).toHaveCount(0)
   await expect.poll(() => readToolbarSelectTriggerIconCount(page, '[data-jword-paragraph-alignment]')).toBeGreaterThan(0)
   await expect.poll(() => readToolbarSelectTriggerIconCount(page, '[data-jword-paragraph-line-height]')).toBeGreaterThan(0)
@@ -87,9 +89,8 @@ test('Gate 3 toolbar renders real controls and mirrors current selection state',
 
   await page.getByRole('button', { name: '选择首页片段' }).click()
 
-  await expect(page.locator('[data-jword-selection-summary]')).toContainText('run-1')
-  await expect(page.getByRole('button', { name: '加粗' })).toBeEnabled()
-  await expect(page.getByRole('button', { name: '斜体' })).toBeEnabled()
+  await expect(readOfficialToolbar(page).getByRole('button', { name: '加粗' })).toBeEnabled()
+  await expect(readOfficialToolbar(page).getByRole('button', { name: '斜体' })).toBeEnabled()
   await expect(page.locator('[data-jword-live-region]')).toContainText('选区')
 })
 
@@ -99,7 +100,7 @@ test('Gate 3 toolbar toggles current run bold and supports undo redo', async ({ 
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
 
-  const boldButton = page.getByRole('button', { name: '加粗' })
+  const boldButton = readOfficialToolbar(page).getByRole('button', { name: '加粗' })
   const undoButton = page.getByRole('button', { name: '撤销' })
   const redoButton = page.getByRole('button', { name: '重做' })
 
@@ -144,15 +145,13 @@ test('Gate 3 toolbar reflects facade-driven selection updates without relying on
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
   await selectFirstFragmentRange(page)
-  await expect(page.locator('[data-jword-selection-summary]')).toContainText('run-1')
-  await expect(page.getByRole('button', { name: '加粗' })).toBeEnabled()
+  await expect(readOfficialToolbar(page).getByRole('button', { name: '加粗' })).toBeEnabled()
 
   await page.evaluate(() => {
     window.__jwordDemo?.editor.setSelection(null)
   })
 
-  await expect(page.locator('[data-jword-selection-summary]')).toContainText('无选区')
-  await expect(page.getByRole('button', { name: '加粗' })).toBeDisabled()
+  await expect(readOfficialToolbar(page).getByRole('button', { name: '加粗' })).toBeDisabled()
 })
 
 test('Gate 3 toolbar supports cross-run formatting through facade command builders', async ({ page }) => {
@@ -160,12 +159,12 @@ test('Gate 3 toolbar supports cross-run formatting through facade command builde
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
-  await page.getByRole('button', { name: '加粗' }).click()
+  await readOfficialToolbar(page).getByRole('button', { name: '加粗' }).click()
 
   await selectFirstParagraphAcrossRuns(page)
 
-  const boldButton = page.getByRole('button', { name: '加粗' })
-  const italicButton = page.getByRole('button', { name: '斜体' })
+  const boldButton = readOfficialToolbar(page).getByRole('button', { name: '加粗' })
+  const italicButton = readOfficialToolbar(page).getByRole('button', { name: '斜体' })
 
   await expect(boldButton).toHaveAttribute('aria-pressed', 'mixed')
   await expect(italicButton).toBeEnabled()
@@ -184,24 +183,21 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
 
-  const underlineButton = page.getByRole('button', { name: '下划线' })
-  const strikeButton = page.getByRole('button', { name: '删除线' })
-  const fontSizeDecreaseButton = page.getByRole('button', { name: '减小字号' })
-  const fontSizeIncreaseButton = page.getByRole('button', { name: '增大字号' })
+  const underlineButton = readOfficialToolbar(page).getByRole('button', { name: '下划线' })
+  const strikeButton = readOfficialToolbar(page).getByRole('button', { name: '删除线' })
+  const fontSizeDecreaseButton = readOfficialToolbar(page).getByRole('button', { name: '减小字号' })
+  const fontSizeIncreaseButton = readOfficialToolbar(page).getByRole('button', { name: '增大字号' })
   const fontFamilySelect = page.locator('[data-jword-format-font-family]')
   const fontSizeSelect = page.locator('[data-jword-format-font-size]')
   const textColorInput = page.locator('[data-jword-format-text-color]')
   const backgroundColorInput = page.locator('[data-jword-format-background-color]')
-  const runSummary = page.locator('[data-jword-run-summary]')
 
   await underlineButton.click()
   await expect(underlineButton).toHaveAttribute('aria-pressed', 'true')
-  await expect(runSummary).toContainText('U 开')
   expect(await readFirstRunStyle(page)).toEqual({ underline: true })
 
   await strikeButton.click()
   await expect(strikeButton).toHaveAttribute('aria-pressed', 'true')
-  await expect(runSummary).toContainText('S 开')
   expect(await readFirstRunStyle(page)).toEqual({
     underline: true,
     strike: true
@@ -210,7 +206,6 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
   await fontFamilySelect.selectOption('KaiTi')
   await expect(fontFamilySelect).toHaveValue('KaiTi')
   await expect(fontFamilySelect).toHaveAttribute('data-jword-state', 'value')
-  await expect(runSummary).toContainText('字体 KaiTi')
   expect(await readFirstRunStyle(page)).toEqual({
     underline: true,
     strike: true,
@@ -220,7 +215,6 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
   await fontSizeSelect.selectOption('360')
   await expect(fontSizeSelect).toHaveValue('360')
   await expect(fontSizeSelect).toHaveAttribute('data-jword-state', 'value')
-  await expect(runSummary).toContainText('字号 18 pt')
   expect(await readFirstRunStyle(page)).toEqual({
     underline: true,
     strike: true,
@@ -229,7 +223,6 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
   })
 
   await fontSizeDecreaseButton.click()
-  await expect(runSummary).toContainText('字号 16 pt')
   expect(await readFirstRunStyle(page)).toEqual({
     underline: true,
     strike: true,
@@ -238,7 +231,6 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
   })
 
   await fontSizeIncreaseButton.click()
-  await expect(runSummary).toContainText('字号 18 pt')
   expect(await readFirstRunStyle(page)).toEqual({
     underline: true,
     strike: true,
@@ -249,7 +241,6 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
   await applyColorValue(page, '[data-jword-format-text-color]', '#ff0000')
   await expect(textColorInput).toHaveValue('#ff0000')
   await expect(textColorInput).toHaveAttribute('data-jword-state', 'value')
-  await expect(runSummary).toContainText('字色 #ff0000')
   expect(await readFirstRunStyle(page)).toEqual({
     underline: true,
     strike: true,
@@ -261,7 +252,6 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
   await applyColorValue(page, '[data-jword-format-background-color]', '#00ff88')
   await expect(backgroundColorInput).toHaveValue('#00ff88')
   await expect(backgroundColorInput).toHaveAttribute('data-jword-state', 'value')
-  await expect(runSummary).toContainText('底色 #00ff88')
   expect(await readFirstRunStyle(page)).toEqual({
     underline: true,
     strike: true,
@@ -384,7 +374,6 @@ test('Gate 3 toolbar paragraph alignment dropdown changes real line geometry', a
   await selectFirstTwoParagraphs(page)
 
   const alignmentSelect = page.locator('[data-jword-paragraph-alignment]')
-  const runSummary = page.locator('[data-jword-run-summary]')
   const beforeProbe = await readFirstParagraphRenderProbe(page)
 
   await expect(alignmentSelect).toBeVisible()
@@ -395,7 +384,6 @@ test('Gate 3 toolbar paragraph alignment dropdown changes real line geometry', a
   })
 
   await expect(alignmentSelect).toHaveValue(selectedAlignment.value)
-  await expect(runSummary).toContainText('对齐 右对齐')
   await openToolbarSelectMenu(page, '[data-jword-paragraph-alignment]')
   await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-alignment]')).resolves.toContain('右对齐')
   await expect.poll(() => readFirstTwoParagraphProperties(page)).toEqual([
@@ -419,10 +407,9 @@ test('Gate 3 toolbar paragraph metric dropdowns update projection and layout geo
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await selectFirstTwoParagraphs(page)
 
-  const runSummary = page.locator('[data-jword-run-summary]')
   const beforeProbe = await readFirstParagraphRenderProbe(page)
-  const indentDecreaseButton = page.getByRole('button', { name: '减少缩进' })
-  const indentIncreaseButton = page.getByRole('button', { name: '增加缩进' })
+  const indentDecreaseButton = readOfficialToolbar(page).getByRole('button', { name: '减少缩进' })
+  const indentIncreaseButton = readOfficialToolbar(page).getByRole('button', { name: '增加缩进' })
 
   expect(beforeProbe.lineCount).toBeGreaterThan(1)
 
@@ -457,12 +444,6 @@ test('Gate 3 toolbar paragraph metric dropdowns update projection and layout geo
     labelAllOf: ['24 pt']
   })
 
-  await expect(runSummary).toContainText('行距 1.8')
-  await expect(runSummary).toContainText('左缩进 18 pt')
-  await expect(runSummary).toContainText('段前 6 pt')
-  await expect(runSummary).toContainText('段后 12 pt')
-  await expect(runSummary).toContainText('首行 18 pt')
-  await expect(runSummary).toContainText('悬挂 24 pt')
   await openToolbarSelectMenu(page, '[data-jword-paragraph-line-height]')
   await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-line-height]')).resolves.toContain('1.8')
 
@@ -507,7 +488,6 @@ test('Gate 3 toolbar paragraph style dropdown makes heading rendering visibly di
   await page.getByRole('button', { name: '选择首页片段' }).click()
 
   const styleSelect = page.locator('[data-jword-paragraph-style]')
-  const runSummary = page.locator('[data-jword-run-summary]')
   const beforeProbe = await readFirstParagraphRenderProbe(page)
 
   await expect(styleSelect).toBeVisible()
@@ -519,7 +499,6 @@ test('Gate 3 toolbar paragraph style dropdown makes heading rendering visibly di
   })
 
   await expect(styleSelect).toHaveValue(selectedStyle.value)
-  await expect(runSummary).toContainText('样式 标题 2')
   await openToolbarSelectMenu(page, '[data-jword-paragraph-style]')
   await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-style]')).resolves.toContain('标题 2')
 
@@ -547,7 +526,6 @@ test('Gate 3 toolbar paragraph list dropdown renders ordered and bullet variants
   await page.getByRole('button', { name: '选择首页片段' }).click()
 
   const listSelect = page.locator('[data-jword-paragraph-list]')
-  const runSummary = page.locator('[data-jword-run-summary]')
   const baselineProbe = await readFirstParagraphRenderProbe(page)
 
   await expect(listSelect).toBeVisible()
@@ -558,7 +536,6 @@ test('Gate 3 toolbar paragraph list dropdown renders ordered and bullet variants
   })
 
   await expect(listSelect).toHaveValue(orderedOption.value)
-  await expect(runSummary).toContainText('列表 编号列表 / 1级')
   await openToolbarSelectMenu(page, '[data-jword-paragraph-list]')
   await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-list]')).resolves.toContain('编号列表 1 级')
 
@@ -580,7 +557,6 @@ test('Gate 3 toolbar paragraph list dropdown renders ordered and bullet variants
   })
 
   await expect(listSelect).toHaveValue(bulletOption.value)
-  await expect(runSummary).toContainText('列表 项目符号列表 / 2级')
   await openToolbarSelectMenu(page, '[data-jword-paragraph-list]')
   await expect(readSelectedToolbarOption(page, '[data-jword-paragraph-list]')).resolves.toContain('项目符号列表 2 级')
 
@@ -1220,6 +1196,11 @@ async function finalizeColorValue(page: Page, selector: string, value: string): 
     node.value = nextValue as string
     node.dispatchEvent(new Event('change', { bubbles: true }))
   }, value)
+}
+
+/** 定位官方 toolbar，避免误命中浮动 selection toolbar 的同名按钮。 */
+function readOfficialToolbar(page: Page): Locator {
+  return page.locator('[data-jword-toolbar]')
 }
 
 async function waitForDemoReady(page: Page): Promise<void> {

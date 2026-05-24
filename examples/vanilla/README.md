@@ -5,7 +5,7 @@
 ## Current Scope
 
 - 使用 `@4xian/jword-core` 创建和挂载 Editor facade。
-- 使用 `@4xian/jword-ui` 装配官方 toolbar、summary、live region、assistive text mirror 和 Gate 4 第一版 media panel。
+- 使用 `@4xian/jword-ui` 装配官方 toolbar、live region、assistive text mirror 和 Gate 4 第一版 media panel。
 - 继续保持不使用 `contenteditable`，编辑能力仍走 hidden textarea + transaction pipeline。
 - 承担 demo-only 场景逻辑、fixture 切换和浏览器测试钩子。
 

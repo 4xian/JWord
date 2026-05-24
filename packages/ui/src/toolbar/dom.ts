@@ -23,12 +23,6 @@ import { createToolbarIcon, type ToolbarIconName } from './icons'
 import type { ToolbarState } from './state'
 import { wrapWithTooltip } from './tooltip'
 
-interface SummaryNodes {
-  readonly selectionSummary: HTMLElement | null
-  readonly runSummary: HTMLElement | null
-  readonly blockedSummary: HTMLElement | null
-}
-
 interface ControlParts {
   readonly wrapper: HTMLElement
   readonly control: JWordToolbarControlElement
@@ -83,23 +77,12 @@ export function createToolbarDom(host: HTMLElement, config: ResolvedToolbarConfi
     }
   }
 
-  const summaryNodes = config.showSummaries ? createSummaryNodes() : createEmptySummaries()
-
-  if (config.showSummaries) {
-    const summaryRow = createSummaryRow(summaryNodes)
-
-    host.append(summaryRow)
-  }
-
   return {
     host,
     bar,
     controls,
     destroyParts,
-    groups,
-    selectionSummary: summaryNodes.selectionSummary,
-    runSummary: summaryNodes.runSummary,
-    blockedSummary: summaryNodes.blockedSummary
+    groups
   }
 }
 
@@ -159,17 +142,6 @@ export function renderToolbarState(
   setSelectState(dom.controls['paragraph.style'], !state.paragraphFormatEnabled, state.paragraphStyleValue, state.paragraphStyleState)
   setSelectState(dom.controls['paragraph.list'], !state.paragraphFormatEnabled, state.paragraphListValue, state.paragraphListState)
 
-  if (dom.selectionSummary !== null) {
-    dom.selectionSummary.textContent = state.selectionSummary
-  }
-
-  if (dom.runSummary !== null) {
-    dom.runSummary.textContent = state.runSummary
-  }
-
-  if (dom.blockedSummary !== null) {
-    dom.blockedSummary.textContent = state.blockedSummary
-  }
 }
 
 /** 销毁 toolbar DOM。 */
@@ -676,59 +648,6 @@ function applyToolbarSelectSizing(wrapper: HTMLElement, definition: BuiltinToolD
   if (definition.menuMaxWidthPx !== undefined) {
     wrapper.style.setProperty('--jw-toolbar-select-menu-max-width', `${definition.menuMaxWidthPx}px`)
   }
-}
-
-/** 创建 summary 区域节点。 */
-function createSummaryNodes(): SummaryNodes {
-  const selectionSummary = document.createElement('span')
-  const runSummary = document.createElement('span')
-  const blockedSummary = document.createElement('span')
-
-  selectionSummary.className = 'jw-toolbar__meta'
-  selectionSummary.setAttribute('data-jword-selection-summary', 'true')
-  selectionSummary.setAttribute('aria-label', '当前选区状态')
-  runSummary.className = 'jw-toolbar__meta'
-  runSummary.setAttribute('data-jword-run-summary', 'true')
-  runSummary.setAttribute('aria-label', '当前格式状态')
-  blockedSummary.className = 'jw-toolbar__note'
-  blockedSummary.setAttribute('data-jword-blocked-summary', 'true')
-  blockedSummary.setAttribute('aria-label', '当前阻塞提示')
-
-  return {
-    selectionSummary,
-    runSummary,
-    blockedSummary
-  }
-}
-
-/** 创建关闭 summary 时的空节点占位。 */
-function createEmptySummaries(): SummaryNodes {
-  return {
-    selectionSummary: null,
-    runSummary: null,
-    blockedSummary: null
-  }
-}
-
-/** 创建 summary 行。 */
-function createSummaryRow(nodes: SummaryNodes): HTMLElement {
-  const row = document.createElement('div')
-
-  row.className = 'jw-toolbar__summary'
-
-  if (nodes.selectionSummary !== null) {
-    row.append(nodes.selectionSummary)
-  }
-
-  if (nodes.runSummary !== null) {
-    row.append(nodes.runSummary)
-  }
-
-  if (nodes.blockedSummary !== null) {
-    row.append(nodes.blockedSummary)
-  }
-
-  return row
 }
 
 /** 设置动作按钮状态。 */

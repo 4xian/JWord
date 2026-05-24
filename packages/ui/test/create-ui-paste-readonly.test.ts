@@ -11,7 +11,7 @@ import { createEditor, createSelectionState, type Editor, type Run } from '@4xia
 import { describe, expect, test, vi } from 'vitest'
 
 import { createJWordUi } from '../src/create-ui'
-import type { JWordReadonlyPreviewOptions } from '../src/types'
+import type { JWordReadonlyOptions, JWordReadonlyPreviewOptions } from '../src/types'
 
 describe('createJWordUi paste and mobile readonly preview integration', () => {
   test('会把安全 HTML 粘贴为富文本片段，危险 HTML 保留纯文本降级', () => {
@@ -91,6 +91,54 @@ describe('createJWordUi paste and mobile readonly preview integration', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  test('全局只读会阻断入口级编辑事件且不修改 projection', () => {
+    const harness = createHarness('ab', {
+      readonly: true
+    })
+
+    try {
+      const beforeProjection = JSON.stringify(harness.editor.getProjection())
+      const textarea = requireTextarea(harness.editorHost, '[data-jword-hidden-textarea]')
+      const bold = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-tool-id="format.bold"]')
+      const beforeInput = new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: 'x'
+      })
+      const paste = new Event('paste', {
+        bubbles: true,
+        cancelable: true
+      })
+      const cut = new Event('cut', {
+        bubbles: true,
+        cancelable: true
+      })
+      const contextmenu = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true
+      })
+
+      textarea.dispatchEvent(beforeInput)
+      textarea.dispatchEvent(paste)
+      textarea.dispatchEvent(cut)
+      harness.editorHost.dispatchEvent(contextmenu)
+
+      expect(harness.editorHost.getAttribute('data-jword-readonly')).toBe('true')
+      expect(harness.toolbarHost.hidden).toBe(true)
+      expect(textarea.readOnly).toBe(true)
+      expect(bold?.disabled).toBe(true)
+      expect(beforeInput.defaultPrevented).toBe(true)
+      expect(paste.defaultPrevented).toBe(true)
+      expect(cut.defaultPrevented).toBe(true)
+      expect(contextmenu.defaultPrevented).toBe(true)
+      expect(JSON.stringify(harness.editor.getProjection())).toBe(beforeProjection)
+      expect(readParagraphTexts(harness.editor)).toEqual(['ab'])
+    } finally {
+      harness.destroy()
+    }
+  })
 })
 
 interface Harness {
@@ -101,6 +149,7 @@ interface Harness {
 }
 
 interface HarnessOptions {
+  readonly readonly?: boolean | JWordReadonlyOptions
   readonly readonlyPreview?: JWordReadonlyPreviewOptions
 }
 
@@ -118,6 +167,7 @@ function createHarness(initialText: string, options: HarnessOptions = {}): Harne
     editorHost,
     toolbarHost,
     liveRegionHost,
+    ...(options.readonly === undefined ? {} : { readonly: options.readonly }),
     ...(options.readonlyPreview === undefined ? {} : { readonlyPreview: options.readonlyPreview })
   })
 

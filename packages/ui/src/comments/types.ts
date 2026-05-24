@@ -6,6 +6,8 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.8-4.10。
  */
 
+import type { JWordReadonlyMode } from '../types'
+
 /** 批注作者的最小身份快照。 */
 export interface JWordCommentUser {
   /** 稳定用户 ID。 */
@@ -162,6 +164,8 @@ export interface JWordCommentsViewContext {
   readonly permissions: JWordCommentPermissionOptions
   /** 创建时间格式化函数。 */
   readonly formatCreatedAt?: JWordCommentTimeFormatter | undefined
+  /** 是否处于全局只读模式。 */
+  readonly readonly?: boolean | undefined
 }
 
 /** 已解析的消息视图。 */
@@ -318,6 +322,8 @@ export interface CreateCommentsControllerOptions {
   readonly formatCreatedAt?: JWordCommentTimeFormatter | undefined
   /** 初始 thread 列表。 */
   readonly threads?: readonly JWordCommentThread[]
+  /** 全局只读配置。 */
+  readonly readonly?: JWordReadonlyMode
   /** 宿主 adapter。 */
   readonly adapter: JWordCommentsAdapter
 }

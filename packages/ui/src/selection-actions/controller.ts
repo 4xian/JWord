@@ -42,6 +42,7 @@ export function createSelectionActionsController(
   const canvasContainer = requireCanvasContainer(editorHost)
   const signalController = new AbortController()
   const liveRegion = options.assistive.liveRegion
+  const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   const stableContextSelection: StableContextSelectionState = {
     selection: null,
     linkSelection: null,
@@ -116,6 +117,11 @@ export function createSelectionActionsController(
       return
     }
 
+    if (readonlyMode) {
+      renderReadonlyState()
+      return
+    }
+
     const colorSelection = openColorPicker === null ? null : readFrozenColorSelection(openColorPicker)
 
     renderSelectionActionsDom(dom, buildSelectionActionsViewState({
@@ -135,6 +141,32 @@ export function createSelectionActionsController(
       hasLink: (selection) => insertActions?.hasLink?.(selection) ?? false,
       readLinkUrl: (selection) => insertActions?.readLinkUrl?.(selection) ?? null
     }))
+  }
+
+  /** 只读模式下只渲染最小状态。 */
+  function renderReadonlyState(): void {
+    dom.floatingToolbar.hidden = true
+    dom.contextMenu.hidden = true
+    dom.formatControls.bold.disabled = true
+    dom.formatControls.italic.disabled = true
+    dom.formatControls.underline.disabled = true
+    dom.formatControls.strike.disabled = true
+    dom.formatControls.insertLink.disabled = true
+    dom.formatControls.openLink.disabled = true
+    dom.formatControls.editLink.disabled = true
+    dom.formatControls.removeLink.disabled = true
+    dom.formatControls.textColor.disabled = true
+    dom.formatControls.backgroundColor.disabled = true
+    dom.contextControls.cut.disabled = true
+    dom.contextControls.copy.disabled = false
+    dom.contextControls.paste.disabled = true
+    dom.contextControls.pastePlainText.disabled = true
+    dom.contextControls.clear.disabled = true
+    dom.contextControls.insertLink.disabled = true
+    dom.contextControls.openLink.disabled = true
+    dom.contextControls.editLink.disabled = true
+    dom.contextControls.removeLink.disabled = true
+    dom.contextControls.insertComment.disabled = true
   }
 
   /** 同步当前 document.activeElement 是否仍在 editor 交互范围内。 */
@@ -535,6 +567,10 @@ export function createSelectionActionsController(
 
   /** 绑定浮动工具栏格式按钮与颜色输入。 */
   function bindToolbarActions(): void {
+    if (readonlyMode) {
+      return
+    }
+
     bindButton(dom.formatControls.bold, () => {
       toggleRunFormat(readActiveSelectionSnapshot(), 'bold')
     })
@@ -717,6 +753,10 @@ export function createSelectionActionsController(
 
   /** 绑定右键菜单动作。 */
   function bindContextMenuActions(): void {
+    if (readonlyMode) {
+      return
+    }
+
     bindButton(dom.contextControls.cut, () => {
       void cutStableSelection(cloneSelection(stableContextSelection.selection))
     })
@@ -789,6 +829,10 @@ export function createSelectionActionsController(
 
   /** 绑定 editor 生命周期、右键菜单、局部快捷键与失焦收口逻辑。 */
   function bindLifecycleEvents(): void {
+    if (readonlyMode) {
+      return
+    }
+
     hiddenTextarea.addEventListener('focus', () => {
       queueMicrotask(updateInteractiveFocus)
     }, { signal: signalController.signal })

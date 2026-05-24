@@ -106,6 +106,13 @@ export function renderLinkPanel(
 ): void {
   dom.quickTools.hidden = state.activeLink === null || !state.quickToolsVisible
   dom.dialog.hidden = state.dialog === null
+  dom.editLinkButton.hidden = state.readonly === true
+  dom.editLinkButton.disabled = state.readonly === true
+  dom.editLinkButton.style.display = state.readonly === true ? 'none' : ''
+  dom.removeLinkButton.hidden = state.readonly === true
+  dom.removeLinkButton.disabled = state.readonly === true
+  dom.removeLinkButton.style.display = state.readonly === true ? 'none' : ''
+  dom.openLinkButton.disabled = state.activeLink === null
 
   if (state.dialog === null) {
     dom.errorText.hidden = true

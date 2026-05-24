@@ -27,6 +27,7 @@ export type {
   JWordHeadingOutlineOptions,
   JWordHeadingOutlinePanelElements,
   JWordLinkOptions,
+  JWordReadonlyOptions,
   JWordReadonlyPreviewOptions,
   JWordRevisionPanelElements,
   JWordRevisionsOptions,

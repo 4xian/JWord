@@ -6,7 +6,7 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区浮层收尾项。
  */
 import type { Editor, SelectionState } from '@4xian/jword-core'
-import type { JWordSelectionActionElements, JWordUiLiveRegionController } from '../types'
+import type { JWordReadonlyMode, JWordSelectionActionElements, JWordUiLiveRegionController } from '../types'
 import type { ToolbarPressedState } from '../toolbar/state'
 
 /** 选区动作弹层的定位结果。 */
@@ -21,6 +21,7 @@ export interface CreateSelectionActionsControllerOptions {
   readonly editorHost: HTMLElement
   readonly colorFormat: SelectionActionsColorFormatController
   readonly insertActions?: SelectionActionsInsertController
+  readonly readonly?: JWordReadonlyMode
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }

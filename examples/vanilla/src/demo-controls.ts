@@ -23,6 +23,7 @@ interface DemoControlElements {
   readonly restoreGate2FixtureButton: HTMLButtonElement
   readonly selectSampleButton: HTMLButtonElement
   readonly clearSelectionButton: HTMLButtonElement
+  readonly openReadonlyExampleButton: HTMLButtonElement
 }
 
 interface DemoControlsHandle {
@@ -106,6 +107,14 @@ export function createDemoControls(input: CreateDemoControlsOptions): DemoContro
     { signal: signalController.signal }
   )
 
+  elements.openReadonlyExampleButton.addEventListener(
+    'click',
+    () => {
+      window.location.href = buildReadonlyExampleUrl(window.location.href)
+    },
+    { signal: signalController.signal }
+  )
+
   renderControlsState(input.editor, elements)
 
   return {
@@ -139,8 +148,24 @@ function queryDemoControlElements(host: HTMLElement): DemoControlElements {
       host,
       '[data-jword-clear-selection]',
       'JWord vanilla demo requires [data-jword-clear-selection].'
+    ),
+    openReadonlyExampleButton: requireButton(
+      host,
+      '[data-jword-open-readonly-example]',
+      'JWord vanilla demo requires [data-jword-open-readonly-example].'
     )
   }
+}
+
+/**
+ * 职责：基于当前 demo URL 构造全局只读示例入口。
+ */
+function buildReadonlyExampleUrl(currentHref: string): string {
+  const url = new URL(currentHref)
+
+  url.searchParams.set('readonly', 'true')
+
+  return `${url.pathname}${url.search}${url.hash}`
 }
 
 /**

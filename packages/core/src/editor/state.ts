@@ -23,6 +23,7 @@ import { DEFAULT_EDITOR_LABEL, DOCUMENT_CREATE_ORIGIN } from './constants'
 import { normalizeEditorUser } from './current-user'
 import type { EditorDocumentInput, EditorEvent, EditorEventListener, EditorOptions, MountedEditorDom, RenderReason } from './types'
 import type { EditorUser } from './types'
+import type { InitialFocusPosition } from './types'
 
 export abstract class JWordEditorState {
   protected readonly label: string
@@ -32,6 +33,7 @@ export abstract class JWordEditorState {
   protected readonly resourceAdapter: ResourceAdapter | undefined
   protected readonly resourceUrlPolicy: ResourceUrlPolicy | undefined
   protected readonly currentUser: EditorUser
+  protected readonly initialFocusPosition: InitialFocusPosition
   protected pageConfig: PageConfig
   protected readonly fontManager = createFontManager()
   protected readonly layoutOptions: LayoutOptions
@@ -67,6 +69,7 @@ export abstract class JWordEditorState {
   constructor(options?: EditorOptions) {
     this.label = options?.label ?? DEFAULT_EDITOR_LABEL
     this.currentUser = normalizeEditorUser(options?.currentUser)
+    this.initialFocusPosition = options?.initialFocusPosition ?? 'end'
     this.pageConfig = createPageConfig(options?.page)
     this.resourceAdapter = options?.resourceAdapter
     this.resourceUrlPolicy = options?.resourceUrlPolicy

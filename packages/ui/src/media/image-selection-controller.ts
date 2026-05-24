@@ -18,7 +18,7 @@ import {
 } from '@4xian/jword-core'
 import type { DocumentProjection } from '@4xian/jword-core'
 import { createToolbarIcon } from '../toolbar/icons'
-import type { JWordMediaCommandAdapter, JWordSelectedImageTarget } from '../types'
+import type { JWordMediaCommandAdapter, JWordReadonlyMode, JWordSelectedImageTarget } from '../types'
 
 type ResizeHandleId =
   | 'top-left'
@@ -34,6 +34,7 @@ interface CreateImageSelectionControllerOptions {
   readonly editor: Editor
   readonly editorHost: HTMLElement
   readonly commands: JWordMediaCommandAdapter | undefined
+  readonly readonly?: JWordReadonlyMode
 }
 
 interface ImageSelectionControllerHandle {
@@ -135,6 +136,7 @@ export function createImageSelectionController(
 
   const dom = createImageSelectionDom(canvasContainer)
   const signalController = new AbortController()
+  const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   let currentSnapshot: ImageSelectionSnapshot | null = null
   let resizeSession: ResizeSession | null = null
   let dragGhostSession: DragGhostSession | null = null
@@ -172,6 +174,13 @@ export function createImageSelectionController(
   /** 刷新 overlay 的显隐、位置和按钮状态。 */
   function refresh(): void {
     resizeLayer(dom.layer, canvasContainer)
+
+    if (readonlyMode) {
+      resizeSession = null
+      dragDropPreview = null
+      hideSelection(dom)
+      return
+    }
 
     const snapshot = readCurrentSnapshot()
 

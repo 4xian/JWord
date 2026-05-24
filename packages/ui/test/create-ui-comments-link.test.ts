@@ -477,6 +477,27 @@ describe('createJWordUi comments and link integration', () => {
       harness.destroy()
     }
   })
+
+  test('全局只读下会阻断批注和链接写入入口', async () => {
+    const harness = createHarness('abcdef', {
+      readonly: true
+    })
+
+    try {
+      harness.editor.setSelection(createSelection(harness.editor, 1, 4))
+      getRequiredButton(harness.toolbarHost, '[data-jword-insert-comment]').click()
+      getRequiredButton(harness.toolbarHost, '[data-jword-insert-link]').click()
+
+      expect(harness.editor.getProjection().document.comments?.length ?? 0).toBe(0)
+      expect(getRequiredElement(requireCommentsHost(harness), '[data-jword-comments-sidebar="true"] .jw-comments-sidebar__composer').hidden).toBe(true)
+      expect(getRequiredElement(harness.linkHost, '[data-jword-link-dialog]').hidden).toBe(true)
+      expect(getRequiredButton(harness.toolbarHost, '[data-jword-insert-comment]').disabled).toBe(true)
+      expect(getRequiredButton(harness.toolbarHost, '[data-jword-insert-link]').disabled).toBe(true)
+    } finally {
+      await Promise.resolve()
+      harness.destroy()
+    }
+  })
 })
 
 interface Harness {
@@ -490,6 +511,7 @@ interface Harness {
 
 interface HarnessOptions {
   readonly comments?: true | JWordCommentsOptions
+  readonly readonly?: boolean
 }
 
 /** 创建挂载 editor、toolbar、comments 与 link 的最小测试环境。 */
@@ -532,6 +554,7 @@ function createHarness(initialText: string, options: HarnessOptions = {}): Harne
       }
     },
     comments: options.comments ?? (commentsHost === null ? true : { host: commentsHost }),
+    ...(options.readonly === undefined ? {} : { readonly: options.readonly }),
     link: {
       host: linkHost
     }

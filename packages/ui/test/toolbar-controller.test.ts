@@ -92,7 +92,6 @@ describe('toolbar controller focus restore', () => {
       expect(document.activeElement).toBe(textarea)
       expect(superscript?.getAttribute('aria-pressed')).toBe('true')
       expect(subscript?.getAttribute('aria-pressed')).toBe('false')
-      expect(toolbarHost.querySelector('[data-jword-run-summary]')?.textContent).toContain('上标 开')
       expect(readFirstParagraphRunProperties(editor)).toBeUndefined()
 
       subscript?.focus()
@@ -102,7 +101,6 @@ describe('toolbar controller focus restore', () => {
       expect(document.activeElement).toBe(textarea)
       expect(superscript?.getAttribute('aria-pressed')).toBe('false')
       expect(subscript?.getAttribute('aria-pressed')).toBe('true')
-      expect(toolbarHost.querySelector('[data-jword-run-summary]')?.textContent).toContain('下标 开')
       expect(readFirstParagraphRunProperties(editor)).toBeUndefined()
 
       controller.destroy()

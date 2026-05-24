@@ -14,6 +14,22 @@ import { createToolbarDom, destroyToolbarDom, renderToolbarState } from '../src/
 import type { ToolbarState } from '../src/toolbar/state'
 
 describe('toolbar select dom', () => {
+  test('does not render legacy toolbar summary nodes', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.bold']
+    }))
+
+    try {
+      expect(host.querySelector('[data-jword-selection-summary]')).toBeNull()
+      expect(host.querySelector('[data-jword-run-summary]')).toBeNull()
+      expect(host.querySelector('[data-jword-blocked-summary]')).toBeNull()
+      expect(host.querySelector('.jw-toolbar__summary')).toBeNull()
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
   test('renders superscript and subscript buttons as regular toggle tools', () => {
     const host = document.createElement('div')
     const dom = createToolbarDom(host, resolveToolbarConfig({
@@ -336,9 +352,6 @@ function createToolbarState(overrides: Partial<ToolbarState> = {}): ToolbarState
     paragraphStyleState: 'value',
     paragraphListValue: 'none',
     paragraphListState: 'value',
-    selectionSummary: '',
-    runSummary: '',
-    blockedSummary: '',
     ...overrides
   }
 }

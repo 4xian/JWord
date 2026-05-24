@@ -35,7 +35,8 @@ export type {
   EditorRichTextRun,
   EditorTextAnchorInput,
   EditorUser,
-  EditorUserInput
+  EditorUserInput,
+  InitialFocusPosition
 } from './editor/runtime'
 export { createEditor } from './editor/runtime'
 export { JWordError } from './shared/errors'

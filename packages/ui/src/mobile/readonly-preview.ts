@@ -5,12 +5,15 @@
  * 性能/安全约束：只在移动媒体查询命中时启用，销毁时恢复本模块写入的 DOM 状态。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-416。
  */
+import { createJWordInteractionGuard } from '../readonly/interaction-guard'
+import type { JWordInteractionGuard } from '../readonly/interaction-guard'
 import type { JWordToolbarControlElement, JWordToolbarToolId, JWordUiLiveRegionController } from '../types'
 
 export interface CreateMobileReadonlyPreviewOptions {
   readonly editorHost: HTMLElement
   readonly toolbarHost: HTMLElement
   readonly controls: Partial<Record<JWordToolbarToolId, JWordToolbarControlElement>>
+  readonly interactionGuard?: JWordInteractionGuard
   readonly enabled?: boolean
   readonly maxWidthPx?: number
   readonly assistive: {
@@ -25,30 +28,27 @@ interface MobileReadonlyPreviewHandle {
 }
 
 const DEFAULT_MOBILE_MAX_WIDTH_PX = 640
-const BLOCKED_EVENTS = [
-  'beforeinput',
-  'input',
-  'paste',
-  'cut',
-  'drop',
-  'keydown',
-  'contextmenu',
-  'dblclick'
-] as const
 
 /** 创建移动端只读分页预览控制器。 */
 export function createMobileReadonlyPreview(options: CreateMobileReadonlyPreviewOptions): MobileReadonlyPreviewHandle {
-  const signalController = new AbortController()
   const canvasContainer = options.editorHost.querySelector<HTMLElement>('[data-jword-canvas-container]')
-  const hiddenTextarea = options.editorHost.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
   const active = options.enabled === true && matchesMobileViewport(options.maxWidthPx ?? DEFAULT_MOBILE_MAX_WIDTH_PX)
   const previousCanvasCursor = canvasContainer?.style.cursor ?? ''
-  const previousTextareaReadOnly = hiddenTextarea?.readOnly ?? false
   const previousToolbarHidden = options.toolbarHost.hidden
+  const ownsGuard = options.interactionGuard === undefined
+  let interactionGuard: JWordInteractionGuard | null = null
 
   if (active) {
-    applyReadonlyPreview(options, canvasContainer, hiddenTextarea)
-    bindReadonlyEvents(options, signalController)
+    applyReadonlyPreview(options, canvasContainer)
+    interactionGuard = options.interactionGuard ?? createJWordInteractionGuard({
+      editorHost: options.editorHost,
+      toolbarHost: options.toolbarHost,
+      controls: options.controls,
+      readonly: {
+        enabled: true
+      },
+      assistive: options.assistive
+    })
   }
 
   return {
@@ -59,7 +59,9 @@ export function createMobileReadonlyPreview(options: CreateMobileReadonlyPreview
       }
     },
     destroy(): void {
-      signalController.abort()
+      if (ownsGuard) {
+        interactionGuard?.destroy()
+      }
 
       if (!active) {
         return
@@ -73,11 +75,6 @@ export function createMobileReadonlyPreview(options: CreateMobileReadonlyPreview
       if (canvasContainer !== null && canvasContainer !== undefined) {
         canvasContainer.style.cursor = previousCanvasCursor
       }
-
-      if (hiddenTextarea !== null && hiddenTextarea !== undefined) {
-        hiddenTextarea.readOnly = previousTextareaReadOnly
-        hiddenTextarea.removeAttribute('aria-readonly')
-      }
     }
   }
 }
@@ -85,46 +82,15 @@ export function createMobileReadonlyPreview(options: CreateMobileReadonlyPreview
 /** 应用移动只读预览 DOM 状态。 */
 function applyReadonlyPreview(
   options: CreateMobileReadonlyPreviewOptions,
-  canvasContainer: HTMLElement | null,
-  hiddenTextarea: HTMLTextAreaElement | null
+  canvasContainer: HTMLElement | null
 ): void {
   options.editorHost.setAttribute('data-jword-mobile-readonly-preview', 'true')
-  options.toolbarHost.hidden = true
 
   if (canvasContainer !== null) {
     canvasContainer.setAttribute('data-jword-mobile-readonly-preview', 'true')
     canvasContainer.setAttribute('aria-readonly', 'true')
     canvasContainer.style.cursor = 'default'
   }
-
-  if (hiddenTextarea !== null) {
-    hiddenTextarea.readOnly = true
-    hiddenTextarea.setAttribute('aria-readonly', 'true')
-  }
-
-  disableToolbarControls(options.controls)
-}
-
-/** 绑定只读预览需要阻断的编辑事件。 */
-function bindReadonlyEvents(
-  options: CreateMobileReadonlyPreviewOptions,
-  signalController: AbortController
-): void {
-  for (const type of BLOCKED_EVENTS) {
-    options.editorHost.addEventListener(type, (event) => {
-      preventReadonlyEdit(event, options.assistive.liveRegion)
-    }, {
-      capture: true,
-      signal: signalController.signal
-    })
-  }
-}
-
-/** 阻止移动只读预览中的编辑事件。 */
-function preventReadonlyEdit(event: Event, liveRegion: JWordUiLiveRegionController | null): void {
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  liveRegion?.announce('移动端当前为只读分页预览。', { force: true })
 }
 
 /** 禁用 toolbar 控件，避免移动只读模式暴露完整编辑入口。 */

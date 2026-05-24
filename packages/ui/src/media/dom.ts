@@ -124,6 +124,7 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
 
 /** 根据当前状态重绘 toolbar 图片入口。 */
 export function renderMediaPanel(dom: MediaPanelDom, state: MediaToolbarViewState): void {
+  dom.triggerButton.disabled = state.busy
   dom.triggerButton.setAttribute('aria-expanded', String(state.menuOpen))
   dom.triggerButton.setAttribute('data-jword-open', String(state.menuOpen))
   dom.menu.hidden = !state.menuOpen

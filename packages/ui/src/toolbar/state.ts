@@ -27,9 +27,6 @@ import {
   FONT_FAMILY_MIXED_VALUE,
   FONT_SIZE_EMPTY_VALUE,
   FONT_SIZE_MIXED_VALUE,
-  readParagraphAlignmentLabel,
-  readParagraphListKindLabel,
-  readParagraphStyleLabel,
   stringifyParagraphListSelectValue,
   TOOLBAR_SELECT_EMPTY_VALUE,
   TOOLBAR_SELECT_MIXED_VALUE
@@ -82,9 +79,6 @@ export interface ToolbarState {
   readonly paragraphStyleState: ToolbarValueState
   readonly paragraphListValue: string
   readonly paragraphListState: ToolbarValueState
-  readonly selectionSummary: string
-  readonly runSummary: string
-  readonly blockedSummary: string
 }
 
 interface SelectionEndpointContext {
@@ -175,10 +169,7 @@ export function buildToolbarState(editor: Editor): ToolbarState {
     paragraphStyleValue: paragraphStyle.value,
     paragraphStyleState: paragraphStyle.state,
     paragraphListValue: paragraphList.value,
-    paragraphListState: paragraphList.state,
-    selectionSummary: readSelectionSummary(context, selection),
-    runSummary: readRunSummary(formattingState),
-    blockedSummary: readBlockedSummary(editor.getLayout().pages.length, context, formattingState)
+    paragraphListState: paragraphList.state
   }
 }
 
@@ -483,82 +474,6 @@ function readSelectionEndpoint(endpoint: SelectionEndpointContext): string {
   return `${endpoint.paragraphId} / ${endpoint.runId} / ${endpoint.graphemeIndex}`
 }
 
-/** 生成格式摘要文本。 */
-function readRunSummary(formattingState: SelectionFormattingState): string {
-  if (formattingState.run === null || formattingState.paragraph === null) {
-    return '当前格式：未定位'
-  }
-
-  return [
-    `B ${readFormattingToken(formattingState.run.bold, '开', '关')}`,
-    `I ${readFormattingToken(formattingState.run.italic, '开', '关')}`,
-    `U ${readFormattingToken(formattingState.run.underline, '开', '关')}`,
-    `S ${readFormattingToken(formattingState.run.strike, '开', '关')}`,
-    `上标 ${readFormattingToken(formattingState.run.superscript, '开', '关')}`,
-    `下标 ${readFormattingToken(formattingState.run.subscript, '开', '关')}`,
-    `字体 ${readStringFormattingToken(formattingState.run.fontFamily, '默认')}`,
-    `字号 ${readNumberFormattingToken(formattingState.run.fontSizeTwips, '默认', formatFontSizeTwips)}`,
-    `字色 ${readStringFormattingToken(formattingState.run.color, '默认')}`,
-    `底色 ${readStringFormattingToken(formattingState.run.backgroundColor, '默认')}`,
-    `对齐 ${readParagraphAlignmentFormattingToken(formattingState.paragraph.alignment, '默认')}`,
-    `行距 ${readNumberFormattingToken(formattingState.paragraph.lineHeight, '默认', formatLineHeight)}`,
-    `左缩进 ${readNumberFormattingToken(formattingState.paragraph.indentLeftTwips, '0 pt', formatIndentTwips)}`,
-    `段前 ${readNumberFormattingToken(formattingState.paragraph.spacingBeforeTwips, '0 pt', formatIndentTwips)}`,
-    `段后 ${readNumberFormattingToken(formattingState.paragraph.spacingAfterTwips, '0 pt', formatIndentTwips)}`,
-    `首行 ${readNumberFormattingToken(formattingState.paragraph.firstLineIndentTwips, '0 pt', formatIndentTwips)}`,
-    `悬挂 ${readNumberFormattingToken(formattingState.paragraph.hangingIndentTwips, '0 pt', formatIndentTwips)}`,
-    `样式 ${readParagraphStyleFormattingToken(formattingState.paragraph.styleId, '默认')}`,
-    `列表 ${readParagraphListFormattingToken(formattingState.paragraph.list)}`
-  ].join(' / ')
-}
-
-/** 生成 blocked summary。 */
-function readBlockedSummary(
-  mountedPageCount: number,
-  context: SelectionContext | null,
-  formattingState: SelectionFormattingState
-): string {
-  if (mountedPageCount > 4) {
-    return 'Gate 2 的 50 页夹具仍用于分页验证；toolbar 交互请先切到 Alpha 样例。最小缺口是 core 需要把大文档 selection/render 热路径降到可交互级别。'
-  }
-
-  if (context === null) {
-    return '当前已接通 facade-driven 基础格式、颜色和段落下拉控件；请先选择片段后再格式化。'
-  }
-
-  if (hasMixedFormattingState(formattingState)) {
-    return '当前选区已覆盖多个 run 或段落；toolbar 会直接显示 mixed，并把下一次格式命令统一归一到整个选区上。'
-  }
-
-  return '当前已可通过同一 Editor Facade 执行键盘输入、IME 合成、纯文本剪贴板、真实 pointer selection 与基础格式命令；剩余缺口主要在跨平台实机输入证据与 Alpha 性能达标。'
-}
-
-/** 判断当前 formatting state 是否含 mixed。 */
-function hasMixedFormattingState(formattingState: SelectionFormattingState): boolean {
-  return formattingState.run !== null && (
-    formattingState.run.bold.mixed
-      || formattingState.run.italic.mixed
-      || formattingState.run.underline.mixed
-      || formattingState.run.strike.mixed
-      || formattingState.run.superscript.mixed
-      || formattingState.run.subscript.mixed
-      || formattingState.run.fontFamily.mixed
-      || formattingState.run.fontSizeTwips.mixed
-      || formattingState.run.color.mixed
-      || formattingState.run.backgroundColor.mixed
-  ) || formattingState.paragraph !== null && (
-    formattingState.paragraph.alignment.mixed
-      || formattingState.paragraph.indentLeftTwips.mixed
-      || formattingState.paragraph.lineHeight.mixed
-      || formattingState.paragraph.spacingBeforeTwips.mixed
-      || formattingState.paragraph.spacingAfterTwips.mixed
-      || formattingState.paragraph.firstLineIndentTwips.mixed
-      || formattingState.paragraph.hangingIndentTwips.mixed
-      || formattingState.paragraph.styleId.mixed
-      || formattingState.paragraph.list.mixed
-  )
-}
-
 /** 读取按钮按压态。 */
 function readPressedState(value: FormattingStateValue<boolean> | null): ToolbarPressedState {
   if (value === null) {
@@ -738,132 +653,4 @@ function readParagraphListSelectState(
     value: normalizedValue,
     state: normalizedValue === TOOLBAR_SELECT_EMPTY_VALUE ? 'empty' : 'value'
   }
-}
-
-/** 把格式值转换成摘要 token。 */
-function readFormattingToken<Value>(
-  value: FormattingStateValue<Value>,
-  activeLabel: string | undefined,
-  inactiveLabel: string
-): string {
-  if (value.mixed) {
-    return '混合'
-  }
-
-  if (value.value === undefined) {
-    return inactiveLabel
-  }
-
-  if (typeof value.value === 'boolean') {
-    return value.value ? (activeLabel ?? '开') : inactiveLabel
-  }
-
-  return String(value.value)
-}
-
-/** 把字符串格式值转换成摘要 token。 */
-function readStringFormattingToken(
-  value: FormattingStateValue<string | ParagraphAlignment>,
-  emptyLabel: string
-): string {
-  if (value.mixed) {
-    return '混合'
-  }
-
-  return value.value === undefined ? emptyLabel : value.value
-}
-
-/**
- * 把可空字符串格式值转换成摘要 token。
- */
-function readNullableStringFormattingToken(
-  value: FormattingStateValue<string | null>,
-  emptyLabel: string
-): string {
-  if (value.mixed) {
-    return '混合'
-  }
-
-  return value.value === undefined || value.value === null
-    ? emptyLabel
-    : value.value
-}
-
-/** 把段落对齐格式值转换成中文摘要 token。 */
-function readParagraphAlignmentFormattingToken(
-  value: FormattingStateValue<ParagraphAlignment>,
-  emptyLabel: string
-): string {
-  if (value.mixed) {
-    return '混合'
-  }
-
-  if (value.value === undefined) {
-    return emptyLabel
-  }
-
-  return readParagraphAlignmentLabel(value.value) ?? value.value
-}
-
-/** 把段落样式格式值转换成中文摘要 token。 */
-function readParagraphStyleFormattingToken(
-  value: FormattingStateValue<string | null>,
-  emptyLabel: string
-): string {
-  if (value.mixed) {
-    return '混合'
-  }
-
-  if (value.value === undefined || value.value === null) {
-    return emptyLabel
-  }
-
-  return readParagraphStyleLabel(value.value) ?? value.value
-}
-
-/** 把数字格式值转换成摘要 token。 */
-function readNumberFormattingToken(
-  value: FormattingStateValue<number>,
-  emptyLabel: string,
-  formatter: (value: number) => string
-): string {
-  if (value.mixed) {
-    return '混合'
-  }
-
-  return value.value === undefined ? emptyLabel : formatter(value.value)
-}
-
-/** 把字号 twips 转成 pt 文案。 */
-function formatFontSizeTwips(value: number): string {
-  const points = value / 20
-
-  return Number.isInteger(points) ? `${points} pt` : `${points.toFixed(1)} pt`
-}
-
-/**
- * 把行距值转成摘要文案。
- */
-function formatLineHeight(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2)
-}
-
-/** 把缩进 twips 转成 pt 文案。 */
-function formatIndentTwips(value: number): string {
-  return `${(value / 20).toFixed(value % 20 === 0 ? 0 : 1)} pt`
-}
-
-/**
- * 把稳定列表语义转换成 toolbar 摘要文案。
- */
-function readParagraphListFormattingToken(value: FormattingStateValue<ParagraphList | null>): string {
-  if (value.mixed) {
-    return '混合'
-  }
-
-  if (value.value === undefined || value.value === null) {
-    return '无'
-  }
-
-  return `${readParagraphListKindLabel(value.value.numberingId)} / ${value.value.level}级`
 }

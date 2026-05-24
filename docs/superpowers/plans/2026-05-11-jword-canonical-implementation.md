@@ -241,11 +241,11 @@
 ### Gate 3 补充收尾（不阻塞 Gate 4 主线）
 
 - [x] Step 3.14：补齐 run format v1：上标、下标；要求 command、toolbar 状态、undo/redo 与 projection 落地一致。
-  - 完成 2026-05-18：上标、下标的 command builder、Editor facade、public export 与 toolbar summary 已闭环；定点 Vitest 已覆盖 command/projection/facade/undo-redo，Kimi 浏览器实测 `toggleSuperscript()` 与 `toggleSubscript()` 互斥生效，`[data-jword-run-summary]` 同步显示 `上标 关 / 下标 开`。
+  - 完成 2026-05-18：上标、下标的 command builder、Editor facade、public export 与 toolbar 状态已闭环；定点 Vitest 已覆盖 command/projection/facade/undo-redo，Kimi 浏览器实测 `toggleSuperscript()` 与 `toggleSubscript()` 互斥生效。
 - [x] Step 3.15：补齐 paragraph format v1：行距、段前、段后、首行缩进、悬挂缩进；要求 command -> projection -> layout -> toolbar 状态闭环。
-  - 完成 2026-05-18：行距、段前、段后、首行缩进、悬挂缩进已串通 `command -> projection -> layout -> toolbar`；Kimi 浏览器实测 `1.8 / 120 / 180 / 360 / 480` 会准确回读到 `getSelectionFormattingState()` 与 `[data-jword-run-summary]`。
+  - 完成 2026-05-18：行距、段前、段后、首行缩进、悬挂缩进已串通 `command -> projection -> layout -> toolbar`；Kimi 浏览器实测 `1.8 / 120 / 180 / 360 / 480` 会准确回读到 `getSelectionFormattingState()`。
 - [x] Step 3.16：补齐 structure/style baseline：有序列表、无序列表、基础多级列表、Heading 1-3；目录与 docx numbering/outline 后续只消费这套稳定语义，不直接从纯文本猜测结构。
-  - 完成 2026-05-18：`paragraph.styleId` / `paragraph.list` 的稳定语义已打通 projection、formatting state、Editor facade 与 public export；Kimi 浏览器实测 `Heading2 + jword-list-ordered / L1` 与 `Heading3 + jword-list-bullet / L2` 都能稳定回读到 `getSelectionFormattingState()` 与 `[data-jword-run-summary]`。
+  - 完成 2026-05-18：`paragraph.styleId` / `paragraph.list` 的稳定语义已打通 projection、formatting state、Editor facade 与 public export；Kimi 浏览器实测 `Heading2 + jword-list-ordered / L1` 与 `Heading3 + jword-list-bullet / L2` 都能稳定回读到 `getSelectionFormattingState()`。
 - [x] 补充说明：以上三项不回滚 Gate 4 准入结论，但在 Gate 4 `Step 4.11` 目录闭环和 Gate 5 docx T1 列表/标题 fixture 进入稳定验证前应完成。
   - 完成 2026-05-18：3.14 / 3.15 / 3.16 已在当前 checkout 收口，不再保留为 Gate 4 `Step 4.11` 与 Gate 5 docx T1 的前置缺口。
 
@@ -668,142 +668,606 @@
 - [x] 不把复杂修订接受/拒绝作为 `1.0-stable` 强承诺。
   - 完成 2026-05-24：`packages/ui/src/revisions/controller.ts` 只负责 revision metadata 的列表展示与定位，不实现 accept/reject 深度流程；当前 Gate 4 计划仍把复杂接受/拒绝明确保留到 post-1.0。
 
-## Gate 5 - docx/PDF 互通
+## Gate 5 - DOCX 导入导出与 PDF 导出
 
 ### 目标
 
-建立可演进的 OOXML/PDF 互通层。Beta 阶段先做到 T1 docx 导入导出和基础 PDF 导出，T2 能力按 fixture 逐步推进，不用虚假百分比表达保真度。
+建立可演进的 DOCX 导入、DOCX 导出和 PDF 导出能力。Beta 阶段先保证常见 DOCX 导入后能保留基础格式和内容，导出 DOCX 后能重新导入并保持 T1 能力不丢结构、不丢样式、不丢资源；PDF 范围只包含从 JWord 当前文档导出 PDF，不包含 PDF 导入、PDF 编辑或 PDF 查看器能力。
 
 ### 实现方案
 
-互通能力独立包、独立 worker、lazy load。docx 主路径为 JSZip + DOMParser/XMLSerializer + 自研 OOXML mapping。PDF 主路径为 LayoutBox -> PDF，不使用浏览器打印作为主导出方案。
+DOCX 主路径为 `JSZip + XML parser/serializer + 自研 OOXML mapping + canonical model`。PDF 主路径为 `DocumentLayout/LayoutBox -> PDF`，直接复用 JWord 分页布局结果，不使用浏览器打印、LibreOffice 转换或第三方在线服务作为主导出方案。导入、导出和 PDF 生成都放在独立包、独立 worker 和 lazy-load 边界内，避免进入 core 或首屏 bundle。
 
-### 当前基线（2026-05-17）
+DOCX 导入应先解析 OPC package，再建立 style、numbering、relationship、media、comments、header/footer 等索引，随后映射到 JWord canonical import model。core 只暴露受控结构化写入入口，docx 包禁止直接访问 Y.Doc 或 `document-store` 内部结构。DOCX 导出应从 JWord projection/canonical model 生成 OOXML Transitional package，再用 roundtrip 重新导入验证。PDF 导出应从 editor layout 读取页面、文本、图片、表格线、页眉页脚和页码，使用字体配置 API 显式嵌入字体；缺少中文字体或字体不能覆盖字符时必须返回可恢复错误，不输出乱码 PDF。
 
-- [x] Gate 4 已验证首个图片纵线闭环，证明 `core -> ui -> host app -> browser` 的交付方式可继续复用到互通层。
-- [x] 当前 repo 已正式落地 `packages/core`、`packages/ui` 与 `examples/vanilla`；`packages/docx`、`packages/pdf`、`examples/docx` 尚未创建，符合“不写无法验证空包”的约束。
-- [x] canonical model、projection 与 LayoutBox 边界已经存在，docx import/export 与 PDF 导出都应复用这套只读/可写中介，不重新引入第二套状态模型。
-- [ ] 当前仍没有 docx/PDF worker、fixture diff、兼容矩阵、字体配置和截图对比的可执行证据。
+### 明确范围
+
+- [x] 支持 DOCX 导入。
+- [x] 支持 DOCX 导出。
+- [x] 支持将当前 JWord 文档导出为 PDF。
+- [ ] 不支持 PDF 导入查看。
+- [ ] 不支持 PDF 编辑。
+- [ ] 不支持把 PDF 反向转换为 JWord 文档。
+- [ ] 不承诺任意复杂 DOCX 100% 保真；只对已纳入 fixture 的 T1/T2 能力给出可验证承诺。
+
+### 兼容分级
+
+- T1 必须强兼容：
+  - 段落、run、文本。
+  - 粗体、斜体、下划线、删除线、上标、下标。
+  - 字体、字号、文字颜色、背景色。
+  - 段落对齐、缩进、首行缩进、悬挂缩进、行距、段前段后。
+  - Heading 1-3。
+  - 基础有序列表、无序列表、基础多级列表。
+  - 简单表格、表格边框、单元格文本、基础列宽。
+  - inline 图片、图片尺寸、alt 文本。
+  - 基础页面尺寸、页边距、分页符。
+- T2 分阶段兼容：
+  - 页眉页脚、页码。
+  - 超链接。
+  - 批注。
+  - 节属性。
+  - 简单浮动对象降级为 inline 或 warning。
+  - 简单修订 metadata 的保留和 warning。
+- T3 不进入 Gate 5 主交付：
+  - SmartArt。
+  - 复杂 DrawingML 浮动排版。
+  - 图表。
+  - 公式。
+  - 内容控件。
+  - 宏。
+  - OLE 嵌入对象。
+  - 复杂域代码。
+  - 完整修订历史语义。
+
+### 当前基线（2026-05-24）
+
+- [x] 当前 repo 已正式落地 `packages/core`、`packages/ui` 与 `examples/vanilla`。
+- [x] `packages/docx`、`packages/pdf`、`examples/docx` 尚未创建，符合“不写无法验证空包”的约束。
+- [x] canonical model、projection、resource、transaction pipeline 与 `DocumentLayout` 已存在。
+- [x] core 当前公开 `EditorDocumentInput` 仍偏纯文本入口，不能直接承载 DOCX 的完整结构化导入结果。
+- [ ] 当前仍没有 DOCX worker、PDF worker、fixture diff、Open XML validation、兼容矩阵、字体配置、PDF 截图对比和 lazy-load 验证证据。
 
 ### 推荐执行顺序
 
-1. 先冻结 Gate 5 fixture registry、worker message contract 和目录落点，再启动任一互通包。
-2. 先做 docx import foundation `Step 5.1 -> 5.7`，因为 export 与 PDF 都必须建立在同一 canonical model 上。
-3. 再做 docx export 与人工兼容矩阵 `Step 5.8 -> 5.10`，避免只在导入侧闭环。
-4. 随后做 PDF 主路径 `Step 5.11 -> 5.14`，直接复用 LayoutBox，不允许并行长出第二套排版。
-5. 最后收 T2 fixture、benchmark 与 lazy-load 验证 `Step 5.15 -> 5.16`。
+1. 先冻结范围、fixture registry、warning schema、worker contract 和验收口径。
+2. 再建立 `packages/docx`，完成 DOCX 解包、XML 解析、OPC 索引和 T1 import mapping。
+3. 随后补 core 结构化导入入口，让 DOCX import 经统一 transaction/mutation 边界写入 JWord。
+4. 再实现 DOCX export 和 roundtrip diff，确保导出后重新导入不丢 T1 格式和内容。
+5. 然后建立 `packages/pdf`，从 JWord layout 导出 PDF，先闭合中文字体和基础视觉验证。
+6. 最后补 `examples/docx`、人工兼容矩阵、benchmark、lazy-load 和 T2 种子。
 
 ### 迭代任务清单
 
-#### Iteration 0 - 冻结 Gate 5 起跑线
+#### Iteration 0 - 冻结 Gate 5 范围、目录和验收口径
 
-- [ ] 建立 Gate 5 fixture registry：
-  - `docx-t1-paragraphs`
-  - `docx-t1-run-styles`
-  - `docx-t1-lists`
-  - `docx-t1-table-basic`
-  - `docx-t1-inline-image`
-  - `pdf-basic-text`
-  - `pdf-chinese-font`
-  - `pdf-missing-font`
-  - `docx-t2-header-footer`
-  - `docx-t2-comments-links`
-- [ ] 为 Gate 5 明确目录落点，但不预创建空壳包：
+- [ ] 将 Gate 5 标题和范围固定为 `DOCX 导入导出与 PDF 导出`。
+- [ ] 明确 PDF 不包含导入查看、反向转换或编辑能力。
+- [ ] 冻结目录落点：
   - `packages/docx/src/`
+  - `packages/docx/test/`
   - `packages/pdf/src/`
+  - `packages/pdf/test/`
   - `fixtures/docx/`
   - `fixtures/pdf/`
   - `examples/docx/`
-- [ ] 冻结互通分层：
-  - `core` 只提供 canonical model / projection / LayoutBox / command 接入点
-  - `docx` 负责 OOXML parsing / mapping / export / fixture diff
-  - `pdf` 负责 LayoutBox -> PDF 与字体配置
-  - `examples` 只负责 host 装配、fixture 切换和人工检查入口
+- [ ] 不预创建空壳包；只有当第一个可执行 fixture 或测试能落地时才创建对应目录。
+- [ ] 冻结分层：
+  - `core` 提供 canonical model、projection、resource、layout、受控结构化写入入口。
+  - `docx` 负责 OPC package、OOXML parsing、mapping、export、roundtrip diff。
+  - `pdf` 负责 `DocumentLayout/LayoutBox -> PDF`、字体、图片、PDF 验证辅助。
+  - `examples/docx` 负责 demo host、fixture 切换、手动导入导出、warning 面板。
+- [ ] 冻结 T1/T2/T3 能力表，并把 T3 统一标记为 warning 或 opaque preserve，不作为 Gate 5 完成条件。
+- [ ] 验证：文档中能清楚回答“做什么、不做什么、怎么验收”。
 
-#### Iteration 1 - worker bridge 与验证基座（Step 5.1 / 5.9 / 5.10）
+#### Iteration 1 - 建立 fixture registry 和兼容矩阵模板
 
-- [ ] 先定义 import/export worker message contract：
-  - `requestId`
-  - `progress`
-  - `warning`
-  - `result`
-  - `error`
-  - `cancel`
-- [ ] 建立 docx/PDF 统一 warning 结构，要求未知节点、缺字体、外链资源、安全降级都能被 host 看到。
-- [ ] 建立人工兼容检查模板：
-  - Word
-  - WPS
-  - LibreOffice
-  - 打开结果
-  - 视觉差异
-  - 阻断级问题
+- [ ] 建立 DOCX T1 fixture registry：
+  - `docx-t1-paragraphs`
+  - `docx-t1-run-styles`
+  - `docx-t1-paragraph-formatting`
+  - `docx-t1-headings`
+  - `docx-t1-lists`
+  - `docx-t1-table-basic`
+  - `docx-t1-inline-image`
+  - `docx-t1-page-setup`
+- [ ] 建立 DOCX T2 fixture registry：
+  - `docx-t2-header-footer`
+  - `docx-t2-page-number`
+  - `docx-t2-comments`
+  - `docx-t2-links`
+  - `docx-t2-section-breaks`
+  - `docx-t2-floating-object-warning`
+- [ ] 建立 PDF fixture registry：
+  - `pdf-basic-text`
+  - `pdf-chinese-font`
+  - `pdf-missing-font`
+  - `pdf-table-image`
+  - `pdf-header-footer-page-number`
+- [ ] 每个 fixture 必须记录：
+  - 输入文件。
+  - 期望 projection 摘要。
+  - 期望 warning。
+  - 导入截图基线。
+  - 导出 DOCX roundtrip 期望。
+  - 导出 PDF 视觉期望。
+- [ ] 建立人工兼容矩阵模板：
+  - Word 打开结果。
+  - WPS 打开结果。
+  - LibreOffice 打开结果。
+  - 是否可编辑。
+  - 是否触发修复提示。
+  - 主要视觉差异。
+  - 阻断级问题。
+- [ ] 验证：任意新增 fixture 都能被 registry 约束，不靠口头说明验收。
 
-#### Iteration 2 - docx import foundation（Step 5.2-5.7）
+#### Iteration 2 - 建立 worker contract 与统一 warning/error 结构
 
-- [ ] 实现 docx 解包与 manifest 校验，先识别 `document`、`styles`、`numbering`、`rels`、`media`。
-- [ ] 建立 style / numbering / relationship / media 索引，禁止把解析逻辑散落到多个入口。
-- [ ] 将 T1 import 统一落到 canonical model，再经 transaction pipeline 写入 Y.Doc，不允许直接替换内部状态。
-- [ ] 对未知 OOXML 节点、未知样式、外链图片和不支持对象产生明确 warning，不静默吞掉。
+- [ ] 定义 `requestId`，确保同一页面可并行发起多个导入导出任务。
+- [ ] 定义 `progress` 事件：
+  - `queued`
+  - `reading`
+  - `parsing`
+  - `mapping`
+  - `writing`
+  - `validating`
+  - `done`
+- [ ] 定义 `warning` 结构：
+  - `code`
+  - `severity`
+  - `part`
+  - `path`
+  - `message`
+  - `fallback`
+  - `recoverable`
+- [ ] 定义 `error` 结构：
+  - package 损坏。
+  - XML 解析失败。
+  - 缺少 main document part。
+  - relationship 断裂。
+  - 字体缺失。
+  - 用户取消。
+- [ ] 支持 `AbortSignal` 取消。
+- [ ] 使用 `ArrayBuffer` transferable 传输 DOCX/PDF 二进制，避免复制大文件。
+- [ ] 验证：worker 取消后不会继续写入 editor，不会留下半成品状态。
 
-#### Iteration 3 - docx export 与 roundtrip（Step 5.8-5.10）
+#### Iteration 3 - 建立 `packages/docx` 最小包与公开 API
 
-- [ ] 从 JWord canonical model 生成 T1 OOXML，先闭合段落、run 样式、列表、简单表格、inline 图片。
-- [ ] 建立导出后重新导入 roundtrip，对核心结构和样式映射做差异比对。
-- [ ] 建立 Word/WPS/LibreOffice 打开检查流程，输出可复查的人工记录，不用单一“兼容度百分比”。
+- [ ] 创建 `@4xian/jword-docx` 包。
+- [ ] 定义 import API：
+  - `importDocx(input, options)`
+  - 输入支持 `ArrayBuffer`、`Uint8Array`、`Blob/File`。
+  - 输出包含 import model、warnings、diagnostics、opaque preservation metadata。
+- [ ] 定义 export API：
+  - `exportDocx(document, options)`
+  - 输入来自 JWord projection/canonical model。
+  - 输出 `ArrayBuffer` 或 `Blob`。
+- [ ] 定义 inspect API：
+  - `inspectDocxPackage(input)`
+  - 只解析 package graph，不写入 JWord。
+- [ ] 定义测试入口：
+  - package graph test。
+  - XML parse test。
+  - T1 mapping test。
+  - export snapshot test。
+- [ ] 验证：`pnpm --filter @4xian/jword-docx typecheck` 和最小测试可运行。
 
-#### Iteration 4 - PDF 主路径（Step 5.11-5.14）
+#### Iteration 4 - 实现 OPC package reader 与 manifest 校验
 
-- [ ] 实现 PDF worker 与字体配置 API，支持 `URL`、`File`、`ArrayBuffer`。
-- [ ] 实现 LayoutBox -> PDF：文本、图片、表格线、页眉页脚、页码按页输出。
-- [ ] 缺字体必须返回明确可恢复错误，禁止输出乱码 PDF。
-- [ ] 建立 PDF 截图对比流程，输出和 Canvas baseline 的可解释差异报告。
+- [ ] 使用 JSZip 读取 DOCX package。
+- [ ] 解析 `[Content_Types].xml`。
+- [ ] 解析 `/_rels/.rels`。
+- [ ] 定位 main document part，默认识别 `word/document.xml`，但不硬编码为唯一入口。
+- [ ] 解析 main document part 的 `.rels`。
+- [ ] 建立 part graph：
+  - document。
+  - styles。
+  - numbering。
+  - settings。
+  - theme。
+  - headers。
+  - footers。
+  - comments。
+  - media。
+- [ ] 校验必需 part 缺失时返回明确错误。
+- [ ] 对可选 part 缺失产生 warning，不阻断 T1 导入。
+- [ ] 验证：损坏 zip、缺 content types、缺 main document、断裂 relationship 都有稳定错误或 warning。
 
-#### Iteration 5 - T2 种子与 Gate 5 回归（Step 5.15-5.16）
+#### Iteration 5 - 实现 XML parse/serialize 抽象
 
-- [ ] 推进第一批 T2 fixture：
-  - 页眉页脚
-  - 分页符
-  - 超链接
-  - 批注
-  - 简单浮动对象
-- [ ] 未支持的 T2 能力必须输出明确 warning，不把缺失隐藏在 roundtrip 结果里。
-- [ ] 建立 import/export benchmark，按 fixture 大小、页数、图片数记录耗时和内存。
-- [ ] 验证 `docx` / `pdf` 走 lazy load，不进入首屏 bundle。
+- [ ] 封装 XML parser，不让业务 mapping 直接散落 `DOMParser` 调用。
+- [ ] 封装 XML serializer，不让 export 逻辑直接拼字符串。
+- [ ] 提供 namespace-aware helper：
+  - 读取 `w:*` 元素。
+  - 读取 `r:id`。
+  - 读取属性。
+  - 读取文本节点。
+  - 读取 children 顺序。
+- [ ] 对 parser error 返回结构化错误。
+- [ ] 保留原始 part text，用于 unsupported part 的 opaque preservation。
+- [ ] 验证：相同 XML parse 后 serialize 不破坏 T1 需要的 namespace 和关系。
+
+#### Iteration 6 - 建立 OOXML indexes
+
+- [ ] 建立 style index：
+  - paragraph style。
+  - character style。
+  - linked style。
+  - table style warning。
+  - default paragraph/run properties。
+  - style inheritance。
+- [ ] 建立 numbering index：
+  - abstract numbering。
+  - numbering instance。
+  - level。
+  - bullet。
+  - decimal。
+  - basic multi-level。
+- [ ] 建立 relationship index：
+  - internal target。
+  - external target。
+  - image relationship。
+  - hyperlink relationship。
+  - header/footer relationship。
+- [ ] 建立 media index：
+  - mime。
+  - bytes。
+  - extension。
+  - target part。
+- [ ] 建立 comments index：
+  - comment id。
+  - author。
+  - date。
+  - text。
+- [ ] 建立 header/footer index。
+- [ ] 验证：每个 index 都有 fixture 覆盖，mapping 入口只消费 index，不重复扫描全 XML。
+
+#### Iteration 7 - 定义 DOCX 导入中间模型
+
+- [ ] 定义 `DocxImportDocument`。
+- [ ] 定义 `DocxImportSection`。
+- [ ] 定义 `DocxImportParagraph`。
+- [ ] 定义 `DocxImportRun`。
+- [ ] 定义 `DocxImportInline`。
+- [ ] 定义 `DocxImportTable`。
+- [ ] 定义 `DocxImportResource`。
+- [ ] 定义 `DocxImportWarning`。
+- [ ] 定义 opaque preservation metadata：
+  - unsupported parts。
+  - unsupported relationships。
+  - unsupported element fragments。
+  - original style ids。
+  - original numbering ids。
+- [ ] 映射目标必须能覆盖 core 当前 `Document` 支持的结构。
+- [ ] 验证：中间模型是 JSON-compatible，不依赖 DOM 节点、JSZip 实例或 Yjs 对象。
+
+#### Iteration 8 - 补 core 结构化导入入口
+
+- [ ] 审查当前 `EditorDocumentInput` 的纯文本限制。
+- [ ] 设计最小结构化导入输入：
+  - document metadata。
+  - sections。
+  - blocks。
+  - runs。
+  - resources。
+  - comments。
+  - style ids。
+- [ ] 在 core 内新增受控写入入口，命名可以是 `loadDocumentModel`、`replaceDocumentModel` 或等价 API。
+- [ ] 写入必须经统一 transaction/mutation 边界。
+- [ ] 不允许 `packages/docx` 直接导入 `document-store`。
+- [ ] 写入后必须刷新 projection、layout dirty state 和 selection。
+- [ ] 写入失败必须保持原文档不被半替换。
+- [ ] 验证：结构化导入能写入段落、run 样式、列表、表格、资源，并通过 projection 读取。
+
+#### Iteration 9 - 实现 T1 DOCX import：段落、run 与文本样式
+
+- [ ] 解析 `w:body`。
+- [ ] 解析 `w:p`。
+- [ ] 解析 `w:r`。
+- [ ] 解析 `w:t`、`w:tab`、`w:br`。
+- [ ] 映射 run 样式：
+  - bold。
+  - italic。
+  - underline。
+  - strike。
+  - superscript。
+  - subscript。
+  - font family。
+  - font size。
+  - text color。
+  - highlight/background。
+- [ ] 应用 direct formatting 和 character style。
+- [ ] 未支持 run 属性输出 warning。
+- [ ] 验证：`docx-t1-paragraphs`、`docx-t1-run-styles` 导入后 projection diff 稳定。
+
+#### Iteration 10 - 实现 T1 DOCX import：段落格式与 Heading
+
+- [ ] 解析 `w:pPr`。
+- [ ] 映射 paragraph style。
+- [ ] 映射 Heading 1-3。
+- [ ] 映射 alignment。
+- [ ] 映射 indentation。
+- [ ] 映射 first-line indent。
+- [ ] 映射 hanging indent。
+- [ ] 映射 line spacing。
+- [ ] 映射 spacing before/after。
+- [ ] 映射 keep/widow orphan 相关属性到现有或可降级属性。
+- [ ] 未支持段落属性输出 warning。
+- [ ] 验证：导入后 toolbar/outline 能识别 Heading，段落格式截图接近原文档。
+
+#### Iteration 11 - 实现 T1 DOCX import：列表与编号
+
+- [ ] 解析 `numbering.xml`。
+- [ ] 解析 `w:numPr`。
+- [ ] 映射 bullet list。
+- [ ] 映射 decimal ordered list。
+- [ ] 映射基础 multi-level list。
+- [ ] 保留原始 numbering id 和 level metadata，供 export roundtrip 使用。
+- [ ] 对复杂编号格式输出 warning。
+- [ ] 验证：`docx-t1-lists` 导入后列表 marker、缩进、层级稳定。
+
+#### Iteration 12 - 实现 T1 DOCX import：表格
+
+- [ ] 解析 `w:tbl`。
+- [ ] 解析 `w:tr`。
+- [ ] 解析 `w:tc`。
+- [ ] 映射基础 grid。
+- [ ] 映射基础边框。
+- [ ] 映射单元格内段落和文本。
+- [ ] 映射基础 gridSpan。
+- [ ] 对复杂合并、嵌套表格、复杂表格样式输出 warning。
+- [ ] 验证：`docx-t1-table-basic` 导入后 table projection 和截图稳定。
+
+#### Iteration 13 - 实现 T1 DOCX import：inline 图片与资源
+
+- [ ] 解析 DrawingML inline image。
+- [ ] 通过 relationship index 找到 media part。
+- [ ] 建立 JWord `Resource`。
+- [ ] 映射图片 mime。
+- [ ] 映射图片尺寸。
+- [ ] 映射 alt text。
+- [ ] 外链图片默认不拉取，输出 warning。
+- [ ] 不支持的浮动图片先降级 warning，不伪装成完整支持。
+- [ ] 验证：`docx-t1-inline-image` 导入后图片资源可渲染，导出后资源关系可 roundtrip。
+
+#### Iteration 14 - 实现 T1 DOCX import：页面设置与分页符
+
+- [ ] 解析 section properties。
+- [ ] 映射页面宽高。
+- [ ] 映射页边距。
+- [ ] 映射 page break。
+- [ ] 映射基础 section break。
+- [ ] 不支持 columns、复杂纸张方向或复杂 section 继承时输出 warning。
+- [ ] 验证：`docx-t1-page-setup` 导入后 page config 和分页截图稳定。
+
+#### Iteration 15 - 实现 warning 与 opaque preservation 策略
+
+- [ ] 未知 OOXML 节点必须输出 warning。
+- [ ] 未知样式必须输出 warning，并尽量继承 default style。
+- [ ] relationship 断裂必须输出 warning 或错误。
+- [ ] unsupported part 保留原始 part bytes/text。
+- [ ] unsupported relationship 保留原始 relationship metadata。
+- [ ] 编辑后无法安全恢复的 opaque 内容必须标记为 `unsafeToPreserveAfterEdit`。
+- [ ] 导出时只对未被编辑影响的 opaque part 做 preserve。
+- [ ] 验证：含 T3 内容的 fixture 不崩溃，不静默丢内容。
+
+#### Iteration 16 - 建立 DOCX export package foundation
+
+- [ ] 导出目标使用 DOCX Transitional。
+- [ ] 生成 `[Content_Types].xml`。
+- [ ] 生成 `/_rels/.rels`。
+- [ ] 生成 `word/document.xml`。
+- [ ] 生成 `word/_rels/document.xml.rels`。
+- [ ] 生成 `word/styles.xml`。
+- [ ] 生成 `word/numbering.xml`。
+- [ ] 写入 `word/media/*`。
+- [ ] 写入必要 docProps。
+- [ ] 使用 JSZip 打包为 `.docx`。
+- [ ] 验证：最小导出 DOCX 可被 Word/WPS/LibreOffice 打开，不触发修复提示。
+
+#### Iteration 17 - 实现 T1 DOCX export：文本、样式、段落
+
+- [ ] 从 JWord projection 生成 `w:p`、`w:r`、`w:t`。
+- [ ] 输出 run direct formatting。
+- [ ] 输出 paragraph formatting。
+- [ ] 输出 Heading 1-3 style。
+- [ ] 输出 styles part 中的基础 style 定义。
+- [ ] 正确处理 XML escape、空格保留和换行。
+- [ ] 验证：T1 文本与样式 fixture export 后重新 import 不丢样式。
+
+#### Iteration 18 - 实现 T1 DOCX export：列表、表格、图片
+
+- [ ] 输出 numbering definitions。
+- [ ] 输出 paragraph numbering refs。
+- [ ] 输出基础 table XML。
+- [ ] 输出表格 grid、border、cell text。
+- [ ] 输出 inline image DrawingML。
+- [ ] 输出 media part 和 image relationship。
+- [ ] 验证：列表、表格、图片导出后 Word/WPS/LibreOffice 可打开，重新导入结构一致。
+
+#### Iteration 19 - 建立 DOCX roundtrip diff
+
+- [ ] 导入原始 DOCX。
+- [ ] 写入 JWord。
+- [ ] 从 JWord 导出 DOCX。
+- [ ] 重新导入导出的 DOCX。
+- [ ] 对比 projection：
+  - section count。
+  - block count。
+  - paragraph text。
+  - run style。
+  - paragraph style。
+  - list metadata。
+  - table structure。
+  - resource refs。
+  - comments/links when supported。
+- [ ] 对比 warning：
+  - 不允许 T1 能力产生 unsupported warning。
+  - T2/T3 warning 必须稳定。
+- [ ] 验证：T1 roundtrip diff 通过后才能进入人工兼容矩阵。
+
+#### Iteration 20 - 建立 DOCX 兼容验证流程
+
+- [ ] 使用 Open XML validator 检查导出 package。
+- [ ] 使用 Word 打开导出文件。
+- [ ] 使用 WPS 打开导出文件。
+- [ ] 使用 LibreOffice 打开导出文件。
+- [ ] 记录是否触发修复提示。
+- [ ] 记录视觉差异。
+- [ ] 记录可编辑性。
+- [ ] 记录阻断问题和对应 fixture。
+- [ ] 不使用“兼容百分比”作为结论。
+- [ ] 验证：每个 T1 fixture 都有可复查的兼容记录。
+
+#### Iteration 21 - 建立 `packages/pdf` 与 PDF worker
+
+- [ ] 创建 `@4xian/jword-pdf` 包。
+- [ ] 定义 `exportPdfFromLayout(layout, options)`。
+- [ ] 定义字体配置 API：
+  - `URL`
+  - `File`
+  - `ArrayBuffer`
+  - font family mapping。
+- [ ] 定义图片解析 API。
+- [ ] 定义 PDF warning/error。
+- [ ] 建立 PDF worker。
+- [ ] 支持 progress 和 cancel。
+- [ ] 验证：无字体、取消、空文档、基础文本都有稳定测试。
+
+#### Iteration 22 - 实现 LayoutBox -> PDF 基础输出
+
+- [ ] 将 twips 转为 PDF points。
+- [ ] 输出 page size。
+- [ ] 输出 page margin/content rect。
+- [ ] 输出文本 fragment。
+- [ ] 输出字体大小。
+- [ ] 输出颜色。
+- [ ] 输出 baseline。
+- [ ] 输出分页。
+- [ ] 验证：`pdf-basic-text` 导出后 PDF.js 可渲染，文本位置与 Canvas baseline 可解释。
+
+#### Iteration 23 - 实现 PDF 中文字体、图片、表格线和页眉页脚
+
+- [ ] 使用 fontkit 注册自定义字体。
+- [ ] 字体不支持字符时返回可恢复错误。
+- [ ] 缺少中文字体时禁止输出乱码 PDF。
+- [ ] 嵌入 PNG/JPEG 图片。
+- [ ] 输出表格线。
+- [ ] 输出页眉页脚。
+- [ ] 输出页码。
+- [ ] 验证：`pdf-chinese-font`、`pdf-missing-font`、`pdf-table-image`、`pdf-header-footer-page-number` 都有确定结果。
+
+#### Iteration 24 - 建立 PDF 视觉验证
+
+- [ ] 使用 PDF.js 将导出的 PDF 渲染到 canvas。
+- [ ] 使用相同 fixture 渲染 JWord Canvas baseline。
+- [ ] 建立截图差异报告：
+  - page count。
+  - page size。
+  - text bounding box 差异。
+  - image bounding box 差异。
+  - table line 差异。
+  - 明确可接受误差。
+- [ ] 不把 PDF.js text layer 位置当作唯一视觉真相。
+- [ ] 验证：PDF 视觉差异可复查，不只给 pass/fail。
+
+#### Iteration 25 - 建立 `examples/docx` 手动验收入口
+
+- [ ] 提供 DOCX 文件选择。
+- [ ] 提供导入按钮。
+- [ ] 提供导出 DOCX 按钮。
+- [ ] 提供导出 PDF 按钮。
+- [ ] 提供 warning 面板。
+- [ ] 提供 fixture 切换。
+- [ ] 提供 roundtrip diff 展示。
+- [ ] 提供 PDF 预览或下载入口，但不做 PDF 导入查看功能。
+- [ ] 验证：通过真实浏览器导入 DOCX、编辑、导出 DOCX、重新导入、导出 PDF。
+
+#### Iteration 26 - 建立 benchmark、bundle 和回归门禁
+
+- [ ] 记录 DOCX import 耗时。
+- [ ] 记录 DOCX export 耗时。
+- [ ] 记录 PDF export 耗时。
+- [ ] 记录 worker 内存峰值。
+- [ ] 按文件大小、页数、图片数分组。
+- [ ] 验证 DOCX/PDF worker lazy load。
+- [ ] 验证 `packages/docx` 和 `packages/pdf` 不进入 `examples/vanilla` 首屏 bundle。
+- [ ] 验证取消任务不会阻塞输入。
+- [ ] 验证导入导出期间 editor 仍可响应基本交互。
+
+#### Iteration 27 - T2 种子和复杂能力降级
+
+- [ ] 页眉页脚：能映射基础文本和页码。
+- [ ] 超链接：能映射基础 external link。
+- [ ] 批注：能映射基础 comment range 和 comment text。
+- [ ] section breaks：能映射基础 next-page/continuous。
+- [ ] 简单浮动对象：优先 warning，必要时降级 inline。
+- [ ] 修订 metadata：先 preserve/warning，不实现完整 track changes。
+- [ ] 对 T2 未完成能力建立 fixture 和 warning，不把缺失隐藏在导出结果里。
+- [ ] 验证：T2 fixture 不阻断 T1 roundtrip，不产生静默丢失。
 
 ### 待办步骤
 
-- [ ] Step 5.1：建立 import/export worker bridge，支持 request id、progress、warning、result、error、AbortSignal。
-- [ ] Step 5.2：实现 docx 解包和基础 manifest 校验，识别 document、styles、numbering、rels、media。
-- [ ] Step 5.3：建立 OOXML style index，解析 paragraph/run style、默认样式、继承链。
-- [ ] Step 5.4：建立 numbering index，解析有序/无序列表和基础多级列表。
-- [ ] Step 5.5：建立 relationship/media index，处理 inline image、外链资源 warning、安全策略。
-- [ ] Step 5.6：实现 T1 docx import：段落、run 样式、列表、简单表格、inline 图片。
-- [ ] Step 5.7：将 import 结果通过 transaction pipeline 写入 Y.Doc，不直接替换内部状态。
-- [ ] Step 5.8：实现 T1 docx export：从 JWord model 生成 OOXML，打包为 docx。
-- [ ] Step 5.9：建立 docx fixture diff：XML 结构 diff、样式映射 diff、导入后截图、导出后 roundtrip。
-- [ ] Step 5.10：建立 Word/WPS/LibreOffice 打开检查流程和人工记录模板。
-- [ ] Step 5.11：实现 PDF worker 和字体配置 API，支持 URL、File、ArrayBuffer 字体来源。
-- [ ] Step 5.12：实现 LayoutBox -> PDF：文本、图片、表格线、页眉页脚、页码按页输出。
-- [ ] Step 5.13：处理中文字体缺失错误，禁止输出乱码 PDF。
-- [ ] Step 5.14：建立 PDF 截图对比流程，和 Canvas 视觉基线做可解释差异报告。
-- [ ] Step 5.15：推进 T2 fixture 第一批：页眉页脚、分页符、超链接、批注、简单浮动对象；未完成项必须明确 warning。
-- [ ] Step 5.16：建立 import/export benchmark，按 fixture 大小、页数、图片数记录耗时和内存。
+- [ ] Step 5.1：明确 Gate 5 不包含 PDF 导入查看，只包含 DOCX 导入、DOCX 导出和从当前 JWord 文档导出 PDF。
+- [ ] Step 5.2：冻结 T1/T2/T3 兼容分级和 fixture registry。
+- [ ] Step 5.3：建立 worker contract，支持 request id、progress、warning、result、error、cancel、AbortSignal 和 ArrayBuffer transferable。
+- [ ] Step 5.4：建立统一 warning/error schema，覆盖未知节点、未知样式、外链资源、断裂 relationship、缺字体、用户取消。
+- [ ] Step 5.5：创建 `@4xian/jword-docx` 最小可测包和 import/export/inspect API。
+- [ ] Step 5.6：实现 OPC package reader，解析 `[Content_Types].xml`、root rels、main document、document rels 和 part graph。
+- [ ] Step 5.7：实现 XML parse/serialize 抽象和 namespace-aware helper。
+- [ ] Step 5.8：建立 style、numbering、relationship、media、comments、header/footer indexes。
+- [ ] Step 5.9：定义 DOCX import 中间模型和 opaque preservation metadata。
+- [ ] Step 5.10：补 core 结构化导入入口，经统一 transaction/mutation 写入 Y.Doc。
+- [ ] Step 5.11：实现 T1 DOCX import：段落、run、文本、run 样式。
+- [ ] Step 5.12：实现 T1 DOCX import：段落格式、Heading 1-3、缩进、行距、段距。
+- [ ] Step 5.13：实现 T1 DOCX import：基础有序/无序/多级列表。
+- [ ] Step 5.14：实现 T1 DOCX import：简单表格、边框、单元格文本、基础列宽。
+- [ ] Step 5.15：实现 T1 DOCX import：inline 图片、资源、尺寸、alt text。
+- [ ] Step 5.16：实现 T1 DOCX import：页面尺寸、页边距、分页符。
+- [ ] Step 5.17：实现 unknown warning 和 opaque preservation，禁止静默丢弃未支持 OOXML。
+- [ ] Step 5.18：实现 DOCX export package foundation，生成 Transitional DOCX 基础 package。
+- [ ] Step 5.19：实现 T1 DOCX export：文本、run 样式、段落格式、Heading。
+- [ ] Step 5.20：实现 T1 DOCX export：列表、表格、inline 图片、media relationships。
+- [ ] Step 5.21：建立 DOCX roundtrip diff，导出后重新导入并比较 T1 核心结构和样式。
+- [ ] Step 5.22：建立 Open XML validation 和 Word/WPS/LibreOffice 人工兼容矩阵。
+- [ ] Step 5.23：创建 `@4xian/jword-pdf` 最小可测包和 PDF worker。
+- [ ] Step 5.24：实现 PDF 字体配置 API，支持 URL、File、ArrayBuffer。
+- [ ] Step 5.25：实现 LayoutBox -> PDF 基础页面和文本输出。
+- [ ] Step 5.26：实现 PDF 图片、表格线、页眉页脚和页码输出。
+- [ ] Step 5.27：处理中文字体缺失和字符不支持错误，禁止输出乱码 PDF。
+- [ ] Step 5.28：建立 PDF.js 渲染截图对比和 Canvas baseline 差异报告。
+- [ ] Step 5.29：建立 `examples/docx` 手动验收入口。
+- [ ] Step 5.30：建立 import/export/PDF benchmark。
+- [ ] Step 5.31：验证 DOCX/PDF worker lazy load，不进入 vanilla 首屏 bundle。
+- [ ] Step 5.32：推进 T2 种子，未完成项必须 warning 或 preserve。
+- [ ] Step 5.33：跑 Gate 5 总验收，回写每个完成项和遗留项。
 
 ### 验收
 
-- [ ] T1 fixture 导入后结构和样式可验证。
-- [ ] 导出 docx 能被 Word/WPS/LibreOffice 打开。
-- [ ] 导出 docx 重新导入后核心结构可 roundtrip。
-- [ ] PDF 中文字体正确，缺字体时返回明确可恢复错误。
-- [ ] import/export 可取消、有 progress、不阻塞输入。
-- [ ] docx/PDF/collab 不进入首屏 bundle。
+- [ ] T1 DOCX fixture 导入后文本、段落、run 样式、段落格式、Heading、列表、表格、inline 图片和页面设置可验证。
+- [ ] T1 DOCX 导出后能被 Word/WPS/LibreOffice 打开，不触发修复提示。
+- [ ] T1 DOCX 导出后重新导入，核心结构、样式、列表、表格和图片资源不丢。
+- [ ] T2 fixture 未完整支持时产生明确 warning，不静默丢内容。
+- [ ] PDF 导出来自 JWord layout，不依赖浏览器打印或 LibreOffice 转换。
+- [ ] PDF 中文字体正确；缺字体或字体不覆盖字符时返回明确可恢复错误。
+- [ ] PDF 渲染截图和 Canvas baseline 有可解释差异报告。
+- [ ] DOCX/PDF 导入导出可取消、有 progress、不阻塞输入。
+- [ ] DOCX/PDF worker lazy load，不进入 `examples/vanilla` 首屏 bundle。
+- [ ] `examples/docx` 能在真实浏览器完成导入 DOCX、导出 DOCX、重新导入、导出 PDF 的人工验收路径。
 
 ### 禁止事项
 
-- [ ] 不把 Mammoth 作为主路径。
+- [ ] 不实现 PDF 导入查看。
+- [ ] 不实现 PDF 编辑。
+- [ ] 不实现 PDF 反向转换为 JWord 文档。
+- [ ] 不把 Mammoth 作为 DOCX 导入主路径。
+- [ ] 不把 html-to-docx 或 docx 模板库作为 DOCX 导出主路径。
 - [ ] 不用浏览器打印代替 PDF 主路径。
-- [ ] 不把互通逻辑放进 core 首屏 bundle。
-- [ ] 不静默吞掉未知 OOXML 节点，必须产生 warning。
+- [ ] 不用 LibreOffice 转换代替 PDF 主路径。
+- [ ] 不把互通逻辑放进 core 或首屏 bundle。
+- [ ] 不让 `packages/docx` 直接访问 Y.Doc 或 `document-store` 内部结构。
+- [ ] 不静默吞掉未知 OOXML 节点、未知样式、断裂 relationship 或外链资源。
+- [ ] 不用“兼容度百分比”替代 fixture diff、人工矩阵和真实打开记录。
 
 ## Gate 6 - 协同、离线、自动插入
 

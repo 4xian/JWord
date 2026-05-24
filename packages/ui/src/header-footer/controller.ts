@@ -9,10 +9,12 @@
 import { buildSetSectionPropertiesCommand, type Editor, type SectionPropertiesInput } from '@4xian/jword-core'
 import { createHeaderFooterDom, destroyHeaderFooterDom } from './dom'
 import type { HeaderFooterDom } from './dom'
+import type { JWordReadonlyMode } from '../types'
 
 export interface CreateHeaderFooterControllerOptions {
   readonly editor: Editor
   readonly host: HTMLElement
+  readonly readonly?: JWordReadonlyMode
   readonly announce?: (message: string) => void
 }
 
@@ -47,10 +49,16 @@ export function createHeaderFooterController(
 ): HeaderFooterControllerHandle {
   const dom = createHeaderFooterDom(options.host)
   const signalController = new AbortController()
+  const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   let destroyed = false
 
   /** 切换页眉页脚下拉。 */
   function toggleHeaderFooterMenu(anchor?: HTMLElement): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const nextVisible = dom.root.hidden || dom.headerMenu.hidden
 
     prepareMenuOpen('header', anchor)
@@ -62,6 +70,11 @@ export function createHeaderFooterController(
 
   /** 切换页脚下拉。 */
   function toggleFooterMenu(anchor?: HTMLElement): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const nextVisible = dom.root.hidden || dom.footerMenu.hidden
 
     prepareMenuOpen('footer', anchor)
@@ -73,6 +86,11 @@ export function createHeaderFooterController(
 
   /** 切换页码下拉。 */
   function togglePageNumberMenu(anchor?: HTMLElement): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const nextVisible = dom.root.hidden || dom.pageNumberMenu.hidden
 
     prepareMenuOpen('page-number', anchor)
@@ -118,6 +136,11 @@ export function createHeaderFooterController(
 
   /** 添加当前输入框中的页眉标识。 */
   function addHeader(): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const current = options.editor.getProjection().document.sections[0]
 
     applySectionProperties({
@@ -130,6 +153,11 @@ export function createHeaderFooterController(
 
   /** 添加当前输入框中的页脚标识。 */
   function addFooter(): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const current = options.editor.getProjection().document.sections[0]
 
     applySectionProperties({
@@ -142,6 +170,11 @@ export function createHeaderFooterController(
 
   /** 删除当前分节页眉。 */
   function deleteHeader(): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const current = options.editor.getProjection().document.sections[0]
 
     applySectionProperties({
@@ -151,6 +184,11 @@ export function createHeaderFooterController(
 
   /** 删除当前分节页脚。 */
   function deleteFooter(): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const current = options.editor.getProjection().document.sections[0]
 
     applySectionProperties({
@@ -160,6 +198,11 @@ export function createHeaderFooterController(
 
   /** 在指定位置启用页码。 */
   function applyPageNumber(position: PageNumberPosition): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const current = options.editor.getProjection().document.sections[0]
     const pageNumberSourceId = `page-number-${position}`
     const userHeaderIds = readUserIds(current?.headerIds ?? [])
@@ -183,6 +226,11 @@ export function createHeaderFooterController(
 
   /** 删除当前分节页码。 */
   function deletePageNumber(): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const current = options.editor.getProjection().document.sections[0]
 
     applySectionProperties({
@@ -194,6 +242,11 @@ export function createHeaderFooterController(
 
   /** 应用下一页分节配置。 */
   function applyNextPageSection(): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const current = options.editor.getProjection().document.sections[0]
 
     applySectionProperties({
@@ -215,6 +268,11 @@ export function createHeaderFooterController(
 
   /** 应用连续分节配置。 */
   function applyContinuousSection(): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const current = options.editor.getProjection().document.sections[0]
 
     applySectionProperties({
@@ -235,6 +293,11 @@ export function createHeaderFooterController(
 
   /** 通过 core transaction pipeline 写入 section 属性。 */
   function applySectionProperties(input: SectionPropertiesInput): void {
+    if (readonlyMode) {
+      announceReadonly()
+      return
+    }
+
     const sectionId = options.editor.getProjection().document.sections[0]?.id
 
     if (sectionId === undefined) {
@@ -252,6 +315,11 @@ export function createHeaderFooterController(
     options.editor.executeCommand(command)
     options.announce?.('已更新分节、页眉页脚和页码设置。')
     refresh()
+  }
+
+  /** 播报只读阻断。 */
+  function announceReadonly(): void {
+    options.announce?.('当前为只读模式。')
   }
 
   /** 从当前 projection 回填表单。 */

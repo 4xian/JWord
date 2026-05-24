@@ -113,6 +113,59 @@ describe('createJWordUi heading outline integration', () => {
     }
   })
 
+  test('全局只读允许导航时目录按钮保持可用并只做定位', () => {
+    const harness = createHarness({
+      useToolbarAsHeadingHost: true,
+      readonly: true
+    })
+
+    try {
+      setParagraphStyle(harness.editor, 0, 'Heading1')
+      harness.ui.refresh()
+
+      const beforeProjection = JSON.stringify(harness.editor.getProjection())
+      const outlineButton = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toggle-heading-outline]')
+
+      expect(outlineButton).not.toBeNull()
+      expect(outlineButton?.disabled).toBe(false)
+
+      outlineButton?.click()
+
+      expect(harness.ui.elements.headingOutlinePanel?.list.hidden).toBe(false)
+
+      const firstButton = harness.editorHost.querySelector<HTMLButtonElement>(
+        '[data-jword-heading-outline-item="paragraph-1:heading"] [data-jword-heading-outline-activate]'
+      )
+
+      firstButton?.click()
+
+      expect(harness.editor.getSelection()).not.toBeNull()
+      expect(JSON.stringify(harness.editor.getProjection())).toBe(beforeProjection)
+    } finally {
+      harness.destroy()
+    }
+  })
+
+  test('全局只读允许导航但没有目录项时目录按钮仍保持禁用', () => {
+    const harness = createHarness({
+      useToolbarAsHeadingHost: true,
+      readonly: true
+    })
+
+    try {
+      harness.ui.refresh()
+
+      const outlineButton = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toggle-heading-outline]')
+
+      expect(outlineButton).not.toBeNull()
+      expect(outlineButton?.disabled).toBe(true)
+      expect(harness.ui.elements.headingOutlinePanel?.list.hidden).toBe(true)
+      expect(harness.ui.elements.headingOutlinePanel?.list.children).toHaveLength(0)
+    } finally {
+      harness.destroy()
+    }
+  })
+
   test('点击目录项会滚动 editor canvas 到对应位置', () => {
     const harness = createHarness()
 
@@ -206,7 +259,7 @@ interface Harness {
 }
 
 /** 创建入口级 UI 测试环境。 */
-function createHarness(options: { readonly useToolbarAsHeadingHost?: boolean } = {}): Harness {
+function createHarness(options: { readonly useToolbarAsHeadingHost?: boolean, readonly readonly?: boolean } = {}): Harness {
   const editorHost = document.createElement('div')
   const toolbarHost = document.createElement('div')
   const liveRegionHost = document.createElement('div')
@@ -222,6 +275,7 @@ function createHarness(options: { readonly useToolbarAsHeadingHost?: boolean } =
     editorHost,
     toolbarHost,
     liveRegionHost,
+    ...(options.readonly === undefined ? {} : { readonly: options.readonly }),
     headingOutline: {
       host: options.useToolbarAsHeadingHost === true ? toolbarHost : outlineHost
     }

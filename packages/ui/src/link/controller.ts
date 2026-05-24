@@ -23,6 +23,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
   const adapter = resolveLinkAdapter(options)
   const policy = options.policy ?? {}
   const viewportHost = options.viewportHost ?? options.host
+  const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   let activeLink: JWordLinkDraft | null = null
   let quickToolsVisible = false
   let dialog: JWordLinkDialogState | null = null
@@ -33,7 +34,8 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
     renderLinkPanel(dom, {
       activeLink,
       quickToolsVisible,
-      dialog
+      dialog,
+      readonly: readonlyMode
     }, policy)
   }
 
@@ -92,6 +94,10 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
 
   /** 打开插入弹窗，并按当前选中文本预填显示文本。 */
   function openInsertDialog(selectionText = ''): void {
+    if (readonlyMode) {
+      return
+    }
+
     quickToolsVisible = false
     dialog = createLinkDialogState('insert', {
       visibleText: selectionText
@@ -101,6 +107,10 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
 
   /** 打开编辑弹窗，并复用当前 active link 草稿。 */
   function openEditDialog(): void {
+    if (readonlyMode) {
+      return
+    }
+
     if (activeLink === null) {
       return
     }
@@ -138,6 +148,10 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
 
   /** 提交当前 dialog 草稿。 */
   async function handleConfirm(): Promise<void> {
+    if (readonlyMode) {
+      return
+    }
+
     const draft = readDialogDraft()
 
     if (draft === null) {
@@ -170,6 +184,10 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
 
   /** 移除当前 active link。 */
   async function handleRemoveLink(): Promise<void> {
+    if (readonlyMode) {
+      return
+    }
+
     if (activeLink === null) {
       return
     }

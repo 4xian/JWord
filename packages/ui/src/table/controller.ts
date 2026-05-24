@@ -14,6 +14,7 @@ import type {
   JWordTableCommandResult,
   JWordTableOptions,
   JWordTablePanelElements,
+  JWordReadonlyMode,
   JWordTableSelectionTarget,
   JWordUiLiveRegionController
 } from '../types'
@@ -54,6 +55,7 @@ interface CreateTableControllerOptions {
   readonly toolbarHost: HTMLElement
   readonly editorHost: HTMLElement
   readonly table: JWordTableOptions
+  readonly readonly?: JWordReadonlyMode
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
@@ -90,6 +92,7 @@ export function createTableController(options: CreateTableControllerOptions): Ta
   const liveRegion = options.assistive.liveRegion
   const signalController = new AbortController()
   const hiddenTextarea = requireHiddenTextarea(options.editorHost)
+  const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   const contextMenu = createTableContextMenu(options.editorHost)
   const resizeHandlesLayer = createResizeHandlesLayer(options.editorHost)
   const resizePreview = createResizePreviewLine(options.editorHost)
@@ -138,6 +141,33 @@ export function createTableController(options: CreateTableControllerOptions): Ta
 
   /** 用当前状态重绘表格工具。 */
   function refresh(): void {
+    if (readonlyMode) {
+      helperAnchorsVisible = false
+      quickToolsVisible = false
+      contextMenuTarget = null
+      renderTablePanel(dom, {
+        summary: '',
+        insertRows,
+        insertColumns,
+        previewRows,
+        previewColumns,
+        insertMenuOpen: false,
+        customSizeDialogOpen: false,
+        helperAnchorsVisible: false,
+        quickToolsVisible: false,
+        targetAvailable: false,
+        canDeleteRow: false,
+        canDeleteColumn: false,
+        canMergeRight: false,
+        busy: true
+      })
+      syncOverlay(dom, null, false)
+      syncResizeHandles(resizeHandlesLayer, null, null, false, true, () => {})
+      syncTableContextMenu(contextMenu, null, null, true)
+      syncResizePreview(resizePreview, null)
+      return
+    }
+
     const target = readTarget()
     const layout = options.editor.getLayout()
     const overlayGeometry = target === null
@@ -207,6 +237,11 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     actionLabel: string,
     runner: () => JWordTableCommandResult | Promise<JWordTableCommandResult>
   ): Promise<void> {
+    if (readonlyMode) {
+      announce('当前为只读模式。')
+      return
+    }
+
     if (busy) {
       return
     }
@@ -235,6 +270,11 @@ export function createTableController(options: CreateTableControllerOptions): Ta
   /** 绑定所有 DOM 事件。 */
   function bindEvents(): void {
     dom.insertTriggerButton.addEventListener('click', () => {
+      if (readonlyMode) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (busy) {
         return
       }
@@ -248,6 +288,11 @@ export function createTableController(options: CreateTableControllerOptions): Ta
       refresh()
     })
     dom.topAnchor.addEventListener('click', () => {
+      if (readonlyMode) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (busy || readTarget() === null) {
         return
       }
@@ -260,6 +305,11 @@ export function createTableController(options: CreateTableControllerOptions): Ta
       restoreEditorFocusSoon()
     })
     dom.leftAnchor.addEventListener('click', () => {
+      if (readonlyMode) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (busy || readTarget() === null) {
         return
       }
@@ -280,6 +330,11 @@ export function createTableController(options: CreateTableControllerOptions): Ta
         refresh()
       })
       button.addEventListener('click', () => {
+        if (readonlyMode) {
+          announce('当前为只读模式。')
+          return
+        }
+
         previewRows = readPreviewDimension(button.dataset.jwordRows, previewRows)
         previewColumns = readPreviewDimension(button.dataset.jwordColumns, previewColumns)
         insertRows = previewRows
@@ -290,6 +345,11 @@ export function createTableController(options: CreateTableControllerOptions): Ta
       })
     }
     dom.customSizeButton.addEventListener('click', () => {
+      if (readonlyMode) {
+        announce('当前为只读模式。')
+        return
+      }
+
       if (busy) {
         return
       }

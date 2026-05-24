@@ -126,13 +126,12 @@
 
 - `visibleTools`
   - 含义：显式声明要显示的工具列表，同时作为显示顺序。
-  - 为空时：使用 UI 包内建的默认工具顺序。
+  - 字段存在时：严格采用该列表；空数组表示不显示任何工具。
 - `hiddenTools`
-  - 含义：在默认顺序或 `visibleTools` 基础上再过滤一层。
+  - 含义：未传 `visibleTools` 时从全部内建工具过滤，已传 `visibleTools` 时从该列表再过滤一层。
   - 用途：宿主快速裁剪功能，不需要重写整套布局。
-- `showSummaries`
-  - 含义：是否展示选区 / 格式 / blocked summary。
-  - 默认建议保持开启，避免把当前浏览器验证过的状态反馈路径意外删掉。
+- `toolbar: false`
+  - 含义：隐藏整条官方 toolbar。
 
 ### 6.3 第一阶段内建工具 ID
 
@@ -224,8 +223,8 @@
 ## Phase 1 - 冻结当前可观察行为
 
 - [x] 记录当前 `gate3-toolbar.e2e.ts` 覆盖的 DOM 契约、aria 契约、selector 契约和 observable state 契约。
-  - DOM / selector 契约：`[data-jword-toolbar]`、`[data-jword-selection-summary]`、`[data-jword-run-summary]`、`[data-jword-blocked-summary]`、`[data-jword-page-preset]`、`[data-jword-format-*]`、`[data-jword-history-*]` 保持稳定，可被浏览器回归直接消费。
-  - aria 契约：toolbar host 保留 `aria-label="JWord toolbar"`；toggle 按钮继续用 `aria-pressed=true|false|mixed` 表达 tri-state；summary 节点保持独立 `aria-label`；真实浏览器继续按按钮可访问名称 `撤销`、`重做`、`加粗`、`斜体`、`下划线`、`删除线` 等断言。
+  - DOM / selector 契约：`[data-jword-toolbar]`、`[data-jword-page-preset]`、`[data-jword-format-*]`、`[data-jword-history-*]` 保持稳定，可被浏览器回归直接消费；toolbar summary selector 已移除。
+  - aria 契约：toolbar host 保留 `aria-label="JWord toolbar"`；toggle 按钮继续用 `aria-pressed=true|false|mixed` 表达 tri-state；真实浏览器继续按按钮可访问名称 `撤销`、`重做`、`加粗`、`斜体`、`下划线`、`删除线` 等断言。
   - observable state 契约：`gate3-toolbar.e2e.ts` 已覆盖撤销重做 enable/disable、facade 驱动的选区同步、cross-run mixed state、run formatting 字段值、颜色冻结选区、段落对齐/缩进、page preset 与真实页面几何变化。
 - [x] 记录 toolbar 视觉契约：
   - 参考腾讯文档真实页面的白底、细边框、轻阴影、紧凑按钮密度
@@ -274,7 +273,7 @@
 ## Phase 4 - 建立第一版可配置 toolbar
 
 - [x] 在 `packages/ui` 内建立内建工具注册表，由注册表而不是手写长串 `createButton` 顺序驱动渲染。
-- [x] 配置解析只支持 `visibleTools`、`hiddenTools`、`showSummaries` 三类输入，不提前做复杂插件注入。
+- [x] 配置解析只支持 `visibleTools`、`hiddenTools` 和顶层 `toolbar: false`，不提前做复杂插件注入。
 - [x] 默认顺序必须严格对齐当前 Gate 3 已验证顺序，避免“配置系统上线”顺便改变用户可见行为。
 - [x] 对 `visibleTools` 做顺序校验和去重处理。
 - [x] 对 `hiddenTools` 做最后一层过滤，并在过滤后自动剔除空 group。

@@ -5,6 +5,7 @@
  * 性能/安全约束：纯类型模块，无副作用，可在非浏览器环境安全导入。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.10。
  */
+import type { JWordReadonlyMode } from '../types'
 
 /** link dialog 的工作模式。 */
 export type JWordLinkDialogMode = 'insert' | 'edit'
@@ -29,6 +30,7 @@ export interface JWordLinkPanelState {
   readonly activeLink: JWordLinkDraft | null
   readonly quickToolsVisible: boolean
   readonly dialog: JWordLinkDialogState | null
+  readonly readonly?: boolean
 }
 
 /** link URL allowlist。 */
@@ -53,6 +55,7 @@ export interface JWordLinkAdapter {
 export interface CreateLinkControllerOptions {
   readonly host: HTMLElement
   readonly viewportHost?: HTMLElement | undefined
+  readonly readonly?: JWordReadonlyMode
   readonly adapter?: JWordLinkAdapter | undefined
   readonly actions?: {
     readonly submit: (request: JWordLinkSubmitRequest) => Promise<void> | void

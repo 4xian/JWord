@@ -55,12 +55,10 @@ export type JWordToolbarToolId =
 
 /** 工具栏显隐配置。 */
 export interface JWordToolbarOptions {
-  /** 显式声明显示顺序；为空时回退到内建默认顺序。 */
+  /** 显式声明显示顺序；字段存在时严格采用该列表，空数组表示不显示工具。 */
   readonly visibleTools?: readonly JWordToolbarToolId[]
-  /** 在默认顺序或 visibleTools 基础上再过滤一层。 */
+  /** 未传 visibleTools 时从全部内建工具中过滤；已传 visibleTools 时从该列表中过滤。 */
   readonly hiddenTools?: readonly JWordToolbarToolId[]
-  /** 是否显示选区 / 格式 / blocked summary。 */
-  readonly showSummaries?: boolean
 }
 
 /** Gate 4 第一版图片资源状态。 */
@@ -425,6 +423,19 @@ export interface JWordReadonlyPreviewOptions {
   readonly maxWidthPx?: number
 }
 
+/** 全局只读模式配置。 */
+export interface JWordReadonlyOptions {
+  /** 开启后只允许阅读、滚动和只读定位，不允许编辑。 */
+  readonly enabled?: boolean
+  /** 只读时是否隐藏 toolbar；默认隐藏。 */
+  readonly hideToolbar?: boolean
+  /** 只读时是否允许目录和查找定位；默认允许。 */
+  readonly allowNavigation?: boolean
+}
+
+/** 控制器级只读配置。 */
+export type JWordReadonlyMode = JWordReadonlyOptions | boolean | undefined
+
 /** createJWordUi 的装配输入。 */
 export interface CreateJWordUiOptions {
   /** 已创建并可供 UI 调用的 core editor facade。 */
@@ -437,8 +448,8 @@ export interface CreateJWordUiOptions {
   readonly liveRegionHost?: HTMLElement | null
   /** 隐藏文本镜像宿主；为空时只关闭 mirror，不阻止 toolbar 工作。 */
   readonly assistiveMirrorHost?: HTMLElement | null
-  /** toolbar 的最小显隐配置。 */
-  readonly toolbar?: JWordToolbarOptions
+  /** toolbar 的最小显隐配置；false 表示隐藏整条 toolbar。 */
+  readonly toolbar?: false | JWordToolbarOptions
   /** SDK 级用户上下文。 */
   readonly user?: JWordUserOptions
   /** Gate 4 第一版图片 panel。 */
@@ -457,6 +468,8 @@ export interface CreateJWordUiOptions {
   readonly findReplace?: JWordFindReplaceOptions
   /** Gate 4 修订 metadata 面板。 */
   readonly revisions?: JWordRevisionsOptions
+  /** 宿主级全局只读模式。 */
+  readonly readonly?: boolean | JWordReadonlyOptions
   /** Gate 4 移动 Web 只读分页预览。 */
   readonly readonlyPreview?: JWordReadonlyPreviewOptions
 }
@@ -493,12 +506,6 @@ export interface JWordToolbarElements {
   readonly host: HTMLElement
   /** 内建工具控件映射。 */
   readonly controls: Partial<Record<JWordToolbarToolId, JWordToolbarControlElement>>
-  /** 选区 summary 节点；关闭 summaries 时为 null。 */
-  readonly selectionSummary: HTMLElement | null
-  /** 格式 summary 节点；关闭 summaries 时为 null。 */
-  readonly runSummary: HTMLElement | null
-  /** blocked summary 节点；关闭 summaries 时为 null。 */
-  readonly blockedSummary: HTMLElement | null
 }
 
 /** 图片 panel 暴露给宿主和浏览器测试的节点。 */

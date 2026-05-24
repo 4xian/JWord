@@ -483,8 +483,19 @@ export function deleteCommentThread(
 export function readCommentThreadPermissions(
   thread: JWordCommentThread,
   currentUser: JWordCommentUser,
-  options: JWordCommentPermissionOptions = {}
+  options: JWordCommentPermissionOptions = {},
+  readonly = false
 ): JWordCommentThreadPermissions {
+  if (readonly) {
+    return {
+      canReply: false,
+      canEdit: false,
+      canDelete: false,
+      canResolve: false,
+      canReopen: false
+    }
+  }
+
   const isAuthor = thread.authorId === currentUser.id
   const allowResolveByNonAuthor = options.allowResolveByNonAuthor === true
   const canResolve = !thread.resolved && (isAuthor || allowResolveByNonAuthor)
@@ -502,8 +513,16 @@ export function readCommentThreadPermissions(
 /** 计算消息的权限。 */
 export function readCommentReplyPermissions(
   reply: JWordCommentReply,
-  currentUser: JWordCommentUser
+  currentUser: JWordCommentUser,
+  readonly = false
 ): JWordCommentReplyPermissions {
+  if (readonly) {
+    return {
+      canEdit: false,
+      canDelete: false
+    }
+  }
+
   const isAuthor = reply.authorId === currentUser.id
 
   return {
@@ -536,7 +555,7 @@ function readCommentThreadView(
   context: JWordCommentsViewContext
 ): JWordCommentThreadView {
   const author = resolveCommentUser(thread.authorId, context.currentUser, context.resolveUser)
-  const permissions = readCommentThreadPermissions(thread, context.currentUser, context.permissions)
+  const permissions = readCommentThreadPermissions(thread, context.currentUser, context.permissions, context.readonly === true)
   const createdAtLabel = readCommentTimeLabel(thread.createdAt, context.formatCreatedAt)
 
   return {
@@ -559,7 +578,7 @@ function readCommentReplyView(
     author: resolveCommentUser(reply.authorId, context.currentUser, context.resolveUser),
     createdAtLabel: readCommentTimeLabel(reply.createdAt, context.formatCreatedAt),
     root,
-    permissions: readCommentReplyPermissions(reply, context.currentUser)
+    permissions: readCommentReplyPermissions(reply, context.currentUser, context.readonly === true)
   }
 }
 

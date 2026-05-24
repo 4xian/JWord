@@ -70,9 +70,35 @@ describe('Editor input runtime', () => {
     }
   })
 
-  it('focuses the mounted editor and seeds a collapsed caret when selection is empty', () => {
+  it('focuses the mounted editor and seeds a collapsed caret at the document end by default', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: 'abcdef' })
+
+    document.body.append(host)
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+
+      expect(editor.getSelection()).toBeNull()
+
+      editor.focus()
+
+      expect(document.activeElement).toBe(textarea)
+      expectSelectionIndexes(editor, editor.getSelection(), [6, 6])
+    } finally {
+      editor.destroy()
+      host.remove()
+    }
+  })
+
+  it('can seed the first focus caret at the document start when configured', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({
+      initialText: 'abcdef',
+      initialFocusPosition: 'start'
+    })
 
     document.body.append(host)
 

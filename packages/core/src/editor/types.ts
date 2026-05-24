@@ -18,6 +18,8 @@ import type { Command, TextPosition, TextRange, TransactionEvent, TransactionRes
 import type { Resource, ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
 import type { CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 
+export type InitialFocusPosition = 'start' | 'end'
+
 export interface EditorUser {
   /** 稳定作者 ID。 */
   readonly authorId: string
@@ -73,6 +75,13 @@ export interface EditorOptions {
    * 初始化文档资源表。
    */
   readonly resources?: readonly Resource[]
+
+  /**
+   * 首次 focus 且当前无选区时的折叠光标位置。
+   *
+   * @defaultValue `"end"`
+   */
+  readonly initialFocusPosition?: InitialFocusPosition
 
   /**
    * 资源 URL allowlist 策略。

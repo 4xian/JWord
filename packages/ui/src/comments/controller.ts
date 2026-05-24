@@ -55,8 +55,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
     currentUser: options.currentUser,
     resolveUser: options.resolveUser,
     permissions: options.permissions ?? {},
-    formatCreatedAt: options.formatCreatedAt
+    formatCreatedAt: options.formatCreatedAt,
+    readonly: isReadonlyMode(options.readonly)
   }
+  const readonlyMode = viewContext.readonly
   let state = createCommentsState(options.threads ?? [])
   let lastCreateAnchor: JWordCommentAnchorState | null = null
 
@@ -76,6 +78,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
     },
     /** 从正文锚点打开新建批注草稿。 */
     openCreateDraft(anchor: JWordCommentAnchorState): void {
+      if (readonlyMode) {
+        return
+      }
+
       lastCreateAnchor = anchor
       state = openCommentDraft(state, anchor)
       render()
@@ -83,12 +89,20 @@ export function createCommentsController(options: CreateCommentsControllerOption
     },
     /** 打开回复草稿。 */
     openReplyDraft(threadId: string): void {
+      if (readonlyMode) {
+        return
+      }
+
       state = openCommentReplyDraft(state, threadId)
       render()
       focusDraftSoon()
     },
     /** 打开编辑草稿。 */
     openEditDraft(threadId: string, messageId: string): void {
+      if (readonlyMode) {
+        return
+      }
+
       state = openCommentEditDraft(state, threadId, messageId)
       render()
       focusDraftSoon()
@@ -106,8 +120,11 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 刷新 sidebar。 */
   function render(): void {
-    dom.createButton.hidden = lastCreateAnchor === null && state.draft === null
-    dom.createButton.disabled = lastCreateAnchor === null && state.draft === null
+    dom.createButton.hidden = readonlyMode || (lastCreateAnchor === null && state.draft === null)
+    dom.createButton.disabled = readonlyMode || (lastCreateAnchor === null && state.draft === null)
+    dom.composerInput.readOnly = readonlyMode
+    dom.replyInput.readOnly = readonlyMode
+    dom.editInput.readOnly = readonlyMode
     renderCommentsSidebar(dom, readCommentsViewState(state, viewContext))
   }
 
@@ -179,6 +196,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 处理标题栏里的新建批注按钮。 */
   function handleOpenCreateButton(): void {
+    if (readonlyMode) {
+      return
+    }
+
     if (state.draft !== null) {
       focusDraftSoon()
       return
@@ -195,6 +216,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 处理新建批注输入。 */
   function handleDraftInput(): void {
+    if (readonlyMode) {
+      return
+    }
+
     state = updateCommentDraft(state, dom.composerInput.value)
     render()
   }
@@ -207,6 +232,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 提交新建批注。 */
   async function handleConfirmDraft(): Promise<void> {
+    if (readonlyMode) {
+      return
+    }
+
     const result = confirmCommentDraft(state)
 
     state = result.state
@@ -290,6 +319,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
     }
 
     if (action === 'edit-message' && typeof messageId === 'string') {
+      if (readonlyMode) {
+        return
+      }
+
       await handleSelectThread(threadId)
       state = openCommentEditDraft(state, threadId, messageId)
       render()
@@ -347,6 +380,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 打开回复草稿。 */
   function handleOpenReply(): void {
+    if (readonlyMode) {
+      return
+    }
+
     const selectedThread = readSelectedThread()
 
     if (selectedThread === null) {
@@ -360,6 +397,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 处理回复输入。 */
   function handleReplyInput(): void {
+    if (readonlyMode) {
+      return
+    }
+
     state = updateCommentReplyDraft(state, dom.replyInput.value)
     render()
   }
@@ -372,6 +413,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 提交回复。 */
   async function handleConfirmReply(): Promise<void> {
+    if (readonlyMode) {
+      return
+    }
+
     const result = confirmCommentReplyDraft(state)
 
     state = result.state
@@ -421,6 +466,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 处理编辑输入。 */
   function handleEditInput(): void {
+    if (readonlyMode) {
+      return
+    }
+
     state = updateCommentEditDraft(state, dom.editInput.value)
     render()
   }
@@ -433,6 +482,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 提交编辑。 */
   async function handleConfirmEdit(): Promise<void> {
+    if (readonlyMode) {
+      return
+    }
+
     const result = confirmCommentEditDraft(state)
 
     state = result.state
@@ -480,6 +533,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 切换解决状态。 */
   async function handleToggleResolved(): Promise<void> {
+    if (readonlyMode) {
+      return
+    }
+
     const selectedThread = readSelectedThread()
 
     if (selectedThread === null) {
@@ -509,6 +566,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 删除当前选中 thread。 */
   async function handleDeleteSelectedThread(): Promise<void> {
+    if (readonlyMode) {
+      return
+    }
+
     const selectedThread = readSelectedThread()
 
     if (selectedThread === null) {
@@ -541,6 +602,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
     }
 
     if (action === 'edit-message') {
+      if (readonlyMode) {
+        return
+      }
+
       state = openCommentEditDraft(state, selectedThread.id, messageId)
       render()
       focusDraftSoon()
@@ -554,6 +619,10 @@ export function createCommentsController(options: CreateCommentsControllerOption
 
   /** 删除指定 reply。 */
   async function handleDeleteMessage(threadId: string, messageId: string): Promise<void> {
+    if (readonlyMode) {
+      return
+    }
+
     try {
       await options.adapter.updateThread({
         kind: 'deleteMessage',
@@ -634,6 +703,11 @@ function normalizeCommentError(error: unknown, fallback: string): string {
 /** 显式吞掉不需要向 UI 暴露的 adapter 异常。 */
 function ignoreAdapterError(error: unknown): void {
   void error
+}
+
+/** 读取全局只读模式是否开启。 */
+function isReadonlyMode(readonly: CreateCommentsControllerOptions['readonly']): boolean {
+  return readonly === true || (typeof readonly === 'object' && readonly.enabled === true)
 }
 
 /** 创建本地 optimistic thread。 */
