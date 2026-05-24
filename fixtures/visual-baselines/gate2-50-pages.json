@@ -2,12 +2,12 @@
   "gate": "Gate 2",
   "fixture": "fixtures/plain-text/gate2-50-pages.txt",
   "case": "A4 纯文本长文，直接消费 50 页 fixture 的可复查基线",
-  "pageCount": 50,
+  "pageCount": 53,
   "lineCount": 2400,
   "fragmentCount": 38400,
-  "renderedPageCount": 50,
-  "drawCallCount": 153750,
-  "drawCallHash": "eee915193cf71b2bb6ccd53d212b1b9e7844c39a24d975b6a0a6771a90bebe47",
+  "renderedPageCount": 53,
+  "drawCallCount": 153759,
+  "drawCallHash": "10d1ae6d972123f4be1486177ee89d6e9600558679739156c78b810d24434aaf",
   "notes": [
     "fixture 非空行直接映射为段落输入，不再做 32 轮扩展",
     "用于复查 viewport virtualization 不应保留全部大 canvas"

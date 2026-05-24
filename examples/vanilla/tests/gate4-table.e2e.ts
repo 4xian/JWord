@@ -126,7 +126,7 @@ test('Gate 4 table click resize and context actions keep table editable', async 
   await clickToolbarAction(insertTrigger)
   await clickToolbarAction(insertPreviewCell2x2)
 
-  const firstCellPoint = await readTableCellViewportPoint(page, 0, 0)
+  let firstCellPoint = await readTableCellViewportPoint(page, 0, 0)
 
   await page.mouse.click(firstCellPoint.x, firstCellPoint.y)
 
@@ -162,31 +162,54 @@ test('Gate 4 table click resize and context actions keep table editable', async 
     heightGrew: true
   })
 
-  await page.mouse.click(firstCellPoint.x, firstCellPoint.y, {
-    button: 'right'
-  })
-  await expect(page.locator('.jw-context-menu:visible')).toHaveCount(1)
+  await openTableContextMenuAtCell(page, 0, 0)
   await expect(page.locator('[data-jword-context-action="format.clear"]:visible')).toHaveCount(0)
-  await clickToolbarAction(page.locator('[data-jword-context-action="table.insert-row-after"]'))
+  await clickToolbarAction(page.locator('[data-jword-context-action="table.insert-row-after"]:visible'))
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     rowCount: 3
   })
 
-  await page.mouse.click(firstCellPoint.x, firstCellPoint.y, {
-    button: 'right'
-  })
-  await clickToolbarAction(page.locator('[data-jword-context-action="table.insert-column-after"]'))
+  firstCellPoint = await readTableCellViewportPoint(page, 0, 0)
+  await page.mouse.click(firstCellPoint.x, firstCellPoint.y)
+  await openTableContextMenuAtCell(page, 0, 0)
+  await clickToolbarAction(page.locator('[data-jword-context-action="table.insert-column-after"]:visible'))
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     columnCount: 3
   })
 
-  await page.mouse.click(firstCellPoint.x, firstCellPoint.y, {
-    button: 'right'
-  })
-  await clickToolbarAction(page.locator('[data-jword-context-action="table.merge-right"]'))
+  firstCellPoint = await readTableCellViewportPoint(page, 0, 0)
+  await page.mouse.click(firstCellPoint.x, firstCellPoint.y)
+  await openTableContextMenuAtCell(page, 0, 0)
+  await clickToolbarAction(page.locator('[data-jword-context-action="table.merge-right"]:visible'))
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     firstRowCellCount: 2,
     firstCellGridSpan: 2
+  })
+})
+
+test('Gate 4 table custom size dialog keeps focusable fields inside the panel', async ({ page }) => {
+  await page.goto('/')
+  await waitForTableDemoReady(page)
+
+  const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
+  const customSizeButton = page.locator('[data-jword-table-custom-size="true"]')
+  const customSizeDialog = page.locator('[data-jword-table-custom-size-dialog="true"]')
+  const rowsInput = page.locator('[data-jword-table-insert-rows="true"]')
+  const columnsInput = page.locator('[data-jword-table-insert-columns="true"]')
+  const insertConfirmButton = page.locator('[data-jword-table-insert-confirm]')
+
+  await clickToolbarAction(insertTrigger)
+  await clickToolbarAction(customSizeButton)
+  await expect(customSizeDialog).toBeVisible()
+  await rowsInput.fill('4')
+  await expect(customSizeDialog).toBeVisible()
+  await columnsInput.fill('3')
+  await expect(customSizeDialog).toBeVisible()
+  await clickToolbarAction(insertConfirmButton)
+
+  await expect.poll(() => readFirstTableState(page)).toMatchObject({
+    rowCount: 4,
+    columnCount: 3
   })
 })
 
@@ -204,6 +227,16 @@ async function clickToolbarAction(locator: Locator): Promise<void> {
   })
 }
 
+/** 在指定单元格上打开表格专用右键菜单。 */
+async function openTableContextMenuAtCell(page: Page, rowIndex: number, columnIndex: number): Promise<void> {
+  const point = await readTableCellViewportPoint(page, rowIndex, columnIndex)
+
+  await page.mouse.click(point.x, point.y, {
+    button: 'right'
+  })
+  await expect(page.locator('[data-jword-context-action="table.insert-row-after"]:visible')).toHaveCount(1)
+}
+
 /** 拖拽表格 resize handle。 */
 async function dragResizeHandle(
   page: Page,
@@ -212,6 +245,8 @@ async function dragResizeHandle(
   deltaY: number
 ): Promise<void> {
   const handle = page.locator(selector)
+
+  await expect(handle).toBeVisible()
   const box = await handle.boundingBox()
 
   if (box === null) {
@@ -238,6 +273,8 @@ async function dragResizeHandleWithPreview(
 ): Promise<void> {
   const handle = page.locator(selector)
   const preview = page.locator('[data-jword-table-resize-preview="true"]')
+
+  await expect(handle).toBeVisible()
   const box = await handle.boundingBox()
 
   if (box === null) {

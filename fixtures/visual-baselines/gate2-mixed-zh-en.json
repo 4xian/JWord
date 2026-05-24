@@ -7,7 +7,7 @@
   "fragmentCount": 133,
   "renderedPageCount": 1,
   "drawCallCount": 535,
-  "drawCallHash": "4f85d714547a58f4d6aea014321296d4dc5e2a1392dfb11df20a87696e18dc3f",
+  "drawCallHash": "3d41a7c74346b738dfd23a7128adfd085b722acbf17be956be48ba50961728e4",
   "notes": [
     "记录中英文混排样本，不声明真实字体测量结果",
     "真实行盒和文本片段数量由 Gate 2 layout 单元测试覆盖"

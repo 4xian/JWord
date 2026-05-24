@@ -19,6 +19,17 @@ export type {
   JWordMediaResource,
   JWordMediaSource,
   JWordMediaStatus,
+  JWordCommentsOptions,
+  JWordFindReplaceOptions,
+  JWordFindReplacePanelElements,
+  JWordHeaderFooterOptions,
+  JWordHeaderFooterPanelElements,
+  JWordHeadingOutlineOptions,
+  JWordHeadingOutlinePanelElements,
+  JWordLinkOptions,
+  JWordReadonlyPreviewOptions,
+  JWordRevisionPanelElements,
+  JWordRevisionsOptions,
   JWordSelectionActionElements,
   JWordTableBorderCommandRequest,
   JWordTableBorderPreset,
@@ -33,6 +44,7 @@ export type {
   JWordTableSelectionScope,
   JWordTableSelectionTarget,
   JWordTableTargetCommandRequest,
+  JWordUserOptions,
   JWordMediaUploadFile,
   JWordMediaUploadOptions,
   JWordMediaUploadProgressEvent,
@@ -49,5 +61,47 @@ export type {
   JWordUiElements,
   JWordUiInstance
 } from './types'
+export { createFindReplaceController } from './find-replace/controller'
+export type {
+  CreateFindReplaceControllerOptions,
+  FindReplaceControllerHandle
+} from './find-replace/controller'
+export { createHeaderFooterController } from './header-footer/controller'
+export type {
+  CreateHeaderFooterControllerOptions,
+  HeaderFooterControllerHandle
+} from './header-footer/controller'
+export type {
+  CommentsControllerHandle,
+  CreateCommentsControllerOptions,
+  JWordCommentAnchorState,
+  JWordCommentReply,
+  JWordCommentThread,
+  JWordCommentUser,
+  JWordCommentsAdapter
+} from './comments/types'
+export type {
+  CreateLinkControllerOptions,
+  JWordLinkAdapter,
+  JWordLinkDraft,
+  JWordLinkUrlPolicy,
+  LinkControllerHandle
+} from './link/types'
+export {
+  createFindReplaceState,
+  normalizeFindReplaceDraft,
+  readFindDisabled,
+  readReplaceDisabled
+} from './find-replace/state'
+export { createHeadingOutlineController } from './heading/controller'
+export type {
+  FindReplaceDraft,
+  FindReplaceState
+} from './find-replace/state'
+export type {
+  CreateHeadingOutlineControllerOptions,
+  HeadingOutlineControllerHandle
+} from './heading/controller'
 export { BUILTIN_TOOL_IDS as BUILTIN_JWORD_TOOL_IDS } from './toolbar/builtin-tools'
 export { DEFAULT_JWORD_MEDIA_URL_POLICY, isAllowedJWordMediaUrl } from './media/policy'
+export { DEFAULT_JWORD_LINK_PROTOCOL_ALLOWLIST, isAllowedJWordLinkUrl } from './link/policy'

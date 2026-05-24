@@ -19,6 +19,7 @@ import type { Command, Operation, TextPosition } from '../operations/transaction
 import { createAllTextSelection, readSelectionHtmlFromProjection } from './clipboard-runtime'
 import { flattenLayoutLines, hitTestLineAtAbsoluteX, resolveLineBoundaryPosition } from './rendering'
 import { JWordEditorMountedRuntime } from './mounted-runtime'
+import type { EditorRichTextFragment, EditorRichTextParagraph, EditorRichTextRun } from './types'
 import {
   allocateParagraphSplitIds,
   collectParagraphRuntimeContexts,
@@ -29,6 +30,37 @@ import {
 } from './text-runtime'
 
 export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRuntime {
+  /** 粘贴 UI 层已清洗过的结构化富文本片段。 */
+  pasteRichTextFragment(fragment: EditorRichTextFragment): boolean {
+    const selection = this.currentSelection
+    const paragraphs = normalizeRichTextParagraphs(fragment)
+
+    if (selection === null || paragraphs.length === 0) {
+      return false
+    }
+
+    const selectedRange = isSelectionCollapsed(selection) ? undefined : this.resolveSelectedTextRange()
+    const deletePlan = selectedRange === undefined ? undefined : this.buildDeleteSelectionPlan(selectedRange)
+    const start = deletePlan?.caret ?? this.resolveTextPosition(selection.focus)
+    const leadingOperations = deletePlan?.operations ?? []
+
+    if (!isSelectionCollapsed(selection) && deletePlan === undefined) {
+      return false
+    }
+
+    const command = this.buildRichTextInsertCommand(start, paragraphs, leadingOperations)
+
+    if (command === undefined) {
+      return false
+    }
+
+    this.executeCommand(command.command, {
+      selectionAfter: command.selectionAfter
+    })
+
+    return true
+  }
+
   protected insertPlainTextFromRuntime(text: string): void {
     const selection = this.currentSelection
 
@@ -91,6 +123,120 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
     })
 
     return true
+  }
+
+  /** 构造已清洗富文本片段的最小事务命令。 */
+  protected buildRichTextInsertCommand(
+    start: TextPosition,
+    paragraphs: readonly NormalizedRichTextParagraph[],
+    leadingOperations: readonly Operation[]
+  ): Readonly<{
+    command: Command
+    selectionAfter: ReturnType<typeof createSelectionState>
+  }> | undefined {
+    const operations: Operation[] = [...leadingOperations]
+    const usedRunIds = collectProjectionRunIds(this.currentProjection)
+    const paragraphIds: string[] = [start.blockId]
+    let currentPosition: TextPosition = { ...start }
+    let currentRunId = start.runId
+    let currentBlockId = start.blockId
+    let currentRunGraphemeLength = this.resolveRuntimeRunGraphemeLength(start)
+
+    for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex += 1) {
+      const paragraph = paragraphs[paragraphIndex]
+
+      if (paragraph === undefined) {
+        continue
+      }
+
+      for (const run of paragraph.runs) {
+        const insertedStartGraphemeIndex = currentPosition.graphemeIndex
+        const insertedGraphemeLength = countGraphemes(run.text)
+
+        operations.push({
+          kind: 'insertText',
+          at: currentPosition,
+          text: run.text
+        })
+        currentRunGraphemeLength += insertedGraphemeLength
+        currentPosition = {
+          ...currentPosition,
+          runId: currentRunId,
+          blockId: currentBlockId,
+          graphemeIndex: insertedStartGraphemeIndex + insertedGraphemeLength
+        }
+
+        if (hasModelProperties(run.properties)) {
+          const pendingCaret = this.appendPendingCollapsedRunPropertiesToInsertedText(
+            operations,
+            usedRunIds,
+            currentRunId,
+            insertedStartGraphemeIndex,
+            insertedGraphemeLength,
+            currentRunGraphemeLength,
+            run.properties
+          )
+
+          currentRunId = pendingCaret.runId
+          currentRunGraphemeLength = insertedGraphemeLength
+          currentPosition = {
+            ...currentPosition,
+            runId: currentRunId,
+            graphemeIndex: pendingCaret.graphemeIndex
+          }
+        }
+      }
+
+      if (paragraphIndex >= paragraphs.length - 1) {
+        continue
+      }
+
+      const splitRunTailGraphemeLength = Math.max(0, currentRunGraphemeLength - currentPosition.graphemeIndex)
+      const identifiers = allocateParagraphSplitIds(this.currentProjection, operations)
+
+      operations.push({
+        kind: 'splitBlock',
+        at: currentPosition,
+        newBlockId: identifiers.blockId,
+        newRunId: identifiers.runId
+      })
+      usedRunIds.add(identifiers.runId)
+      paragraphIds.push(identifiers.blockId)
+      currentBlockId = identifiers.blockId
+      currentRunId = identifiers.runId
+      currentRunGraphemeLength = splitRunTailGraphemeLength
+      currentPosition = {
+        sectionId: currentPosition.sectionId,
+        blockId: currentBlockId,
+        runId: currentRunId,
+        graphemeIndex: 0
+      }
+    }
+
+    appendRichTextParagraphPropertyOperations(operations, paragraphs, paragraphIds)
+
+    if (operations.length === leadingOperations.length) {
+      return undefined
+    }
+
+    const selectionAfter = createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...currentPosition
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        ...currentPosition
+      })
+    )
+
+    return {
+      command: {
+        name: 'pasteRichText',
+        operations
+      },
+      selectionAfter
+    }
   }
 
   protected deleteSelectedTextFromRuntime(): boolean {
@@ -1405,4 +1551,100 @@ function allocateGeneratedRuntimeRunId(
   usedRunIds.add(candidate)
 
   return candidate
+}
+
+interface NormalizedRichTextRun {
+  readonly text: string
+  readonly properties: ModelProperties
+}
+
+interface NormalizedRichTextParagraph {
+  readonly properties: ModelProperties
+  readonly runs: readonly NormalizedRichTextRun[]
+}
+
+/** 归一化富文本粘贴片段，丢弃空文本 run 和空段落。 */
+function normalizeRichTextParagraphs(fragment: EditorRichTextFragment): readonly NormalizedRichTextParagraph[] {
+  return fragment.paragraphs.flatMap((paragraph) => {
+    const runs = normalizeRichTextRuns(paragraph.runs)
+
+    if (runs.length === 0) {
+      return []
+    }
+
+    return [{
+      properties: normalizeModelProperties(paragraph.properties),
+      runs
+    }]
+  })
+}
+
+/** 归一化富文本 run，避免空字符串生成无效 operation。 */
+function normalizeRichTextRuns(runs: readonly EditorRichTextRun[]): readonly NormalizedRichTextRun[] {
+  return runs.flatMap((run) => {
+    const text = normalizePlainText(run.text)
+
+    if (text.length === 0) {
+      return []
+    }
+
+    return [{
+      text,
+      properties: normalizeRichTextRunProperties(run.properties)
+    }]
+  })
+}
+
+/** 归一化 run 属性，并显式清掉上一段 split 继承来的常见格式。 */
+function normalizeRichTextRunProperties(properties: ModelProperties | undefined): ModelProperties {
+  return Object.freeze({
+    bold: false,
+    italic: false,
+    underline: false,
+    strike: false,
+    superscript: false,
+    subscript: false,
+    color: null,
+    backgroundColor: null,
+    fontFamily: null,
+    fontSizePx: null,
+    fontSizeTwips: null,
+    ...normalizeModelProperties(properties)
+  })
+}
+
+/** 复制模型属性对象，避免事务构造持有外部可变引用。 */
+function normalizeModelProperties(properties: ModelProperties | undefined): ModelProperties {
+  if (properties === undefined) {
+    return {}
+  }
+
+  return Object.freeze({ ...properties })
+}
+
+/** 判断模型属性是否包含可写入字段。 */
+function hasModelProperties(properties: ModelProperties): boolean {
+  return Object.keys(properties).length > 0
+}
+
+/** 把富文本段落属性追加到已生成的段落上。 */
+function appendRichTextParagraphPropertyOperations(
+  operations: Operation[],
+  paragraphs: readonly NormalizedRichTextParagraph[],
+  paragraphIds: readonly string[]
+): void {
+  for (let index = 0; index < paragraphs.length; index += 1) {
+    const paragraph = paragraphs[index]
+    const paragraphId = paragraphIds[index]
+
+    if (paragraph === undefined || paragraphId === undefined || !hasModelProperties(paragraph.properties)) {
+      continue
+    }
+
+    operations.push({
+      kind: 'setParagraphProperties',
+      paragraphId,
+      properties: paragraph.properties
+    })
+  }
 }

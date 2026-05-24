@@ -150,12 +150,13 @@ async function uploadDemoResource(
     throw createDemoUploadError('DEMO_MEDIA_TEMP_FAILURE', '当前 demo URL 首次上传临时失败，请点击重试。', retryToken)
   }
 
-  const source = createUrlMediaSource(request.source.url)
+  const resourceUrl = stripDemoScenarioFromUrl(request.source.url)
+  const source = createUrlMediaSource(resourceUrl)
   const sizeMetadata = await loadIntrinsicSizeMetadata(source.url)
   const resource = createDemoResource(
     request,
     source,
-    inferMimeTypeFromUrl(request.source.url),
+    inferMimeTypeFromUrl(resourceUrl),
     sizeMetadata
   )
 
@@ -274,6 +275,15 @@ function readDemoScenario(url: string): DemoMediaScenario {
   return scenario === 'retry-once' || scenario === 'always-fail'
     ? scenario
     : 'success'
+}
+
+/** 移除 demo 场景 query，避免 data URL fixture 被 query 破坏解码。 */
+function stripDemoScenarioFromUrl(url: string): string {
+  const parsedUrl = new URL(url, window.location.href)
+
+  parsedUrl.searchParams.delete(DEMO_MEDIA_SCENARIO_PARAM)
+
+  return parsedUrl.toString()
 }
 
 /** 根据资源 URL 推断最小 mime。 */

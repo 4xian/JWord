@@ -9,6 +9,8 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type { RangeRef } from '@4xian/jword-core'
 
+const expectedGate2PageCount = 53
+
 interface ResolvedSelectionSnapshot {
   readonly summary: string
   readonly range: Readonly<{
@@ -434,7 +436,7 @@ async function waitForGate3AlphaReady(page: Page): Promise<void> {
 }
 
 async function waitForGate3LargeFixtureReady(page: Page): Promise<void> {
-  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
+  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', String(expectedGate2PageCount))
   await page.waitForFunction(() => window.__jwordDemo !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await expect.poll(async () => {
@@ -450,7 +452,27 @@ async function readPlainText(page: Page): Promise<string> {
 
 async function readSelectionSummary(page: Page): Promise<string> {
   return page.evaluate(() => {
-    return document.querySelector<HTMLElement>('[data-jword-selection-summary]')?.textContent ?? ''
+    const demo = window.__jwordDemo
+    const selection = demo?.editor.getSelection() ?? null
+
+    if (demo === undefined || selection === null) {
+      return '无选区'
+    }
+
+    const anchor = demo.editor.resolveTextPosition(selection.anchor)
+    const focus = demo.editor.resolveTextPosition(selection.focus)
+    const startGraphemeIndex = Math.min(anchor.graphemeIndex, focus.graphemeIndex)
+    const endGraphemeIndex = Math.max(anchor.graphemeIndex, focus.graphemeIndex)
+
+    if (
+      anchor.sectionId === focus.sectionId
+      && anchor.blockId === focus.blockId
+      && anchor.runId === focus.runId
+    ) {
+      return `选区：${anchor.blockId} / ${anchor.runId} / ${startGraphemeIndex}→${endGraphemeIndex}`
+    }
+
+    return `选区：${anchor.blockId} / ${anchor.runId} / ${anchor.graphemeIndex}→${focus.blockId} / ${focus.runId} / ${focus.graphemeIndex}`
   })
 }
 
@@ -769,24 +791,25 @@ async function readAlphaChineseDoubleClickProbes(page: Page): Promise<readonly A
 async function readResolvedSelectionSnapshot(page: Page): Promise<ResolvedSelectionSnapshot> {
   return page.evaluate(() => {
     const demo = window.__jwordDemo
-    const summary = document.querySelector<HTMLElement>('[data-jword-selection-summary]')?.textContent ?? ''
     const selection = demo?.editor.getSelection() ?? null
 
     if (demo === undefined || selection === null) {
       return {
-        summary,
+        summary: '无选区',
         range: null
       }
     }
 
     const anchor = demo.editor.resolveTextPosition(selection.anchor)
     const focus = demo.editor.resolveTextPosition(selection.focus)
+    const startGraphemeIndex = Math.min(anchor.graphemeIndex, focus.graphemeIndex)
+    const endGraphemeIndex = Math.max(anchor.graphemeIndex, focus.graphemeIndex)
 
     return {
-      summary,
+      summary: `选区：${anchor.blockId} / ${anchor.runId} / ${startGraphemeIndex}→${endGraphemeIndex}`,
       range: {
-        startGraphemeIndex: Math.min(anchor.graphemeIndex, focus.graphemeIndex),
-        endGraphemeIndex: Math.max(anchor.graphemeIndex, focus.graphemeIndex)
+        startGraphemeIndex,
+        endGraphemeIndex
       }
     }
   })
@@ -963,7 +986,21 @@ async function runCompositionSequence(
   return page.evaluate(({ firstData, finalData }) => {
     const input = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
     const readText = (): string => document.querySelector<HTMLElement>('[data-jword-ui-text-mirror]')?.textContent ?? ''
-    const readSummary = (): string => document.querySelector<HTMLElement>('[data-jword-selection-summary]')?.textContent ?? ''
+    const readSummary = (): string => {
+      const demo = window.__jwordDemo
+      const selection = demo?.editor.getSelection() ?? null
+
+      if (demo === undefined || selection === null) {
+        return '无选区'
+      }
+
+      const anchor = demo.editor.resolveTextPosition(selection.anchor)
+      const focus = demo.editor.resolveTextPosition(selection.focus)
+      const startGraphemeIndex = Math.min(anchor.graphemeIndex, focus.graphemeIndex)
+      const endGraphemeIndex = Math.max(anchor.graphemeIndex, focus.graphemeIndex)
+
+      return `选区：${anchor.blockId} / ${anchor.runId} / ${startGraphemeIndex}→${endGraphemeIndex}`
+    }
     const createCompositionEvent = (type: string, data: string): Event => {
       const event = new Event(type, {
         bubbles: true,

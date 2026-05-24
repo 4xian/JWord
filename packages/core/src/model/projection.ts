@@ -13,7 +13,10 @@ import {
   DOCUMENT_STORE_FIELDS,
   createDocumentStore,
   getParagraphRuns,
+  projectCommentRecord,
+  projectRevisionRecord,
   projectResourceRecord,
+  readCommentRangeRecord,
   getRunField,
   getRunInlines,
   getRunLink,
@@ -71,13 +74,19 @@ export function createDocumentProjection(input: DocumentStore | Y.Doc): Document
   )
   const styleIds = projectStringList(store.document.get(DOCUMENT_STORE_FIELDS.document.styleIds))
   const resourceIds = projectStringList(store.document.get(DOCUMENT_STORE_FIELDS.document.resourceIds))
+  const commentIds = projectStringList(store.document.get(DOCUMENT_STORE_FIELDS.document.commentIds))
+  const revisionIds = projectStringList(store.document.get(DOCUMENT_STORE_FIELDS.document.revisionIds))
   const resources = projectDocumentResources(store, resourceIds)
+  const comments = projectDocumentComments(store, commentIds)
+  const revisions = projectDocumentRevisions(store, revisionIds)
   const document: Document = {
     kind: 'document',
     id: documentId,
     ...(styleIds === undefined ? {} : { styleIds }),
     ...(resourceIds === undefined ? {} : { resourceIds }),
     ...(resources === undefined ? {} : { resources }),
+    ...(comments === undefined ? {} : { comments }),
+    ...(revisions === undefined ? {} : { revisions }),
     sections: deepFreezeArray(store.sections.toArray().map(projectSection))
   }
 
@@ -90,16 +99,22 @@ function projectSection(section: SectionRecord): Section {
   const properties = section.get(DOCUMENT_STORE_FIELDS.section.properties) as Y.Map<unknown> | undefined
   const page = projectSectionPage(properties?.get('page'))
   const columns = readOptionalNumber(properties?.get('columns'))
+  const breakType = projectSectionBreakType(properties?.get('breakType'))
+  const headerFooterSameAsPrevious = projectSectionSameAsPrevious(properties?.get('headerFooterSameAsPrevious'))
+  const pageNumbering = projectSectionPageNumbering(properties?.get('pageNumbering'))
   const headerIds = projectStringList(section.get(DOCUMENT_STORE_FIELDS.section.headerIds))
   const footerIds = projectStringList(section.get(DOCUMENT_STORE_FIELDS.section.footerIds))
 
   return deepFreeze({
     kind: 'section',
     id: readString(section.get(DOCUMENT_STORE_FIELDS.section.id), 'section'),
+    ...(breakType === undefined ? {} : { breakType }),
     ...(page === undefined ? {} : { page }),
     ...(columns === undefined ? {} : { columns }),
     ...(headerIds === undefined ? {} : { headerIds }),
     ...(footerIds === undefined ? {} : { footerIds }),
+    ...(headerFooterSameAsPrevious === undefined ? {} : { headerFooterSameAsPrevious }),
+    ...(pageNumbering === undefined ? {} : { pageNumbering }),
     blocks: deepFreezeArray(getSectionBlocks(section).toArray().map(projectBlock))
   })
 }
@@ -242,6 +257,49 @@ function projectProperties(value: unknown): ModelProperties | undefined {
   return deepFreeze(Object.fromEntries(value.entries()) as ModelProperties)
 }
 
+function projectDocumentComments(
+  store: DocumentStore,
+  commentIds: readonly string[] | undefined
+): Document['comments'] | undefined {
+  if (commentIds === undefined || commentIds.length === 0) {
+    return undefined
+  }
+
+  const comments = commentIds.flatMap((commentId) => {
+    const record = store.comments.get(commentId)
+    const anchorRangeId = typeof record?.get(DOCUMENT_STORE_FIELDS.comment.anchorRangeId) === 'string'
+      ? record.get(DOCUMENT_STORE_FIELDS.comment.anchorRangeId) as string
+      : undefined
+    const rangeRecord = anchorRangeId === undefined
+      ? undefined
+      : store.commentRanges.get(anchorRangeId)
+
+    return record === undefined || rangeRecord === undefined
+      ? []
+      : [projectCommentRecord(record, readCommentRangeRecord(rangeRecord))]
+  })
+
+  return comments.length === 0 ? undefined : deepFreezeArray(comments)
+}
+
+function projectDocumentRevisions(
+  store: DocumentStore,
+  revisionIds: readonly string[] | undefined
+): Document['revisions'] | undefined {
+  const ids = revisionIds ?? Array.from(store.revisions.keys())
+
+  if (ids.length === 0) {
+    return undefined
+  }
+
+  const revisions = ids
+    .map((revisionId) => store.revisions.get(revisionId))
+    .filter((revision): revision is NonNullable<typeof revision> => revision !== undefined)
+    .map(projectRevisionRecord)
+
+  return revisions.length === 0 ? undefined : deepFreezeArray(revisions)
+}
+
 /**
  * 读取段落样式标识。
  */
@@ -285,6 +343,27 @@ function projectSectionPage(value: unknown): SectionPageLayout | undefined {
     ...(widthTwips === undefined ? {} : { widthTwips }),
     ...(heightTwips === undefined ? {} : { heightTwips }),
     ...(marginTwips === undefined ? {} : { marginTwips })
+  })
+}
+
+function projectSectionBreakType(value: unknown): Section['breakType'] | undefined {
+  return value === 'continuous' || value === 'next-page' ? value : undefined
+}
+
+function projectSectionSameAsPrevious(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function projectSectionPageNumbering(value: unknown): Section['pageNumbering'] | undefined {
+  if (!isRecord(value) || (value.mode !== 'continue' && value.mode !== 'restart')) {
+    return undefined
+  }
+
+  const start = readOptionalNumber(value.start)
+
+  return deepFreeze({
+    mode: value.mode,
+    ...(start === undefined ? {} : { start })
   })
 }
 

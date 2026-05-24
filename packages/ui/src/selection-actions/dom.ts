@@ -30,6 +30,10 @@ export function createSelectionActionsDom(host: HTMLElement): SelectionActionsDo
     formatControls.italic,
     formatControls.underline,
     formatControls.strike,
+    formatControls.insertLink,
+    formatControls.openLink,
+    formatControls.editLink,
+    formatControls.removeLink,
     createColorLabel('文字颜色', 'text-color', 'textColor', formatControls.textColor),
     createColorLabel('背景色', 'background-color', 'backgroundColor', formatControls.backgroundColor)
   )
@@ -49,6 +53,9 @@ export function createSelectionActionsDom(host: HTMLElement): SelectionActionsDo
   contextMetaGroup.className = 'jw-context-menu__group jw-context-menu__group--meta'
   contextMetaGroup.append(
     contextControls.insertLink,
+    contextControls.openLink,
+    contextControls.editLink,
+    contextControls.removeLink,
     contextControls.insertComment,
     contextControls.insertBookmark,
     contextControls.forwardReference
@@ -79,6 +86,7 @@ export function renderSelectionActionsDom(dom: SelectionActionsDom, state: Selec
   setToggleState(dom.formatControls.italic, state.formatEnabled, state.italicPressed)
   setToggleState(dom.formatControls.underline, state.formatEnabled, state.underlinePressed)
   setToggleState(dom.formatControls.strike, state.formatEnabled, state.strikePressed)
+  syncLinkActionVisibility(dom, state)
   dom.formatControls.textColor.disabled = !state.formatEnabled
   dom.formatControls.backgroundColor.disabled = !state.formatEnabled
   if (state.activeColorPicker !== 'text') {
@@ -113,6 +121,10 @@ function createFormatControls(): SelectionActionsFormatControls {
     italic: createFormatButton('format.italic', '斜体', 'italic'),
     underline: createFormatButton('format.underline', '下划线', 'underline'),
     strike: createFormatButton('format.strike', '删除线', 'strike'),
+    insertLink: createFormatButton('insert.link', '插入链接', 'link'),
+    openLink: createFormatButton('link.open', '打开链接', 'openLink'),
+    editLink: createFormatButton('link.edit', '编辑链接', 'paragraphStyle'),
+    removeLink: createFormatButton('link.remove', '删除链接', 'trash'),
     textColor: createColorInput('format.textColor', '文字颜色', '#111111'),
     backgroundColor: createColorInput('format.backgroundColor', '背景色', '#fff59d')
   }
@@ -126,8 +138,11 @@ function createContextControls(): SelectionActionsContextControls {
     paste: createContextButton('clipboard.paste', '粘贴', false, '⌘+V'),
     pastePlainText: createContextButton('clipboard.pastePlainText', '仅文本粘贴', false, '⌘+⇧+V'),
     clear: createContextButton('format.clear', '清除格式'),
-    insertLink: createContextButton('insert.link', '插入链接', true),
-    insertComment: createContextButton('insert.comment', '插入批注', true),
+    insertLink: createContextButton('insert.link', '插入链接'),
+    openLink: createContextButton('link.open', '打开链接'),
+    editLink: createContextButton('link.edit', '编辑链接'),
+    removeLink: createContextButton('link.remove', '删除链接'),
+    insertComment: createContextButton('insert.comment', '插入批注'),
     insertBookmark: createContextButton('insert.bookmark', '插入书签', true),
     forwardReference: createContextButton('insert.referenceForward', '引用转发', true)
   }
@@ -137,18 +152,54 @@ function createContextControls(): SelectionActionsContextControls {
 function createFormatButton(
   actionId: string,
   ariaLabel: string,
-  iconName: 'bold' | 'italic' | 'underline' | 'strike'
+  iconName: 'bold' | 'italic' | 'underline' | 'strike' | 'link' | 'openLink'
+  | 'paragraphStyle' | 'trash'
 ): HTMLButtonElement {
   const button = document.createElement('button')
 
   button.type = 'button'
   button.className = 'jw-selection-toolbar__button'
+  button.title = ariaLabel
   button.setAttribute('data-jword-selection-action', actionId)
   button.setAttribute('aria-label', ariaLabel)
   button.setAttribute('aria-pressed', 'false')
   button.append(createToolbarIcon(iconName))
 
   return button
+}
+
+/** 按当前链接命中状态切换新增链接与已有链接操作。 */
+function syncLinkActionVisibility(dom: SelectionActionsDom, state: SelectionActionsViewState): void {
+  const hasActiveLink = state.activeLinkUrl !== null
+
+  dom.formatControls.bold.hidden = true
+  dom.formatControls.italic.hidden = true
+  dom.formatControls.underline.hidden = true
+  dom.formatControls.strike.hidden = true
+  dom.formatControls.textColor.parentElement?.toggleAttribute('hidden', true)
+  dom.formatControls.backgroundColor.parentElement?.toggleAttribute('hidden', true)
+  setActionVisibility(dom.formatControls.insertLink, !hasActiveLink)
+  setActionVisibility(dom.formatControls.openLink, hasActiveLink)
+  setActionVisibility(dom.formatControls.editLink, hasActiveLink)
+  setActionVisibility(dom.formatControls.removeLink, hasActiveLink)
+  dom.formatControls.insertLink.disabled = hasActiveLink || !state.insertLinkEnabled
+  dom.formatControls.openLink.disabled = !hasActiveLink
+  dom.formatControls.editLink.disabled = !hasActiveLink
+  dom.formatControls.removeLink.disabled = !hasActiveLink
+  setActionVisibility(dom.contextControls.insertLink, !state.contextHasLink)
+  setActionVisibility(dom.contextControls.openLink, state.contextHasLink)
+  setActionVisibility(dom.contextControls.editLink, state.contextHasLink)
+  setActionVisibility(dom.contextControls.removeLink, state.contextHasLink)
+  dom.contextControls.insertLink.disabled = state.contextHasLink
+  dom.contextControls.openLink.disabled = !state.contextHasLink
+  dom.contextControls.editLink.disabled = !state.contextHasLink
+  dom.contextControls.removeLink.disabled = !state.contextHasLink
+}
+
+/** 同步动作按钮的真实可见性，避免 CSS display 覆盖 hidden 属性。 */
+function setActionVisibility(target: HTMLButtonElement, visible: boolean): void {
+  target.hidden = !visible
+  target.style.display = visible ? '' : 'none'
 }
 
 /** 创建浮动工具栏里的颜色输入。 */
@@ -158,6 +209,7 @@ function createColorInput(actionId: string, ariaLabel: string, initialValue: str
   input.type = 'color'
   input.value = initialValue
   input.className = 'jw-selection-toolbar__color-input'
+  input.title = ariaLabel
   input.setAttribute('data-jword-selection-action', actionId)
   input.setAttribute('aria-label', ariaLabel)
 
@@ -176,6 +228,7 @@ function createColorLabel(
   const indicator = document.createElement('span')
 
   label.className = 'jw-selection-toolbar__color'
+  label.title = ariaLabel
   label.setAttribute('data-jword-color-tone', tone)
   label.setAttribute('aria-label', ariaLabel)
   visual.className = 'jw-selection-toolbar__color-visual'
@@ -199,7 +252,9 @@ function createContextButton(
   button.type = 'button'
   button.className = 'jw-context-menu__button'
   button.disabled = disabled
+  button.title = text
   button.setAttribute('data-jword-context-action', actionId)
+  button.setAttribute('aria-label', text)
   label.className = 'jw-context-menu__label'
   label.title = text
   label.textContent = text

@@ -5,12 +5,13 @@
  * 性能/安全约束：只在入口层访问宿主 DOM，不回退到旧的 toolbar 内联实现。
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
  */
-import { createEditor, createSelectionState } from '@4xian/jword-core'
+import { buildAddRevisionMetadataCommand, createEditor, createSelectionState } from '@4xian/jword-core'
 import { createJWordUi } from '@4xian/jword-ui'
 
 import { createDemoControls, loadInitialDemoText } from './demo-controls'
 import { createDemoMediaSupport } from './demo-media'
 import { createDemoTableSupport } from './demo-table'
+import type { JWordDemoRevisionInput } from './vite-env'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
 
@@ -29,6 +30,14 @@ const assistiveMirrorHost = requireElement<HTMLElement>(
 const initialDemoText = await loadInitialDemoText()
 const editor = createEditor({
   initialText: initialDemoText,
+  currentUser: {
+    id: 'demo-user',
+    displayName: 'Demo User',
+    color: '#2563eb'
+  },
+  resourceUrlPolicy: {
+    allowExternalUrl: isDemoSameOriginResourceUrl
+  },
   layout: {
     keepLatinWordWholeOnWrap: true
   }
@@ -47,8 +56,46 @@ const jwordUi = createJWordUi({
   toolbar: {
     showSummaries: false
   },
+  user: {
+    currentUser: {
+      id: 'demo-user',
+      name: 'Demo User',
+      color: '#2563eb'
+    },
+    resolveUser(authorId) {
+      return authorId === 'demo-user'
+        ? {
+            id: 'demo-user',
+            name: 'Demo User',
+            color: '#2563eb'
+          }
+        : null
+    }
+  },
   media: demoMedia.media,
-  table: demoTable.table
+  table: demoTable.table,
+  readonlyPreview: {
+    mobile: true
+  },
+  comments: true,
+  link: {
+    openLink(url) {
+      statusHost.textContent = `打开链接：${url}`
+      window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  },
+  headerFooter: {
+    host: toolbarHost
+  },
+  headingOutline: {
+    host: toolbarHost
+  },
+  findReplace: {
+    host: toolbarHost
+  },
+  revisions: {
+    host: toolbarHost
+  }
 })
 const demoControls = createDemoControls({
   editor,
@@ -66,7 +113,68 @@ window.__jwordDemo = Object.freeze({
     selectImageByResourceId(editor, resourceId)
   },
   media: demoMedia.hooks,
-  table: demoTable.hooks
+  table: demoTable.hooks,
+  comments: {
+    readThreadCount: () => editor.getProjection().document.comments?.length ?? 0
+  },
+  link: {
+    readActiveLink: () => {
+      const selection = editor.getSelection()
+
+      if (selection === null) {
+        return null
+      }
+
+      const position = editor.resolveTextPosition(selection.focus)
+      const projection = editor.getProjection()
+
+      for (const section of projection.document.sections) {
+        for (const block of section.blocks) {
+          if (block.kind !== 'paragraph') {
+            continue
+          }
+
+          const run = block.runs.find((candidate) => candidate.id === position.runId)
+
+          if (run?.link !== undefined) {
+            return run.link
+          }
+        }
+      }
+
+      return null
+    }
+  },
+  revisions: {
+    addRevision(input: JWordDemoRevisionInput) {
+      const selection = editor.getSelection()
+      const command = buildAddRevisionMetadataCommand(editor.getProjection(), selection, input)
+
+      if (command === null) {
+        return false
+      }
+
+      editor.executeCommand(command, {
+        selectionAfter: selection
+      })
+      jwordUi.refresh()
+
+      return true
+    },
+    readRevisionCount: () => editor.getProjection().document.revisions?.length ?? 0,
+    readSelectionOffsets: () => {
+      const selection = editor.getSelection()
+
+      if (selection === null) {
+        return null
+      }
+
+      return [
+        editor.resolveTextPosition(selection.anchor).graphemeIndex,
+        editor.resolveTextPosition(selection.focus).graphemeIndex
+      ] as const
+    }
+  }
 })
 
 requestAnimationFrame(() => {
@@ -97,6 +205,11 @@ function requireElement<ElementType extends HTMLElement>(selector: string, error
   }
 
   return element
+}
+
+/** 判断 demo 图片资源 URL 是否属于当前同源 fixture。 */
+function isDemoSameOriginResourceUrl(url: URL): boolean {
+  return url.origin === window.location.origin
 }
 
 /** 根据资源 id 直接把测试选区切到对应图片 run。 */

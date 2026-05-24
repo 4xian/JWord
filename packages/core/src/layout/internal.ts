@@ -13,10 +13,12 @@ import type { Inline, ModelProperties, Paragraph, Section } from '../model/types
 import type { PageConfig } from './page-config'
 import type { Resource } from '../resources/types'
 import type {
+  HeaderFooterBox,
   InlineObjectPayload,
   LayoutDebugBox,
   LayoutDebugOverlay,
   LayoutRect,
+  LayoutSectionContext,
   LineBox,
   MutableLineBox,
   MutablePageBox,
@@ -41,6 +43,7 @@ export function createPage(pageIndex: number, pageConfig: PageConfig): MutablePa
     sectionIds: [],
     headerIds: Object.freeze([]),
     footerIds: Object.freeze([]),
+    headerFooterBoxes: [],
     lines: [],
     paragraphs: [],
     blocks: [],
@@ -67,6 +70,7 @@ export function freezePage(page: MutablePageBox): PageBox {
     sectionIds: Object.freeze([...page.sectionIds]),
     headerIds: Object.freeze([...page.headerIds]),
     footerIds: Object.freeze([...page.footerIds]),
+    headerFooterBoxes: Object.freeze([...page.headerFooterBoxes]),
     lines: Object.freeze(page.lines),
     paragraphs: Object.freeze(frozenParagraphs),
     blocks: Object.freeze(page.blocks.map((block) =>
@@ -75,7 +79,8 @@ export function freezePage(page: MutablePageBox): PageBox {
         : block
     )),
     contentRect: Object.freeze(page.contentRect),
-    ...(page.pageLayout === undefined ? {} : { pageLayout: freezeSectionPageLayout(page.pageLayout) })
+    ...(page.pageLayout === undefined ? {} : { pageLayout: freezeSectionPageLayout(page.pageLayout) }),
+    ...(page.pageNumber === undefined ? {} : { pageNumber: page.pageNumber })
   })
 }
 
@@ -123,7 +128,11 @@ export function createDebugBox(
   })
 }
 
-export function assignPageSectionBoundary(page: MutablePageBox, section: Section): void {
+export function assignPageSectionBoundary(
+  page: MutablePageBox,
+  section: Section,
+  context?: LayoutSectionContext
+): void {
   if (page.sectionIds[page.sectionIds.length - 1] === section.id) {
     return
   }
@@ -134,16 +143,74 @@ export function assignPageSectionBoundary(page: MutablePageBox, section: Section
     page.sectionBoundary = 'single'
     page.sectionId = section.id
     page.pageLayout = section.page
-    page.headerIds = section.headerIds ?? Object.freeze([])
-    page.footerIds = section.footerIds ?? Object.freeze([])
+    page.headerIds = context?.headerIds ?? section.headerIds ?? Object.freeze([])
+    page.footerIds = context?.footerIds ?? section.footerIds ?? Object.freeze([])
+    const pageNumber = resolvePageNumber(page, context)
+
+    if (pageNumber === undefined) {
+      delete page.pageNumber
+    } else {
+      page.pageNumber = pageNumber
+    }
+
+    page.headerFooterBoxes = createHeaderFooterBoxes(page, section.id)
     return
   }
 
   page.sectionBoundary = 'mixed'
   delete page.sectionId
   delete page.pageLayout
+  delete page.pageNumber
   page.headerIds = Object.freeze([])
   page.footerIds = Object.freeze([])
+  page.headerFooterBoxes = []
+}
+
+function resolvePageNumber(page: MutablePageBox, context: LayoutSectionContext | undefined): number | undefined {
+  if (context === undefined) {
+    return undefined
+  }
+
+  return context.startPageNumber + Math.max(0, page.pageIndex - context.startPageIndex)
+}
+
+function createHeaderFooterBoxes(page: MutablePageBox, sectionId: string): HeaderFooterBox[] {
+  const pageNumber = page.pageNumber
+
+  if (pageNumber === undefined) {
+    return []
+  }
+
+  return [
+    ...page.headerIds.map((sourceId) => createHeaderFooterBox(page, sectionId, sourceId, 'header', pageNumber)),
+    ...page.footerIds.map((sourceId) => createHeaderFooterBox(page, sectionId, sourceId, 'footer', pageNumber))
+  ]
+}
+
+function createHeaderFooterBox(
+  page: MutablePageBox,
+  sectionId: string,
+  sourceId: string,
+  role: HeaderFooterBox['role'],
+  pageNumber: number
+): HeaderFooterBox {
+  const height = Math.min(page.contentRect.y - page.y, page.height / 8)
+  const y = role === 'header'
+    ? page.y
+    : page.contentRect.y + page.contentRect.height
+
+  return Object.freeze({
+    kind: 'headerFooter',
+    role,
+    sectionId,
+    sourceId,
+    pageNumber,
+    pageIndex: page.pageIndex,
+    x: page.contentRect.x,
+    y,
+    width: page.contentRect.width,
+    height: Math.max(0, height)
+  })
 }
 
 export function createInlineObjectPayload(

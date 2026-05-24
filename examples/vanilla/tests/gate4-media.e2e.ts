@@ -134,6 +134,106 @@ test('Gate 4 media toolbar uses confirm/cancel url dialog and inserts inline ima
   })
 })
 
+test('Gate 4 media toolbar keeps failed url upload recoverable and retries with the same resource', async ({ page }) => {
+  await page.goto('/')
+  await waitForMediaDemoReady(page)
+  await prepareInsertSelection(page)
+
+  const trigger = page.locator('[data-jword-media-trigger="true"]')
+  const urlAction = page.locator('[data-jword-media-action-url="true"]')
+  const dialog = page.locator('[data-jword-media-url-dialog="true"]')
+  const dialogInput = page.locator('[data-jword-media-url-dialog-input="true"]')
+  const confirmButton = page.locator('[data-jword-media-url-dialog-confirm="true"]')
+  const dialogError = page.locator('[data-jword-media-url-dialog-error="true"]')
+  const retryOnceUrl = await page.evaluate(() => {
+    return window.__jwordDemo?.media?.buildScenarioUrl('retry-once') ?? ''
+  })
+
+  expect(retryOnceUrl).not.toBe('')
+  await trigger.click()
+  await urlAction.click()
+  await dialogInput.fill(retryOnceUrl)
+  await confirmButton.click()
+
+  await expect(dialog).toBeVisible()
+  await expect(dialogError).toContainText('首次上传临时失败')
+
+  const failedLog = await page.evaluate(() => window.__jwordDemo?.media?.readUploadLog() ?? [])
+
+  expect(failedLog).toHaveLength(1)
+  expect(failedLog[0]).toMatchObject({
+    sourceKind: 'url',
+    outcome: 'failed'
+  })
+  expect(failedLog[0]?.retryToken).toContain(failedLog[0]?.resourceId)
+
+  await confirmButton.click()
+
+  await expect(dialog).toBeHidden()
+  await expect.poll(() => {
+    return page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().length ?? 0)
+  }).toBe(2)
+
+  const recoveredLog = await page.evaluate(() => window.__jwordDemo?.media?.readUploadLog() ?? [])
+  const resourceId = recoveredLog[0]?.resourceId
+
+  expect(resourceId).toBe(recoveredLog[1]?.resourceId)
+  expect(recoveredLog.map((entry) => entry.outcome)).toEqual(['failed', 'success'])
+  await expect.poll(() => {
+    return resourceId === undefined ? null : readProjectionImage(page, resourceId)
+  }).toEqual({
+    display: 'inline',
+    widthTwips: FIXTURE_WIDTH_TWIPS,
+    heightTwips: FIXTURE_HEIGHT_TWIPS,
+    rotationDegrees: 0
+  })
+})
+
+test('Gate 4 media toolbar replaces selected inline image resource after successful upload', async ({ page }) => {
+  await page.goto('/')
+  await waitForMediaDemoReady(page)
+  await prepareInsertSelection(page)
+
+  const originalResourceId = await insertFixtureByFile(page)
+
+  await expect.poll(() => {
+    return readProjectionImage(page, originalResourceId)
+  }).toEqual({
+    display: 'inline',
+    widthTwips: FIXTURE_WIDTH_TWIPS,
+    heightTwips: FIXTURE_HEIGHT_TWIPS,
+    rotationDegrees: 0
+  })
+
+  await selectImageByResourceId(page, originalResourceId)
+
+  const fixtureUrl = await page.evaluate(() => window.__jwordDemo?.media?.getFixtureUrl() ?? '')
+
+  expect(fixtureUrl).not.toBe('')
+  await page.locator('[data-jword-media-trigger="true"]').click()
+  await page.locator('[data-jword-media-action-url="true"]').click()
+  await page.locator('[data-jword-media-url-dialog-input="true"]').fill(fixtureUrl)
+  await page.locator('[data-jword-media-url-dialog-confirm="true"]').click()
+
+  await expect.poll(() => {
+    return page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().length ?? 0)
+  }).toBe(2)
+
+  const replacementResourceId = await page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().at(-1)?.resourceId ?? null)
+
+  expect(replacementResourceId).not.toBeNull()
+  expect(replacementResourceId).not.toBe(originalResourceId)
+  await expect.poll(() => readProjectionImage(page, originalResourceId)).toBeNull()
+  await expect.poll(() => {
+    return replacementResourceId === null ? null : readProjectionImage(page, replacementResourceId)
+  }).toEqual({
+    display: 'inline',
+    widthTwips: FIXTURE_WIDTH_TWIPS,
+    heightTwips: FIXTURE_HEIGHT_TWIPS,
+    rotationDegrees: 0
+  })
+})
+
 test('Gate 4 inline image keeps fixture natural size instead of layout fallback width', async ({ page }) => {
   await page.goto('/')
   await waitForMediaDemoReady(page)
@@ -527,7 +627,21 @@ async function prepareInsertSelection(page: Page): Promise<void> {
       focusGraphemeIndex: 0
     })
   })
-  await expect(page.locator('[data-jword-selection-summary]')).toContainText('0→0')
+  await expect.poll(() => {
+    return page.evaluate(() => {
+      const demo = window.__jwordDemo
+      const selection = demo?.editor.getSelection()
+
+      if (demo === undefined || selection === null || selection === undefined) {
+        return null
+      }
+
+      return [
+        demo.editor.resolveTextPosition(selection.anchor).graphemeIndex,
+        demo.editor.resolveTextPosition(selection.focus).graphemeIndex
+      ]
+    })
+  }).toEqual([0, 0])
 }
 
 /** 通过已有 toolbar 文件上传入口插入 fixture，并返回资源 id。 */

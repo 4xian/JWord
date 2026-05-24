@@ -15,6 +15,7 @@ import {
 const fixturePath = posix.join('fixtures', 'plain-text', 'gate2-50-pages.txt')
 const fixtureText = readFileSync(fixturePath, 'utf8')
 const fixtureLines = splitGate2FixtureParagraphs(fixtureText)
+const expectedPageCount = 53
 const pageConfig = createPageConfig()
 const fontManager = createFontManager({
   fallbackFontFamily: 'Arial',
@@ -29,8 +30,8 @@ const layout = layoutDocument({
 })
 const layoutDurationMs = roundMetric(performance.now() - layoutStart)
 
-if (layout.pages.length !== 50) {
-  throw new Error(`Gate 2 benchmark expected exactly 50 pages, got ${layout.pages.length}.`)
+if (layout.pages.length !== expectedPageCount) {
+  throw new Error(`Gate 2 benchmark expected exactly ${expectedPageCount} pages, got ${layout.pages.length}.`)
 }
 
 const renderStart = performance.now()

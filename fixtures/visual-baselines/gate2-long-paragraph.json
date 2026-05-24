@@ -7,7 +7,7 @@
   "fragmentCount": 217,
   "renderedPageCount": 1,
   "drawCallCount": 871,
-  "drawCallHash": "656e5558c727b0476fef324438fbff5f1633678a7ca889b15f291ce261a891df",
+  "drawCallHash": "f60c802fff353221c9f2ae567ba9f98937bd4a897170019dbe2a0aab7c82c832",
   "notes": [
     "记录长段落视觉输入基线",
     "真实分页和断行数量由 Gate 2 layout 单元测试覆盖"

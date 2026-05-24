@@ -30,7 +30,12 @@ export type {
   EditorFixture,
   EditorHitTestPoint,
   EditorOptions,
-  EditorTextAnchorInput
+  EditorRichTextFragment,
+  EditorRichTextParagraph,
+  EditorRichTextRun,
+  EditorTextAnchorInput,
+  EditorUser,
+  EditorUserInput
 } from './editor/runtime'
 export { createEditor } from './editor/runtime'
 export { JWordError } from './shared/errors'
@@ -76,6 +81,39 @@ export {
   buildUpsertResourceCommand,
   buildUpsertResourceCommandWithPolicy
 } from './operations/command-builders'
+export {
+  buildAddCommentThreadCommand,
+  buildDeleteCommentThreadCommand,
+  buildEditCommentMessageCommand,
+  buildReopenCommentThreadCommand,
+  buildReplyCommentThreadCommand,
+  buildResolveCommentThreadCommand
+} from './operations/comment-command-builders'
+export {
+  buildDeleteLinkCommand,
+  buildEditLinkCommand,
+  buildInsertLinkCommand,
+  buildSetLinkCommand
+} from './operations/link-command-builders'
+export { buildAddRevisionMetadataCommand } from './operations/revision-command-builders'
+export type { AddRevisionMetadataInput } from './operations/revision-command-builders'
+export { buildSetSectionPropertiesCommand } from './operations/section-command-builders'
+export type { SectionPropertiesInput } from './operations/section-command-builders'
+export {
+  buildHeadingOutline,
+  locateHeadingOutlineItem
+} from './heading/outline'
+export type { HeadingOutlineItem } from './heading/outline'
+export {
+  buildReplaceMatchCommand,
+  findTextMatches,
+  replaceAllMatches
+} from './find-replace/find-replace'
+export type {
+  FindTextMatch,
+  ReplaceAllMatchesResult
+} from './find-replace/find-replace'
+export { isAllowedLinkUrl } from './link/policy'
 export { createFontManager } from './layout/font-manager'
 export type {
   FontAvailabilityStatus,
@@ -124,7 +162,22 @@ export type {
 } from './layout/runtime'
 export { createLayoutSchedule } from './layout/scheduler'
 export type { LayoutSchedule, LayoutScheduleInput } from './layout/scheduler'
-export type { Block, Document, Paragraph, ParagraphList, Run, Section, Table, TableBorder, TableCell, TableRow } from './model/types'
+export type {
+  Block,
+  Comment,
+  CommentMessage,
+  CommentThread,
+  Document,
+  Paragraph,
+  ParagraphList,
+  RevisionMetadata,
+  Run,
+  Section,
+  Table,
+  TableBorder,
+  TableCell,
+  TableRow
+} from './model/types'
 export type { ImageInline } from './model/types'
 export {
   CSS_PX_PER_INCH,

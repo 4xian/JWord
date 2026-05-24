@@ -119,7 +119,27 @@ describe('Gate 1 document model skeleton', () => {
       authorId: 'author-1',
       createdAt: '2026-05-12T00:00:00.000Z',
       type: 'insert',
-      rangeId: 'range-1'
+      rangeId: 'range-1',
+      rangeSnapshot: {
+        id: 'range-1',
+        anchor: {
+          documentId: 'document-rich',
+          sectionId: 'section-rich',
+          blockId: 'paragraph-rich',
+          runId: 'run-rich',
+          graphemeIndex: 0,
+          relativePosition: {}
+        },
+        focus: {
+          documentId: 'document-rich',
+          sectionId: 'section-rich',
+          blockId: 'paragraph-rich',
+          runId: 'run-rich',
+          graphemeIndex: 2,
+          relativePosition: {}
+        }
+      },
+      summary: '插入正文'
     } satisfies RevisionMetadata
 
     const document: Document = {
@@ -185,18 +205,38 @@ describe('Gate 1 document model skeleton', () => {
       ],
       comments: [
         {
-          kind: 'comment',
-          id: 'comment-1',
+          kind: 'commentThread',
+          id: 'thread-1',
           authorId: 'author-1',
           createdAt: '2026-05-12T00:00:00.000Z',
           anchorRangeId: 'range-1',
-          threadId: 'thread-1',
           resolved: false,
-          blocks: [
+          rangeSnapshot: {
+            id: 'range-1',
+            anchor: {
+              documentId: 'document-rich',
+              sectionId: 'section-rich',
+              blockId: 'paragraph-rich',
+              runId: 'run-rich',
+              graphemeIndex: 0,
+              relativePosition: {}
+            },
+            focus: {
+              documentId: 'document-rich',
+              sectionId: 'section-rich',
+              blockId: 'paragraph-rich',
+              runId: 'run-rich',
+              graphemeIndex: 2,
+              relativePosition: {}
+            }
+          },
+          messages: [
             {
-              kind: 'paragraph',
-              id: 'comment-paragraph-1',
-              runs: []
+              id: 'comment-1',
+              authorId: 'author-1',
+              createdAt: '2026-05-12T00:00:00.000Z',
+              anchorRangeId: 'range-1',
+              text: '批注内容'
             }
           ]
         }

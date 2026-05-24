@@ -216,6 +216,37 @@ describe('renderPageCanvas', () => {
     )
   })
 
+  it('draws header footer boxes before body text', () => {
+    const canvas = createMockCanvas()
+    const page = createHeaderFooterPageLayout() satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page
+    })
+
+    expect(canvas.calls).toContain('fillText:header-main,72,32')
+    expect(canvas.calls).toContain('fillText:footer-main,72,772')
+    expect(canvas.calls.indexOf('fillText:header-main,72,32')).toBeLessThan(
+      canvas.calls.indexOf('fillText:正文,72,110')
+    )
+  })
+
+  it('draws page-number source ids as page numbers without exposing source id text', () => {
+    const canvas = createMockCanvas()
+    const page = createHeaderFooterPageNumberLayout() satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page
+    })
+
+    expect(canvas.calls).toContain('fillText:公司页眉,72,32')
+    expect(canvas.calls).toContain('fillText:5,521,32')
+    expect(canvas.calls).toContain('fillText:保密页脚,72,772')
+    expect(canvas.calls.some((call) => call.includes('page-number-'))).toBe(false)
+  })
+
   it('限制异常大页面的 canvas 尺寸，避免保留超大画布', () => {
     const canvas = createMockCanvas()
     const basePage = createPageLayout(0, '大页面')
@@ -403,6 +434,7 @@ function createPageLayout(
     sectionId: 'section-render',
     headerIds: [],
     footerIds: [],
+    headerFooterBoxes: [],
     lines: [
       {
         kind: 'line',
@@ -490,6 +522,7 @@ function createImagePageLayout(pageIndex: number): LayoutBox {
     sectionId: 'section-render',
     headerIds: [],
     footerIds: [],
+    headerFooterBoxes: [],
     lines: [
       {
         kind: 'line',
@@ -579,6 +612,94 @@ function createListPageLayout(pageIndex: number, text: string, markerText: strin
             level: 0
           }
         }
+      }
+    ]
+  }
+}
+
+/** 创建带页眉页脚 layout box 的页面。 */
+function createHeaderFooterPageLayout(): LayoutBox {
+  const page = createPageLayout(0, '正文')
+
+  return {
+    ...page,
+    pageNumber: 5,
+    headerIds: ['header-main'],
+    footerIds: ['footer-main'],
+    headerFooterBoxes: [
+      {
+        kind: 'headerFooter',
+        role: 'header',
+        sectionId: 'section-render',
+        sourceId: 'header-main',
+        pageNumber: 5,
+        pageIndex: 0,
+        x: cssPxToTwips(72),
+        y: cssPxToTwips(20),
+        width: cssPxToTwips(456),
+        height: cssPxToTwips(20)
+      },
+      {
+        kind: 'headerFooter',
+        role: 'footer',
+        sectionId: 'section-render',
+        sourceId: 'footer-main',
+        pageNumber: 5,
+        pageIndex: 0,
+        x: cssPxToTwips(72),
+        y: cssPxToTwips(760),
+        width: cssPxToTwips(456),
+        height: cssPxToTwips(20)
+      }
+    ]
+  }
+}
+
+/** 创建带独立页码 source id 的页眉页脚 layout box。 */
+function createHeaderFooterPageNumberLayout(): LayoutBox {
+  const page = createPageLayout(0, '正文')
+
+  return {
+    ...page,
+    pageNumber: 5,
+    headerIds: ['公司页眉', 'page-number-top-right'],
+    footerIds: ['保密页脚'],
+    headerFooterBoxes: [
+      {
+        kind: 'headerFooter',
+        role: 'header',
+        sectionId: 'section-render',
+        sourceId: '公司页眉',
+        pageNumber: 5,
+        pageIndex: 0,
+        x: cssPxToTwips(72),
+        y: cssPxToTwips(20),
+        width: cssPxToTwips(456),
+        height: cssPxToTwips(20)
+      },
+      {
+        kind: 'headerFooter',
+        role: 'header',
+        sectionId: 'section-render',
+        sourceId: 'page-number-top-right',
+        pageNumber: 5,
+        pageIndex: 0,
+        x: cssPxToTwips(72),
+        y: cssPxToTwips(20),
+        width: cssPxToTwips(456),
+        height: cssPxToTwips(20)
+      },
+      {
+        kind: 'headerFooter',
+        role: 'footer',
+        sectionId: 'section-render',
+        sourceId: '保密页脚',
+        pageNumber: 5,
+        pageIndex: 0,
+        x: cssPxToTwips(72),
+        y: cssPxToTwips(760),
+        width: cssPxToTwips(456),
+        height: cssPxToTwips(20)
       }
     ]
   }

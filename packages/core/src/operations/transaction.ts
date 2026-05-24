@@ -8,11 +8,12 @@
 
 import * as Y from 'yjs'
 
-import type { Block, ImageInline, ModelProperties, TableBorder } from '../model/types'
+import type { Block, Comment, CommentMessage, ImageInline, ModelProperties, RevisionMetadata, RunLink, TableBorder } from '../model/types'
 import { createDocumentProjection } from '../model/projection'
 import { createOperationAdapter } from './operation-adapter'
 import { createJWordError } from '../shared/errors'
 import type { DocumentProjection } from '../model/projection'
+import type { TextRangeRecord } from '../model/position'
 import type { Resource, ResourceUrlPolicy } from '../resources/types'
 
 /**
@@ -23,6 +24,7 @@ export type OperationKind =
   | 'deleteRange'
   | 'setRunProperties'
   | 'setParagraphProperties'
+  | 'setSectionProperties'
   | 'splitBlock'
   | 'mergeBlock'
   | 'insertBlock'
@@ -44,12 +46,21 @@ export type OperationKind =
   | 'mergeTableCells'
   | 'setTableBorder'
   | 'setTableCellText'
+  | 'addCommentThread'
+  | 'replyCommentThread'
+  | 'editCommentEntry'
+  | 'resolveCommentThread'
+  | 'reopenCommentThread'
+  | 'deleteCommentThread'
+  | 'setRunLink'
+  | 'addRevisionMetadata'
 
 const OPERATION_KINDS = new Set<OperationKind>([
   'insertText',
   'deleteRange',
   'setRunProperties',
   'setParagraphProperties',
+  'setSectionProperties',
   'splitBlock',
   'mergeBlock',
   'insertBlock',
@@ -70,7 +81,15 @@ const OPERATION_KINDS = new Set<OperationKind>([
   'setTableRowHeight',
   'mergeTableCells',
   'setTableBorder',
-  'setTableCellText'
+  'setTableCellText',
+  'addCommentThread',
+  'replyCommentThread',
+  'editCommentEntry',
+  'resolveCommentThread',
+  'reopenCommentThread',
+  'deleteCommentThread',
+  'setRunLink',
+  'addRevisionMetadata'
 ])
 
 /**
@@ -143,6 +162,14 @@ export interface SetRunPropertiesOperation extends OperationBase<'setRunProperti
 export interface SetParagraphPropertiesOperation extends OperationBase<'setParagraphProperties'> {
   readonly paragraphId: string
   readonly properties: ModelProperties
+}
+
+/** 设置节级属性和页眉页脚引用。 */
+export interface SetSectionPropertiesOperation extends OperationBase<'setSectionProperties'> {
+  readonly sectionId: string
+  readonly properties: ModelProperties
+  readonly headerIds?: readonly string[]
+  readonly footerIds?: readonly string[]
 }
 
 /** 在锚点处分裂块。 */
@@ -289,6 +316,62 @@ export interface SetTableCellTextOperation extends OperationBase<'setTableCellTe
   readonly text: string
 }
 
+/** 创建新的批注 thread。 */
+export interface AddCommentThreadOperation extends OperationBase<'addCommentThread'> {
+  readonly thread: Comment
+  readonly range: TextRangeRecord
+}
+
+/** 在线程下追加回复。 */
+export interface ReplyCommentThreadOperation extends OperationBase<'replyCommentThread'> {
+  readonly threadId: string
+  readonly message: CommentMessage
+}
+
+/** 编辑线程中的一条回复。 */
+export interface EditCommentEntryOperation extends OperationBase<'editCommentEntry'> {
+  readonly threadId: string
+  readonly messageId: string
+  readonly text: string
+  readonly editedAt: string
+}
+
+/** 解决批注 thread。 */
+export interface ResolveCommentThreadOperation extends OperationBase<'resolveCommentThread'> {
+  readonly threadId: string
+}
+
+/** 重新打开批注 thread。 */
+export interface ReopenCommentThreadOperation extends OperationBase<'reopenCommentThread'> {
+  readonly threadId: string
+}
+
+/** 删除整条批注 thread。 */
+export interface DeleteCommentThreadOperation extends OperationBase<'deleteCommentThread'> {
+  readonly threadId: string
+}
+
+/** 局部或整体设置 run 链接。 */
+export interface SetRunLinkRange {
+  readonly startGraphemeIndex: number
+  readonly endGraphemeIndex: number
+  readonly linkedRunId?: string
+  readonly trailingRunId?: string
+}
+
+/** 设置或移除 run 链接。 */
+export interface SetRunLinkOperation extends OperationBase<'setRunLink'> {
+  readonly runId: string
+  readonly link: RunLink | null
+  readonly range?: SetRunLinkRange
+}
+
+/** 写入修订 metadata 并标记目标 run。 */
+export interface AddRevisionMetadataOperation extends OperationBase<'addRevisionMetadata'> {
+  readonly revision: RevisionMetadata
+  readonly runId: string
+}
+
 /**
  * Gate 1.4 首批可序列化操作边界。
  */
@@ -297,6 +380,7 @@ export type Operation =
   | DeleteRangeOperation
   | SetRunPropertiesOperation
   | SetParagraphPropertiesOperation
+  | SetSectionPropertiesOperation
   | SplitBlockOperation
   | MergeBlockOperation
   | InsertBlockOperation
@@ -318,6 +402,14 @@ export type Operation =
   | MergeTableCellsOperation
   | SetTableBorderOperation
   | SetTableCellTextOperation
+  | AddCommentThreadOperation
+  | ReplyCommentThreadOperation
+  | EditCommentEntryOperation
+  | ResolveCommentThreadOperation
+  | ReopenCommentThreadOperation
+  | DeleteCommentThreadOperation
+  | SetRunLinkOperation
+  | AddRevisionMetadataOperation
 
 /**
  * 最小命令描述。

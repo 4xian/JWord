@@ -65,6 +65,7 @@ describe('createDocumentStore', () => {
       sections: 'sections',
       resources: 'resources',
       styles: 'styles',
+      commentRanges: 'commentRanges',
       comments: 'comments',
       revisions: 'revisions'
     })

@@ -217,8 +217,9 @@ describe('table layout render hit-test', () => {
       .length
 
     expect(backgroundIndex).toBeGreaterThanOrEqual(0)
-    expect(selectionIndex).toBeGreaterThan(backgroundIndex)
-    expect(textIndex).toBeGreaterThan(selectionIndex)
+    expect(selectionIndex).toBeGreaterThanOrEqual(0)
+    expect(backgroundIndex).toBeGreaterThan(selectionIndex)
+    expect(textIndex).toBeGreaterThan(backgroundIndex)
     expect(decorationRectCount).toBeGreaterThanOrEqual(2)
   })
 

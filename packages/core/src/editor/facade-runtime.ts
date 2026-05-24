@@ -38,8 +38,8 @@ import type { HistoryOperationResult } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
 import { getCaretRect as getLayoutCaretRect, getSelectionRects as getLayoutSelectionRects, hitTestDocumentLayout, layoutDocument } from '../layout/runtime'
 import type { DocumentLayout, LayoutDirtyRange, LayoutRect } from '../layout/runtime'
-import { createAnchorRef, createGraphemeIndex, createTextAnchorRef, readAnchorRefSnapshot, resolveAnchorRef } from '../model/position'
-import type { AnchorRef, BlockId, RangeRef, RunId, SectionId } from '../model/position'
+import { createAnchorRef, createGraphemeIndex, createTextAnchorRef, createTextRangeRecord, readAnchorRefSnapshot, resolveAnchorRef } from '../model/position'
+import type { AnchorRef, BlockId, RangeRef, RunId, SectionId, TextRangeRecord } from '../model/position'
 import type { DocumentProjection } from '../model/projection'
 import { createSelectionRestoreSnapshot, createSelectionState, isSelectionCollapsed, restoreSelection } from '../model/selection'
 import type { SelectionState } from '../model/selection'
@@ -48,12 +48,15 @@ import type { Command, TextPosition, TransactionMetadata, TransactionResult } fr
 import { DOCUMENT_CREATE_ORIGIN, FIXTURE_LOAD_ORIGIN } from './constants'
 import { createCanvasElement } from './rendering'
 import { createHiddenTextareaElement, createLiveRegionElement, createTextMirrorElement, focusHiddenTextarea } from './dom'
-import { findRunText, readCurrentDocumentId, replaceStoreDocument } from './document'
+import { findRunText, locateCommentThreadRange, readCurrentDocumentId, replaceStoreDocument, restoreTextRangeRecord } from './document'
 import { JWordEditorState } from './state'
 import { resolveCommandDirtyRange } from './rendering'
-import type { Editor, EditorCommandOptions, EditorDocumentInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorTextAnchorInput, SelectionUpdateSource } from './types'
+import type { Editor, EditorCommandOptions, EditorDocumentInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
 
 export abstract class JWordEditorFacadeRuntime extends JWordEditorState implements Editor {
+  /** 粘贴已清洗的富文本片段，具体 command 生成由输入运行时实现。 */
+  abstract pasteRichTextFragment(fragment: EditorRichTextFragment): boolean
+
   getProjection(): DocumentProjection {
     this.assertActive()
 
@@ -171,6 +174,33 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     return getLayoutSelectionRects(this.readTransientLayoutForRange(resolvedRange), resolvedRange)
   }
 
+  /**
+   * 捕获当前 range 的稳定快照。
+   */
+  captureRangeSnapshot(range: RangeRef): TextRangeRecord {
+    this.assertActive()
+
+    this.rangeSnapshotSequence += 1
+
+    return createTextRangeRecord(`range-snapshot-${this.rangeSnapshotSequence}`, range)
+  }
+
+  /**
+   * 解析稳定 range 快照的当前位置。
+   */
+  locateRangeSnapshot(snapshot: TextRangeRecord) {
+    this.assertActive()
+
+    const restoredRange = restoreTextRangeRecord(this.store, snapshot)
+
+    return restoredRange === null
+      ? null
+      : {
+          anchor: this.resolveTextPosition(restoredRange.anchor),
+          focus: this.resolveTextPosition(restoredRange.focus)
+        }
+  }
+
   getSelection(): SelectionState | null {
     this.assertActive()
 
@@ -181,6 +211,24 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     this.assertActive()
 
     return this.readCurrentSelectionFormattingState()
+  }
+
+  /**
+   * 读取当前本地用户快照。
+   */
+  getCurrentUser() {
+    this.assertActive()
+
+    return this.currentUser
+  }
+
+  /**
+   * 定位批注线程当前绑定的稳定范围。
+   */
+  locateCommentThread(threadId: string): RangeRef | null {
+    this.assertActive()
+
+    return locateCommentThreadRange(this.store, threadId)
   }
 
   setSelection(selection: SelectionState | null): void {

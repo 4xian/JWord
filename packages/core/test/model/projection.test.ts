@@ -192,6 +192,12 @@ describe('createDocumentProjection', () => {
       }
     })
     sectionProperties?.set('columns', 2)
+    sectionProperties?.set('breakType', 'next-page')
+    sectionProperties?.set('headerFooterSameAsPrevious', true)
+    sectionProperties?.set('pageNumbering', {
+      mode: 'restart',
+      start: 7
+    })
 
     const projection = createDocumentProjection(store)
     const projectedSection = projection.document.sections[0]
@@ -200,8 +206,14 @@ describe('createDocumentProjection', () => {
       kind: 'section',
       id: 'section-layout-boundary',
       columns: 2,
+      breakType: 'next-page',
       headerIds: ['header-1'],
       footerIds: ['footer-1'],
+      headerFooterSameAsPrevious: true,
+      pageNumbering: {
+        mode: 'restart',
+        start: 7
+      },
       page: {
         widthTwips: 12240,
         heightTwips: 15840,

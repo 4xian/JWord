@@ -429,6 +429,7 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     if (
       !(event.target instanceof Node)
       || dom.host.contains(event.target)
+      || dom.customSizeDialog.contains(event.target)
       || dom.overlay.contains(event.target)
       || resizeHandlesLayer.contains(event.target)
       || contextMenu.root.contains(event.target)

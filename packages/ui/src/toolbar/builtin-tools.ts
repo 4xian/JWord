@@ -17,7 +17,7 @@ export interface ToolbarOption {
 }
 
 /** toolbar 内建分组。 */
-export type ToolbarGroupId = 'history' | 'document' | 'format' | 'paragraph'
+export type ToolbarGroupId = 'history' | 'document' | 'insert' | 'format' | 'paragraph'
 
 /** toolbar 内建控件种类。 */
 export type ToolbarControlKind = 'button' | 'select' | 'color'
@@ -90,6 +90,14 @@ export const BUILTIN_TOOL_IDS = [
   'history.undo',
   'history.redo',
   'document.pagePreset',
+  'document.findReplace',
+  'document.headingOutline',
+  'document.headerFooter',
+  'document.footer',
+  'document.pageNumber',
+  'document.revisions',
+  'insert.comment',
+  'insert.link',
   'format.bold',
   'format.italic',
   'format.underline',
@@ -120,6 +128,13 @@ export const DEFAULT_VISIBLE_TOOL_IDS = [
   'history.undo',
   'history.redo',
   'document.pagePreset',
+  'document.findReplace',
+  'document.headingOutline',
+  'document.headerFooter',
+  'document.footer',
+  'document.pageNumber',
+  'insert.comment',
+  'insert.link',
   'format.fontFamily',
   'format.fontSize',
   'paragraph.style',
@@ -370,6 +385,78 @@ const BUILTIN_TOOL_DEFINITIONS = [
     menuMinWidthPx: 72,
     menuMaxWidthPx: 104,
     options: PAGE_PRESET_OPTIONS
+  },
+  {
+    id: 'document.findReplace',
+    group: 'document',
+    kind: 'button',
+    label: '查找替换',
+    tooltip: '查找替换',
+    dataAttribute: 'data-jword-open-find-replace',
+    icon: 'search'
+  },
+  {
+    id: 'document.headingOutline',
+    group: 'document',
+    kind: 'button',
+    label: '目录',
+    tooltip: '目录',
+    dataAttribute: 'data-jword-toggle-heading-outline',
+    icon: 'outline'
+  },
+  {
+    id: 'document.headerFooter',
+    group: 'document',
+    kind: 'button',
+    label: '页眉',
+    tooltip: '页眉',
+    dataAttribute: 'data-jword-toggle-header-footer',
+    icon: 'headerFooter'
+  },
+  {
+    id: 'document.footer',
+    group: 'document',
+    kind: 'button',
+    label: '页脚',
+    tooltip: '页脚',
+    dataAttribute: 'data-jword-toggle-footer',
+    icon: 'footer'
+  },
+  {
+    id: 'document.pageNumber',
+    group: 'document',
+    kind: 'button',
+    label: '页码',
+    tooltip: '页码',
+    dataAttribute: 'data-jword-toggle-page-number',
+    icon: 'pageNumber'
+  },
+  {
+    id: 'document.revisions',
+    group: 'document',
+    kind: 'button',
+    label: '修订记录',
+    tooltip: '修订记录',
+    dataAttribute: 'data-jword-toggle-revisions',
+    icon: 'revisions'
+  },
+  {
+    id: 'insert.comment',
+    group: 'insert',
+    kind: 'button',
+    label: '批注',
+    tooltip: '插入批注',
+    dataAttribute: 'data-jword-insert-comment',
+    icon: 'comment'
+  },
+  {
+    id: 'insert.link',
+    group: 'insert',
+    kind: 'button',
+    label: '链接',
+    tooltip: '插入链接',
+    dataAttribute: 'data-jword-insert-link',
+    icon: 'link'
   },
   {
     id: 'format.bold',

@@ -64,12 +64,30 @@ interface ToolbarControllerAssistive {
 
 interface CreateToolbarControllerOptions extends CreateJWordUiOptions {
   readonly assistive: ToolbarControllerAssistive
+  readonly insertActions?: {
+    readonly openComment?: () => void
+    readonly openLink?: () => void
+  }
+  readonly panelActions?: {
+    readonly toggleFindReplace?: () => void
+    readonly toggleHeadingOutline?: () => void
+    readonly toggleHeaderFooter?: (anchor: HTMLElement) => void
+    readonly toggleFooter?: (anchor: HTMLElement) => void
+    readonly togglePageNumber?: (anchor: HTMLElement) => void
+    readonly toggleRevisions?: () => void
+  }
+  readonly panelState?: {
+    readonly headingOutline?: () => boolean
+    readonly headingOutlineAvailable?: () => boolean
+  }
 }
 
 interface ToolbarControllerHandle {
   readonly elements: JWordToolbarElements
   readonly mediaHost: HTMLElement | null
   readonly tableHost: HTMLElement | null
+  readonly linkHost: HTMLElement | null
+  readonly panelHost: HTMLElement | null
   readonly colorFormat: SelectionActionsColorFormatController
   refresh(): void
   destroy(): void
@@ -85,6 +103,15 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
   const tableHost = options.table === undefined
     ? null
     : createToolbarExtensionHost(dom.bar, 'table')
+  const linkHost = options.link === undefined
+    ? null
+    : createToolbarExtensionHost(dom.bar, 'link')
+  const panelHost = options.headerFooter === undefined
+    && options.headingOutline === undefined
+    && options.findReplace === undefined
+    && options.revisions === undefined
+    ? null
+    : createToolbarExtensionHost(dom.bar, 'panel')
   const assistive = options.assistive
   const editor = options.editor
   const signalController = new AbortController()
@@ -141,7 +168,15 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
   /** 只重绘 toolbar，不触发额外 assistive 副作用。 */
   function render(): void {
-    renderToolbarState(dom, buildToolbarState(editor), openColorPicker)
+    renderToolbarState(dom, buildToolbarState(editor), openColorPicker, {
+      headingOutline: options.panelState?.headingOutline?.() === true,
+      headingOutlineAvailable: readHeadingOutlineAvailable()
+    })
+  }
+
+  /** 读取目录按钮当前是否有可打开的目录项。 */
+  function readHeadingOutlineAvailable(): boolean {
+    return options.panelState?.headingOutlineAvailable?.() === true
   }
 
   /** 同步 assistive text mirror。 */
@@ -176,10 +211,20 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
   /** 绑定所有实际挂载出来的控件事件。 */
   function bindEvents(): void {
-    const bindToolbarButton = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
+    const bindToolbarButton = (
+      control: JWordToolbarControlElement | undefined,
+      handler: (control: HTMLButtonElement) => void,
+      focusOptions: { readonly restoreEditorFocus?: boolean } = {}
+    ) => {
+      if (!(control instanceof HTMLButtonElement)) {
+        return
+      }
+
       bindButton(control, () => {
-        handler()
-        restoreEditorFocusSoon()
+        handler(control)
+        if (focusOptions.restoreEditorFocus !== false) {
+          restoreEditorFocusSoon()
+        }
       })
     }
     const bindToolbarSelect = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
@@ -205,6 +250,12 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       openColorPicker = null
       render()
     }, { signal: signalController.signal })
+    dom.host.ownerDocument.addEventListener('pointerdown', closeToolbarPanelsOnOutsideEvent, {
+      signal: signalController.signal
+    })
+    dom.host.ownerDocument.addEventListener('click', closeToolbarPanelsOnOutsideEvent, {
+      signal: signalController.signal
+    })
 
     bindToolbarButton(dom.controls['history.undo'], () => {
       markToolbarTransaction()
@@ -243,6 +294,51 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       render()
       announce(readPagePresetAnnouncement(nextPreset, nextPageConfig), true)
     })
+    bindToolbarButton(dom.controls['document.findReplace'], () => {
+      options.panelActions?.toggleFindReplace?.()
+      render()
+    }, { restoreEditorFocus: false })
+    bindToolbarButton(dom.controls['document.headingOutline'], () => {
+      if (!readHeadingOutlineAvailable()) {
+        render()
+        return
+      }
+
+      options.panelActions?.toggleHeadingOutline?.()
+      render()
+    }, { restoreEditorFocus: false })
+    bindToolbarButton(dom.controls['document.headerFooter'], (control) => {
+      options.panelActions?.toggleHeaderFooter?.(control)
+      render()
+    }, { restoreEditorFocus: false })
+    bindToolbarButton(dom.controls['document.footer'], (control) => {
+      options.panelActions?.toggleFooter?.(control)
+      render()
+    }, { restoreEditorFocus: false })
+    bindToolbarButton(dom.controls['document.pageNumber'], (control) => {
+      options.panelActions?.togglePageNumber?.(control)
+      render()
+    }, { restoreEditorFocus: false })
+    bindToolbarButton(dom.controls['document.revisions'], () => {
+      options.panelActions?.toggleRevisions?.()
+      render()
+    }, { restoreEditorFocus: false })
+    bindToolbarButton(dom.controls['insert.comment'], () => {
+      if (options.insertActions?.openComment === undefined) {
+        announce('BLOCKED: 当前宿主未启用批注侧栏。')
+        return
+      }
+
+      options.insertActions.openComment()
+    }, { restoreEditorFocus: false })
+    bindToolbarButton(dom.controls['insert.link'], () => {
+      if (options.insertActions?.openLink === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接弹窗。')
+        return
+      }
+
+      options.insertActions.openLink()
+    }, { restoreEditorFocus: false })
     bindToolbarButton(dom.controls['format.bold'], () => {
       toggleActiveRunBooleanFormat('bold', '加粗')
     })
@@ -433,6 +529,17 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 
       applyParagraphList(value)
     })
+  }
+
+  /** 点击 toolbar 与浮层外部时关闭当前打开的面板。 */
+  function closeToolbarPanelsOnOutsideEvent(event: Event): void {
+    const target = event.target
+
+    if (!(target instanceof Node) || dom.host.contains(target) || isToolbarPanelTarget(target)) {
+      return
+    }
+
+    closeVisibleToolbarPanels(panelHost)
   }
 
   /** 在当前选区上切换布尔格式。 */
@@ -976,6 +1083,8 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     elements: dom,
     mediaHost,
     tableHost,
+    linkHost,
+    panelHost,
     colorFormat: {
       applyColorFromSelection
     },
@@ -991,14 +1100,56 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
 }
 
 /** 为 Gate 4 扩展入口补一个挂到 toolbar bar 末尾的独立分组。 */
-function createToolbarExtensionHost(bar: HTMLElement, kind: 'media' | 'table'): HTMLElement {
+function createToolbarExtensionHost(bar: HTMLElement, kind: 'media' | 'table' | 'link' | 'panel'): HTMLElement {
   const group = document.createElement('div')
 
-  group.className = 'jw-toolbar__group'
+  group.className = kind === 'panel'
+    ? 'jw-toolbar__group jw-toolbar__group--overlay'
+    : 'jw-toolbar__group'
   group.setAttribute(`data-jword-${kind}-host`, 'true')
   bar.append(group)
 
   return group
+}
+
+/** 判断事件目标是否落在 toolbar 管理的面板内部。 */
+function isToolbarPanelTarget(target: Node): boolean {
+  return target instanceof Element && target.closest(readToolbarPanelSelector()) !== null
+}
+
+/** 关闭当前 toolbar 相关的可见面板。 */
+function closeVisibleToolbarPanels(panelHost: HTMLElement | null): void {
+  closeToolbarPanelHostChildren(panelHost)
+}
+
+/** 关闭挂在 toolbar overlay host 里的面板。 */
+function closeToolbarPanelHostChildren(panelHost: HTMLElement | null): void {
+  if (panelHost === null) {
+    return
+  }
+
+  const panels = panelHost.querySelectorAll<HTMLElement>(
+    '[data-jword-find-replace], [data-jword-header-footer], [data-jword-revisions-panel]'
+  )
+
+  for (const panel of panels) {
+    panel.hidden = true
+  }
+
+  for (const menu of panelHost.querySelectorAll<HTMLElement>(
+    '[data-jword-header-menu], [data-jword-footer-menu], [data-jword-header-footer-menu], [data-jword-page-number-menu]'
+  )) {
+    menu.hidden = true
+  }
+}
+
+/** 读取所有 toolbar 弹出面板选择器。 */
+function readToolbarPanelSelector(): string {
+  return [
+    '[data-jword-find-replace]',
+    '[data-jword-header-footer]',
+    '[data-jword-revisions-panel]'
+  ].join(', ')
 }
 
 /** 在按钮上绑定点击事件。 */

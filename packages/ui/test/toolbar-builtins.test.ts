@@ -55,6 +55,8 @@ describe('toolbar builtin paragraph selects', () => {
       'paragraph.indentIncrease'
     ]))
     expect(DEFAULT_VISIBLE_TOOL_IDS).not.toContain('paragraph.indentLeft')
+    expect(getBuiltinToolDefinition('document.revisions').icon).toBe('revisions')
+    expect(DEFAULT_VISIBLE_TOOL_IDS).not.toContain('document.revisions')
   })
 
   test('使用中文字段前缀与更完整的段落选项', () => {

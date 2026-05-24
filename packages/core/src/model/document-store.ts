@@ -9,8 +9,9 @@
 import * as Y from 'yjs'
 
 import { createJWordError } from '../shared/errors'
-import type { Inline, RunField, RunLink } from './types'
+import type { Comment, CommentMessage, Inline, RevisionMetadata, RunField, RunLink } from './types'
 import type { BlockId, CommentId, DocumentId, RevisionId, RunId, SectionId } from './position'
+import type { TextAnchorRecord, TextRangeRecord } from './position'
 import type { Resource, ResourceErrorState, ResourceSource, ResourceStatus } from '../resources/types'
 
 declare const documentStoreIdBrand: unique symbol
@@ -24,6 +25,9 @@ export type ResourceId = DocumentStoreId<'ResourceId'>
 
 /** 样式 ID，运行时仍是字符串。 */
 export type StyleId = DocumentStoreId<'StyleId'>
+
+/** 批注范围 ID，运行时仍是字符串。 */
+export type CommentRangeId = DocumentStoreId<'CommentRangeId'>
 
 /** Y.Doc 结构版本；具体写入仍交给后续 transaction adapter。 */
 export const DOCUMENT_STORE_SCHEMA_VERSION = 1
@@ -39,6 +43,7 @@ export const DOCUMENT_STORE_CONTAINERS = {
   resources: 'resources',
   styles: 'styles',
   comments: 'comments',
+  commentRanges: 'commentRanges',
   revisions: 'revisions'
 } as const
 
@@ -129,10 +134,15 @@ export const DOCUMENT_STORE_FIELDS = {
     authorId: 'authorId',
     createdAt: 'createdAt',
     anchorRangeId: 'anchorRangeId',
-    threadId: 'threadId',
     resolved: 'resolved',
+    messages: 'messages',
     blockIds: 'blockIds',
     revisionIds: 'revisionIds'
+  },
+  commentRange: {
+    id: 'id',
+    anchor: 'anchor',
+    focus: 'focus'
   },
   revision: {
     kind: 'kind',
@@ -141,6 +151,8 @@ export const DOCUMENT_STORE_FIELDS = {
     createdAt: 'createdAt',
     type: 'type',
     rangeId: 'rangeId',
+    rangeSnapshot: 'rangeSnapshot',
+    summary: 'summary',
     targetId: 'targetId'
   }
 } as const
@@ -254,9 +266,14 @@ export type CommentRecordValue =
   | CommentId
   | string
   | boolean
+  | Y.Array<DocumentStoreJson>
   | Y.Array<BlockId>
   | Y.Array<RevisionId>
   | Y.Map<DocumentStoreJson>
+
+export type CommentRangeRecordValue =
+  | CommentRangeId
+  | DocumentStoreJson
 
 export type RevisionType = 'insert' | 'delete' | 'format'
 
@@ -265,6 +282,7 @@ export type RevisionRecordValue =
   | RevisionId
   | RevisionType
   | string
+  | DocumentStoreJson
   | Y.Map<DocumentStoreJson>
 
 export type DocumentRootMap = Y.Map<DocumentRootValue>
@@ -280,11 +298,13 @@ export type TableCellContainer = Y.Array<TableCellRecord>
 export type ResourceRecord = Y.Map<ResourceRecordValue>
 export type StyleRecord = Y.Map<StyleRecordValue>
 export type CommentRecord = Y.Map<CommentRecordValue>
+export type CommentRangeRecord = Y.Map<CommentRangeRecordValue>
 export type RevisionRecord = Y.Map<RevisionRecordValue>
 export type SectionsContainer = Y.Array<SectionRecord>
 export type ResourceTable = Y.Map<ResourceRecord>
 export type StyleTable = Y.Map<StyleRecord>
 export type CommentTable = Y.Map<CommentRecord>
+export type CommentRangeTable = Y.Map<CommentRangeRecord>
 export type RevisionTable = Y.Map<RevisionRecord>
 
 /**
@@ -297,6 +317,7 @@ export interface DocumentStore {
   readonly resources: ResourceTable
   readonly styles: StyleTable
   readonly comments: CommentTable
+  readonly commentRanges: CommentRangeTable
   readonly revisions: RevisionTable
 }
 
@@ -322,6 +343,7 @@ export function createDocumentStore(doc = new Y.Doc()): DocumentStore {
     resources: doc.getMap(DOCUMENT_STORE_CONTAINERS.resources),
     styles: doc.getMap(DOCUMENT_STORE_CONTAINERS.styles),
     comments: doc.getMap(DOCUMENT_STORE_CONTAINERS.comments),
+    commentRanges: doc.getMap(DOCUMENT_STORE_CONTAINERS.commentRanges),
     revisions: doc.getMap(DOCUMENT_STORE_CONTAINERS.revisions)
   }
 }
@@ -479,6 +501,63 @@ export function createResourceRecord(resource: Resource): ResourceRecord {
 }
 
 /**
+ * 创建批注 thread 记录。
+ *
+ * @param comment 批注 thread 快照。
+ * @returns 可放入 comments 表的记录。
+ */
+export function createCommentRecord(comment: Comment): CommentRecord {
+  const record = new Y.Map<CommentRecordValue>() as CommentRecord
+
+  record.set(DOCUMENT_STORE_FIELDS.comment.kind, 'commentThread')
+  record.set(DOCUMENT_STORE_FIELDS.comment.id, comment.id as CommentId)
+  record.set(DOCUMENT_STORE_FIELDS.comment.authorId, comment.authorId)
+  record.set(DOCUMENT_STORE_FIELDS.comment.createdAt, comment.createdAt)
+  record.set(DOCUMENT_STORE_FIELDS.comment.anchorRangeId, comment.anchorRangeId)
+  record.set(DOCUMENT_STORE_FIELDS.comment.resolved, comment.resolved)
+  record.set(DOCUMENT_STORE_FIELDS.comment.messages, createCommentMessagesArray(comment.messages))
+
+  return record
+}
+
+/**
+ * 创建批注范围记录。
+ *
+ * @param range 稳定范围快照。
+ * @returns 可放入 commentRanges 表的记录。
+ */
+export function createCommentRangeRecord(range: TextRangeRecord): CommentRangeRecord {
+  const record = new Y.Map<CommentRangeRecordValue>() as CommentRangeRecord
+
+  record.set(DOCUMENT_STORE_FIELDS.commentRange.id, range.id as CommentRangeId)
+  record.set(DOCUMENT_STORE_FIELDS.commentRange.anchor, toDocumentStoreJson(range.anchor))
+  record.set(DOCUMENT_STORE_FIELDS.commentRange.focus, toDocumentStoreJson(range.focus))
+
+  return record
+}
+
+/**
+ * 创建修订 metadata 记录。
+ *
+ * @param revision 修订 metadata 快照。
+ * @returns 可放入 revisions 表的记录。
+ */
+export function createRevisionRecord(revision: RevisionMetadata): RevisionRecord {
+  const record = new Y.Map<RevisionRecordValue>() as RevisionRecord
+
+  record.set(DOCUMENT_STORE_FIELDS.revision.kind, 'revision')
+  record.set(DOCUMENT_STORE_FIELDS.revision.id, revision.id as RevisionId)
+  record.set(DOCUMENT_STORE_FIELDS.revision.authorId, revision.authorId)
+  record.set(DOCUMENT_STORE_FIELDS.revision.createdAt, revision.createdAt)
+  record.set(DOCUMENT_STORE_FIELDS.revision.type, revision.type)
+  record.set(DOCUMENT_STORE_FIELDS.revision.rangeId, revision.rangeId ?? revision.rangeSnapshot.id)
+  record.set(DOCUMENT_STORE_FIELDS.revision.rangeSnapshot, toDocumentStoreJson(revision.rangeSnapshot))
+  record.set(DOCUMENT_STORE_FIELDS.revision.summary, revision.summary)
+
+  return record
+}
+
+/**
  * 读取节内有序块容器。
  *
  * @param section 节记录。
@@ -563,6 +642,21 @@ export function getRunLink(run: RunRecord): RunLink | undefined {
 }
 
 /**
+ * 覆盖 run 的链接元数据；传入 null 时移除链接。
+ *
+ * @param run run 记录。
+ * @param link 新链接快照或 null。
+ */
+export function setRunLinkValue(run: RunRecord, link: RunLink | null): void {
+  if (link === null) {
+    run.delete(DOCUMENT_STORE_FIELDS.run.link)
+    return
+  }
+
+  run.set(DOCUMENT_STORE_FIELDS.run.link, toDocumentStoreJson(link))
+}
+
+/**
  * 读取 run 的修订 ID。
  *
  * @param run run 记录。
@@ -627,12 +721,181 @@ export function projectResourceRecord(resource: ResourceRecord): Resource {
   }
 }
 
+/**
+ * 把批注记录投影为只读 thread 快照。
+ *
+ * @param comment 批注记录。
+ * @returns 只读批注 thread。
+ */
+export function projectCommentRecord(comment: CommentRecord, rangeSnapshot: TextRangeRecord): Comment {
+  const authorId = readString(comment.get(DOCUMENT_STORE_FIELDS.comment.authorId), 'comment authorId')
+  const createdAt = readString(comment.get(DOCUMENT_STORE_FIELDS.comment.createdAt), 'comment createdAt')
+  const anchorRangeId = readString(comment.get(DOCUMENT_STORE_FIELDS.comment.anchorRangeId), 'comment anchorRangeId')
+  const resolved = readOptionalBoolean(comment.get(DOCUMENT_STORE_FIELDS.comment.resolved)) ?? false
+  const messages = projectCommentMessages(comment.get(DOCUMENT_STORE_FIELDS.comment.messages))
+
+  return {
+    kind: 'commentThread',
+    id: readString(comment.get(DOCUMENT_STORE_FIELDS.comment.id), 'comment'),
+    authorId,
+    createdAt,
+    anchorRangeId,
+    resolved,
+    rangeSnapshot,
+    messages
+  }
+}
+
+/**
+ * 把修订记录投影为只读 metadata 快照。
+ *
+ * @param revision 修订记录。
+ * @returns 只读修订 metadata。
+ */
+export function projectRevisionRecord(revision: RevisionRecord): RevisionMetadata {
+  const type = readRevisionType(revision.get(DOCUMENT_STORE_FIELDS.revision.type))
+  const rangeSnapshot = readTextRangeRecord(
+    revision.get(DOCUMENT_STORE_FIELDS.revision.rangeSnapshot),
+    'revision range'
+  )
+
+  return {
+    kind: 'revision',
+    id: readString(revision.get(DOCUMENT_STORE_FIELDS.revision.id), 'revision'),
+    authorId: readString(revision.get(DOCUMENT_STORE_FIELDS.revision.authorId), 'revision authorId'),
+    createdAt: readString(revision.get(DOCUMENT_STORE_FIELDS.revision.createdAt), 'revision createdAt'),
+    type,
+    rangeId: readString(revision.get(DOCUMENT_STORE_FIELDS.revision.rangeId), 'revision rangeId'),
+    rangeSnapshot,
+    summary: readString(revision.get(DOCUMENT_STORE_FIELDS.revision.summary), 'revision summary')
+  }
+}
+
+function readRevisionType(value: unknown): RevisionType {
+  if (value === 'insert' || value === 'delete' || value === 'format') {
+    return value
+  }
+
+  throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'revision type 字段非法')
+}
+
+/**
+ * 读取批注范围记录。
+ *
+ * @param record 批注范围记录。
+ * @returns 只读范围快照。
+ */
+export function readCommentRangeRecord(record: CommentRangeRecord): TextRangeRecord {
+  return readTextRangeRecord({
+    id: record.get(DOCUMENT_STORE_FIELDS.commentRange.id),
+    anchor: record.get(DOCUMENT_STORE_FIELDS.commentRange.anchor),
+    focus: record.get(DOCUMENT_STORE_FIELDS.commentRange.focus)
+  }, 'comment range')
+}
+
+function createCommentMessagesArray(messages: readonly CommentMessage[]): Y.Array<DocumentStoreJson> {
+  const array = new Y.Array<DocumentStoreJson>()
+
+  if (messages.length > 0) {
+    array.push(messages.map((message) => toDocumentStoreJson(message)))
+  }
+
+  return array
+}
+
+function projectCommentMessages(value: unknown): readonly CommentMessage[] {
+  if (!(value instanceof Y.Array)) {
+    return Object.freeze([])
+  }
+
+  return Object.freeze(value.toArray().map((message, index) => projectCommentMessage(message, index)))
+}
+
+function projectCommentMessage(value: unknown, index: number): CommentMessage {
+  if (!isRecord(value)) {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'comment message 结构非法', {
+      index
+    })
+  }
+
+  if (
+    typeof value.id !== 'string'
+    || typeof value.authorId !== 'string'
+    || typeof value.createdAt !== 'string'
+    || typeof value.anchorRangeId !== 'string'
+    || typeof value.text !== 'string'
+  ) {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'comment message 字段非法', {
+      index
+    })
+  }
+
+  return {
+    id: value.id,
+    authorId: value.authorId,
+    createdAt: value.createdAt,
+    anchorRangeId: value.anchorRangeId,
+    text: value.text,
+    ...(typeof value.editedAt === 'string' ? { editedAt: value.editedAt } : {})
+  }
+}
+
+function readTextRangeRecord(value: unknown, label: string): TextRangeRecord {
+  if (
+    !isRecord(value)
+    || typeof value.id !== 'string'
+    || value.anchor === undefined
+    || value.focus === undefined
+  ) {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', `${label} 结构非法`)
+  }
+
+  return {
+    id: value.id,
+    anchor: readTextAnchorRecord(value.anchor, `${label} anchor`),
+    focus: readTextAnchorRecord(value.focus, `${label} focus`)
+  }
+}
+
+function readTextAnchorRecord(value: unknown, label: string): TextAnchorRecord {
+  if (
+    !isRecord(value)
+    || typeof value.documentId !== 'string'
+    || typeof value.sectionId !== 'string'
+    || typeof value.blockId !== 'string'
+    || typeof value.runId !== 'string'
+    || typeof value.graphemeIndex !== 'number'
+    || !isRecord(value.relativePosition)
+  ) {
+    throw createJWordError('PROJECTION_INVALID_DOCUMENT', `${label} 结构非法`)
+  }
+
+  return {
+    documentId: value.documentId,
+    sectionId: value.sectionId,
+    blockId: value.blockId,
+    runId: value.runId,
+    graphemeIndex: value.graphemeIndex,
+    ...(typeof value.assoc === 'number' ? { assoc: value.assoc } : {}),
+    relativePosition: {
+      ...(isRelativePositionId(value.relativePosition.type) ? { type: value.relativePosition.type } : {}),
+      ...(typeof value.relativePosition.tname === 'string' ? { tname: value.relativePosition.tname } : {}),
+      ...(isRelativePositionId(value.relativePosition.item) ? { item: value.relativePosition.item } : {}),
+      ...(typeof value.relativePosition.assoc === 'number' ? { assoc: value.relativePosition.assoc } : {})
+    }
+  }
+}
+
 function projectProperties(value: unknown): Readonly<Record<string, unknown>> | undefined {
   if (!(value instanceof Y.Map) || value.size === 0) {
     return undefined
   }
 
   return Object.freeze(Object.fromEntries(value.entries()))
+}
+
+function readOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
 }
 
 /**
@@ -865,6 +1128,15 @@ function readString(value: unknown, label: string): string {
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isRelativePositionId(value: unknown): value is {
+  readonly client: number
+  readonly clock: number
+} {
+  return isRecord(value)
+    && typeof value.client === 'number'
+    && typeof value.clock === 'number'
 }
 
 function createJsonMap(properties: Readonly<Record<string, unknown>> | undefined): Y.Map<DocumentStoreJson> {

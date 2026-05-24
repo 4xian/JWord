@@ -12,9 +12,9 @@ import {
   areFormattingPropertyValuesEquivalent
 } from '../model/formatting-types'
 import type { ParagraphAlignment } from '../model/formatting-types'
-import type { ParagraphList, Table, TableBorder } from '../model/types'
+import type { Comment, ParagraphList, Table, TableBorder } from '../model/types'
+import type { ModelProperties, Paragraph, Run, RunLink } from '../model/types'
 import { readAnchorRefSnapshot } from '../model/position'
-import type { ModelProperties, Paragraph, Run } from '../model/types'
 import type { DocumentProjection } from '../model/projection'
 import type { SelectionState } from '../model/selection'
 import type { Command, Operation, TextPosition } from './transaction'
@@ -22,6 +22,21 @@ import { isAllowedResourceUrl } from '../resources/types'
 import type { Resource, ResourceUrlPolicy } from '../resources/types'
 import { countGraphemes } from '../shared/grapheme'
 import { createJWordError } from '../shared/errors'
+import { isAllowedLinkUrl } from '../links/policy'
+import { isSelectionCollapsed } from '../model/selection'
+import {
+  buildAddCommentThreadCommand as buildAddCommentThreadCommandInternal,
+  buildDeleteCommentThreadCommand as buildDeleteCommentThreadCommandInternal,
+  buildEditCommentMessageCommand as buildEditCommentMessageCommandInternal,
+  buildReopenCommentThreadCommand as buildReopenCommentThreadCommandInternal,
+  buildReplyCommentThreadCommand as buildReplyCommentThreadCommandInternal,
+  buildResolveCommentThreadCommand as buildResolveCommentThreadCommandInternal
+} from './comment-command-builders'
+import type {
+  AddCommentThreadInput,
+  EditCommentMessageInput,
+  ReplyCommentThreadInput
+} from './comment-command-builders'
 
 let tableCommandSequence = 0
 const DEFAULT_TABLE_COLUMN_WIDTH_TWIPS = 1500
@@ -326,6 +341,166 @@ export function buildDeleteResourceCommand(resourceId: string): Command {
       resourceId
     }]
   }
+}
+
+/**
+ * 构造批注 thread 创建命令。
+ */
+export function buildAddCommentThreadCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  input: AddCommentThreadInput
+): Command | null {
+  return buildAddCommentThreadCommandInternal(projection, selection, input)
+}
+
+/**
+ * 构造批注回复命令。
+ */
+export function buildReplyCommentThreadCommand(
+  projection: DocumentProjection,
+  threadId: string,
+  input: ReplyCommentThreadInput
+): Command | null {
+  return buildReplyCommentThreadCommandInternal(projection, threadId, input)
+}
+
+/**
+ * 构造批注消息编辑命令。
+ */
+export function buildEditCommentMessageCommand(
+  projection: DocumentProjection,
+  threadId: string,
+  entryId: string,
+  input: EditCommentMessageInput
+): Command | null {
+  return buildEditCommentMessageCommandInternal(projection, threadId, entryId, input)
+}
+
+/**
+ * 构造批注回复编辑命令。
+ */
+export function buildEditCommentEntryCommand(
+  projection: DocumentProjection,
+  threadId: string,
+  entryId: string,
+  input: EditCommentMessageInput
+): Command | null {
+  return buildEditCommentMessageCommandInternal(projection, threadId, entryId, input)
+}
+
+/**
+ * 构造批注解决命令。
+ */
+export function buildResolveCommentThreadCommand(
+  projection: DocumentProjection,
+  threadId: string
+): Command | null {
+  return buildResolveCommentThreadCommandInternal(projection, threadId)
+}
+
+/**
+ * 构造批注重开命令。
+ */
+export function buildReopenCommentThreadCommand(
+  projection: DocumentProjection,
+  threadId: string
+): Command | null {
+  return buildReopenCommentThreadCommandInternal(projection, threadId)
+}
+
+/**
+ * 构造批注删除命令。
+ */
+export function buildDeleteCommentThreadCommand(
+  projection: DocumentProjection,
+  threadId: string
+): Command | null {
+  return buildDeleteCommentThreadCommandInternal(projection, threadId)
+}
+
+/**
+ * 构造链接插入命令。
+ */
+export function buildInsertLinkCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  input: Readonly<{
+    target: string
+    tooltip?: string
+    displayText?: string
+  }>
+): Command | null {
+  assertAllowedLinkUrl(input.target)
+
+  if (selection !== null && isSelectionCollapsed(selection)) {
+    const displayText = input.displayText?.trim() ?? ''
+
+    if (displayText.length === 0) {
+      return null
+    }
+
+    const insertion = resolveSelectionInsertionContext(projection, selection)
+
+    if (insertion === null) {
+      return null
+    }
+
+    const usedRunIds = collectRunIds(projection)
+    const displayTextLength = countGraphemes(displayText)
+    const link = createRunLink(input)
+
+    return {
+      name: 'insertLink',
+      operations: [{
+        kind: 'insertText',
+        at: insertion.at,
+        text: displayText
+      }, {
+        kind: 'setRunLink',
+        runId: insertion.run.id,
+        link,
+        range: {
+          startGraphemeIndex: insertion.at.graphemeIndex,
+          endGraphemeIndex: insertion.at.graphemeIndex + displayTextLength,
+          ...(insertion.at.graphemeIndex > 0
+            ? { linkedRunId: allocateGeneratedRunId(usedRunIds, insertion.run.id, 'link') }
+            : {}),
+          ...(insertion.at.graphemeIndex < insertion.graphemeLength
+            ? { trailingRunId: allocateGeneratedRunId(usedRunIds, insertion.run.id, 'tail') }
+            : {})
+        }
+      }]
+    }
+  }
+
+  return buildSetLinkCommand(projection, selection, 'insertLink', createRunLink(input))
+}
+
+/**
+ * 构造链接编辑命令。
+ */
+export function buildEditLinkCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  input: Readonly<{
+    target: string
+    tooltip?: string
+  }>
+): Command | null {
+  assertAllowedLinkUrl(input.target)
+
+  return buildSetLinkCommand(projection, selection, 'editLink', createRunLink(input))
+}
+
+/**
+ * 构造链接删除命令。
+ */
+export function buildDeleteLinkCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null
+): Command | null {
+  return buildSetLinkCommand(projection, selection, 'deleteLink', null)
 }
 
 /**
@@ -980,6 +1155,96 @@ function isPropertySetEquivalent(
   )
 }
 
+function buildSetLinkCommand(
+  projection: DocumentProjection,
+  selection: SelectionState | null,
+  name: string,
+  link: RunLink | null
+): Command | null {
+  const targets = collectSelectionTargets(projection, selection)
+  const usedRunIds = collectRunIds(projection)
+
+  if (targets.runs.length === 0) {
+    return null
+  }
+
+  const operations: Operation[] = targets.runs.flatMap((target) => {
+    if (isRunLinkEquivalent(target.run.link, link)) {
+      return []
+    }
+
+    const isWholeRunSelection =
+      target.selectedStartGraphemeIndex === 0
+      && target.selectedEndGraphemeIndex === target.graphemeLength
+
+    if (isWholeRunSelection) {
+      return [{
+        kind: 'setRunLink',
+        runId: target.run.id,
+        link
+      }]
+    }
+
+    return [{
+      kind: 'setRunLink',
+      runId: target.run.id,
+      link,
+      range: {
+        startGraphemeIndex: target.selectedStartGraphemeIndex,
+        endGraphemeIndex: target.selectedEndGraphemeIndex,
+        ...(target.selectedStartGraphemeIndex > 0
+          ? { linkedRunId: allocateGeneratedRunId(usedRunIds, target.run.id, 'link') }
+          : {}),
+        ...(target.selectedEndGraphemeIndex < target.graphemeLength
+          ? { trailingRunId: allocateGeneratedRunId(usedRunIds, target.run.id, 'tail') }
+          : {})
+      }
+    }]
+  })
+
+  if (operations.length === 0) {
+    return null
+  }
+
+  return {
+    name,
+    operations
+  }
+}
+
+function createRunLink(input: Readonly<{ target: string, tooltip?: string }>): RunLink {
+  const normalizedTarget = input.target.trim()
+  const normalizedTooltip = input.tooltip?.trim()
+
+  return normalizedTooltip === undefined || normalizedTooltip.length === 0
+    ? {
+        target: normalizedTarget
+      }
+    : {
+        target: normalizedTarget,
+        tooltip: normalizedTooltip
+      }
+}
+
+function assertAllowedLinkUrl(target: string): void {
+  if (isAllowedLinkUrl(target)) {
+    return
+  }
+
+  throw createJWordError('OPERATION_LINK_URL_DISALLOWED', '链接 URL 不在 allowlist 内', {
+    target
+  })
+}
+
+function isRunLinkEquivalent(currentLink: RunLink | undefined, nextLink: RunLink | null): boolean {
+  if (nextLink === null) {
+    return currentLink === undefined
+  }
+
+  return currentLink?.target === nextLink.target
+    && currentLink?.tooltip === nextLink.tooltip
+}
+
 function collectRunIds(projection: DocumentProjection): Set<string> {
   const runIds = new Set<string>()
 
@@ -1006,6 +1271,10 @@ function collectRunIds(projection: DocumentProjection): Set<string> {
       }
     }
   }
+}
+
+function collectCommentThreadIds(projection: DocumentProjection): Set<string> {
+  return new Set((projection.document.comments ?? []).map((comment) => comment.id))
 }
 
 function countImageResourceReferences(projection: DocumentProjection, resourceId: string): number {
@@ -1043,7 +1312,7 @@ function countImageResourceReferences(projection: DocumentProjection, resourceId
 function allocateGeneratedRunId(
   usedRunIds: Set<string>,
   runId: string,
-  suffix: 'format' | 'tail' | 'image'
+  suffix: 'format' | 'tail' | 'image' | 'link'
 ): string {
   let sequence = 1
   let candidate = `${runId}__${suffix}-${sequence}`
@@ -1054,6 +1323,20 @@ function allocateGeneratedRunId(
   }
 
   usedRunIds.add(candidate)
+
+  return candidate
+}
+
+function allocateGeneratedCommentThreadId(usedIds: Set<string>): string {
+  let sequence = usedIds.size + 1
+  let candidate = `comment-${sequence}`
+
+  while (usedIds.has(candidate)) {
+    sequence += 1
+    candidate = `comment-${sequence}`
+  }
+
+  usedIds.add(candidate)
 
   return candidate
 }
@@ -1212,6 +1495,10 @@ function findParagraphById(
 
     return null
   }
+}
+
+function findCommentThread(projection: DocumentProjection, threadId: string): Comment | null {
+  return projection.document.comments?.find((comment) => comment.id === threadId) ?? null
 }
 
 function runContainsTextInline(run: Run | undefined): boolean {

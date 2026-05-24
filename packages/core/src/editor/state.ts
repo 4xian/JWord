@@ -20,7 +20,9 @@ import { createTransactionPipeline } from '../operations/transaction'
 import type { TextPosition } from '../operations/transaction'
 import type { ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
 import { DEFAULT_EDITOR_LABEL, DOCUMENT_CREATE_ORIGIN } from './constants'
+import { normalizeEditorUser } from './current-user'
 import type { EditorDocumentInput, EditorEvent, EditorEventListener, EditorOptions, MountedEditorDom, RenderReason } from './types'
+import type { EditorUser } from './types'
 
 export abstract class JWordEditorState {
   protected readonly label: string
@@ -29,6 +31,7 @@ export abstract class JWordEditorState {
   protected readonly history: ReturnType<typeof createHistoryManager>
   protected readonly resourceAdapter: ResourceAdapter | undefined
   protected readonly resourceUrlPolicy: ResourceUrlPolicy | undefined
+  protected readonly currentUser: EditorUser
   protected pageConfig: PageConfig
   protected readonly fontManager = createFontManager()
   protected readonly layoutOptions: LayoutOptions
@@ -58,10 +61,12 @@ export abstract class JWordEditorState {
   protected pendingCollapsedRunProperties: ModelProperties | undefined
   protected selectionPageIndexes: readonly number[] = []
   protected mountedTextMirrorNeedsRefresh = true
+  protected rangeSnapshotSequence = 0
   protected isDestroyed = false
 
   constructor(options?: EditorOptions) {
     this.label = options?.label ?? DEFAULT_EDITOR_LABEL
+    this.currentUser = normalizeEditorUser(options?.currentUser)
     this.pageConfig = createPageConfig(options?.page)
     this.resourceAdapter = options?.resourceAdapter
     this.resourceUrlPolicy = options?.resourceUrlPolicy

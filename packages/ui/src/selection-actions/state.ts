@@ -101,13 +101,17 @@ export function buildSelectionActionsViewState(input: Readonly<{
   interactiveFocus: boolean
   dismissedSelectionKey: string | null
   contextSelection: SelectionState | null
+  contextLinkSelection: SelectionState | null
   contextPoint: SelectionActionPosition | null
   colorSelection: SelectionState | null
   activeColorPicker: 'text' | 'background' | null
   stickyFloatingToolbar: StickyFloatingToolbarState
+  hasLink: (selection: SelectionState | null) => boolean
+  readLinkUrl: (selection: SelectionState | null) => string | null
 }>): SelectionActionsViewState {
   const currentSelection = input.editor.getSelection()
   const floatingSelection = input.colorSelection ?? currentSelection
+  const activeLinkUrl = input.readLinkUrl(floatingSelection)
   const currentSelectionKey = readSelectionKey(input.editor, floatingSelection)
   const usesStickyFloatingPosition =
     currentSelectionKey.length > 0
@@ -130,6 +134,7 @@ export function buildSelectionActionsViewState(input: Readonly<{
   const contextFormatting = input.contextSelection === null
     ? null
     : readSelectionFormattingState(input.editor, input.contextSelection)
+  const contextHasLink = input.hasLink(input.contextLinkSelection)
 
   return {
     floatingVisible: floatingVisible && floatingPosition !== null,
@@ -138,6 +143,9 @@ export function buildSelectionActionsViewState(input: Readonly<{
     contextMenuPosition: readContextMenuPosition(input.editorHost, input.contextPoint),
     contextSelectionKey: readSelectionKey(input.editor, input.contextSelection),
     formatEnabled: floatingFormatting?.run !== null,
+    insertLinkEnabled: floatingVisible,
+    activeLinkUrl,
+    contextHasLink,
     boldPressed: readPressedState(floatingFormatting?.run?.bold),
     italicPressed: readPressedState(floatingFormatting?.run?.italic),
     underlinePressed: readPressedState(floatingFormatting?.run?.underline),

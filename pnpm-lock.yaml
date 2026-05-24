@@ -95,6 +95,9 @@ importers:
       '@4xian/jword-core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@4xian/jword-ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       typescript:
         specifier: 6.0.3
@@ -108,6 +111,15 @@ importers:
       yjs:
         specifier: 13.6.30
         version: 13.6.30
+
+  packages/ui:
+    dependencies:
+      '@4xian/jword-core':
+        specifier: workspace:*
+        version: link:../core
+      dompurify:
+        specifier: 3.4.2
+        version: 3.4.2
 
 packages:
 

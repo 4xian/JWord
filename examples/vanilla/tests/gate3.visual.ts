@@ -55,13 +55,12 @@ async function waitForGate3AlphaReady(page: Page): Promise<void> {
 async function selectSampleAndReadVisualProbe(page: Page): Promise<Gate3VisualProbe> {
   await page.getByRole('button', { name: '选择首页片段' }).click()
 
-  await expect.poll(() => page.evaluate(() => {
-    return document.querySelector<HTMLElement>('[data-jword-selection-summary]')?.textContent ?? ''
-  })).toContain('run-1')
+  await expect.poll(() => hasSingleRunSelection(page)).toBe(true)
 
   return readCurrentVisualProbe(page)
 }
 
+/** 点击页尾光标位置，并读取真实 canvas 视觉探针。 */
 async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3VisualProbe> {
   const point = await page.evaluate(() => {
     const demo = window.__jwordDemo
@@ -94,19 +93,78 @@ async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3Vis
     return {
       clientX: canvasRect.left + ((caretRect.x - pageBox.x + 1) * canvasRect.width) / pageBox.width,
       clientY: canvasRect.top + ((caretRect.y - pageBox.y + caretRect.height / 2) * canvasRect.height) / pageBox.height,
-      selectionSummary: `${graphemeIndex}→${graphemeIndex}`
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex
     }
   })
 
   await page.mouse.click(point.clientX, point.clientY)
 
-  await expect.poll(() => page.evaluate(() => {
-    return document.querySelector<HTMLElement>('[data-jword-selection-summary]')?.textContent ?? ''
-  })).toContain(point.selectionSummary)
+  await expect.poll(() => hasCollapsedSelectionAt(page, {
+    sectionId: point.sectionId,
+    blockId: point.blockId,
+    runId: point.runId,
+    graphemeIndex: point.graphemeIndex
+  })).toBe(true)
+
+  await expect.poll(async () => {
+    const probe = await readCurrentVisualProbe(page)
+
+    return probe.selectionPixels
+  }).toBe(0)
 
   return readCurrentVisualProbe(page)
 }
 
+/** 判断当前选区是否落在同一个 run 内且非折叠。 */
+async function hasSingleRunSelection(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const demo = window.__jwordDemo
+    const selection = demo?.editor.getSelection() ?? null
+    const anchorPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.anchor)
+    const focusPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.focus)
+
+    return anchorPosition !== undefined
+      && focusPosition !== undefined
+      && anchorPosition.sectionId === focusPosition.sectionId
+      && anchorPosition.blockId === focusPosition.blockId
+      && anchorPosition.runId === focusPosition.runId
+      && anchorPosition.graphemeIndex !== focusPosition.graphemeIndex
+  })
+}
+
+/** 判断当前选区是否折叠到指定文本位置。 */
+async function hasCollapsedSelectionAt(
+  page: Page,
+  expected: Readonly<{
+    sectionId: string
+    blockId: string
+    runId: string
+    graphemeIndex: number
+  }>
+): Promise<boolean> {
+  return page.evaluate((input) => {
+    const demo = window.__jwordDemo
+    const selection = demo?.editor.getSelection() ?? null
+    const anchorPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.anchor)
+    const focusPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.focus)
+
+    return anchorPosition !== undefined
+      && focusPosition !== undefined
+      && anchorPosition.sectionId === input.sectionId
+      && anchorPosition.blockId === input.blockId
+      && anchorPosition.runId === input.runId
+      && anchorPosition.graphemeIndex === input.graphemeIndex
+      && focusPosition.sectionId === input.sectionId
+      && focusPosition.blockId === input.blockId
+      && focusPosition.runId === input.runId
+      && focusPosition.graphemeIndex === input.graphemeIndex
+  }, expected)
+}
+
+/** 读取当前真实 canvas 上的文字、选区与光标像素。 */
 async function readCurrentVisualProbe(page: Page): Promise<Gate3VisualProbe> {
   return page.evaluate(() => {
     const demo = window.__jwordDemo

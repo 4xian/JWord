@@ -82,6 +82,7 @@ export function renderPageCanvas(input: RenderPageInput): void {
   renderSelectionRects(context, input, drawingScale)
   renderTextBackgrounds(context, input.page, drawingScale)
   renderTables(context, input.page, drawingScale)
+  renderHeaderFooterBoxes(context, input.page, drawingScale)
   renderParagraphListMarkers(context, input.page, drawingScale)
   renderTextFragments(context, input.page, drawingScale)
   renderInlineObjects(context, input.page, drawingScale, input.imageResourceResolver)
@@ -229,6 +230,79 @@ function renderTextFragments(
   for (const fragment of iteratePageTextFragments(page)) {
     renderTextFragment(context, page, fragment, drawingScale)
   }
+}
+
+/** 绘制页眉页脚最小可见标记，供浏览器和后续 PDF/docx 复用同一 layout 输出。 */
+function renderHeaderFooterBoxes(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  page: LayoutBox,
+  drawingScale: number
+): void {
+  for (const box of page.headerFooterBoxes) {
+    const text = formatHeaderFooterText(box.sourceId, box.pageNumber)
+    const x = resolveHeaderFooterTextX(page, box, text, drawingScale)
+    const baseline = toCanvasY(page, box.y + (box.height * 0.6), drawingScale)
+
+    context.fillStyle = '#6b7280'
+    context.font = `${Math.max(10, Math.round(12 * drawingScale))}px sans-serif`
+    context.textBaseline = 'alphabetic'
+    context.fillText(text, x, baseline)
+  }
+}
+
+/** 格式化页眉页脚可见文本，隐藏内部页码 source id。 */
+function formatHeaderFooterText(sourceId: string, pageNumber: number): string {
+  return isPageNumberSourceId(sourceId)
+    ? String(pageNumber)
+    : sourceId
+}
+
+/** 根据页码 source id 中的位置计算页眉页脚文本 x 坐标。 */
+function resolveHeaderFooterTextX(
+  page: LayoutBox,
+  box: LayoutBox['headerFooterBoxes'][number],
+  text: string,
+  drawingScale: number
+): number {
+  const align = readPageNumberAlignment(box.sourceId)
+
+  if (align === 'center') {
+    return toCanvasX(page, box.x + (box.width / 2), drawingScale)
+      - (estimateHeaderFooterTextWidthPx(text, drawingScale) / 2)
+  }
+
+  if (align === 'right') {
+    return toCanvasX(page, box.x + box.width, drawingScale) - estimateHeaderFooterTextWidthPx(text, drawingScale)
+  }
+
+  return toCanvasX(page, box.x, drawingScale)
+}
+
+/** 从页码 source id 读取水平对齐方式。 */
+function readPageNumberAlignment(sourceId: string): 'left' | 'center' | 'right' {
+  if (!isPageNumberSourceId(sourceId)) {
+    return 'left'
+  }
+
+  if (sourceId.endsWith('-center')) {
+    return 'center'
+  }
+
+  if (sourceId.endsWith('-right')) {
+    return 'right'
+  }
+
+  return 'left'
+}
+
+/** 估算页眉页脚文本宽度，避免内部页码在右对齐时溢出。 */
+function estimateHeaderFooterTextWidthPx(text: string, scale: number): number {
+  return Math.max(1, Math.round(text.length * 12 * 0.55 * scale))
+}
+
+/** 判断页眉页脚标识是否由页码工具生成。 */
+function isPageNumberSourceId(value: string): boolean {
+  return value.startsWith('page-number-')
 }
 
 /** 统一绘制单个文本片段，供正文和表格复用。 */

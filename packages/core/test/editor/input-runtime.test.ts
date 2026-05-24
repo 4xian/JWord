@@ -1339,6 +1339,120 @@ describe('Editor input runtime', () => {
     }
   })
 
+  it('pastes sanitized rich text fragments through the transaction pipeline', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+    const transactions = captureTransactions(editor)
+
+    try {
+      editor.mount(host)
+
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+
+      editor.setSelection(createSelectionState(anchor, anchor))
+      editor.pasteRichTextFragment({
+        paragraphs: [{
+          properties: {
+            alignment: 'center'
+          },
+          runs: [{
+            text: 'Word',
+            properties: {
+              bold: true,
+              italic: true,
+              color: '#c00000',
+              backgroundColor: '#fff2cc'
+            }
+          }, {
+            text: ' 片段',
+            properties: {
+              underline: true
+            }
+          }]
+        }, {
+          properties: {
+            listNumberingId: 'paste-bullet',
+            listLevel: 0
+          },
+          runs: [{
+            text: '列表',
+            properties: {
+              fontSizeTwips: 280
+            }
+          }]
+        }]
+      })
+
+      expect(readParagraphTexts(editor)).toEqual(['aWord 片段', '列表b'])
+      expect(readParagraphRunTexts(editor)).toEqual([
+        ['a', 'Word', ' 片段'],
+        ['列表', 'b']
+      ])
+      expect(readParagraphRunProperties(editor)).toMatchObject([
+        [
+          {},
+          {
+            bold: true,
+            italic: true,
+            color: '#c00000',
+            backgroundColor: '#fff2cc'
+          },
+          {
+            bold: false,
+            italic: false,
+            underline: true,
+            color: null,
+            backgroundColor: null
+          }
+        ],
+        [
+          {
+            bold: false,
+            italic: false,
+            underline: false,
+            color: null,
+            backgroundColor: null,
+            fontSizeTwips: 280
+          },
+          {}
+        ]
+      ])
+      expect(readParagraphProperties(editor)).toEqual([
+        {
+          alignment: 'center'
+        },
+        {
+          listNumberingId: 'paste-bullet',
+          listLevel: 0
+        }
+      ])
+      expect(transactions).toEqual([{
+        commandName: 'pasteRichText',
+        origin: 'local-user',
+        operationKinds: [
+          'insertText',
+          'setRunProperties',
+          'insertText',
+          'setRunProperties',
+          'splitBlock',
+          'insertText',
+          'setRunProperties',
+          'setParagraphProperties',
+          'setParagraphProperties'
+        ],
+        dirty: true
+      }])
+      expectSelectionIndexes(editor, editor.getSelection(), [2, 2])
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('supports cross-run plain text cut and paste through the transaction pipeline', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: 'abcdef' })
@@ -1754,6 +1868,15 @@ function readParagraphRunProperties(editor: ReturnType<typeof createEditor>) {
   return editor.getProjection().document.sections.flatMap((section) =>
     section.blocks.flatMap((block) => block.kind === 'paragraph'
       ? [block.runs.map((run) => run.properties ?? {})]
+      : [])
+  )
+}
+
+/** 读取段落属性，验证富文本粘贴是否把段落级格式落入 projection。 */
+function readParagraphProperties(editor: ReturnType<typeof createEditor>) {
+  return editor.getProjection().document.sections.flatMap((section) =>
+    section.blocks.flatMap((block) => block.kind === 'paragraph'
+      ? [block.properties ?? {}]
       : [])
   )
 }

@@ -67,6 +67,8 @@ export interface PageBox extends LayoutRect {
   readonly pageLayout?: Section['page']
   readonly headerIds: readonly string[]
   readonly footerIds: readonly string[]
+  readonly pageNumber?: number
+  readonly headerFooterBoxes: readonly HeaderFooterBox[]
   readonly lines: readonly LineBox[]
   readonly paragraphs: readonly ParagraphBox[]
   readonly blocks: readonly BlockBox[]
@@ -74,6 +76,14 @@ export interface PageBox extends LayoutRect {
 }
 
 export type LayoutBox = PageBox
+
+export interface HeaderFooterBox extends LayoutRect {
+  readonly kind: 'headerFooter'
+  readonly role: 'header' | 'footer'
+  readonly sectionId: string
+  readonly sourceId: string
+  readonly pageNumber: number
+}
 
 export interface ParagraphBox extends LayoutRect {
   readonly kind: 'paragraph'
@@ -240,6 +250,8 @@ export interface MutablePageBox {
   pageLayout?: Section['page']
   headerIds: readonly string[]
   footerIds: readonly string[]
+  pageNumber?: number
+  headerFooterBoxes: HeaderFooterBox[]
   lines: LineBox[]
   paragraphs: MutableParagraphBox[]
   blocks: BlockBox[]
@@ -286,8 +298,17 @@ export interface LayoutCursor {
   line: MutableLineBox | undefined
   y: number
   x: number
+  sectionContext?: LayoutSectionContext
   paragraphLineCounts?: Map<string, number>
   listCounters?: Map<string, number[]>
+}
+
+export interface LayoutSectionContext {
+  readonly sectionId: string
+  readonly headerIds: readonly string[]
+  readonly footerIds: readonly string[]
+  readonly startPageIndex: number
+  readonly startPageNumber: number
 }
 
 export interface IncrementalLayoutContext {

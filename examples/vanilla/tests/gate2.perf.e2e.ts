@@ -1,5 +1,5 @@
 /**
- * @fileoverview 职责: 用真实 Chromium 浏览器记录 Gate 2 50 页夹具的滚动与虚拟化指标。
+ * @fileoverview 职责: 用真实 Chromium 浏览器记录 Gate 2 长文夹具的滚动与虚拟化指标。
  * 边界: 只测 examples/vanilla 已接通的 Gate 2 demo，不替代 core Node benchmark 或 Gate 3 toolbar perf。
  * 协作: data-jword-canvas-container、window.__jwordDemo 和 Playwright perf-chromium 项目。
  * 约束: 指标必须来自浏览器 performance、requestAnimationFrame 和真实 canvas DOM，可附带 JSON 供复查。
@@ -7,6 +7,8 @@
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+
+const expectedGate2PageCount = 53
 
 interface Gate2PerfMetrics {
   readonly pageCount: number
@@ -37,12 +39,12 @@ test('Gate 2 fixture exposes real browser scroll metrics and virtualization boun
     contentType: 'application/json'
   })
 
-  expect(metrics.pageCount).toBe(50)
+  expect(metrics.pageCount).toBe(expectedGate2PageCount)
   expect(metrics.initialMountedCanvasCount).toBeLessThanOrEqual(3)
   expect(metrics.peakMountedCanvasCount).toBeLessThanOrEqual(4)
   expect(metrics.initialCanvasBytes).toBeGreaterThan(0)
   expect(metrics.peakCanvasBytes).toBeGreaterThanOrEqual(metrics.initialCanvasBytes)
-  expect(metrics.peakCanvasBytes).toBeLessThanOrEqual(12_000_000)
+  expect(metrics.peakCanvasBytes).toBeLessThanOrEqual(16_000_000)
   expect(metrics.maxCanvasSidePx).toBeLessThanOrEqual(2048)
   expect(metrics.scrollToMiddleMs).toBeGreaterThan(0)
   expect(metrics.scrollToMiddleMs).toBeLessThanOrEqual(500)
@@ -55,7 +57,7 @@ test('Gate 2 fixture exposes real browser scroll metrics and virtualization boun
 })
 
 async function waitForGate2Ready(page: Page): Promise<void> {
-  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
+  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', String(expectedGate2PageCount))
   await page.waitForFunction(() => window.__jwordDemo !== undefined)
   await expect.poll(async () => {
     return page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)

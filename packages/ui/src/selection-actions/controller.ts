@@ -36,6 +36,7 @@ export function createSelectionActionsController(
   const editor = options.editor
   const editorHost = options.editorHost
   const colorFormat = options.colorFormat
+  const insertActions = options.insertActions
   const dom = createSelectionActionsDom(editorHost)
   const hiddenTextarea = requireHiddenTextarea(editorHost)
   const canvasContainer = requireCanvasContainer(editorHost)
@@ -43,6 +44,7 @@ export function createSelectionActionsController(
   const liveRegion = options.assistive.liveRegion
   const stableContextSelection: StableContextSelectionState = {
     selection: null,
+    linkSelection: null,
     point: null
   }
   const frozenColorSelections = {
@@ -97,6 +99,7 @@ export function createSelectionActionsController(
 
     if (event.kind === 'destroyed') {
       stableContextSelection.selection = null
+      stableContextSelection.linkSelection = null
       stableContextSelection.point = null
       destroyController()
     }
@@ -121,13 +124,16 @@ export function createSelectionActionsController(
       interactiveFocus,
       dismissedSelectionKey,
       contextSelection: stableContextSelection.selection,
+      contextLinkSelection: stableContextSelection.linkSelection,
       contextPoint: stableContextSelection.point,
       colorSelection,
       activeColorPicker: openColorPicker,
       stickyFloatingToolbar: {
         selectionKey: stickyFloatingSelectionKey,
         position: stickyFloatingPosition
-      }
+      },
+      hasLink: (selection) => insertActions?.hasLink?.(selection) ?? false,
+      readLinkUrl: (selection) => insertActions?.readLinkUrl?.(selection) ?? null
     }))
   }
 
@@ -141,6 +147,7 @@ export function createSelectionActionsController(
 
     if (!interactiveFocus) {
       stableContextSelection.point = null
+      stableContextSelection.linkSelection = null
     }
 
     render()
@@ -540,6 +547,46 @@ export function createSelectionActionsController(
     bindButton(dom.formatControls.strike, () => {
       toggleRunFormat(readActiveSelectionSnapshot(), 'strike')
     })
+    bindButton(dom.formatControls.insertLink, () => {
+      if (insertActions === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接弹窗。')
+        return
+      }
+
+      insertActions.openLink(cloneSelection(readActiveSelectionSnapshot()))
+      stableContextSelection.point = null
+      render()
+    })
+    bindButton(dom.formatControls.openLink, () => {
+      if (insertActions?.openActiveLink === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接打开能力。')
+        return
+      }
+
+      insertActions.openActiveLink(cloneSelection(readActiveSelectionSnapshot()))
+      stableContextSelection.point = null
+      render()
+    })
+    bindButton(dom.formatControls.editLink, () => {
+      if (insertActions?.editLink === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接编辑能力。')
+        return
+      }
+
+      insertActions.editLink(cloneSelection(readActiveSelectionSnapshot()))
+      stableContextSelection.point = null
+      render()
+    })
+    bindButton(dom.formatControls.removeLink, () => {
+      if (insertActions?.removeLink === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接删除能力。')
+        return
+      }
+
+      insertActions.removeLink(cloneSelection(readActiveSelectionSnapshot()))
+      stableContextSelection.point = null
+      render()
+    })
 
     bindColorInput(dom.formatControls.textColor, 'text')
     bindColorInput(dom.formatControls.backgroundColor, 'background')
@@ -685,6 +732,59 @@ export function createSelectionActionsController(
     bindButton(dom.contextControls.clear, () => {
       clearStableSelectionFormatting(cloneSelection(stableContextSelection.selection))
     })
+    bindButton(dom.contextControls.insertComment, () => {
+      if (insertActions === undefined) {
+        announce('BLOCKED: 当前宿主未启用批注侧栏。')
+        return
+      }
+
+      insertActions.openComment(cloneSelection(stableContextSelection.selection))
+      stableContextSelection.point = null
+      render()
+    })
+    bindButton(dom.contextControls.insertLink, () => {
+      if (insertActions === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接弹窗。')
+        return
+      }
+
+      insertActions.openLink(cloneSelection(stableContextSelection.selection))
+      stableContextSelection.point = null
+      render()
+    })
+    bindButton(dom.contextControls.openLink, () => {
+      if (insertActions?.openActiveLink === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接打开能力。')
+        return
+      }
+
+      insertActions.openActiveLink(cloneSelection(stableContextSelection.linkSelection))
+      stableContextSelection.point = null
+      stableContextSelection.linkSelection = null
+      render()
+    })
+    bindButton(dom.contextControls.editLink, () => {
+      if (insertActions?.editLink === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接编辑能力。')
+        return
+      }
+
+      insertActions.editLink(cloneSelection(stableContextSelection.linkSelection))
+      stableContextSelection.point = null
+      stableContextSelection.linkSelection = null
+      render()
+    })
+    bindButton(dom.contextControls.removeLink, () => {
+      if (insertActions?.removeLink === undefined) {
+        announce('BLOCKED: 当前宿主未启用链接删除能力。')
+        return
+      }
+
+      insertActions.removeLink(cloneSelection(stableContextSelection.linkSelection))
+      stableContextSelection.point = null
+      stableContextSelection.linkSelection = null
+      render()
+    })
   }
 
   /** 绑定 editor 生命周期、右键菜单、局部快捷键与失焦收口逻辑。 */
@@ -717,6 +817,7 @@ export function createSelectionActionsController(
         openColorPicker = null
         clearStickyFloatingToolbar()
         stableContextSelection.point = null
+        stableContextSelection.linkSelection = null
         render()
       }
     }, { signal: signalController.signal })
@@ -724,7 +825,10 @@ export function createSelectionActionsController(
       event.preventDefault()
       openColorPicker = null
       clearStickyFloatingToolbar()
-      stableContextSelection.selection = cloneSelection(editor.getSelection())
+      const linkSelection = readContextLinkSelection(event)
+
+      stableContextSelection.selection = linkSelection ?? cloneSelection(editor.getSelection())
+      stableContextSelection.linkSelection = linkSelection
       stableContextSelection.point = {
         left: event.clientX,
         top: event.clientY
@@ -738,6 +842,10 @@ export function createSelectionActionsController(
         return
       }
 
+      if (isLinkOverlayTarget(event.target) && restoreDismissedLinkToolbar()) {
+        return
+      }
+
       if (!dom.host.contains(event.target)) {
         if (openColorPicker !== null) {
           writeActiveColorReturnedToEditor(openColorPicker, true)
@@ -746,10 +854,12 @@ export function createSelectionActionsController(
       }
 
       stableContextSelection.point = null
+      stableContextSelection.linkSelection = null
       render()
     }, { signal: signalController.signal })
     canvasContainer.addEventListener('scroll', () => {
       stableContextSelection.point = null
+      stableContextSelection.linkSelection = null
       render()
     }, { signal: signalController.signal })
     document.addEventListener('pointerdown', (event) => {
@@ -764,9 +874,60 @@ export function createSelectionActionsController(
       openColorPicker = null
       clearStickyFloatingToolbar()
       stableContextSelection.point = null
+      stableContextSelection.linkSelection = null
       interactiveFocus = false
       render()
     }, { signal: signalController.signal })
+  }
+
+  /** 读取本次右键菜单可执行链接动作的选区，避免沿用旧链接状态。 */
+  function readContextLinkSelection(event: MouseEvent): SelectionState | null {
+    const targetSelection = event.target instanceof Element
+      ? cloneSelection(insertActions?.readLinkSelectionFromTarget?.(event.target) ?? null)
+      : null
+
+    if (targetSelection !== null) {
+      return targetSelection
+    }
+
+    const selection = cloneSelection(editor.getSelection())
+
+    if (insertActions?.hasLink?.(selection) === true) {
+      return selection
+    }
+
+    return null
+  }
+
+  /** 判断事件目标是否来自正文链接 overlay。 */
+  function isLinkOverlayTarget(target: Node): boolean {
+    return target instanceof Element
+      && target.closest('[data-jword-link-target-index]') !== null
+  }
+
+  /** 再次点击已收起的链接选区时恢复浮动工具栏显示资格。 */
+  function restoreDismissedLinkToolbar(): boolean {
+    const selection = editor.getSelection()
+    const currentSelectionKey = readSelectionKey(editor, selection)
+
+    if (
+      dismissedSelectionKey === null
+      || currentSelectionKey.length === 0
+      || dismissedSelectionKey !== currentSelectionKey
+      || insertActions?.hasLink?.(selection) !== true
+    ) {
+      return false
+    }
+
+    dismissedSelectionKey = null
+    openColorPicker = null
+    clearStickyFloatingToolbar()
+    stableContextSelection.point = null
+    stableContextSelection.linkSelection = null
+    interactiveFocus = true
+    render()
+
+    return true
   }
 
   /** 把按钮绑定为统一动作入口，并阻止鼠标按下抢走 hidden textarea 焦点。 */

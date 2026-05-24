@@ -7,16 +7,42 @@
  */
 import type { CanvasLike, createCanvasPool } from '../canvas/pool'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
-import type { ParagraphList } from '../model/types'
+import type { ModelProperties, ParagraphList } from '../model/types'
 import type { HistoryOperationResult } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
 import type { DocumentLayout, LayoutBox, LayoutOptions, LayoutRect } from '../layout/runtime'
-import type { AnchorRef, RangeRef } from '../model/position'
+import type { AnchorRef, RangeRef, TextRangeRecord } from '../model/position'
 import type { DocumentProjection } from '../model/projection'
 import type { SelectionState } from '../model/selection'
-import type { Command, TextPosition, TransactionEvent, TransactionResult } from '../operations/transaction'
+import type { Command, TextPosition, TextRange, TransactionEvent, TransactionResult } from '../operations/transaction'
 import type { Resource, ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
 import type { CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
+
+export interface EditorUser {
+  /** 稳定作者 ID。 */
+  readonly authorId: string
+  /** 稳定作者显示名。 */
+  readonly name?: string
+  /** 兼容现有宿主的头像 URL。 */
+  readonly avatarUrl?: string
+  /** 兼容现有宿主的颜色标记。 */
+  readonly color?: string
+}
+
+export interface EditorUserInput {
+  /** 兼容现有宿主的用户 ID。 */
+  readonly id?: string
+  /** 稳定作者 ID。 */
+  readonly authorId?: string
+  /** 兼容现有宿主的显示名。 */
+  readonly displayName?: string
+  /** 稳定作者显示名别名。 */
+  readonly name?: string
+  /** 兼容现有宿主的头像 URL。 */
+  readonly avatarUrl?: string
+  /** 兼容现有宿主的颜色标记。 */
+  readonly color?: string
+}
 
 export interface EditorOptions {
   /**
@@ -57,6 +83,11 @@ export interface EditorOptions {
    * 资源上传适配器。
    */
   readonly resourceAdapter?: ResourceAdapter
+
+  /**
+   * 当前本地用户。
+   */
+  readonly currentUser?: EditorUserInput
 }
 
 /**
@@ -139,6 +170,34 @@ export interface EditorCommandOptions {
    * 该值不写入文档模型，只进入 history restore metadata。
    */
   readonly selectionAfter?: SelectionState | null
+}
+
+/**
+ * 已由宿主/UI 清洗过的富文本粘贴 run。
+ */
+export interface EditorRichTextRun {
+  /** 要插入的纯文本。 */
+  readonly text: string
+  /** run 级格式属性安全子集。 */
+  readonly properties?: ModelProperties
+}
+
+/**
+ * 已由宿主/UI 清洗过的富文本粘贴段落。
+ */
+export interface EditorRichTextParagraph {
+  /** 段落级格式属性安全子集。 */
+  readonly properties?: ModelProperties
+  /** 段落内 run 列表。 */
+  readonly runs: readonly EditorRichTextRun[]
+}
+
+/**
+ * 已由宿主/UI 清洗过的富文本粘贴片段。
+ */
+export interface EditorRichTextFragment {
+  /** 按文档顺序排列的段落片段。 */
+  readonly paragraphs: readonly EditorRichTextParagraph[]
 }
 
 /**
@@ -295,6 +354,29 @@ export interface Editor {
   getSelectionRects(range: RangeRef): readonly LayoutRect[]
 
   /**
+   * 读取当前本地用户。
+   *
+   * @returns 当前 editor 使用的稳定用户快照。
+   */
+  getCurrentUser(): EditorUser
+
+  /**
+   * 捕获当前 range 的稳定快照。
+   *
+   * @param range 需要持久化的稳定范围。
+   * @returns JSON 兼容的范围快照记录。
+   */
+  captureRangeSnapshot(range: RangeRef): TextRangeRecord
+
+  /**
+   * 把稳定 range 快照解析回当前文本范围。
+   *
+   * @param snapshot 已持久化的范围快照。
+   * @returns 当前文本范围；无法解析时返回 null。
+   */
+  locateRangeSnapshot(snapshot: TextRangeRecord): TextRange | null
+
+  /**
    * 读取当前 facade runtime 选择区。
    *
    * @returns 当前选择区；没有光标或选区时返回 null。
@@ -302,6 +384,14 @@ export interface Editor {
    * 无副作用，不读取 DOM，不暴露可写文档模型。
    */
   getSelection(): SelectionState | null
+
+  /**
+   * 定位指定批注 thread 当前绑定的稳定范围。
+   *
+   * @param threadId 批注 thread 标识。
+   * @returns 当前可解析的范围；锚点失效时返回 null。
+   */
+  locateCommentThread(threadId: string): RangeRef | null
 
   /**
    * 读取当前 selection 对应的只读 formatting state。
@@ -486,6 +576,16 @@ export interface Editor {
    * ```
    */
   executeCommand(command: Command, options?: EditorCommandOptions): TransactionResult
+
+  /**
+   * 粘贴已清洗的结构化富文本片段。
+   *
+   * @param fragment UI 或宿主已经完成 HTML 清洗后的结构化片段。
+   * @returns 是否成功生成并执行事务。
+   * @remarks
+   * core 不解析 HTML、不访问 DOMPurify；这里只消费安全纯数据并进入 transaction pipeline。
+   */
+  pasteRichTextFragment(fragment: EditorRichTextFragment): boolean
 
   /**
    * 撤销最近一次本地用户历史操作。

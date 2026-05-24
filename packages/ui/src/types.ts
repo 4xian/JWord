@@ -6,12 +6,29 @@
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
  */
 import type { DocumentProjection, Editor, SelectionState } from '@4xian/jword-core'
+import type {
+  JWordCommentPermissionOptions,
+  JWordCommentThread,
+  JWordCommentTimeFormatter,
+  JWordCommentUser,
+  JWordCommentUserResolver,
+  JWordCommentsSidebarDom
+} from './comments/types'
+import type { JWordLinkPanelDom, JWordLinkUrlPolicy } from './link/types'
 
 /** 当前 UI 包内建的 Gate 3 工具 ID。 */
 export type JWordToolbarToolId =
   | 'history.undo'
   | 'history.redo'
   | 'document.pagePreset'
+  | 'document.findReplace'
+  | 'document.headingOutline'
+  | 'document.headerFooter'
+  | 'document.footer'
+  | 'document.pageNumber'
+  | 'document.revisions'
+  | 'insert.comment'
+  | 'insert.link'
   | 'format.bold'
   | 'format.italic'
   | 'format.underline'
@@ -346,6 +363,68 @@ export interface JWordTableOptions {
   readonly description?: string
 }
 
+/** SDK 级当前用户配置。 */
+export interface JWordUserOptions {
+  /** 当前编辑器实例对应的本地用户；为空时回退到 editor.getCurrentUser()。 */
+  readonly currentUser?: JWordCommentUser
+  /** 作者目录解析函数。 */
+  readonly resolveUser?: JWordCommentUserResolver
+}
+
+/** Gate 4 批注侧栏配置。 */
+export interface JWordCommentsOptions {
+  /** 批注侧栏挂载宿主；为空时由 SDK 在 editorHost 内创建默认右侧 rail。 */
+  readonly host?: HTMLElement
+  /** 初始批注列表；为空时从 editor projection 读取。 */
+  readonly threads?: readonly JWordCommentThread[]
+  /** 批注权限配置。 */
+  readonly permissions?: JWordCommentPermissionOptions
+  /** 创建时间格式化函数。 */
+  readonly formatCreatedAt?: JWordCommentTimeFormatter
+}
+
+/** Gate 4 链接 UI 配置。 */
+export interface JWordLinkOptions {
+  /** 链接 panel 挂载宿主；为空时挂到 toolbar 扩展区域。 */
+  readonly host?: HTMLElement
+  /** URL protocol allowlist。 */
+  readonly policy?: JWordLinkUrlPolicy
+  /** 打开链接由宿主接管，SDK 不直接调用 window.open。 */
+  readonly openLink?: (url: string) => Promise<void> | void
+}
+
+/** Gate 4 页眉页脚和页码基础 UI 配置。 */
+export interface JWordHeaderFooterOptions {
+  /** 页眉页脚面板挂载宿主。 */
+  readonly host: HTMLElement
+}
+
+/** Gate 4 基础目录面板配置。 */
+export interface JWordHeadingOutlineOptions {
+  /** 目录面板挂载宿主。 */
+  readonly host: HTMLElement
+}
+
+/** Gate 4 查找替换基础 UI 配置。 */
+export interface JWordFindReplaceOptions {
+  /** 查找替换面板挂载宿主。 */
+  readonly host: HTMLElement
+}
+
+/** Gate 4 修订 metadata 面板配置。 */
+export interface JWordRevisionsOptions {
+  /** 修订面板挂载宿主。 */
+  readonly host: HTMLElement
+}
+
+/** 移动 Web 只读分页预览配置。 */
+export interface JWordReadonlyPreviewOptions {
+  /** 是否在移动视口启用只读分页预览；不提供时不改变桌面编辑体验。 */
+  readonly mobile?: boolean
+  /** 移动视口最大宽度，默认 640px。 */
+  readonly maxWidthPx?: number
+}
+
 /** createJWordUi 的装配输入。 */
 export interface CreateJWordUiOptions {
   /** 已创建并可供 UI 调用的 core editor facade。 */
@@ -360,10 +439,26 @@ export interface CreateJWordUiOptions {
   readonly assistiveMirrorHost?: HTMLElement | null
   /** toolbar 的最小显隐配置。 */
   readonly toolbar?: JWordToolbarOptions
+  /** SDK 级用户上下文。 */
+  readonly user?: JWordUserOptions
   /** Gate 4 第一版图片 panel。 */
   readonly media?: JWordMediaOptions
   /** Gate 4 Iteration 2 表格工具。 */
   readonly table?: JWordTableOptions
+  /** Gate 4 批注侧栏；传 `true` 时启用 SDK 默认右侧 rail。 */
+  readonly comments?: true | JWordCommentsOptions
+  /** Gate 4 链接 UI。 */
+  readonly link?: JWordLinkOptions
+  /** Gate 4 页眉页脚和页码基础 UI。 */
+  readonly headerFooter?: JWordHeaderFooterOptions
+  /** Gate 4 基础目录 UI。 */
+  readonly headingOutline?: JWordHeadingOutlineOptions
+  /** Gate 4 查找替换基础 UI。 */
+  readonly findReplace?: JWordFindReplaceOptions
+  /** Gate 4 修订 metadata 面板。 */
+  readonly revisions?: JWordRevisionsOptions
+  /** Gate 4 移动 Web 只读分页预览。 */
+  readonly readonlyPreview?: JWordReadonlyPreviewOptions
 }
 
 /** live region 控制器的最小协作边界。 */
@@ -492,6 +587,112 @@ export interface JWordSelectionActionElements {
   readonly contextMenu: HTMLElement
 }
 
+/** 页眉页脚面板暴露给宿主和浏览器测试的节点。 */
+export interface JWordHeaderFooterPanelElements {
+  /** 页眉页脚面板宿主。 */
+  readonly host: HTMLElement
+  /** 面板根节点。 */
+  readonly root: HTMLElement
+  /** 页眉页脚入口按钮。 */
+  readonly triggerButton: HTMLButtonElement
+  /** 页眉页脚下拉菜单。 */
+  readonly menu: HTMLElement
+  /** 页眉入口按钮。 */
+  readonly headerTriggerButton: HTMLButtonElement
+  /** 页眉下拉菜单。 */
+  readonly headerMenu: HTMLElement
+  /** 页脚入口按钮。 */
+  readonly footerTriggerButton: HTMLButtonElement
+  /** 页脚下拉菜单。 */
+  readonly footerMenu: HTMLElement
+  /** 页码入口按钮。 */
+  readonly pageNumberTriggerButton: HTMLButtonElement
+  /** 页码下拉菜单。 */
+  readonly pageNumberMenu: HTMLElement
+  /** 页眉标识输入。 */
+  readonly headerInput: HTMLInputElement
+  /** 页脚标识输入。 */
+  readonly footerInput: HTMLInputElement
+  /** 页码起始值输入。 */
+  readonly pageStartInput: HTMLInputElement
+  /** 添加页眉按钮。 */
+  readonly addHeaderButton: HTMLButtonElement
+  /** 添加页脚按钮。 */
+  readonly addFooterButton: HTMLButtonElement
+  /** 删除页眉按钮。 */
+  readonly deleteHeaderButton: HTMLButtonElement
+  /** 删除页脚按钮。 */
+  readonly deleteFooterButton: HTMLButtonElement
+  /** 页脚菜单下一页分节按钮。 */
+  readonly footerNextPageButton: HTMLButtonElement
+  /** 页脚菜单连续分节按钮。 */
+  readonly footerContinuousButton: HTMLButtonElement
+  /** 上方左侧页码按钮。 */
+  readonly pageNumberTopLeftButton: HTMLButtonElement
+  /** 上方中间页码按钮。 */
+  readonly pageNumberTopCenterButton: HTMLButtonElement
+  /** 上方右侧页码按钮。 */
+  readonly pageNumberTopRightButton: HTMLButtonElement
+  /** 下方左侧页码按钮。 */
+  readonly pageNumberBottomLeftButton: HTMLButtonElement
+  /** 下方中间页码按钮。 */
+  readonly pageNumberBottomCenterButton: HTMLButtonElement
+  /** 下方右侧页码按钮。 */
+  readonly pageNumberBottomRightButton: HTMLButtonElement
+  /** 删除页码按钮。 */
+  readonly deletePageNumberButton: HTMLButtonElement
+  /** 下一页分节按钮。 */
+  readonly nextPageButton: HTMLButtonElement
+  /** 连续分节按钮。 */
+  readonly continuousButton: HTMLButtonElement
+}
+
+/** 修订 metadata 面板暴露给宿主和浏览器测试的节点。 */
+export interface JWordRevisionPanelElements {
+  /** 修订面板宿主。 */
+  readonly host: HTMLElement
+  /** 面板根节点。 */
+  readonly root: HTMLElement
+  /** 修订列表节点。 */
+  readonly list: HTMLElement
+  /** 空状态节点。 */
+  readonly emptyState: HTMLElement
+}
+
+/** 查找替换面板暴露给宿主和浏览器测试的节点。 */
+export interface JWordFindReplacePanelElements {
+  /** 查找替换面板宿主。 */
+  readonly host: HTMLElement
+  /** 面板根节点。 */
+  readonly root: HTMLElement
+  /** 关闭按钮。 */
+  readonly closeButton: HTMLButtonElement
+  /** 查找词输入。 */
+  readonly queryInput: HTMLInputElement
+  /** 替换词输入。 */
+  readonly replacementInput: HTMLInputElement
+  /** 查找按钮。 */
+  readonly findButton: HTMLButtonElement
+  /** 上一个结果按钮。 */
+  readonly previousButton: HTMLButtonElement
+  /** 下一个结果按钮。 */
+  readonly nextButton: HTMLButtonElement
+  /** 替换当前结果按钮。 */
+  readonly replaceButton: HTMLButtonElement
+  /** 替换全部结果按钮。 */
+  readonly replaceAllButton: HTMLButtonElement
+  /** 状态输出节点。 */
+  readonly status: HTMLOutputElement
+}
+
+/** 基础目录面板暴露给宿主和浏览器测试的节点。 */
+export interface JWordHeadingOutlinePanelElements {
+  /** 目录面板宿主。 */
+  readonly host: HTMLElement
+  /** 目录项列表节点。 */
+  readonly list: HTMLElement
+}
+
 /** createJWordUi 返回的完整 DOM 句柄。 */
 export interface JWordUiElements extends JWordToolbarElements {
   /** Gate 4 第一版图片 panel；未启用时为 null。 */
@@ -500,6 +701,18 @@ export interface JWordUiElements extends JWordToolbarElements {
   readonly tablePanel: JWordTablePanelElements | null
   /** Gate 4 选区浮层；editorHost 未提供时为 null。 */
   readonly selectionActions: JWordSelectionActionElements | null
+  /** Gate 4 批注侧栏；未启用时为 null。 */
+  readonly commentsPanel: JWordCommentsSidebarDom | null
+  /** Gate 4 链接 panel；未启用时为 null。 */
+  readonly linkPanel: JWordLinkPanelDom | null
+  /** Gate 4 页眉页脚 panel；未启用时为 null。 */
+  readonly headerFooterPanel: JWordHeaderFooterPanelElements | null
+  /** Gate 4 基础目录 panel；未启用时为 null。 */
+  readonly headingOutlinePanel: JWordHeadingOutlinePanelElements | null
+  /** Gate 4 查找替换 panel；未启用时为 null。 */
+  readonly findReplacePanel: JWordFindReplacePanelElements | null
+  /** Gate 4 修订 metadata panel；未启用时为 null。 */
+  readonly revisionsPanel: JWordRevisionPanelElements | null
 }
 
 /** UI 装配实例的最小返回值。 */

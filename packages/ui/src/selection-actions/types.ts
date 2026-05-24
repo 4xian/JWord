@@ -20,6 +20,7 @@ export interface CreateSelectionActionsControllerOptions {
   readonly editor: Editor
   readonly editorHost: HTMLElement
   readonly colorFormat: SelectionActionsColorFormatController
+  readonly insertActions?: SelectionActionsInsertController
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
@@ -34,6 +35,18 @@ export interface SelectionActionsColorFormatController {
   ): void
 }
 
+/** selection-actions 触发的插入类动作。 */
+export interface SelectionActionsInsertController {
+  openComment(selection: SelectionState | null): void
+  openLink(selection: SelectionState | null): void
+  openActiveLink?(selection: SelectionState | null): void
+  editLink?(selection: SelectionState | null): void
+  removeLink?(selection: SelectionState | null): void
+  hasLink?(selection: SelectionState | null): boolean
+  readLinkUrl?(selection: SelectionState | null): string | null
+  readLinkSelectionFromTarget?(target: Element | null): SelectionState | null
+}
+
 /** 浮动工具栏与右键菜单的只读渲染状态。 */
 export interface SelectionActionsViewState {
   readonly floatingVisible: boolean
@@ -42,6 +55,9 @@ export interface SelectionActionsViewState {
   readonly contextMenuPosition: SelectionActionPosition | null
   readonly contextSelectionKey: string
   readonly formatEnabled: boolean
+  readonly insertLinkEnabled: boolean
+  readonly activeLinkUrl: string | null
+  readonly contextHasLink: boolean
   readonly boldPressed: ToolbarPressedState
   readonly italicPressed: ToolbarPressedState
   readonly underlinePressed: ToolbarPressedState
@@ -73,6 +89,10 @@ export interface SelectionActionsFormatControls {
   readonly italic: HTMLButtonElement
   readonly underline: HTMLButtonElement
   readonly strike: HTMLButtonElement
+  readonly insertLink: HTMLButtonElement
+  readonly openLink: HTMLButtonElement
+  readonly editLink: HTMLButtonElement
+  readonly removeLink: HTMLButtonElement
   readonly textColor: HTMLInputElement
   readonly backgroundColor: HTMLInputElement
 }
@@ -85,6 +105,9 @@ export interface SelectionActionsContextControls {
   readonly pastePlainText: HTMLButtonElement
   readonly clear: HTMLButtonElement
   readonly insertLink: HTMLButtonElement
+  readonly openLink: HTMLButtonElement
+  readonly editLink: HTMLButtonElement
+  readonly removeLink: HTMLButtonElement
   readonly insertComment: HTMLButtonElement
   readonly insertBookmark: HTMLButtonElement
   readonly forwardReference: HTMLButtonElement
@@ -99,5 +122,6 @@ export interface SelectionActionsDom extends JWordSelectionActionElements {
 /** 右键菜单冻结的稳定选区快照。 */
 export interface StableContextSelectionState {
   selection: SelectionState | null
+  linkSelection: SelectionState | null
   point: SelectionActionPosition | null
 }

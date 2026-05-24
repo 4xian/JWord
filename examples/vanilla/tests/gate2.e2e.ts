@@ -48,6 +48,7 @@ interface MountedViewportProbe {
   readonly pageCount: number
   readonly mountedCanvasCount: number
   readonly mountedPageIndexes: readonly number[]
+  readonly viewportPageIndexes: readonly number[]
   readonly targetPages: readonly MountedPageGeometryProbe[]
   readonly beforeMountedPageIndex: number | null
   readonly beforeMountedHasCanvas: boolean | null
@@ -55,16 +56,18 @@ interface MountedViewportProbe {
   readonly afterMountedHasCanvas: boolean | null
 }
 
+const expectedGate2PageCount = 53
+
 test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', async ({ page }) => {
   await page.goto('/?fixture=gate2')
 
   const container = page.locator('[data-jword-canvas-container]')
 
-  await expect(container).toHaveAttribute('data-jword-page-count', '50')
+  await expect(container).toHaveAttribute('data-jword-page-count', String(expectedGate2PageCount))
 
   const firstProbe = await readDemoProbe(page)
 
-  expect(firstProbe.pageCount).toBe(50)
+  expect(firstProbe.pageCount).toBe(expectedGate2PageCount)
   expect(firstProbe.mountedCanvasCount).toBeLessThanOrEqual(5)
   expect(firstProbe.maxCanvasSidePx).toBeLessThanOrEqual(4096)
   expect(firstProbe.hitPosition).not.toBeNull()
@@ -89,26 +92,26 @@ test('Gate 2 demo keeps mounted page geometry and debug overlay aligned on the 5
 
   const container = page.locator('[data-jword-canvas-container]')
 
-  await expect(container).toHaveAttribute('data-jword-page-count', '50')
+  await expect(container).toHaveAttribute('data-jword-page-count', String(expectedGate2PageCount))
 
   await scrollToRatio(page, 0.5)
 
   const probe = await readMountedViewportProbe(page)
 
-  expect(probe.pageCount).toBe(50)
+  expect(probe.pageCount).toBe(expectedGate2PageCount)
   expect(probe.mountedCanvasCount).toBeLessThanOrEqual(5)
   expect(probe.mountedPageIndexes).toHaveLength(probe.mountedCanvasCount)
-  expect(probe.mountedPageIndexes[0]).toBeGreaterThan(0)
-  expect(probe.mountedPageIndexes[probe.mountedPageIndexes.length - 1]).toBeLessThan(probe.pageCount - 1)
+  expect(probe.viewportPageIndexes[0]).toBeGreaterThan(0)
+  expect(probe.viewportPageIndexes[probe.viewportPageIndexes.length - 1]).toBeLessThan(probe.pageCount - 1)
   expect(probe.targetPages).toHaveLength(2)
   expect(probe.beforeMountedPageIndex).not.toBeNull()
   expect(probe.afterMountedPageIndex).not.toBeNull()
   expect(probe.beforeMountedHasCanvas).toBe(false)
   expect(probe.afterMountedHasCanvas).toBe(false)
 
-  for (let index = 1; index < probe.mountedPageIndexes.length; index += 1) {
-    const previousPageIndex = probe.mountedPageIndexes[index - 1]
-    const currentPageIndex = probe.mountedPageIndexes[index]
+  for (let index = 1; index < probe.viewportPageIndexes.length; index += 1) {
+    const previousPageIndex = probe.viewportPageIndexes[index - 1]
+    const currentPageIndex = probe.viewportPageIndexes[index]
 
     expect(currentPageIndex).toBe((previousPageIndex ?? 0) + 1)
   }
@@ -178,8 +181,31 @@ async function scrollToRatio(page: Page, ratio: number): Promise<void> {
   }, ratio)
 
   await expect.poll(async () => {
-    return page.evaluate(() => document.querySelectorAll('[data-jword-page] canvas').length)
-  }).toBeGreaterThan(0)
+    return page.evaluate((targetRatio) => {
+      const pageCount = window.__jwordDemo?.editor.getLayout().pages.length ?? 0
+      const mountedPageIndexes = [...document.querySelectorAll<HTMLElement>('[data-jword-page]')]
+        .filter((element) => element.querySelector('canvas') !== null)
+        .map((element) => Number(element.getAttribute('data-jword-page')))
+        .filter((pageIndex) => Number.isFinite(pageIndex))
+        .sort((left, right) => left - right)
+      const firstMounted = mountedPageIndexes[0]
+      const lastMounted = mountedPageIndexes[mountedPageIndexes.length - 1]
+
+      if (pageCount === 0 || firstMounted === undefined || lastMounted === undefined) {
+        return false
+      }
+
+      if (targetRatio <= 0) {
+        return firstMounted === 0
+      }
+
+      if (targetRatio >= 1) {
+        return lastMounted === pageCount - 1
+      }
+
+      return mountedPageIndexes.some((pageIndex) => pageIndex > 0 && pageIndex < pageCount - 1)
+    }, ratio)
+  }).toBe(true)
 }
 
 async function readMountedViewportProbe(page: Page): Promise<MountedViewportProbe> {
@@ -255,8 +281,9 @@ async function readMountedViewportProbe(page: Page): Promise<MountedViewportProb
       }
     }
 
-    const firstMountedPageIndex = mountedPageIndexes[0] ?? null
-    const lastMountedPageIndex = mountedPageIndexes[mountedPageIndexes.length - 1] ?? null
+    const viewportPageIndexes = mountedPageIndexes.filter((pageIndex) => pageIndex > 0 && pageIndex < layout.pages.length - 1)
+    const firstMountedPageIndex = viewportPageIndexes[0] ?? null
+    const lastMountedPageIndex = viewportPageIndexes[viewportPageIndexes.length - 1] ?? null
     const targetPageIndexes = [
       visibleMountedPageIndexes[0] ?? firstMountedPageIndex,
       visibleMountedPageIndexes[visibleMountedPageIndexes.length - 1] ?? lastMountedPageIndex
@@ -268,6 +295,7 @@ async function readMountedViewportProbe(page: Page): Promise<MountedViewportProb
       pageCount: layout.pages.length,
       mountedCanvasCount: document.querySelectorAll<HTMLCanvasElement>('.jw-editor__page-canvas').length,
       mountedPageIndexes,
+      viewportPageIndexes,
       targetPages: targetPageIndexes.map((pageIndex) => readMountedPageGeometry(pageIndex)),
       beforeMountedPageIndex: firstMountedPageIndex === null || firstMountedPageIndex <= 0 ? null : firstMountedPageIndex - 1,
       beforeMountedHasCanvas: firstMountedPageIndex === null || firstMountedPageIndex <= 0

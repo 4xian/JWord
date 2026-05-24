@@ -99,6 +99,43 @@ export interface TextAnchorMigrationTarget {
   readonly text: Y.Text
 }
 
+export interface RelativePositionSnapshot {
+  readonly type?: {
+    readonly client: number
+    readonly clock: number
+  }
+  readonly tname?: string
+  readonly item?: {
+    readonly client: number
+    readonly clock: number
+  }
+  readonly assoc?: number
+}
+
+export interface TextAnchorRecord {
+  readonly documentId: string
+  readonly sectionId: string
+  readonly blockId: string
+  readonly runId: string
+  readonly graphemeIndex: number
+  readonly assoc?: number
+  readonly relativePosition: RelativePositionSnapshot
+}
+
+export interface TextRangeRecord {
+  readonly id: string
+  readonly anchor: TextAnchorRecord
+  readonly focus: TextAnchorRecord
+}
+
+export type RangeSnapshotRecord = TextRangeRecord
+
+export interface ResolvedTextAnchorRecord {
+  readonly text: Y.Text
+  readonly graphemeIndex: number
+  readonly assoc?: number
+}
+
 const textAnchorRegistry = new WeakMap<Y.Text, Set<AnchorRefState>>()
 
 /** 稳定锚点引用；外部不能依赖其内部结构。 */
@@ -201,6 +238,83 @@ export function createRangeRef(anchor: AnchorRef, focus: AnchorRef): RangeRef {
 }
 
 /**
+ * 把运行时 AnchorRef 序列化为可持久化文本锚点记录。
+ *
+ * @param anchor 运行时锚点。
+ * @returns JSON 兼容的文本锚点快照。
+ */
+export function createTextAnchorRecord(anchor: AnchorRef): TextAnchorRecord {
+  const snapshot = readAnchorRefSnapshot(anchor)
+  const relativePosition = snapshot.relativePosition
+
+  if (relativePosition === undefined) {
+    throw new Error('text anchor has no relative position')
+  }
+
+  return {
+    documentId: String(snapshot.documentId),
+    sectionId: String(snapshot.sectionId),
+    blockId: String(snapshot.blockId),
+    runId: String(snapshot.runId),
+    graphemeIndex: Number(snapshot.graphemeIndex),
+    ...(snapshot.assoc === undefined ? {} : { assoc: snapshot.assoc }),
+    relativePosition: Y.relativePositionToJSON(relativePosition) as RelativePositionSnapshot
+  }
+}
+
+/**
+ * 把运行时 RangeRef 序列化为可持久化范围记录。
+ *
+ * @param id 范围记录 ID。
+ * @param range 运行时范围。
+ * @returns JSON 兼容的范围快照。
+ */
+export function createTextRangeRecord(id: string, range: RangeRef): TextRangeRecord {
+  return {
+    id,
+    anchor: createTextAnchorRecord(range.anchor),
+    focus: createTextAnchorRecord(range.focus)
+  }
+}
+
+/**
+ * 把可持久化相对位置快照恢复成 Y.RelativePosition。
+ *
+ * @param snapshot JSON 兼容的相对位置快照。
+ * @returns 可用于绝对位置解析的相对位置对象。
+ */
+export function createRelativePositionFromSnapshot(snapshot: RelativePositionSnapshot): Y.RelativePosition {
+  return Y.createRelativePositionFromJSON(snapshot)
+}
+
+/**
+ * 解析持久化文本锚点记录的当前位置。
+ *
+ * @param record 文本锚点快照。
+ * @param doc 当前文档。
+ * @returns 当前共享文本与 grapheme 下标；失效时返回 undefined。
+ */
+export function resolveTextAnchorRecord(
+  record: TextAnchorRecord,
+  doc: Y.Doc
+): ResolvedTextAnchorRecord | undefined {
+  const absolute = Y.createAbsolutePositionFromRelativePosition(
+    createRelativePositionFromSnapshot(record.relativePosition),
+    doc
+  )
+
+  if (absolute === null || !(absolute.type instanceof Y.Text)) {
+    return undefined
+  }
+
+  return {
+    text: absolute.type,
+    graphemeIndex: utf16IndexToGraphemeIndex(absolute.type.toString(), absolute.index),
+    ...(record.assoc === undefined ? {} : { assoc: record.assoc })
+  }
+}
+
+/**
  * 读取锚点内部快照。
  *
  * @remarks
@@ -270,6 +384,94 @@ export function migrateTextAnchorsToText(
   target: TextAnchorMigrationTarget
 ): void {
   migrateTextAnchors(sourceText, doc, target, (index) => index)
+}
+
+/**
+ * 把持久化文本锚点在 split 后迁到新 run。
+ *
+ * @param record 待迁移的文本锚点记录。
+ * @param doc 当前文档。
+ * @param sourceText 迁移前的共享文本。
+ * @param boundaryUtf16Index split 边界。
+ * @param target 迁移目标。
+ * @returns 迁移后的文本锚点记录。
+ */
+export function migrateTextAnchorRecordAfterSplit(
+  record: TextAnchorRecord,
+  doc: Y.Doc,
+  sourceText: Y.Text,
+  boundaryUtf16Index: number,
+  target: TextAnchorMigrationTarget
+): TextAnchorRecord {
+  return migrateTextAnchorRecord(record, doc, sourceText, target, (utf16Index, assoc) =>
+    utf16Index > boundaryUtf16Index || (utf16Index === boundaryUtf16Index && assoc > 0)
+      ? utf16Index - boundaryUtf16Index
+      : undefined
+  )
+}
+
+/**
+ * 把持久化文本锚点整段迁到另一段共享文本。
+ *
+ * @param record 待迁移的文本锚点记录。
+ * @param doc 当前文档。
+ * @param sourceText 迁移前的共享文本。
+ * @param target 迁移目标。
+ * @returns 迁移后的文本锚点记录。
+ */
+export function migrateTextAnchorRecordToText(
+  record: TextAnchorRecord,
+  doc: Y.Doc,
+  sourceText: Y.Text,
+  target: TextAnchorMigrationTarget
+): TextAnchorRecord {
+  return migrateTextAnchorRecord(record, doc, sourceText, target, (utf16Index) => utf16Index)
+}
+
+/**
+ * 把持久化范围在 split 后迁到新 run。
+ *
+ * @param record 待迁移的范围记录。
+ * @param doc 当前文档。
+ * @param sourceText 迁移前的共享文本。
+ * @param boundaryUtf16Index split 边界。
+ * @param target 迁移目标。
+ * @returns 迁移后的范围记录。
+ */
+export function migrateTextRangeRecordAfterSplit(
+  record: TextRangeRecord,
+  doc: Y.Doc,
+  sourceText: Y.Text,
+  boundaryUtf16Index: number,
+  target: TextAnchorMigrationTarget
+): TextRangeRecord {
+  return {
+    ...record,
+    anchor: migrateTextAnchorRecordAfterSplit(record.anchor, doc, sourceText, boundaryUtf16Index, target),
+    focus: migrateTextAnchorRecordAfterSplit(record.focus, doc, sourceText, boundaryUtf16Index, target)
+  }
+}
+
+/**
+ * 把持久化范围整段迁到另一段共享文本。
+ *
+ * @param record 待迁移的范围记录。
+ * @param doc 当前文档。
+ * @param sourceText 迁移前的共享文本。
+ * @param target 迁移目标。
+ * @returns 迁移后的范围记录。
+ */
+export function migrateTextRangeRecordToText(
+  record: TextRangeRecord,
+  doc: Y.Doc,
+  sourceText: Y.Text,
+  target: TextAnchorMigrationTarget
+): TextRangeRecord {
+  return {
+    ...record,
+    anchor: migrateTextAnchorRecordToText(record.anchor, doc, sourceText, target),
+    focus: migrateTextAnchorRecordToText(record.focus, doc, sourceText, target)
+  }
 }
 
 function createAnchorRefFromState(state: AnchorRefState): AnchorRef {
@@ -347,5 +549,38 @@ function migrateTextAnchors(
     state.text = target.text
     state.relativePosition = Y.createRelativePositionFromTypeIndex(target.text, targetIndex, state.assoc)
     registerTextAnchorState(state)
+  }
+}
+
+function migrateTextAnchorRecord(
+  record: TextAnchorRecord,
+  doc: Y.Doc,
+  sourceText: Y.Text,
+  target: TextAnchorMigrationTarget,
+  mapIndex: (utf16Index: number, assoc: number) => number | undefined
+): TextAnchorRecord {
+  const assoc = record.assoc ?? 0
+  const relativePosition = createRelativePositionFromSnapshot(record.relativePosition)
+  const absolute = Y.createAbsolutePositionFromRelativePosition(relativePosition, doc)
+
+  if (absolute === null || absolute.type !== sourceText) {
+    return record
+  }
+
+  const targetIndex = mapIndex(absolute.index, assoc)
+
+  if (targetIndex === undefined) {
+    return record
+  }
+
+  return {
+    ...record,
+    sectionId: String(target.sectionId ?? record.sectionId),
+    blockId: String(target.blockId),
+    runId: String(target.runId),
+    graphemeIndex: utf16IndexToGraphemeIndex(target.text.toString(), targetIndex),
+    relativePosition: Y.relativePositionToJSON(
+      Y.createRelativePositionFromTypeIndex(target.text, targetIndex, assoc)
+    ) as RelativePositionSnapshot
   }
 }

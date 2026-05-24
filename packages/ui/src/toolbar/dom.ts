@@ -35,6 +35,11 @@ interface ControlParts {
   readonly destroy?: () => void
 }
 
+interface ToolbarPanelRenderState {
+  readonly headingOutline?: boolean
+  readonly headingOutlineAvailable?: boolean
+}
+
 /** toolbar DOM 结构。 */
 export interface ToolbarDom extends JWordToolbarElements {
   readonly bar: HTMLElement
@@ -102,11 +107,22 @@ export function createToolbarDom(host: HTMLElement, config: ResolvedToolbarConfi
 export function renderToolbarState(
   dom: ToolbarDom,
   state: ToolbarState,
-  activeColorPicker: 'textColor' | 'backgroundColor' | null = null
+  activeColorPicker: 'textColor' | 'backgroundColor' | null = null,
+  activePanels: ToolbarPanelRenderState = {}
 ): void {
   setActionButtonState(dom.controls['history.undo'], state.canUndo)
   setActionButtonState(dom.controls['history.redo'], state.canRedo)
   setSelectState(dom.controls['document.pagePreset'], false, state.pagePresetValue, 'value')
+  setActionButtonState(dom.controls['document.findReplace'], true)
+  setToggleButtonState(
+    dom.controls['document.headingOutline'],
+    activePanels.headingOutlineAvailable === true,
+    activePanels.headingOutlineAvailable === true && activePanels.headingOutline === true ? 'true' : 'false'
+  )
+  setActionButtonState(dom.controls['document.headerFooter'], true)
+  setActionButtonState(dom.controls['document.footer'], true)
+  setActionButtonState(dom.controls['document.pageNumber'], true)
+  setActionButtonState(dom.controls['document.revisions'], true)
   setToggleButtonState(dom.controls['format.bold'], state.runFormatEnabled, state.boldPressed)
   setToggleButtonState(dom.controls['format.italic'], state.runFormatEnabled, state.italicPressed)
   setToggleButtonState(dom.controls['format.underline'], state.runFormatEnabled, state.underlinePressed)
@@ -225,9 +241,25 @@ function createToolbarButton(definition: BuiltinToolDefinition): HTMLButtonEleme
     button.append(createToolbarIcon(definition.icon))
   }
 
+  if (readButtonNeedsCaret(definition.id)) {
+    const arrow = document.createElement('span')
+
+    arrow.className = 'jw-toolbar__button-caret'
+    arrow.append(createToolbarIcon('caretDown'))
+    button.append(arrow)
+  }
+
   bindToolbarPointerFocusGuard(button)
 
   return button
+}
+
+/** 判断按钮是否需要显示下拉箭头。 */
+function readButtonNeedsCaret(toolId: JWordToolbarToolId): boolean {
+  return toolId === 'document.findReplace'
+    || toolId === 'document.headerFooter'
+    || toolId === 'document.footer'
+    || toolId === 'document.pageNumber'
 }
 
 /** 创建 select 控件包装。 */
@@ -380,6 +412,18 @@ function createToolbarSelectControl(
 
   document.addEventListener(
     'pointerdown',
+    (event) => {
+      if (!(event.target instanceof Node) || wrapper.contains(event.target)) {
+        return
+      }
+
+      closeToolbarSelect(wrapper, trigger, menu)
+    },
+    { signal: signalController.signal }
+  )
+
+  document.addEventListener(
+    'click',
     (event) => {
       if (!(event.target instanceof Node) || wrapper.contains(event.target)) {
         return

@@ -20,6 +20,7 @@ interface Gate3PerfMetrics {
 
 const P95_SAMPLE_COUNT = 20
 const LARGE_DOCUMENT_INSERT_WARMUP_COUNT = 2
+const expectedGate2PageCount = 53
 
 const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
   gate2ScrollMs: 120,
@@ -69,7 +70,6 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
   return page.evaluate(async ({ p95SampleCount, largeDocumentInsertWarmupCount }) => {
     const demo = window.__jwordDemo
     const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
-    const selectionSummaryNode = document.querySelector<HTMLElement>('[data-jword-selection-summary]')
     const loadAlphaButton = document.querySelector<HTMLButtonElement>('[data-jword-load-alpha]')
     const clearSelectionButton = document.querySelector<HTMLButtonElement>('[data-jword-clear-selection]')
     const selectSampleButton = document.querySelector<HTMLButtonElement>('[data-jword-select-sample]')
@@ -80,7 +80,6 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
     if (
       demo === undefined
       || container === null
-      || selectionSummaryNode === null
       || loadAlphaButton === null
       || clearSelectionButton === null
       || selectSampleButton === null
@@ -158,6 +157,47 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       return Number(sorted[rank]?.toFixed(2) ?? 0)
     }
 
+    const readSelectionPositions = (): Readonly<{
+      anchorSectionId: string
+      anchorBlockId: string
+      anchorRunId: string
+      anchorGraphemeIndex: number
+      focusSectionId: string
+      focusBlockId: string
+      focusRunId: string
+      focusGraphemeIndex: number
+    }> | null => {
+      const selection = demo.editor.getSelection()
+      const anchor = selection === null ? undefined : demo.editor.resolveTextPosition(selection.anchor)
+      const focus = selection === null ? undefined : demo.editor.resolveTextPosition(selection.focus)
+
+      if (anchor === undefined || focus === undefined) {
+        return null
+      }
+
+      return {
+        anchorSectionId: anchor.sectionId,
+        anchorBlockId: anchor.blockId,
+        anchorRunId: anchor.runId,
+        anchorGraphemeIndex: anchor.graphemeIndex,
+        focusSectionId: focus.sectionId,
+        focusBlockId: focus.blockId,
+        focusRunId: focus.runId,
+        focusGraphemeIndex: focus.graphemeIndex
+      }
+    }
+
+    const hasActiveTextSelection = (): boolean => {
+      const positions = readSelectionPositions()
+
+      return positions !== null && (
+        positions.anchorSectionId !== positions.focusSectionId
+        || positions.anchorBlockId !== positions.focusBlockId
+        || positions.anchorRunId !== positions.focusRunId
+        || positions.anchorGraphemeIndex !== positions.focusGraphemeIndex
+      )
+    }
+
     const readFirstParagraphText = (): string => {
       const firstBlock = demo.editor.getProjection().document.sections[0]?.blocks[0]
 
@@ -193,7 +233,6 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
     }
 
     const largeFixtureSelectionStart = readLargeFixtureSelectionStart()
-    const largeFixtureSelectionSummary = `选区：${largeFixtureSelectionStart.blockId} / ${largeFixtureSelectionStart.runId} / ${largeFixtureSelectionStart.graphemeIndex}→${largeFixtureSelectionStart.graphemeIndex}`
 
     const collapseLargeFixtureSelectionAtStart = (): void => {
       demo.selectTextRange({
@@ -206,7 +245,17 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
     }
 
     const readLargeFixtureSelectionReady = (): boolean => {
-      return selectionSummaryNode.textContent === largeFixtureSelectionSummary
+      const positions = readSelectionPositions()
+
+      return positions !== null
+        && positions.anchorSectionId === largeFixtureSelectionStart.sectionId
+        && positions.anchorBlockId === largeFixtureSelectionStart.blockId
+        && positions.anchorRunId === largeFixtureSelectionStart.runId
+        && positions.anchorGraphemeIndex === largeFixtureSelectionStart.graphemeIndex
+        && positions.focusSectionId === largeFixtureSelectionStart.sectionId
+        && positions.focusBlockId === largeFixtureSelectionStart.blockId
+        && positions.focusRunId === largeFixtureSelectionStart.runId
+        && positions.focusGraphemeIndex === largeFixtureSelectionStart.graphemeIndex
     }
 
     const measureGate2Scroll = async (): Promise<number> => {
@@ -323,14 +372,14 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       await runAndMeasure(
         '清空选区',
         () => clearSelectionButton.click(),
-        () => selectionSummaryNode.textContent?.includes('无选区') === true
+        () => demo.editor.getSelection() === null
       )
     }
 
     const selectionSummarySyncMs = await runAndMeasure(
       '同步首页片段选区',
       () => selectSampleButton.click(),
-      () => selectionSummaryNode.textContent?.includes('选区：') === true
+      () => hasActiveTextSelection()
     )
 
     if (boldButton.getAttribute('aria-pressed') === 'true') {
@@ -391,7 +440,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
 }
 
 async function waitForDemoReady(page: Page): Promise<void> {
-  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '50')
+  await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', String(expectedGate2PageCount))
   await page.waitForFunction(() => window.__jwordDemo !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await expect.poll(async () => {

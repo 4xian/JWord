@@ -40,6 +40,29 @@ describe('toolbar select dom', () => {
     }
   })
 
+  test('renders heading outline as a toggle button without toolbar caret', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['document.findReplace', 'document.headingOutline']
+    }))
+
+    try {
+      renderToolbarState(dom, createToolbarState(), null, {
+        headingOutline: true,
+        headingOutlineAvailable: true
+      })
+
+      const findReplace = host.querySelector<HTMLElement>('[data-jword-tool-id="document.findReplace"]')
+      const headingOutline = host.querySelector<HTMLElement>('[data-jword-tool-id="document.headingOutline"]')
+
+      expect(findReplace?.querySelector('.jw-toolbar__button-caret')).toBeInstanceOf(HTMLElement)
+      expect(headingOutline?.querySelector('.jw-toolbar__button-caret')).toBeNull()
+      expect(headingOutline?.getAttribute('aria-pressed')).toBe('true')
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
   test('renders text menus without a leading icon slot and keeps icon menus explicit', () => {
     const host = document.createElement('div')
     const dom = createToolbarDom(host, resolveToolbarConfig({
@@ -161,6 +184,40 @@ describe('toolbar select dom', () => {
       expect(tooltipAnchor?.getAttribute('data-jword-tooltip-visible')).toBe('false')
     } finally {
       destroyToolbarDom(dom)
+    }
+  })
+
+  test('closes custom select when clicking outside the toolbar dropdown', () => {
+    const host = document.createElement('div')
+    const outsideTarget = document.createElement('button')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.fontFamily']
+    }))
+
+    document.body.append(host, outsideTarget)
+
+    try {
+      const wrapper = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"]')
+      const trigger = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger')
+      const menu = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-menu')
+
+      expect(wrapper).toBeInstanceOf(HTMLElement)
+      expect(trigger).toBeInstanceOf(HTMLElement)
+      expect(menu).toBeInstanceOf(HTMLElement)
+
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+      expect(wrapper?.getAttribute('data-jword-open')).toBe('true')
+      expect(menu?.hidden).toBe(false)
+
+      outsideTarget.click()
+
+      expect(wrapper?.getAttribute('data-jword-open')).toBe('false')
+      expect(menu?.hidden).toBe(true)
+    } finally {
+      destroyToolbarDom(dom)
+      host.remove()
+      outsideTarget.remove()
     }
   })
 

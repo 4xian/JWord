@@ -1026,6 +1026,137 @@ describe('Gate 2 布局', () => {
     }))
   })
 
+  it('resolves section breaks, inherited header footer ids and page numbering for downstream export', () => {
+    const layout = layoutDocument({
+      projection: {
+        document: {
+          kind: 'document',
+          id: 'document-layout-section-page-numbering',
+          sections: [
+            {
+              kind: 'section',
+              id: 'section-layout-page-numbering-1',
+              headerIds: ['header-a'],
+              footerIds: ['footer-a'],
+              pageNumbering: {
+                mode: 'continue'
+              },
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-page-numbering-1',
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-page-numbering-1',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: 'section one'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              kind: 'section',
+              id: 'section-layout-page-numbering-2',
+              breakType: 'next-page',
+              headerFooterSameAsPrevious: true,
+              pageNumbering: {
+                mode: 'restart',
+                start: 7
+              },
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'paragraph-layout-page-numbering-2',
+                  runs: [
+                    {
+                      kind: 'run',
+                      id: 'run-layout-page-numbering-2',
+                      inlines: [
+                        {
+                          kind: 'text',
+                          text: 'section two'
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      pageConfig: createPageConfig({
+        heightTwips: 2400,
+        marginTwips: {
+          top: 240,
+          right: 240,
+          bottom: 240,
+          left: 240
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const firstPage = layout.pages[0]
+    const secondPage = layout.pages[1]
+
+    expect(layout.pages).toHaveLength(2)
+    expect(firstPage).toMatchObject({
+      sectionBoundary: 'single',
+      sectionId: 'section-layout-page-numbering-1',
+      headerIds: ['header-a'],
+      footerIds: ['footer-a'],
+      pageNumber: 1,
+      headerFooterBoxes: [
+        expect.objectContaining({
+          kind: 'headerFooter',
+          role: 'header',
+          sectionId: 'section-layout-page-numbering-1',
+          sourceId: 'header-a',
+          pageNumber: 1
+        }),
+        expect.objectContaining({
+          kind: 'headerFooter',
+          role: 'footer',
+          sectionId: 'section-layout-page-numbering-1',
+          sourceId: 'footer-a',
+          pageNumber: 1
+        })
+      ]
+    })
+    expect(secondPage).toMatchObject({
+      sectionBoundary: 'single',
+      sectionId: 'section-layout-page-numbering-2',
+      headerIds: ['header-a'],
+      footerIds: ['footer-a'],
+      pageNumber: 7,
+      headerFooterBoxes: [
+        expect.objectContaining({
+          kind: 'headerFooter',
+          role: 'header',
+          sectionId: 'section-layout-page-numbering-2',
+          sourceId: 'header-a',
+          pageNumber: 7
+        }),
+        expect.objectContaining({
+          kind: 'headerFooter',
+          role: 'footer',
+          sectionId: 'section-layout-page-numbering-2',
+          sourceId: 'footer-a',
+          pageNumber: 7
+        })
+      ]
+    })
+  })
+
   it('emits explicit inline object boxes for non-text inline structure', () => {
     const layout = layoutDocument({
       projection: {

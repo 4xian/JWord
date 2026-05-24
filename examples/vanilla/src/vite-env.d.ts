@@ -7,7 +7,7 @@
  */
 /// <reference types="vite/client" />
 
-import type { Editor, SelectionState } from '@4xian/jword-core'
+import type { Editor, RevisionMetadata, SelectionState } from '@4xian/jword-core'
 
 export interface JWordDemoSelectionInput {
   readonly sectionId: string
@@ -34,6 +34,13 @@ export interface JWordDemoTableSnapshot {
   readonly firstCellText: string
   readonly firstCellBorderColor: string | null
   readonly firstCellBorderWidthTwips: number | null
+}
+
+export interface JWordDemoRevisionInput {
+  readonly authorId: string
+  readonly createdAt: string
+  readonly type: RevisionMetadata['type']
+  readonly summary: string
 }
 
 declare global {
@@ -65,6 +72,20 @@ declare global {
         } | null
         selectCell(rowIndex: number, columnIndex: number): boolean
         setCellText(rowIndex: number, columnIndex: number, text: string): boolean
+      }
+      readonly comments: {
+        readThreadCount(): number
+      }
+      readonly link: {
+        readActiveLink(): {
+          readonly target: string
+          readonly tooltip?: string
+        } | null
+      }
+      readonly revisions: {
+        addRevision(input: JWordDemoRevisionInput): boolean
+        readRevisionCount(): number
+        readSelectionOffsets(): readonly [number, number] | null
       }
     }>
   }

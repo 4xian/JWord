@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  *
- * 职责：锁定 Gate 2 50 页纯文本 fixture、benchmark 和 visual baseline 的统一语义。
+ * 职责：锁定 Gate 2 长文纯文本 fixture、benchmark 和 visual baseline 的统一语义。
  * 边界：只验证 fixture 行段落解释、benchmark 输出和 visual baseline，不覆盖浏览器交互细节。
  * 协作模块：fixtures/plain-text、fixtures/visual-baselines、benchmarks/gate2-render-benchmark.mjs 和 packages/core layout/render。
  * 约束：不依赖人工截图，不做 32 轮扩展，不读取 demo DOM。
@@ -21,15 +21,17 @@ import {
   renderPageCanvas
 } from '../packages/core/src/index'
 
+const expectedGate2PageCount = 53
+
 describe('Gate 2 纯文本 fixture', () => {
-  it('gate2-50-pages.txt 作为行段落 fixture 能直接布局为 50 页', () => {
+  it('gate2-50-pages.txt 作为行段落 fixture 能直接布局为当前 A4 页数基线', () => {
     const observed = observeGate2Fixture()
 
     expect(observed.inputParagraphCount).toBe(1200)
-    expect(observed.pageCount).toBe(50)
+    expect(observed.pageCount).toBe(expectedGate2PageCount)
   })
 
-  it('gate2-render benchmark 直接消费 fixture 后输出 50 页', () => {
+  it('gate2-render benchmark 直接消费 fixture 后输出当前 A4 页数基线', () => {
     const childEnv = {
       ...process.env,
       NODE_OPTIONS: '',
@@ -57,8 +59,8 @@ describe('Gate 2 纯文本 fixture', () => {
     }
 
     expect(benchmark.fixture).toBe('fixtures/plain-text/gate2-50-pages.txt')
-    expect(benchmark.pageCount).toBe(50)
-    expect(benchmark.frames).toBe(50)
+    expect(benchmark.pageCount).toBe(expectedGate2PageCount)
+    expect(benchmark.frames).toBe(expectedGate2PageCount)
     expect(benchmark.browserEvidence).toEqual({
       perfTest: 'examples/vanilla/tests/gate2.perf.e2e.ts',
       visualTest: 'examples/vanilla/tests/gate2.visual.ts'

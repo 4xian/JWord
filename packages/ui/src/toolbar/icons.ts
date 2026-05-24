@@ -42,6 +42,14 @@ export type ToolbarIconName =
   | 'crop'
   | 'layout'
   | 'comment'
+  | 'link'
+  | 'openLink'
+  | 'search'
+  | 'outline'
+  | 'headerFooter'
+  | 'footer'
+  | 'pageNumber'
+  | 'revisions'
   | 'caretDown'
   | 'check'
   | 'table'
@@ -68,6 +76,70 @@ const TOOLBAR_ICON_DEFINITIONS = Object.freeze<Record<ToolbarIconName, ToolbarIc
     paths: [
       {
         d: 'M9 10.9a.2.2 0 0 1-.302.173L4.276 8.474a.2.2 0 0 1-.01-.339l4.423-2.93a.2.2 0 0 1 .31.167v2.252l5 .001c3.149 0 5.626 2.306 5.626 5.375 0 3.033-2.4 5.505-5.404 5.62l-.221.005H7v-1.25h7A4.375 4.375 0 0 0 18.375 13c0-2.289-1.788-4.02-4.158-4.12L14 8.875H9z'
+      }
+    ]
+  },
+  link: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M9.25 7.75 7.8 9.2a3.5 3.5 0 0 0 4.95 4.95l1.05-1.05-.88-.88-1.05 1.05a2.25 2.25 0 1 1-3.18-3.18l1.45-1.45a2.25 2.25 0 0 1 3.18 0l.53.53.88-.88-.53-.53a3.5 3.5 0 0 0-4.95 0m1.65 5.37.88.88 1.45-1.45a2.25 2.25 0 1 1 3.18 3.18l-1.45 1.45a2.25 2.25 0 0 1-3.18 0l-.53-.53-.88.88.53.53a3.5 3.5 0 0 0 4.95 0l1.45-1.45a3.5 3.5 0 0 0-4.95-4.95z'
+      }
+    ]
+  },
+  openLink: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M7.5 6.25H12V7.5H7.5v9h9V12h1.25v4.5a1.25 1.25 0 0 1-1.25 1.25h-9a1.25 1.25 0 0 1-1.25-1.25v-9A1.25 1.25 0 0 1 7.5 6.25M14 5.75h4.25V10H17V7.88l-5.72 5.72-.88-.88L16.12 7H14z'
+      }
+    ]
+  },
+  search: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M10.5 5.75a4.75 4.75 0 1 0 0 9.5 4.75 4.75 0 0 0 0-9.5M4.5 10.5a6 6 0 1 1 10.69 3.75l4.03 4.03-.88.88-4.03-4.03A6 6 0 0 1 4.5 10.5'
+      }
+    ]
+  },
+  outline: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M5.5 6.25h3V7.5h-3zm5 0h8V7.5h-8zm-5 5.15h3v1.25h-3zm5 0h8v1.25h-8zm-5 5.1h3v1.25h-3zm5 0h8v1.25h-8z'
+      }
+    ]
+  },
+  headerFooter: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M6 4.75h12A1.25 1.25 0 0 1 19.25 6v12A1.25 1.25 0 0 1 18 19.25H6A1.25 1.25 0 0 1 4.75 18V6A1.25 1.25 0 0 1 6 4.75M6 6v2.25h12V6zm12 12v-2.25H6V18zm0-3.5v-5H6v5z'
+      }
+    ]
+  },
+  footer: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M6 4.75h12A1.25 1.25 0 0 1 19.25 6v12A1.25 1.25 0 0 1 18 19.25H6A1.25 1.25 0 0 1 4.75 18V6A1.25 1.25 0 0 1 6 4.75M6 6v12h12V6zm1.5 9.75h9v1.25h-9z'
+      }
+    ]
+  },
+  pageNumber: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M6 5.25h12A1.25 1.25 0 0 1 19.25 6.5v11A1.25 1.25 0 0 1 18 18.75H6A1.25 1.25 0 0 1 4.75 17.5v-11A1.25 1.25 0 0 1 6 5.25M6 6.5v11h12v-11zm1.75 2.25h8.5V10h-8.5zm0 3.25h5.5v1.25h-5.5zm0 3.25h7v1.25h-7z'
+      }
+    ]
+  },
+  revisions: {
+    viewBox: '0 0 24 24',
+    paths: [
+      {
+        d: 'M6.5 4.75h7.4L18.25 9.1V19A1.25 1.25 0 0 1 17 20.25H6.5A1.25 1.25 0 0 1 5.25 19V6A1.25 1.25 0 0 1 6.5 4.75m.05 1.25v13h10.45V9.75H13.25V6zm7.95.9v1.6h1.6zM8.25 11h6.5v1.25h-6.5zm0 3h4.75v1.25H8.25z'
       }
     ]
   },
@@ -419,6 +491,7 @@ export function createToolbarIcon(icon: ToolbarIconName): SVGElement {
 
   iconNode.classList.add('jw-toolbar__button-icon')
   iconNode.setAttribute('aria-hidden', 'true')
+  iconNode.setAttribute('data-jword-icon', icon)
   iconNode.setAttribute('viewBox', definition.viewBox)
   iconNode.setAttribute('focusable', 'false')
 

@@ -9,22 +9,29 @@ import * as Y from 'yjs'
 
 import {
   DOCUMENT_STORE_FIELDS,
+  createCommentRangeRecord,
+  createCommentRecord,
   createDocumentStore,
   createParagraphRecord,
   createResourceRecord,
+  createRevisionRecord,
   createRunRecord,
   getRunField,
   getRunInlines,
   getRunLink,
+  projectCommentRecord,
+  readCommentRangeRecord,
   getRunRevisionId,
   getParagraphRuns,
   getRunText,
   getSectionBlocks,
+  setRunLinkValue,
   setRunStructure,
   getTableCellBlocks,
   getTableRowCells,
   getTableRows
 } from '../model/document-store'
+import { isAllowedLinkUrl } from '../links/policy'
 import { isAllowedResourceUrl } from '../resources/types'
 import { createJWordError } from '../shared/errors'
 import {
@@ -35,6 +42,7 @@ import type {
   BlockContainer,
   BlockRecord,
   BlockRecordValue,
+  CommentRangeId,
   DocumentStore,
   DocumentStoreJson,
   ResourceId,
@@ -48,7 +56,9 @@ import type { Block, Run } from '../model/types'
 import type { BlockInsertPlacement, Operation, TextPosition } from './transaction'
 import {
   migrateTextAnchorsAfterSplit,
-  migrateTextAnchorsToText
+  migrateTextAnchorsToText,
+  migrateTextRangeRecordAfterSplit,
+  migrateTextRangeRecordToText
 } from '../model/position'
 import type { BlockId, CommentId, GraphemeIndex, RevisionId, RunId, SectionId } from '../model/position'
 import { createGraphemeIndex } from '../model/position'
@@ -125,6 +135,9 @@ export function applyOperation(
     case 'setParagraphProperties':
       setProperties(findBlockLocation(store, operation.paragraphId as BlockId).block, DOCUMENT_STORE_FIELDS.block.properties, operation.properties)
       break
+    case 'setSectionProperties':
+      setSectionProperties(store, operation)
+      break
     case 'splitBlock':
       splitBlock(store, operation.at, operation.newBlockId, operation.newRunId)
       break
@@ -188,6 +201,30 @@ export function applyOperation(
     case 'setTableCellText':
       applyTableOperation(store, operation)
       break
+    case 'addCommentThread':
+      addCommentThread(store, operation)
+      break
+    case 'replyCommentThread':
+      replyCommentThread(store, operation)
+      break
+    case 'editCommentEntry':
+      editCommentEntry(store, operation)
+      break
+    case 'resolveCommentThread':
+      resolveCommentThread(store, operation)
+      break
+    case 'reopenCommentThread':
+      reopenCommentThread(store, operation)
+      break
+    case 'deleteCommentThread':
+      deleteCommentThread(store, operation.threadId)
+      break
+    case 'setRunLink':
+      setRunLink(store, operation)
+      break
+    case 'addRevisionMetadata':
+      addRevisionMetadata(store, operation)
+      break
   }
 }
 
@@ -216,6 +253,104 @@ function deleteResource(store: DocumentStore, resourceId: string): void {
     readRequiredArray<ResourceId>(store.document, DOCUMENT_STORE_FIELDS.document.resourceIds, 'document resourceIds'),
     resourceId as ResourceId
   )
+}
+
+function addCommentThread(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'addCommentThread' }>
+): void {
+  store.comments.set(operation.thread.id as CommentId, createCommentRecord(operation.thread))
+  store.commentRanges.set(operation.range.id as CommentRangeId, createCommentRangeRecord(operation.range))
+  appendIdIfMissing(
+    readRequiredArray<CommentId>(store.document, DOCUMENT_STORE_FIELDS.document.commentIds, 'document commentIds'),
+    operation.thread.id as CommentId
+  )
+}
+
+function replyCommentThread(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'replyCommentThread' }>
+): void {
+  replaceCommentThread(store, operation.threadId, (thread) => ({
+    ...thread,
+    messages: [...thread.messages, operation.message]
+  }))
+}
+
+function editCommentEntry(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'editCommentEntry' }>
+): void {
+  replaceCommentThread(store, operation.threadId, (thread) => ({
+    ...thread,
+    messages: thread.messages.map((message) =>
+      message.id !== operation.messageId
+        ? message
+        : {
+            ...message,
+            text: operation.text,
+            editedAt: operation.editedAt
+          }
+    )
+  }))
+}
+
+function resolveCommentThread(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'resolveCommentThread' }>
+): void {
+  replaceCommentThread(store, operation.threadId, (thread) => ({
+    ...thread,
+    resolved: true
+  }))
+}
+
+function reopenCommentThread(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'reopenCommentThread' }>
+): void {
+  replaceCommentThread(store, operation.threadId, (thread) => ({
+    ...thread,
+    resolved: false
+  }))
+}
+
+function deleteCommentThread(store: DocumentStore, threadId: string): void {
+  const commentRecord = findCommentRecord(store, threadId)
+  const rangeId = commentRecord.get(DOCUMENT_STORE_FIELDS.comment.anchorRangeId)
+
+  store.comments.delete(threadId as CommentId)
+  removeId(
+    readRequiredArray<CommentId>(store.document, DOCUMENT_STORE_FIELDS.document.commentIds, 'document commentIds'),
+    threadId as CommentId
+  )
+
+  if (typeof rangeId === 'string') {
+    store.commentRanges.delete(rangeId as CommentRangeId)
+  }
+}
+
+function setSectionProperties(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'setSectionProperties' }>
+): void {
+  const section = findSection(store, operation.sectionId as SectionId)
+
+  setProperties(section, DOCUMENT_STORE_FIELDS.section.properties, operation.properties)
+
+  if (operation.headerIds !== undefined) {
+    replaceStringArray(
+      readRequiredArray<string>(section, DOCUMENT_STORE_FIELDS.section.headerIds, 'section headerIds'),
+      operation.headerIds
+    )
+  }
+
+  if (operation.footerIds !== undefined) {
+    replaceStringArray(
+      readRequiredArray<string>(section, DOCUMENT_STORE_FIELDS.section.footerIds, 'section footerIds'),
+      operation.footerIds
+    )
+  }
 }
 
 function setRunProperties(
@@ -275,6 +410,95 @@ function setRunProperties(
   }
 
   setProperties(formattedRunLocation.run, DOCUMENT_STORE_FIELDS.run.properties, operation.properties)
+}
+
+function setRunLink(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'setRunLink' }>
+): void {
+  if (operation.link !== null && !isAllowedLinkUrl(operation.link.target)) {
+    throw createJWordError('OPERATION_LINK_URL_DISALLOWED', '链接 URL 不在 allowlist 内', {
+      target: operation.link.target
+    })
+  }
+
+  const runLocation = findRunLocation(store, operation.runId as RunId)
+  const range = operation.range
+
+  if (range === undefined) {
+    setRunLinkValue(runLocation.run, operation.link)
+    return
+  }
+
+  const runText = getRunText(runLocation.run).toString()
+  const graphemeLength = countGraphemes(runText)
+
+  assertRunPropertyRange(range.startGraphemeIndex, range.endGraphemeIndex, graphemeLength)
+
+  if (range.startGraphemeIndex === 0 && range.endGraphemeIndex === graphemeLength) {
+    setRunLinkValue(runLocation.run, operation.link)
+    return
+  }
+
+  let linkedRunLocation = runLocation
+
+  if (range.startGraphemeIndex > 0) {
+    if (range.linkedRunId === undefined) {
+      throw createJWordError('OPERATION_RUN_FORMAT_RANGE_INVALID', '局部 run 链接缺少 linkedRunId', {
+        runId: operation.runId
+      })
+    }
+
+    assertRunIdUnused(store, range.linkedRunId as RunId)
+    linkedRunLocation = splitRunAtGraphemeIndex(
+      store,
+      runLocation,
+      range.startGraphemeIndex,
+      range.linkedRunId as RunId
+    )
+  }
+
+  if (range.endGraphemeIndex < graphemeLength) {
+    if (range.trailingRunId === undefined) {
+      throw createJWordError('OPERATION_RUN_FORMAT_RANGE_INVALID', '局部 run 链接缺少 trailingRunId', {
+        runId: operation.runId
+      })
+    }
+
+    assertRunIdUnused(store, range.trailingRunId as RunId)
+    splitRunAtGraphemeIndex(
+      store,
+      linkedRunLocation,
+      range.endGraphemeIndex - range.startGraphemeIndex,
+      range.trailingRunId as RunId
+    )
+  }
+
+  setRunLinkValue(linkedRunLocation.run, operation.link)
+}
+
+function addRevisionMetadata(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'addRevisionMetadata' }>
+): void {
+  const revisionId = operation.revision.id as RevisionId
+  const runLocation = findRunLocation(store, operation.runId as RunId)
+  const blockLocation = findBlockLocation(store, runLocation.blockId)
+
+  store.revisions.set(revisionId, createRevisionRecord(operation.revision))
+  runLocation.run.set(DOCUMENT_STORE_FIELDS.run.revisionId, revisionId)
+  appendIdIfMissing(
+    readRequiredArray<RevisionId>(store.document, DOCUMENT_STORE_FIELDS.document.revisionIds, 'document revisionIds'),
+    revisionId
+  )
+  appendIdIfMissing(
+    readRequiredArray<RevisionId>(runLocation.run, DOCUMENT_STORE_FIELDS.run.revisionIds, 'run revisionIds'),
+    revisionId
+  )
+  appendIdIfMissing(
+    readRequiredArray<RevisionId>(blockLocation.block, DOCUMENT_STORE_FIELDS.block.revisionIds, 'block revisionIds'),
+    revisionId
+  )
 }
 
 function insertText(store: DocumentStore, position: TextPosition, text: string): void {
@@ -347,6 +571,12 @@ function splitBlock(
     runId: splitRunId,
     text: getRunText(splitRun)
   })
+  migrateCommentRangesAfterSplit(store, sharedText, index, {
+    sectionId: snapshot.sectionId,
+    blockId: newBlockId as BlockId,
+    runId: splitRunId,
+    text: getRunText(splitRun)
+  })
   for (let nextRunIndex = 0; nextRunIndex < followingRuns.length; nextRunIndex += 1) {
     const sourceRun = followingRuns[nextRunIndex]
     const clonedRun = nextRuns[nextRunIndex]
@@ -356,6 +586,12 @@ function splitBlock(
     }
 
     migrateTextAnchorsToText(getRunText(sourceRun), store.doc, {
+      sectionId: snapshot.sectionId,
+      blockId: newBlockId as BlockId,
+      runId: readRequiredString(clonedRun, DOCUMENT_STORE_FIELDS.run.id) as RunId,
+      text: getRunText(clonedRun)
+    })
+    migrateCommentRangesToText(store, getRunText(sourceRun), {
       sectionId: snapshot.sectionId,
       blockId: newBlockId as BlockId,
       runId: readRequiredString(clonedRun, DOCUMENT_STORE_FIELDS.run.id) as RunId,
@@ -399,6 +635,11 @@ function mergeBlock(store: DocumentStore, targetBlockId: string, sourceBlockId: 
     }
 
     migrateTextAnchorsToText(getRunText(sourceRun), store.doc, {
+      blockId: targetBlockId as BlockId,
+      runId: readRequiredString(clonedRun, DOCUMENT_STORE_FIELDS.run.id) as RunId,
+      text: getRunText(clonedRun)
+    })
+    migrateCommentRangesToText(store, getRunText(sourceRun), {
       blockId: targetBlockId as BlockId,
       runId: readRequiredString(clonedRun, DOCUMENT_STORE_FIELDS.run.id) as RunId,
       text: getRunText(clonedRun)
@@ -805,6 +1046,11 @@ function splitRunAtGraphemeIndex(
     runId: newRunId,
     text: getRunText(splitRun)
   })
+  migrateCommentRangesAfterSplit(store, sharedText, utf16Index, {
+    blockId: runLocation.blockId,
+    runId: newRunId,
+    text: getRunText(splitRun)
+  })
 
   if (tailText.length > 0) {
     sharedText.delete(utf16Index, tailText.length)
@@ -815,6 +1061,105 @@ function splitRunAtGraphemeIndex(
     container: runLocation.container,
     index: runLocation.index + 1,
     blockId: runLocation.blockId
+  }
+}
+
+function findCommentRecord(store: DocumentStore, threadId: string) {
+  const record = store.comments.get(threadId as CommentId)
+
+  if (record === undefined) {
+    throw createJWordError('OPERATION_COMMENT_NOT_FOUND', '找不到目标批注线程', {
+      threadId
+    })
+  }
+
+  return record
+}
+
+function findCommentRangeRecord(store: DocumentStore, rangeId: string) {
+  const record = store.commentRanges.get(rangeId as CommentRangeId)
+
+  if (record === undefined) {
+    throw createJWordError('OPERATION_COMMENT_NOT_FOUND', '找不到目标批注范围', {
+      rangeId
+    })
+  }
+
+  return record
+}
+
+function replaceCommentThread(
+  store: DocumentStore,
+  threadId: string,
+  updater: (thread: ReturnType<typeof projectCommentRecord>) => ReturnType<typeof projectCommentRecord>
+): void {
+  const record = findCommentRecord(store, threadId)
+  const rangeId = readRequiredString(record, DOCUMENT_STORE_FIELDS.comment.anchorRangeId)
+  const rangeRecord = findCommentRangeRecord(store, rangeId)
+  const nextThread = updater(projectCommentRecord(record, readCommentRangeRecord(rangeRecord)))
+
+  store.comments.set(threadId as CommentId, createCommentRecord(nextThread))
+}
+
+function migrateCommentRangesAfterSplit(
+  store: DocumentStore,
+  sourceText: Y.Text,
+  boundaryUtf16Index: number,
+  target: Readonly<{
+    sectionId?: SectionId
+    blockId: BlockId
+    runId: RunId
+    text: Y.Text
+  }>
+): void {
+  for (const [rangeId, record] of store.commentRanges.entries()) {
+    const snapshot = readCommentRangeRecord(record)
+    const nextSnapshot = migrateTextRangeRecordAfterSplit(
+      snapshot,
+      store.doc,
+      sourceText,
+      boundaryUtf16Index,
+      {
+        ...(target.sectionId === undefined ? {} : { sectionId: target.sectionId }),
+        blockId: target.blockId,
+        runId: target.runId,
+        text: target.text
+      }
+    )
+
+    if (nextSnapshot !== snapshot) {
+      store.commentRanges.set(rangeId as CommentRangeId, createCommentRangeRecord(nextSnapshot))
+    }
+  }
+}
+
+function migrateCommentRangesToText(
+  store: DocumentStore,
+  sourceText: Y.Text,
+  target: Readonly<{
+    sectionId?: SectionId
+    blockId: BlockId
+    runId: RunId
+    text: Y.Text
+  }>
+): void {
+  for (const [rangeId, record] of store.commentRanges.entries()) {
+    const snapshot = readCommentRangeRecord(record)
+    const nextSnapshot = migrateTextRangeRecordToText(
+      snapshot,
+      store.doc,
+      sourceText,
+      {
+        ...(target.sectionId === undefined ? {} : { sectionId: target.sectionId }),
+        blockId: target.blockId,
+        runId: target.runId,
+        text: target.text
+      }
+    )
+
+    if (nextSnapshot !== snapshot) {
+      store.commentRanges.set(rangeId as CommentRangeId, createCommentRangeRecord(nextSnapshot))
+    }
   }
 }
 
@@ -916,6 +1261,16 @@ function removeId<Id extends string>(array: Y.Array<Id>, id: Id): void {
 
   if (index >= 0) {
     array.delete(index, 1)
+  }
+}
+
+function replaceStringArray(array: Y.Array<string>, values: readonly string[]): void {
+  if (array.length > 0) {
+    array.delete(0, array.length)
+  }
+
+  if (values.length > 0) {
+    array.push([...values])
   }
 }
 

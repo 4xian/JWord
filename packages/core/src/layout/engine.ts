@@ -43,6 +43,7 @@ import type {
   IncrementalLayoutPassInput,
   LayoutCursor,
   LayoutInput,
+  LayoutSectionContext,
   MutablePageBox,
   PageBreakBox,
   TableBox,
@@ -97,9 +98,11 @@ export function layoutDocumentIncrementally(input: IncrementalLayoutPassInput): 
   pages.push(cursor.page)
 
   let stoppedEarly = false
+  let previousSectionContext: LayoutSectionContext | undefined
 
   for (const section of sourceProjection.document.sections) {
-    assignPageSectionBoundary(cursor.page, section)
+    startSectionLayout(cursor, pages, section, previousSectionContext, input.pageConfig)
+    previousSectionContext = cursor.sectionContext
 
     for (const block of section.blocks) {
       if (layoutBlock(block, section, layoutInput, cursor, pages, incremental)) {
@@ -137,6 +140,37 @@ export function layoutDocumentIncrementally(input: IncrementalLayoutPassInput): 
   })
 }
 
+function startSectionLayout(
+  cursor: LayoutCursor,
+  pages: MutablePageBox[],
+  section: Section,
+  previousContext: LayoutSectionContext | undefined,
+  pageConfig: PageConfig
+): void {
+  if (section.breakType === 'next-page' && cursor.page.sectionIds.length > 0) {
+    startNewPage(cursor, pages, pageConfig)
+  }
+
+  const headerIds = section.headerFooterSameAsPrevious === true
+    ? previousContext?.headerIds ?? section.headerIds ?? Object.freeze([])
+    : section.headerIds ?? Object.freeze([])
+  const footerIds = section.headerFooterSameAsPrevious === true
+    ? previousContext?.footerIds ?? section.footerIds ?? Object.freeze([])
+    : section.footerIds ?? Object.freeze([])
+  const startPageNumber = section.pageNumbering?.mode === 'restart'
+    ? section.pageNumbering.start ?? 1
+    : cursor.page.pageIndex + 1
+
+  cursor.sectionContext = Object.freeze({
+    sectionId: section.id,
+    headerIds,
+    footerIds,
+    startPageIndex: cursor.page.pageIndex,
+    startPageNumber
+  })
+  assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
+}
+
 function layoutBlock(
   block: Block,
   section: Section,
@@ -145,7 +179,7 @@ function layoutBlock(
   pages: MutablePageBox[],
   incremental?: IncrementalLayoutContext
 ): boolean {
-  assignPageSectionBoundary(cursor.page, section)
+  assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
 
   if (block.kind === 'table') {
     layoutTable(block, section, cursor, pages, input.pageConfig, input)
@@ -489,7 +523,7 @@ function layoutInlineBoundary(
   line.inlines.push(Object.freeze(pageBreak))
   flushLine(cursor)
   startNewPage(cursor, pages, pageConfig)
-  assignPageSectionBoundary(cursor.page, section)
+  assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
   startParagraph(cursor, sectionId, paragraph, pageConfig)
 }
 
@@ -529,7 +563,7 @@ function layoutTable(
 
   if (cursor.y + tableHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
     startNewPage(cursor, pages, pageConfig)
-    assignPageSectionBoundary(cursor.page, section)
+    assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
   }
 
   const tableX = cursor.page.contentRect.x

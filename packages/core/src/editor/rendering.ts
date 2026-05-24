@@ -340,9 +340,13 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
         findTextPositionPageIndexes(layout, operation.range.focus)
       )
     case 'setRunProperties':
+    case 'setRunLink':
+    case 'addRevisionMetadata':
       return findRunPageIndexes(layout, operation.runId)
     case 'setParagraphProperties':
       return findParagraphPageIndexes(layout, operation.paragraphId)
+    case 'setSectionProperties':
+      return findSectionPageIndexes(layout, operation.sectionId)
     case 'mergeBlock':
       return mergePageIndexes(
         findBlockPageIndexes(layout, operation.targetBlockId),
@@ -382,6 +386,12 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
       return findBlockPageIndexes(layout, operation.tableId)
     case 'upsertResource':
     case 'deleteResource':
+    case 'addCommentThread':
+    case 'replyCommentThread':
+    case 'editCommentEntry':
+    case 'resolveCommentThread':
+    case 'reopenCommentThread':
+    case 'deleteCommentThread':
       return []
   }
 }
@@ -411,6 +421,12 @@ export function findRunPageIndexes(layout: DocumentLayout, runId: string): reado
 export function findParagraphPageIndexes(layout: DocumentLayout, paragraphId: string): readonly number[] {
   return mergePageIndexes(
     layout.pages.flatMap((page) => page.paragraphs.some((paragraph) => paragraph.paragraphId === paragraphId) ? [page.pageIndex] : [])
+  )
+}
+
+function findSectionPageIndexes(layout: DocumentLayout, sectionId: string): readonly number[] {
+  return mergePageIndexes(
+    layout.pages.flatMap((page) => page.sectionIds.includes(sectionId) ? [page.pageIndex] : [])
   )
 }
 

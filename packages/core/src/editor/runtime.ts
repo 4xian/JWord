@@ -23,5 +23,10 @@ export type {
   EditorFixture,
   EditorHitTestPoint,
   EditorOptions,
-  EditorTextAnchorInput
+  EditorRichTextFragment,
+  EditorRichTextParagraph,
+  EditorRichTextRun,
+  EditorTextAnchorInput,
+  EditorUser,
+  EditorUserInput
 } from './types'

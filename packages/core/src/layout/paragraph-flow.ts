@@ -237,7 +237,7 @@ export function ensureLineFits(
 
   if (cursor.y + nextHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
     startNewPage(cursor, pages, pageConfig)
-    assignPageSectionBoundary(cursor.page, section)
+    assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
     startParagraph(cursor, section.id, paragraph, pageConfig)
   }
 

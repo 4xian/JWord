@@ -7,6 +7,7 @@
  */
 
 import type { Resource } from '../resources/types'
+import type { TextRangeRecord } from './position'
 
 export const DOCUMENT_MODEL_SCHEMA_VERSION = 1
 
@@ -29,17 +30,27 @@ export interface Document {
 export interface Section {
   readonly kind: 'section'
   readonly id: string
+  readonly breakType?: SectionBreakType
   readonly page?: SectionPageLayout
   readonly columns?: number
   readonly headerIds?: readonly string[]
   readonly footerIds?: readonly string[]
+  readonly headerFooterSameAsPrevious?: boolean
+  readonly pageNumbering?: SectionPageNumbering
   readonly blocks: readonly Block[]
 }
+
+export type SectionBreakType = 'continuous' | 'next-page'
 
 export interface SectionPageLayout {
   readonly widthTwips?: number
   readonly heightTwips?: number
   readonly marginTwips?: PageMargins
+}
+
+export interface SectionPageNumbering {
+  readonly mode: 'continue' | 'restart'
+  readonly start?: number
 }
 
 export interface PageMargins {
@@ -154,16 +165,27 @@ export interface TableBorder {
   readonly widthTwips?: number
 }
 
-export interface Comment {
-  readonly kind: 'comment'
+export interface CommentMessage {
   readonly id: string
   readonly authorId: string
   readonly createdAt: string
   readonly anchorRangeId: string
-  readonly threadId?: string
-  readonly resolved?: boolean
-  readonly blocks: readonly Paragraph[]
+  readonly text: string
+  readonly editedAt?: string
 }
+
+export interface CommentThread {
+  readonly kind: 'commentThread'
+  readonly id: string
+  readonly authorId: string
+  readonly createdAt: string
+  readonly anchorRangeId: string
+  readonly resolved: boolean
+  readonly rangeSnapshot: TextRangeRecord
+  readonly messages: readonly CommentMessage[]
+}
+
+export type Comment = CommentThread
 
 export interface RevisionMetadata {
   readonly kind: 'revision'
@@ -172,4 +194,6 @@ export interface RevisionMetadata {
   readonly createdAt: string
   readonly type: 'insert' | 'delete' | 'format'
   readonly rangeId?: string
+  readonly rangeSnapshot: TextRangeRecord
+  readonly summary: string
 }
