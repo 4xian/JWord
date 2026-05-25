@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "gate": "gate5",
+  "scope": "pdf-export",
+  "status": "template-only",
+  "notes": [
+    "This registry does not create placeholder .pdf binaries.",
+    "Each input.path is a required future location for a real projection or layout fixture.",
+    "PDF export must use JWord layout/projection, not browser print or LibreOffice conversion."
+  ],
+  "fixtures": [
+    {
+      "id": "pdf-basic-text",
+      "tier": "PDF",
+      "status": "placeholder",
+      "input": {
+        "path": "fixtures/pdf/inputs/pdf-basic-text.json",
+        "state": "missing-until-real-fixture-is-added",
+        "description": "Basic multi-page text layout exported from JWord projection/layout."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["page-size", "text-fragment", "baseline", "pagination"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/pdf/baselines/pdf-basic-text/canvas.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "not applicable to PDF-only fixture",
+        "diffFields": []
+      },
+      "pdfVisualExpectation": {
+        "expected": "PDF.js page count, page size, text flow, and text boxes match the JWord canvas baseline within tolerance",
+        "baselinePath": "fixtures/pdf/baselines/pdf-basic-text/pdf.png",
+        "fields": ["pageCount", "pageSize", "textBoundingBoxes"],
+        "state": "pending"
+      }
+    },
+    {
+      "id": "pdf-chinese-font",
+      "tier": "PDF",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/pdf/inputs/pdf-chinese-font.json",
+        "state": "available",
+        "description": "Chinese text with explicit font configuration."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["font-config", "font-embedding", "cjk-text"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/pdf/baselines/pdf-chinese-font/canvas.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "not applicable to PDF-only fixture",
+        "diffFields": []
+      },
+      "pdfVisualExpectation": {
+        "expected": "Chinese glyphs render with embedded font and no replacement boxes or mojibake",
+        "baselinePath": "fixtures/pdf/baselines/pdf-chinese-font/pdf.png",
+        "fields": ["fontEmbedding", "glyphCoverage", "textBoundingBoxes"],
+        "state": "pdfjs-text-verified"
+      }
+    },
+    {
+      "id": "pdf-missing-font",
+      "tier": "PDF",
+      "status": "placeholder",
+      "input": {
+        "path": "fixtures/pdf/inputs/pdf-missing-font.json",
+        "state": "missing-until-real-fixture-is-added",
+        "description": "Chinese text without a usable font configuration."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["font-error", "recoverable-warning"]
+      },
+      "expectedWarnings": [
+        {
+          "code": "PDF_FONT_MISSING",
+          "severity": "error",
+          "recoverable": true,
+          "fallback": "do not emit a garbled PDF"
+        }
+      ],
+      "importScreenshotBaseline": {
+        "path": "fixtures/pdf/baselines/pdf-missing-font/canvas.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "not applicable to PDF-only fixture",
+        "diffFields": []
+      },
+      "pdfVisualExpectation": {
+        "expected": "export is blocked or returns a recoverable font error before any garbled PDF is accepted",
+        "baselinePath": "fixtures/pdf/baselines/pdf-missing-font/pdf.png",
+        "fields": ["fontError", "noGarbledOutput"],
+        "state": "pending"
+      }
+    },
+    {
+      "id": "pdf-table-image",
+      "tier": "PDF",
+      "status": "placeholder",
+      "input": {
+        "path": "fixtures/pdf/inputs/pdf-table-image.json",
+        "state": "missing-until-real-fixture-is-added",
+        "description": "Layout containing a simple table and inline image."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["table", "paragraph"],
+        "requiredCapabilities": ["table-line", "table-cell-text", "image-embedding", "image-bounds"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/pdf/baselines/pdf-table-image/canvas.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "not applicable to PDF-only fixture",
+        "diffFields": []
+      },
+      "pdfVisualExpectation": {
+        "expected": "table lines, cell text, and image bounds match the JWord canvas baseline within tolerance",
+        "baselinePath": "fixtures/pdf/baselines/pdf-table-image/pdf.png",
+        "fields": ["tableLineBounds", "imageBoundingBoxes", "textBoundingBoxes"],
+        "state": "pending"
+      }
+    },
+    {
+      "id": "pdf-header-footer-page-number",
+      "tier": "PDF",
+      "status": "placeholder",
+      "input": {
+        "path": "fixtures/pdf/inputs/pdf-header-footer-page-number.json",
+        "state": "missing-until-real-fixture-is-added",
+        "description": "Layout with header, footer, and page number text."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["header-text", "footer-text", "page-number"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/pdf/baselines/pdf-header-footer-page-number/canvas.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "not applicable to PDF-only fixture",
+        "diffFields": []
+      },
+      "pdfVisualExpectation": {
+        "expected": "header, footer, and page numbers render on expected pages and positions",
+        "baselinePath": "fixtures/pdf/baselines/pdf-header-footer-page-number/pdf.png",
+        "fields": ["pageCount", "headerFooterBounds", "pageNumberText"],
+        "state": "pending"
+      }
+    }
+  ]
+}

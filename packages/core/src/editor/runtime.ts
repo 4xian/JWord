@@ -18,6 +18,7 @@ export type {
   Editor,
   EditorCommandOptions,
   EditorDocumentInput,
+  EditorDocumentModelInput,
   EditorEvent,
   EditorEventListener,
   EditorFixture,

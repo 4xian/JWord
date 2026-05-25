@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>JWord DOCX Gate 5 Demo</title>
+  </head>
+  <body>
+    <main class="jw-docx-demo">
+      <section class="jw-docx-demo__workspace" aria-label="JWord DOCX manual acceptance workspace">
+        <section class="jw-docx-demo__topbar" aria-label="DOCX import export controls">
+          <label class="jw-docx-demo__field">
+            <span class="jw-docx-demo__label">DOCX 文件</span>
+            <input id="jword-docx-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+          </label>
+          <label class="jw-docx-demo__field">
+            <span class="jw-docx-demo__label">Fixture</span>
+            <select id="jword-docx-fixture">
+              <option value="demo-basic">内置 Gate 5 基础文档</option>
+            </select>
+          </label>
+          <button id="jword-docx-import" class="jw-docx-demo__button jw-docx-demo__button--primary" type="button">
+            导入 DOCX
+          </button>
+          <button id="jword-docx-export" class="jw-docx-demo__button" type="button">
+            导出 DOCX
+          </button>
+          <button id="jword-pdf-export" class="jw-docx-demo__button" type="button">
+            导出 PDF
+          </button>
+          <button id="jword-task-cancel" class="jw-docx-demo__button" type="button" disabled>
+            取消任务
+          </button>
+        </section>
+        <section class="jw-docx-demo__toolbar-zone" aria-label="JWord official toolbar area">
+          <div id="jword-toolbar"></div>
+        </section>
+        <section class="jw-docx-demo__main" aria-label="DOCX editor and acceptance panels">
+          <section class="jw-docx-demo__editor-shell" aria-label="JWord editor area">
+            <div id="jword-editor" class="jw-docx-demo__editor-host" aria-label="JWord editor canvas host"></div>
+          </section>
+          <aside class="jw-docx-demo__side" aria-label="DOCX acceptance panels">
+            <section class="jw-docx-demo__panel">
+              <h2 class="jw-docx-demo__panel-title">Warnings</h2>
+              <pre id="jword-docx-warnings" class="jw-docx-demo__pre">[]</pre>
+            </section>
+            <section class="jw-docx-demo__panel">
+              <h2 class="jw-docx-demo__panel-title">Roundtrip</h2>
+              <pre id="jword-docx-roundtrip" class="jw-docx-demo__pre">尚未运行</pre>
+              <div id="jword-docx-output" class="jw-docx-demo__output">尚未导出 DOCX</div>
+            </section>
+            <section class="jw-docx-demo__panel">
+              <h2 class="jw-docx-demo__panel-title">PDF</h2>
+              <div id="jword-pdf-output" class="jw-docx-demo__output">尚未导出</div>
+            </section>
+          </aside>
+        </section>
+        <section class="jw-docx-demo__assistive-zone" aria-label="JWord assistive and status area">
+          <p id="jword-status" class="jw-docx-demo__status" aria-live="polite">Mounting DOCX demo...</p>
+          <div id="jword-assistive-mirror"></div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

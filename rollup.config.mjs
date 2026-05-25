@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const packagesRoot = 'packages'
-const externalPrefixes = ['@4xian/', 'react', 'vue', 'yjs']
+const externalPrefixes = ['@4xian/', 'react', 'vue', 'yjs', 'pdf-lib', 'pdfjs-dist', 'fontkit', 'node:']
 
 function readPackageJson(packageDir) {
   const packageJsonPath = join(packageDir, 'package.json')

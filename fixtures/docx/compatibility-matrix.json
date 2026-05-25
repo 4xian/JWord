@@ -1,0 +1,531 @@
+{
+  "schemaVersion": 1,
+  "gate": "gate5",
+  "scope": "docx-openxml-and-app-compatibility",
+  "status": "template-only",
+  "notes": [
+    "This matrix records required validation targets without claiming real Open XML or app compatibility evidence.",
+    "Each fixture must keep Open XML validation plus Word, WPS, and LibreOffice records visible until real evidence is attached.",
+    "No compatibility percent is allowed; use explicit per-target results and evidence."
+  ],
+  "fixtures": [
+    {
+      "fixtureId": "docx-t1-paragraphs",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-paragraphs.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t1-run-styles",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t1-paragraph-formatting",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t1-headings",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-headings.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t1-lists",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-lists.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t1-table-basic",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-table-basic.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t1-inline-image",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-inline-image.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t1-page-setup",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-page-setup.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t2-header-footer",
+      "exportArtifact": "fixtures/docx/exports/docx-t2-header-footer.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t2-page-number",
+      "exportArtifact": "fixtures/docx/exports/docx-t2-page-number.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t2-comments",
+      "exportArtifact": "fixtures/docx/exports/docx-t2-comments.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t2-links",
+      "exportArtifact": "fixtures/docx/exports/docx-t2-links.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t2-section-breaks",
+      "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-t2-floating-object-warning",
+      "exportArtifact": "fixtures/docx/exports/docx-t2-floating-object-warning.docx",
+      "openXmlValidation": {
+        "result": "pending",
+        "evidence": "not-run"
+      },
+      "appResults": [
+        {
+          "app": "Word",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "WPS",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        },
+        {
+          "app": "LibreOffice",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "pending",
+          "evidence": "not-run"
+        }
+      ]
+    }
+  ]
+}

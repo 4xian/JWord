@@ -7,7 +7,7 @@
  */
 import type { CanvasLike, createCanvasPool } from '../canvas/pool'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
-import type { ModelProperties, ParagraphList } from '../model/types'
+import type { Document, ModelProperties, ParagraphList } from '../model/types'
 import type { HistoryOperationResult } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
 import type { DocumentLayout, LayoutBox, LayoutOptions, LayoutRect } from '../layout/runtime'
@@ -130,6 +130,14 @@ export interface EditorDocumentInput {
   readonly text?: string
   /** 可选资源表快照。 */
   readonly resources?: readonly Resource[]
+}
+
+/**
+ * 结构化文档模型导入输入。
+ */
+export interface EditorDocumentModelInput {
+  /** 由 DOCX、持久化或宿主系统转换出的 canonical 文档模型。 */
+  readonly document: Document
 }
 
 /**
@@ -282,6 +290,16 @@ export interface Editor {
    * ```
    */
   loadFixture(fixture: EditorFixture): DocumentProjection
+
+  /**
+   * 加载受控结构化文档模型。
+   *
+   * @param input 已转换成 core canonical model 的文档。
+   * @returns 加载后的只读 projection。
+   * @remarks
+   * 副作用：通过初始化事务替换当前 Y.Doc 文档根，不暴露 document-store 或 Y.Doc 内部结构。
+   */
+  loadDocumentModel(input: EditorDocumentModelInput): DocumentProjection
 
   /**
    * 创建可交给 command 使用的文本锚点。

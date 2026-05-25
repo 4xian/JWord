@@ -9,6 +9,7 @@ export const DEFAULT_EDITOR_LABEL = 'JWord editor'
 export const DEFAULT_DOCUMENT_ID = 'document-1'
 export const DEFAULT_SECTION_ID = 'section-1'
 export const DOCUMENT_CREATE_ORIGIN = 'jword-document'
+export const DOCUMENT_MODEL_LOAD_ORIGIN = 'jword-document-model'
 export const FIXTURE_LOAD_ORIGIN = 'jword-fixture'
 export const POINTER_MULTI_CLICK_GRACE_MS = 80
 export const CARET_BLINK_INTERVAL_MS = 530

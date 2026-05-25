@@ -46,13 +46,13 @@ import { createSelectionRestoreSnapshot, createSelectionState, isSelectionCollap
 import type { SelectionState } from '../model/selection'
 import { collectSelectionTargets } from '../model/selection-targets'
 import type { Command, TextPosition, TransactionMetadata, TransactionResult } from '../operations/transaction'
-import { DOCUMENT_CREATE_ORIGIN, FIXTURE_LOAD_ORIGIN } from './constants'
+import { DOCUMENT_CREATE_ORIGIN, DOCUMENT_MODEL_LOAD_ORIGIN, FIXTURE_LOAD_ORIGIN } from './constants'
 import { createCanvasElement } from './rendering'
 import { createHiddenTextareaElement, createLiveRegionElement, createTextMirrorElement, focusHiddenTextarea } from './dom'
-import { findRunText, locateCommentThreadRange, readCurrentDocumentId, replaceStoreDocument, restoreTextRangeRecord } from './document'
+import { findRunText, locateCommentThreadRange, readCurrentDocumentId, replaceStoreDocument, replaceStoreDocumentModel, restoreTextRangeRecord } from './document'
 import { JWordEditorState } from './state'
 import { resolveCommandDirtyRange } from './rendering'
-import type { Editor, EditorCommandOptions, EditorDocumentInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
+import type { Editor, EditorCommandOptions, EditorDocumentInput, EditorDocumentModelInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
 
 export abstract class JWordEditorFacadeRuntime extends JWordEditorState implements Editor {
   /** 粘贴已清洗的富文本片段，具体 command 生成由输入运行时实现。 */
@@ -74,6 +74,12 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     this.assertActive()
 
     return this.replaceDocument(fixture, 'loadFixture', FIXTURE_LOAD_ORIGIN)
+  }
+
+  loadDocumentModel(input: EditorDocumentModelInput): DocumentProjection {
+    this.assertActive()
+
+    return this.replaceDocumentModel(input, 'loadDocumentModel', DOCUMENT_MODEL_LOAD_ORIGIN)
   }
 
   createTextAnchor(input: EditorTextAnchorInput): AnchorRef {
@@ -884,6 +890,36 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     this.layoutDirtyRange = undefined
     const result = this.pipeline.runMutation(commandName, { origin }, () => {
       replaceStoreDocument(this.store, input)
+    })
+
+    this.currentProjection = result.projection
+    this.commitSelection(null, {
+      source: 'document',
+      previousSelection,
+      render: true
+    })
+
+    return result.projection
+  }
+
+  protected replaceDocumentModel(
+    input: EditorDocumentModelInput,
+    commandName: string,
+    origin: string
+  ): DocumentProjection {
+    const previousSelection = this.currentSelection
+
+    this.commitSelection(null, {
+      source: 'document',
+      render: false,
+      emit: false
+    })
+
+    this.dirtyPageIndex = 0
+    this.dirtyPageEndIndex = 0
+    this.layoutDirtyRange = undefined
+    const result = this.pipeline.runMutation(commandName, { origin }, () => {
+      replaceStoreDocumentModel(this.store, input.document)
     })
 
     this.currentProjection = result.projection
