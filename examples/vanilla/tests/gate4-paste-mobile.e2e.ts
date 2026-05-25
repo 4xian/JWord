@@ -1,7 +1,7 @@
 /**
- * @fileoverview 职责: 用真实浏览器覆盖 Gate 4 富文本粘贴与移动只读分页预览的最小验收路径。
- * 边界: 只验证 demo 装配层、hidden textarea paste 事件、projection 输出和移动只读拦截，不覆盖完整移动编辑。
- * 协作: examples/vanilla/src/main.ts、packages/ui/src/paste/*、packages/ui/src/mobile/* 与 core editor facade。
+ * @fileoverview 职责: 用真实浏览器覆盖 Gate 4 富文本粘贴与移动视口分页的最小验收路径。
+ * 边界: 只验证 demo 装配层、hidden textarea paste 事件、projection 输出和移动视口分页，不覆盖完整移动编辑。
+ * 协作: examples/vanilla/src/main.ts、packages/ui/src/paste/* 与 core editor facade。
  * 约束: 断言来自真实 DOM 或 window.__jwordDemo.editor 公开 facade，不读取 controller 私有状态。
  * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.15/4.16。
  */
@@ -14,13 +14,10 @@ interface PasteProjectionProbe {
   readonly serializedProjection: string
 }
 
-interface MobileReadonlyProbe {
-  readonly hostReadonly: string | null
-  readonly canvasReadonly: string | null
+interface MobileViewportProbe {
   readonly toolbarHidden: boolean
   readonly textareaReadonly: boolean
   readonly canvasOverflow: string
-  readonly blockedDefaultPrevented: boolean
   readonly firstParagraphText: string
 }
 
@@ -59,7 +56,7 @@ test('Gate 4 paste sanitizer keeps safe Word-like formats and falls back to plai
   expect(fallbackProbe.serializedProjection).not.toContain('alert')
 })
 
-test('Gate 4 mobile readonly preview blocks editing while keeping paged canvas scrollable', async ({ page }) => {
+test('Gate 4 mobile viewport keeps paged canvas scrollable without implicit readonly mode', async ({ page }) => {
   await page.setViewportSize({
     width: 390,
     height: 780
@@ -67,14 +64,11 @@ test('Gate 4 mobile readonly preview blocks editing while keeping paged canvas s
   await page.goto('/')
   await waitForPasteMobileDemoReady(page)
 
-  const probe = await readMobileReadonlyProbe(page)
+  const probe = await readMobileViewportProbe(page)
 
-  expect(probe.hostReadonly).toBe('true')
-  expect(probe.canvasReadonly).toBe('true')
-  expect(probe.toolbarHidden).toBe(true)
-  expect(probe.textareaReadonly).toBe(true)
+  expect(probe.toolbarHidden).toBe(false)
+  expect(probe.textareaReadonly).toBe(false)
   expect(probe.canvasOverflow).toBe('auto')
-  expect(probe.blockedDefaultPrevented).toBe(true)
   expect(probe.firstParagraphText).toContain('默认混排样例')
 })
 
@@ -174,26 +168,16 @@ async function readPasteProjectionProbe(page: Page): Promise<PasteProjectionProb
   })
 }
 
-/** 读取移动只读预览的 DOM 与 projection 状态。 */
-async function readMobileReadonlyProbe(page: Page): Promise<MobileReadonlyProbe> {
+/** 读取移动视口下的 DOM 与 projection 状态。 */
+async function readMobileViewportProbe(page: Page): Promise<MobileViewportProbe> {
   return page.evaluate(() => {
-    const editorHost = document.querySelector<HTMLElement>('#jword-editor')
     const toolbarHost = document.querySelector<HTMLElement>('#jword-toolbar')
     const canvasContainer = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
     const textarea = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
 
-    if (editorHost === null || toolbarHost === null || canvasContainer === null || textarea === null) {
-      throw new Error('移动只读预览测试缺少必要 DOM。')
+    if (toolbarHost === null || canvasContainer === null || textarea === null) {
+      throw new Error('移动视口测试缺少必要 DOM。')
     }
-
-    const event = new InputEvent('beforeinput', {
-      bubbles: true,
-      cancelable: true,
-      inputType: 'insertText',
-      data: 'x'
-    })
-
-    editorHost.dispatchEvent(event)
 
     const firstBlock = window.__jwordDemo?.editor.getProjection().document.sections[0]?.blocks[0]
     const firstParagraphText = firstBlock?.kind === 'paragraph'
@@ -201,12 +185,9 @@ async function readMobileReadonlyProbe(page: Page): Promise<MobileReadonlyProbe>
       : ''
 
     return {
-      hostReadonly: editorHost.getAttribute('data-jword-mobile-readonly-preview'),
-      canvasReadonly: canvasContainer.getAttribute('data-jword-mobile-readonly-preview'),
       toolbarHidden: toolbarHost.hidden === true,
       textareaReadonly: textarea.readOnly,
       canvasOverflow: canvasContainer.style.overflow,
-      blockedDefaultPrevented: event.defaultPrevented,
       firstParagraphText
     }
   })

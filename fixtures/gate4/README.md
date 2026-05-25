@@ -13,7 +13,7 @@
 | `find-replace` | 查找结果定位、替换、批量替换 | anchor、selection、history、render、error recovery |
 | `header-footer` | 页眉页脚、页码与分页协同 | anchor、selection、history、render、error recovery |
 | `paste-html` | Word HTML / 常见 HTML 粘贴和安全降级 | anchor、selection、history、render、error recovery |
-| `mobile-readonly` | 移动端只读分页预览 | anchor、selection、history、render、error recovery |
+| `mobile-viewport` | 移动视口分页预览 | anchor、selection、history、render、error recovery |
 
 ## Contract Definitions
 

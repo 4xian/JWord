@@ -4,7 +4,7 @@
 
 **Goal:** 为 `@4xian/jword-ui` 增加宿主可配置的全局只读模式，开启后只保留分页阅读能力，所有编辑入口、浮层操作、右键编辑菜单、键盘输入、粘贴、拖拽和命令式 UI 操作都被统一阻断。
 
-**Architecture:** 全局只读模式放在 UI SDK 层，由一个 `readonly/interaction-guard` controller 统一接管 DOM 事件和 UI 控件禁用；core 仍保持 framework-agnostic，不新增顶层 DOM 依赖。现有 `mobile/readonly-preview.ts` 是移动视口预览能力，本计划将其收敛到同一 guard 语义下，但不把“移动端只读”和“全局只读”混成同一个配置。
+**Architecture:** 全局只读模式放在 UI SDK 层，由一个 `readonly/interaction-guard` controller 统一接管 DOM 事件和 UI 控件禁用；core 仍保持 framework-agnostic，不新增顶层 DOM 依赖。2026-05-25 已删除独立移动端只读模式，只保留全局 `readonly` 作为唯一只读入口。
 
 **Tech Stack:** TypeScript ESM、原生 DOM API、`@4xian/jword-core` Editor Facade、Vitest jsdom、Playwright Chromium。
 
@@ -12,8 +12,8 @@
 
 ## 1. 当前现状
 
-- `packages/ui/src/mobile/readonly-preview.ts` 已能在移动视口下隐藏 toolbar、设置 hidden textarea readonly，并在 `editorHost` capture 阶段阻断 `beforeinput / input / paste / cut / drop / keydown / contextmenu / dblclick`。
-- 现有只读能力只有 `CreateJWordUiOptions.readonlyPreview.mobile`，它依赖 `matchMedia(max-width)`，不是全局权限开关。
+- 2026-05-25 已删除移动端专属只读配置和实现文件。
+- 只读能力统一使用 `CreateJWordUiOptions.readonly`，不再按移动视口自动切换。
 - 当前事件分散在多个 controller：
   - core mount：`packages/core/src/editor/facade-runtime.ts` 绑定 canvas pointer、hidden textarea 输入、剪贴板和 composition。
   - selection-actions：`packages/ui/src/selection-actions/controller.ts` 绑定浮动工具栏、右键菜单、剪切/复制/粘贴、颜色、链接、批注入口。
@@ -69,16 +69,10 @@ export interface CreateJWordUiOptions {
 }
 ```
 
-保留现有：
+已删除旧的移动端专属只读入口：
 
-```ts
-readonly readonlyPreview?: JWordReadonlyPreviewOptions
-```
-
-语义区别：
-
-- `readonly`: 全局只读，所有视口都生效。
-- `readonlyPreview.mobile`: 移动视口预览，命中移动宽度才生效。
+- 移动端专属只读公开配置。
+- 移动端专属只读实现文件。
 
 ## 4. 文件结构
 
@@ -99,12 +93,8 @@ readonly readonlyPreview?: JWordReadonlyPreviewOptions
 
 - `packages/ui/src/create-ui.ts`
   - 创建 `interactionGuard`。
-  - 把 guard 传给 toolbar、selection-actions、table、media、comments、link、header-footer、paste、mobile readonly preview。
+  - 把 guard 传给 toolbar、selection-actions、table、media、comments、link、header-footer、paste。
   - destroy 时先销毁 guard 后销毁其他 controller，避免晚到事件继续写状态。
-
-- `packages/ui/src/mobile/readonly-preview.ts`
-  - 复用 `interactionGuard` 的事件阻断语义。
-  - 保留移动视口判断和移动专属 DOM attribute。
 
 - `packages/ui/src/toolbar/controller.ts`
   - 在 refresh 时根据 guard 禁用编辑控件。
@@ -236,7 +226,6 @@ Expected: tests pass。
 
 **Files:**
 - Modify: `packages/ui/src/create-ui.ts`
-- Modify: `packages/ui/src/mobile/readonly-preview.ts`
 - Test: `packages/ui/test/create-ui-paste-readonly.test.ts`
 
 - [x] **Step 1: 写入口级 test**
@@ -246,7 +235,7 @@ Expected: tests pass。
 - `createJWordUi({ readonly: true })` 后 toolbar 隐藏或禁用。
 - `beforeinput / paste / cut / contextmenu` 被阻断。
 - projection 不变。
-- `readonlyPreview.mobile` 现有测试仍通过。
+- 不再创建或依赖移动端专属只读入口。
 
 - [x] **Step 2: 在 create-ui 创建 guard**
 
@@ -256,9 +245,9 @@ Expected: tests pass。
 - 如果 `readonly` 是对象，按对象字段构造。
 - 如果没传，guard 为 disabled handle，避免其他 controller 判断 null。
 
-- [x] **Step 3: 调整 mobile readonly preview**
+- [x] **Step 3: 删除移动端专属只读模式**
 
-移动预览继续保留移动 attribute 和 maxWidth 判断，但事件阻断和控件禁用复用 guard 能力，避免两套只读逻辑分叉。
+2026-05-25 已删除移动端专属只读模式；移动视口仍使用同一套分页 canvas，宿主如需移动只读需自行传入全局 `readonly`。
 
 - [x] **Step 4: 运行入口测试**
 
@@ -424,8 +413,8 @@ Expected: pass。
 - **风险：capture 阶段阻断 pointer 会破坏滚动和链接打开。**  
   决策：第一阶段不全量阻断 pointer，只阻断输入、剪贴板、右键、双击和各 controller 编辑入口。
 
-- **风险：移动只读预览和全局只读重复。**  
-  决策：移动预览保留视口判断和 DOM 标记，事件阻断逻辑复用 interaction guard。
+- **风险：移动端专属只读和全局只读重复。**  
+  决策：2026-05-25 删除移动端专属只读模式，只保留全局 `readonly`。
 
 - **风险：控制器分散导致漏入口。**  
   决策：先把 toolbar、selection-actions、table、media、comments、link、header-footer、find-replace 全部列入任务和测试矩阵。

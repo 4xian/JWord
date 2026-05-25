@@ -1,7 +1,7 @@
 /**
  * 职责：统一管理 UI SDK 全局只读模式下的 DOM 输入阻断和入口禁用。
  * 边界：只在 UI 装配层处理 DOM 事件和控件状态，不改 core transaction pipeline。
- * 协作模块：create-ui、mobile readonly preview 与各 UI controller 通过 canEdit/blockEdit 协作。
+ * 协作模块：create-ui 与各 UI controller 通过 canEdit/blockEdit 协作。
  * 性能/安全约束：只绑定固定输入类事件，销毁时恢复本模块写入的 DOM 状态。
  * Specs：docs/superpowers/plans/2026-05-24-jword-global-readonly-mode.md#task-1-增加只读配置类型和-guard-骨架。
  */

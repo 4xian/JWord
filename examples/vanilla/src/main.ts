@@ -87,9 +87,6 @@ const jwordUi = createJWordUi({
   },
   media: demoMedia.media,
   table: demoTable.table,
-  readonlyPreview: {
-    mobile: true
-  },
   comments: true,
   link: {
     openLink(url) {

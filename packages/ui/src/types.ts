@@ -415,14 +415,6 @@ export interface JWordRevisionsOptions {
   readonly host: HTMLElement
 }
 
-/** 移动 Web 只读分页预览配置。 */
-export interface JWordReadonlyPreviewOptions {
-  /** 是否在移动视口启用只读分页预览；不提供时不改变桌面编辑体验。 */
-  readonly mobile?: boolean
-  /** 移动视口最大宽度，默认 640px。 */
-  readonly maxWidthPx?: number
-}
-
 /** 全局只读模式配置。 */
 export interface JWordReadonlyOptions {
   /** 开启后只允许阅读、滚动和只读定位，不允许编辑。 */
@@ -470,8 +462,6 @@ export interface CreateJWordUiOptions {
   readonly revisions?: JWordRevisionsOptions
   /** 宿主级全局只读模式。 */
   readonly readonly?: boolean | JWordReadonlyOptions
-  /** Gate 4 移动 Web 只读分页预览。 */
-  readonly readonlyPreview?: JWordReadonlyPreviewOptions
 }
 
 /** live region 控制器的最小协作边界。 */

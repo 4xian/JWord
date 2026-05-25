@@ -1,5 +1,5 @@
 /**
- * @fileoverview 职责: 用真实浏览器补齐 Gate 4 图片、表格、批注、页眉页脚、修订和移动只读的视觉回归入口。
+ * @fileoverview 职责: 用真实浏览器补齐 Gate 4 图片、表格、批注、页眉页脚、修订和移动视口的视觉回归入口。
  * 边界: 固定 Chromium 截图基线与 canvas/DOM 探针，不把长表格基线宣称为行级跨页拆分支持。
  * 协作: vanilla demo、@4xian/jword-ui 官方控件、core renderer 与 Playwright visual-chromium 项目。
  * 约束: 验证必须来自真实 canvas 像素、DOM 可见状态和公开 editor facade。
@@ -125,7 +125,7 @@ test('Gate 4 long table visual baseline records current page-boundary behavior',
   })
 })
 
-test('Gate 4 mobile readonly visual baseline keeps paged canvas readable without toolbar overlap', async ({ page }) => {
+test('Gate 4 mobile visual baseline keeps paged canvas readable without toolbar overlap', async ({ page }) => {
   await page.setViewportSize({
     width: 390,
     height: 780
@@ -155,7 +155,6 @@ test('Gate 4 mobile readonly visual baseline keeps paged canvas readable without
     }
 
     return {
-      hostReadonly: document.querySelector<HTMLElement>('#jword-editor')?.getAttribute('data-jword-mobile-readonly-preview') ?? null,
       toolbarHidden: toolbar?.hidden ?? false,
       canvasOverflow: container?.style.overflow ?? '',
       canvasWidth: canvas?.width ?? 0,
@@ -163,12 +162,11 @@ test('Gate 4 mobile readonly visual baseline keeps paged canvas readable without
     }
   })
 
-  expect(mobileProbe.hostReadonly).toBe('true')
-  expect(mobileProbe.toolbarHidden).toBe(true)
+  expect(mobileProbe.toolbarHidden).toBe(false)
   expect(mobileProbe.canvasOverflow).toBe('auto')
   expect(mobileProbe.canvasWidth).toBeGreaterThan(0)
   expect(mobileProbe.nonWhitePixels).toBeGreaterThan(100)
-  await expect(page.locator('.jw-demo__workspace')).toHaveScreenshot('gate4-mobile-readonly-baseline.png', {
+  await expect(page.locator('.jw-demo__workspace')).toHaveScreenshot('gate4-mobile-baseline.png', {
     animations: 'disabled',
     caret: 'hide',
     maxDiffPixelRatio: 0.02

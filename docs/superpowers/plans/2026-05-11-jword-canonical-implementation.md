@@ -282,7 +282,7 @@
 
 ### 目标
 
-补齐常用企业文档结构：图片、表格、批注、超链接、目录、查找替换、页眉页脚、页码、移动只读预览、保格式粘贴第一版。
+补齐常用企业文档结构：图片、表格、批注、超链接、目录、查找替换、页眉页脚、页码、移动视口分页预览、保格式粘贴第一版。
 
 ### 实现方案
 
@@ -309,7 +309,7 @@
 
 #### Iteration 0 - 冻结 Gate 4 起跑线
 
-- [x] 建立 Gate 4 fixture 清单：`image-inline`、`table-basic`、`comment-thread`、`link-basic`、`find-replace`、`header-footer`、`paste-html`、`mobile-readonly`。
+- [x] 建立 Gate 4 fixture 清单：`image-inline`、`table-basic`、`comment-thread`、`link-basic`、`find-replace`、`header-footer`、`paste-html`、`mobile-viewport`。
   - 完成 2026-05-17：已新增 `fixtures/gate4/README.md`，把 Gate 4 fixture registry 固定为可复查清单，并补入首个图片 smoke 资产 `fixtures/gate4/media-inline.svg`。
 - [x] 明确每类 fixture 的最小可观察契约：anchor、selection、history、render、error recovery。
   - 完成 2026-05-17：`fixtures/gate4/README.md` 已逐项写明五类最小可观察契约，避免后续图片、表格、批注各自定义一套验收口径。
@@ -551,15 +551,15 @@
   - UI 控件必须属于 `@4xian/jword-ui`，vanilla 不得重新实现官方逻辑。
   - CSS 继续使用 flex，不使用 grid / gap。
   - 完成 2026-05-24：实际目录按实现命名为 `packages/ui/src/find-replace/`，并已与 `packages/ui/src/header-footer/` 一起通过官方 `createJWordUi(...)` 入口装配；`examples/vanilla/src/main.ts` 只传入 host 和 adapter，不重写官方控制逻辑。
-- [x] 实现移动 Web 只读分页预览，不承诺完整移动编辑。
+- [x] 保留移动 Web 分页预览可阅读，不承诺完整移动编辑。
   - UI / host 落点：
-    - `packages/ui` 提供 readonly mobile mode，隐藏输入 textarea、工具栏编辑入口和交互编辑手柄。
-    - 保留分页 canvas、目录跳转、批注/链接只读查看、横向适配和基础缩放。
-    - vanilla 增加移动只读预览测试入口，不能变成第二套 demo editor。
+    - `packages/ui` 保留同一套 editor/canvas 渲染，不新增移动端第二套只读模式。
+    - 保留分页 canvas、横向适配和基础缩放。
+    - vanilla 增加移动视口分页回归入口，不能变成第二套 demo editor。
   - 验收：
-    - mobile viewport browser test 覆盖可滚动阅读、不能输入、目录可跳转、链接/批注可查看。
+    - mobile viewport browser test 覆盖可滚动阅读和分页 canvas 非空。
     - 视觉检查确认移动宽度下文本和按钮不重叠。
-  - 完成 2026-05-24：`packages/ui/src/mobile/readonly-preview.ts` 已提供移动 viewport 下的只读分页预览控制器，隐藏 toolbar 编辑入口，设置 hidden textarea readonly，阻断 `beforeinput` / `input` / `paste` / `cut` / `drop` / `keydown` 等编辑事件，同时保留分页 canvas 滚动容器。focused Vitest 覆盖 createJWordUi 接线与只读拦截；Playwright Chromium 移动 viewport 覆盖 demo 可滚动、不能输入和 projection 不变。
+  - 调整 2026-05-25：移动端专属只读模式已删除；移动视口继续使用同一套分页 canvas，若宿主需要只读则使用全局 `readonly` 配置。
 
 #### Iteration 5 - Gate 4 回归与基线（Step 4.17）
 
@@ -572,7 +572,7 @@
   - paste sanitizer
   - section / header-footer / page numbering
   - revision metadata / markup
-  - mobile readonly preview state
+  - global readonly state
   - 进展 2026-05-24：4.11 / 4.12 已有 focused Vitest 覆盖，命令为 `pnpm vitest run packages/core/test/heading/outline.test.ts packages/core/test/find-replace/find-replace.test.ts packages/ui/test/find-replace-state.test.ts packages/ui/test/heading-controller.test.ts`，当前 4 files / 5 tests passed。
   - 进展 2026-05-24：4.15 已有 sanitizer 与 core transaction focused 覆盖，命令为 `pnpm vitest run packages/ui/test/paste-sanitizer.test.ts` 与 `pnpm vitest run packages/core/test/editor/input-runtime.test.ts -t "pastes sanitized rich text fragments through the transaction pipeline"`；当前仅证明 sanitizer / core fragment 粘贴切片，不等同于完整浏览器粘贴闭环。
   - 进展 2026-05-24：4.15 / 4.16 已补入口级 focused tests，命令为 `pnpm vitest run packages/ui/test/create-ui-paste-readonly.test.ts packages/ui/test/paste-sanitizer.test.ts`，当前 2 files / 4 tests passed。
@@ -589,8 +589,8 @@
   - 页眉页脚 / 页码
   - 修订可见化 / 定位
   - Word HTML 安全粘贴
-  - 移动只读预览
-  - 进展 2026-05-24：`examples/vanilla/tests/gate4-paste-mobile.e2e.ts` 已覆盖 Word HTML 安全粘贴和移动只读预览，命令为 `pnpm playwright test examples/vanilla/tests/gate4-paste-mobile.e2e.ts --project=chromium`，当前 2 tests passed。
+  - 移动视口分页预览
+  - 调整 2026-05-25：`examples/vanilla/tests/gate4-paste-mobile.e2e.ts` 覆盖 Word HTML 安全粘贴和移动视口分页可读，不再覆盖独立移动只读模式。
   - 进展 2026-05-24：`examples/vanilla/tests/gate4-revisions.e2e.ts` 已覆盖修订可见列表、点击定位和 undo/redo，命令为 `pnpm playwright test examples/vanilla/tests/gate4-revisions.e2e.ts --project=chromium`，当前 1 test passed。
   - 进展 2026-05-24：`examples/vanilla/tests/gate4-comments-link.e2e.ts` 已覆盖批注创建、前方输入后 anchor 跟随、解决 / 重开，以及链接弹窗拒绝 `javascript:`、接受 `https:` 并写入 projection；命令为 `pnpm playwright test examples/vanilla/tests/gate4-comments-link.e2e.ts --project=chromium`，当前 2 tests passed。Kimi WebBridge 真实 Chrome 抽验同一路径，批注定位从 `[1, 3]` 跟随到 `[2, 4]`，危险链接禁用，`https://example.com/kimi-gate4` 成功落地。
   - 进展 2026-05-24：`examples/vanilla/tests/gate4-structure-find.e2e.ts` 已覆盖官方 `headingOutline` 目录项点击稳定 anchor、官方 `findReplace` 查找 / 替换 / 全部替换，并断言替换通过 3 次 `replaceTextMatch` transaction 写入；命令为 `pnpm playwright test examples/vanilla/tests/gate4-structure-find.e2e.ts --project=chromium`，当前 1 test passed。Kimi WebBridge 真实 Chrome 抽验同一路径，目录点击定位到 `paragraph-3 [0, 0]`，查找 `alpha` 显示 `3 个结果` 并定位到 `paragraph-2 [0, 5]`，最终 projection 为 `['第一章', 'ALPHA beta ALPHA', '第二章 ALPHA']`，transaction 记录 3 次 `replaceTextMatch`。
@@ -603,9 +603,9 @@
   - 目录面板与查找高亮
   - 页眉页脚 / 页码
   - 修订 markup
-  - 移动只读分页
-  - 进展 2026-05-24：新增 `examples/vanilla/tests/gate4.visual.ts` 作为 Gate 4 visual 入口，覆盖桌面端图片、表格、批注卡片、页眉页脚、目录面板、查找状态、修订列表与非空 canvas，以及移动只读分页非空 canvas / toolbar 隐藏 / scroll 容器。
-  - 收口 2026-05-24：已建立 4 个 Chromium 截图基线：`gate4-desktop-feature-baseline.png`、`gate4-media-failure-baseline.png`、`gate4-long-table-baseline.png`、`gate4-mobile-readonly-baseline.png`；`pnpm test:visual` 已通过 Gate 2 JSON baseline 校验、Gate 2/3 canvas visual 探针和 Gate 4 4 个 screenshot baseline，当前 7 passed。长表格基线只记录当前页面边界行为，不宣称行级跨页拆分。
+  - 移动视口分页
+  - 调整 2026-05-25：`examples/vanilla/tests/gate4.visual.ts` 的移动基线改为普通移动视口分页非空 canvas / scroll 容器，不再要求 toolbar 隐藏。
+  - 收口 2026-05-24：已建立 4 个 Chromium 截图基线：`gate4-desktop-feature-baseline.png`、`gate4-media-failure-baseline.png`、`gate4-long-table-baseline.png`、`gate4-mobile-baseline.png`；`pnpm test:visual` 已通过 Gate 2 JSON baseline 校验、Gate 2/3 canvas visual 探针和 Gate 4 4 个 screenshot baseline，当前 7 passed。长表格基线只记录当前页面边界行为，不宣称行级跨页拆分。
 - [x] 建立 Gate 4 perf 护栏，至少记录：
   - 表格大页滚动
   - 图片混排文档滚动
@@ -614,7 +614,7 @@
   - 进展 2026-05-24：`examples/vanilla/tests/gate4.perf.e2e.ts` 已补官方查找 UI 交互延迟与目录 / 批注 / 修订同屏 overlay 滚动指标；命令为 `pnpm playwright test examples/vanilla/tests/gate4.perf.e2e.ts --project=perf-chromium`，当前 1 test passed，实测 `imageInsertMs=1860.7`、`tableInsertEditMs=370.1`、`commentCreateMs=166.3`、`revisionCreateMs=142.2`、`findScaleMatchCount=2400`、`findUiInteractionMs=406.0`、`overlayScrollMs=105.1`、`overlayCompositeScrollMs=123.7`、`mountedCanvasCount=3`。本轮连续复跑发现原 `imageInsertMs <= 1600ms` 在当前 Chromium 环境下不稳定，三次分别约 `1832.9ms / 1607.1ms / 1800.6ms`，因此 guard 校准为 `<= 2200ms`，仍保留明显退化拦截。
   - 收口 2026-05-24：perf guard 已用 `pnpm playwright test examples/vanilla/tests/gate4.perf.e2e.ts --project=perf-chromium --workers=1` 复跑通过，当前 1 passed，实测 `initialPageCount=53`、`imageInsertMs=1728.7`、`tableInsertEditMs=371.6`、`commentCreateMs=152.7`、`revisionCreateMs=123.9`、`findScaleCollectMs=0.6`、`findScaleMatchCount=2400`、`findUiInteractionMs=286.2`、`overlayScrollMs=108.2`、`overlayCompositeScrollMs=116.1`、`mountedCanvasCount=3`。
 - [x] 验证新能力全部落在 `core` / `ui`，不回塞到 `examples/vanilla/src/main.ts`。
-  - architecture check 必须覆盖 `packages/ui/src/find/`、`packages/ui/src/header-footer/`、`packages/ui/src/outline/`、移动只读入口和 paste adapter。
+  - architecture check 必须覆盖 `packages/ui/src/find/`、`packages/ui/src/header-footer/`、`packages/ui/src/outline/`、全局只读入口和 paste adapter。
   - 主进程验收必须包含真实浏览器证据；Kimi WebBridge 优先，Playwright 作为自动化回归补充。
   - 进展 2026-05-24：目录与查找替换控制逻辑已落在 `packages/ui/src/heading/` 与 `packages/ui/src/find-replace/`，`examples/vanilla/src/main.ts` 只向 `createJWordUi` 传入 `headingOutline.host` 与 `findReplace.host`；本轮已用 Playwright Chromium 与 Kimi WebBridge 复核官方 UI 路径。
   - 收口 2026-05-24：`pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm test:visual` 与 `git diff --check` 均已通过；`pnpm lint` 包含 ESLint、package versions、core boundary 与中文注释检查。
@@ -636,7 +636,7 @@
 - [x] Step 4.13：实现分节模型、分节符、页眉页脚和页码基础能力，支持最小 `same as previous` 与页码 `restart` / `continue` 规则，排版结果可被 PDF/docx 后续复用。
 - [x] Step 4.14：实现修订 metadata 与最小 markup 第一版，记录插入、删除、格式变更并提供可见化；接受/拒绝深度流程保留到 post-1.0。
 - [x] Step 4.15：实现 DOMPurify 保格式粘贴 v1，覆盖 Word HTML 常见片段并保留安全降级到纯文本能力。
-- [x] Step 4.16：实现移动 Web 只读分页预览，不支持完整移动编辑。
+- [x] Step 4.16：保留移动 Web 分页预览可阅读，不支持完整移动编辑。
 - [x] Step 4.17：完善 Beta 前半段 E2E 和视觉回归：表格、图片、批注、目录、页眉页脚、移动预览。
   - 完成 2026-05-24：当前 Step 4.17 自动化收口证据为 Gate 4 Chromium E2E 17 passed、Gate 4 perf guard 1 passed、`pnpm test:visual` 7 passed；同时补回 Gate 3 input/visual 回归，`gate3-input.e2e.ts` Chromium 为 9 passed / 1 skipped，`gate3.visual.ts` visual-chromium 为 1 passed。
 
@@ -656,8 +656,8 @@
   - 完成 2026-05-24：core builder 支持 `insert` / `delete` / `format` 三类 revision metadata，UI revisions 面板展示 `type / summary / authorId / createdAt` 并可点击定位 range snapshot；`examples/vanilla/tests/gate4-revisions.e2e.ts` 已直接断言 `locatedRangeOffsets: [1, 4]`，Kimi WebBridge fresh reload 也读到 `locatedOffsets: [1, 4]`，并验证 undo/redo 后 UI 与 projection 同步。
 - [x] 粘贴 HTML 不产生 XSS。
   - 完成 2026-05-24：`examples/vanilla/tests/gate4-paste-mobile.e2e.ts` 真实 Chromium 粘贴 Word-like HTML 后，`bold / italic / color / backgroundColor` 落到 projection，`script` 与 `alert` 不进入 projection；危险 HTML 为空时降级为纯文本 fallback。
-- [x] 移动端只读分页预览可阅读。
-  - 完成 2026-05-24：`examples/vanilla/tests/gate4-paste-mobile.e2e.ts` 与 `examples/vanilla/tests/gate4.visual.ts` 在 390px 移动 viewport 验证 toolbar 隐藏、hidden textarea readonly、编辑事件被阻止、分页 canvas 可滚动且非空。
+- [x] 移动视口分页预览可阅读。
+  - 调整 2026-05-25：独立移动只读模式已删除；移动 viewport 回归验证分页 canvas 可滚动且非空，只读场景统一走全局 `readonly`。
 
 ### 禁止事项
 
@@ -679,6 +679,34 @@
 DOCX 主路径为 `JSZip + XML parser/serializer + 自研 OOXML mapping + canonical model`。PDF 主路径为 `DocumentLayout/LayoutBox -> PDF`，直接复用 JWord 分页布局结果，不使用浏览器打印、LibreOffice 转换或第三方在线服务作为主导出方案。导入、导出和 PDF 生成都放在独立包、独立 worker 和 lazy-load 边界内，避免进入 core 或首屏 bundle。
 
 DOCX 导入应先解析 OPC package，再建立 style、numbering、relationship、media、comments、header/footer 等索引，随后映射到 JWord canonical import model。core 只暴露受控结构化写入入口，docx 包禁止直接访问 Y.Doc 或 `document-store` 内部结构。DOCX 导出应从 JWord projection/canonical model 生成 OOXML Transitional package，再用 roundtrip 重新导入验证。PDF 导出应从 editor layout 读取页面、文本、图片、表格线、页眉页脚和页码，使用字体配置 API 显式嵌入字体；缺少中文字体或字体不能覆盖字符时必须返回可恢复错误，不输出乱码 PDF。
+
+### 参考资料与对标口径
+
+Gate 5 可以参考外部技术文档和竞品能力，但参考材料必须分层使用，不能把竞品 API 或云端转换服务当成 JWord SDK 的内部实现路线。
+
+- 实现依据：
+  - Microsoft Open XML / WordprocessingML 官方文档：作为 DOCX package、`word/document.xml`、style、numbering、relationship、media、comments、header/footer 和 schema validation 的主实现依据。
+  - ECMA-376 / ISO/IEC 29500：作为 OOXML Transitional package、namespace、part relationship、content type、paragraph/run/table/list/page setup 等格式边界的标准依据。
+  - JSZip 官方文档：只用于 DOCX zip package 的读取和生成，不负责 OOXML 语义映射。
+  - XML parser/serializer 文档：用于 namespace-safe XML 读写，必须保留 prefix、attribute、relationship id 和 unknown node 的可诊断信息。
+  - MDN Worker、AbortSignal、Blob/File、postMessage transferable 文档：用于 import/export worker、取消、进度回调和二进制传输设计。
+  - `pdf-lib` 与 fontkit 文档：用于 PDF page、text、image、path、font embedding 的基础生成能力。
+  - PDF.js 文档：只用于导出 PDF 的本地预览和截图验证，不作为 PDF 生成主路径。
+- 验证与兼容参考：
+  - Microsoft Word、WPS、LibreOffice：作为导出 DOCX 人工打开、编辑、另存和回导的兼容矩阵目标。
+  - Open XML validation：作为 DOCX package 与 schema 的自动校验目标，导出文件必须能被 validator 定位错误。
+  - ONLYOFFICE Conversion API：作为格式矩阵、转换参数、异步转换和错误码设计参考，不作为 JWord DOCX/PDF 主实现依赖。
+  - ONLYOFFICE Document Builder：作为 OOXML/PDF 互通能力和高保真转换行为参考，不引入其服务端 SDK 作为 Gate 5 主路径。
+  - LibreOffice CLI：只允许作为可选离线兼容验证工具，不允许作为 JWord PDF 导出实现方案。
+- 产品对标参考：
+  - 腾讯文档开放平台 / WebSDK：用于理解产品侧“导入、转换、预览、最大程度保留源文档样式”的用户预期，以及导入前置、上传、转换、预览这类云端工作流；不作为本地 SDK 的 OOXML mapping 或 layout 实现依据。
+  - ONLYOFFICE Docs：用于参考 OOXML-first 编辑器在导入、编辑、转换、导出之间的能力边界和用户可见 warning 口径。
+  - Google Docs / Microsoft Word Online：只作为用户体验和兼容提示参考，不作为底层技术路线依据。
+- 使用边界：
+  - 所有外部参考都必须回到 JWord 的 `canonical model -> OOXML`、`OOXML -> canonical import model`、`DocumentLayout/LayoutBox -> PDF` 三条本地路线。
+  - 能参考竞品的能力矩阵、warning 口径、导入导出流程和验收方式；不能照搬竞品云服务、闭源 SDK 或在线转换作为 SDK 核心能力。
+  - 若外部文档只描述产品/API 流程而不描述内部格式映射，应写入“产品对标参考”，不能写入“实现依据”。
+  - 后续每个 DOCX/PDF Iteration 需要在执行记录中标明参考来源、实现结论和不能兼容的降级策略，避免把“参考过”误读成“已支持”。
 
 ### 明确范围
 

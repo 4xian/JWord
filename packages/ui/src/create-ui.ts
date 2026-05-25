@@ -46,8 +46,6 @@ import { createLinkController } from './link/controller'
 import type { JWordLinkDraft, LinkControllerHandle } from './link/types'
 import { createMediaController } from './media/controller'
 import { createImageSelectionController } from './media/image-selection-controller'
-import { createMobileReadonlyPreview } from './mobile/readonly-preview'
-import type { CreateMobileReadonlyPreviewOptions } from './mobile/readonly-preview'
 import { createPasteController } from './paste/controller'
 import { createJWordInteractionGuard } from './readonly/interaction-guard'
 import type { JWordInteractionGuard } from './readonly/interaction-guard'
@@ -61,8 +59,7 @@ import type {
   JWordReadonlyOptions,
   JWordToolbarControlElement,
   JWordToolbarToolId,
-  JWordUiInstance,
-  JWordUiLiveRegionController
+  JWordUiInstance
 } from './types'
 
 interface ResolvedCommentsMount {
@@ -589,15 +586,6 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         liveRegion
       }
     })
-  const mobileReadonlyPreview = mountedEditorHost === undefined
-    ? null
-    : createMobileReadonlyPreview(buildMobileReadonlyPreviewOptions(
-      options,
-      mountedEditorHost,
-      toolbar.elements.controls,
-      liveRegion,
-      interactionGuard
-    ))
   const unsubscribeEditor = options.editor.subscribe((event) => {
     if (event.kind === 'transaction') {
       syncComments(commentsHandle, options.editor)
@@ -641,7 +629,6 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       table?.refresh()
       selectionActions?.refresh()
       imageSelection?.refresh()
-      mobileReadonlyPreview?.refresh()
       headerFooter?.refresh()
       headingOutline?.refresh()
       findReplace?.refresh()
@@ -657,7 +644,6 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       unsubscribeCommentsGeometry()
       commentsOverlay?.destroy()
       linkOverlay?.destroy()
-      mobileReadonlyPreview?.destroy()
       paste?.destroy()
       imageSelection?.destroy()
       selectionActions?.destroy()
@@ -742,29 +728,6 @@ function resolveEditorShell(editorHost: HTMLElement): HTMLElement | null {
   }
 
   return editorHost.querySelector<HTMLElement>('[data-jword-editor]')
-}
-
-/** 构造移动只读预览参数，避免 exact optional types 下传入显式 undefined。 */
-function buildMobileReadonlyPreviewOptions(
-  options: CreateJWordUiOptions,
-  editorHost: HTMLElement,
-  controls: Partial<Record<JWordToolbarToolId, JWordToolbarControlElement>>,
-  liveRegion: JWordUiLiveRegionController | null,
-  interactionGuard: JWordInteractionGuard
-): CreateMobileReadonlyPreviewOptions {
-  const readonlyOptions = normalizeReadonlyOptions(options.readonly)
-
-  return {
-    editorHost,
-    toolbarHost: options.toolbarHost,
-    controls,
-    ...(readonlyOptions.enabled === true ? { interactionGuard } : {}),
-    ...(options.readonlyPreview?.mobile === undefined ? {} : { enabled: options.readonlyPreview.mobile }),
-    ...(options.readonlyPreview?.maxWidthPx === undefined ? {} : { maxWidthPx: options.readonlyPreview.maxWidthPx }),
-    assistive: {
-      liveRegion
-    }
-  }
 }
 
 /** 规范化宿主级只读配置。 */
