@@ -13,12 +13,46 @@ import {
   createPageConfig,
   layoutDocument
 } from '@4xian/jword-core'
+import {
+  createJWordLicenseSignature,
+  type JWordLicenseEntitlement
+} from '@4xian/jword-license'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { exportPdfFromLayout } from '../src/index'
+import type { ExportPdfOptions } from '../src/index'
+import { exportPdfFromLayout as exportPdfFromLayoutPublic } from '../src/index'
+
+/** 以有效授权调用 PDF export，保持视觉报告测试聚焦于渲染证据。 */
+function exportPdfFromLayout(
+  layout: Parameters<typeof exportPdfFromLayoutPublic>[0],
+  options: ExportPdfOptions = {}
+) {
+  return exportPdfFromLayoutPublic(layout, {
+    ...options,
+    license: createVisualReportLicense()
+  })
+}
+
+/** 创建视觉报告测试使用的有效授权。 */
+function createVisualReportLicense(): JWordLicenseEntitlement {
+  const entitlement = {
+    customerId: 'customer-pdf-visual-test',
+    licenseToken: 'token-pdf-visual-test',
+    issuer: 'jword-pdf-visual-test',
+    issuedAt: '2026-05-01T00:00:00Z',
+    features: ['pdf.export'],
+    expiresAt: '2026-06-01T00:00:00Z',
+    status: 'valid' as const
+  }
+
+  return {
+    ...entitlement,
+    signature: createJWordLicenseSignature(entitlement)
+  }
+}
 
 describe('PDF visual report', () => {
   it('renders exported PDF through PDF.js and compares it with the JWord layout baseline', async () => {
@@ -144,6 +178,8 @@ describe('PDF visual report', () => {
     expect(report?.status).toBe('pass')
     expect(page?.canvasBaseline.imageBoundingBoxes).toHaveLength(1)
     expect(page?.canvasBaseline.tableLineBounds.length).toBeGreaterThan(0)
+    expect(page?.pdfTextBoundingBoxes.map((box) => box.text).join(' ')).toContain('A1')
+    expect(page?.pdfTextBoundingBoxes.map((box) => box.text).join(' ')).toContain('B1')
     expect(page?.imageBoundingBoxDeltas[0]).toMatchObject({
       expected: 1,
       actual: 1,

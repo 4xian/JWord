@@ -1,0 +1,563 @@
+{
+  "schemaVersion": 1,
+  "codes": [
+    {
+      "code": "COLLAB_PROVIDER_UNAVAILABLE",
+      "owner": "provider",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "queue-local-operations",
+      "description": "Provider is unavailable and local operations must be queued until reconnect.",
+      "domains": ["network"]
+    },
+    {
+      "code": "COLLAB_PROVIDER_AUTH_FAILED",
+      "owner": "provider",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "block-room-connection",
+      "description": "Provider authentication failed and the room connection must be blocked.",
+      "domains": ["authorization", "auth-hook", "network"]
+    },
+    {
+      "code": "COLLAB_UPDATE_REJECTED",
+      "owner": "provider",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "keep-local-update-pending",
+      "description": "Provider rejected a local update and the client must preserve it as pending.",
+      "domains": ["network"]
+    },
+    {
+      "code": "COLLAB_PROVIDER_NOT_CONNECTED",
+      "owner": "provider",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "wait-for-provider-reconnect",
+      "description": "Provider was asked to send an update before it reached a connected state.",
+      "domains": ["network"]
+    },
+    {
+      "code": "COLLAB_PROVIDER_SEND_FAILED",
+      "owner": "provider",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "keep-local-update-pending",
+      "description": "Provider failed to publish a local update and the client must keep the update pending.",
+      "domains": ["network", "offline"]
+    },
+    {
+      "code": "COLLAB_UPDATE_METADATA_MISMATCH",
+      "owner": "provider",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "reject-update-without-broadcast",
+      "description": "Update metadata does not match the provider document, room or client identity.",
+      "domains": ["network"]
+    },
+    {
+      "code": "COLLAB_PROVIDER_DESTROYED",
+      "owner": "provider",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "create-new-provider",
+      "description": "Provider was used after destroy and must not accept more updates or presence changes.",
+      "domains": ["network"]
+    },
+    {
+      "code": "COLLAB_SERVER_UNAVAILABLE",
+      "owner": "network",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "keep-single-user-editing",
+      "description": "Client could not read the collaboration server version endpoint before connecting.",
+      "domains": ["network", "version", "server"]
+    },
+    {
+      "code": "COLLAB_VERSION_MISMATCH",
+      "owner": "version",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "keep-single-user-editing",
+      "description": "Server version payload is invalid and the provider must not connect.",
+      "domains": ["version", "server"]
+    },
+    {
+      "code": "COLLAB_PROTOCOL_MISMATCH",
+      "owner": "version",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "keep-single-user-editing",
+      "description": "Client and server collaboration protocol versions are incompatible.",
+      "domains": ["version", "server"]
+    },
+    {
+      "code": "COLLAB_SERVER_TOO_OLD",
+      "owner": "version",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "keep-single-user-editing",
+      "description": "Server package version is below the client minimum server requirement.",
+      "domains": ["version", "server"]
+    },
+    {
+      "code": "COLLAB_CLIENT_TOO_OLD",
+      "owner": "version",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "keep-single-user-editing",
+      "description": "Client package version is below the server minimum client requirement.",
+      "domains": ["version", "server"]
+    },
+    {
+      "code": "COLLAB_FEATURE_FLAGS_MISSING",
+      "owner": "version",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "keep-single-user-editing",
+      "description": "Server did not advertise a feature required by the client.",
+      "domains": ["version", "server"]
+    },
+    {
+      "code": "COLLAB_AWARENESS_STALE",
+      "owner": "awareness",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "hide-stale-remote-presence",
+      "description": "Remote cursor or selection awareness is stale and should not be rendered as live.",
+      "domains": ["presence"]
+    },
+    {
+      "code": "COLLAB_AWARENESS_INVALID",
+      "owner": "awareness",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "drop-invalid-presence-payload",
+      "description": "Awareness payload parsed as JSON but does not match the public presence schema.",
+      "domains": ["presence"]
+    },
+    {
+      "code": "COLLAB_AWARENESS_PARSE_FAILED",
+      "owner": "awareness",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "drop-invalid-presence-payload",
+      "description": "Awareness payload is not valid JSON and cannot be used for presence.",
+      "domains": ["presence"]
+    },
+    {
+      "code": "COLLAB_AWARENESS_ANCHOR_UNRESOLVED",
+      "owner": "awareness",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "render-presence-without-selection",
+      "description": "Remote cursor or selection awareness references an unresolved range and should be downgraded to presence only.",
+      "domains": ["presence"]
+    },
+    {
+      "code": "OFFLINE_CACHE_SYNCED",
+      "owner": "offline",
+      "severity": "info",
+      "recoverable": true,
+      "fallback": "use-y-indexeddb-cache",
+      "description": "IndexedDB offline cache is synced with the local Y.Doc.",
+      "domains": ["offline", "storage"]
+    },
+    {
+      "code": "OFFLINE_CACHE_UNAVAILABLE",
+      "owner": "offline",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "continue-online-without-cache",
+      "description": "IndexedDB offline cache is unavailable, but online collaboration may continue.",
+      "domains": ["offline", "storage"]
+    },
+    {
+      "code": "OFFLINE_LOCAL_UPDATE_QUEUED",
+      "owner": "offline",
+      "severity": "info",
+      "recoverable": true,
+      "fallback": "preserve-local-yjs-update",
+      "description": "A local update was preserved while the provider was disconnected.",
+      "domains": ["offline"]
+    },
+    {
+      "code": "OFFLINE_RECONNECT_STARTED",
+      "owner": "offline",
+      "severity": "info",
+      "recoverable": true,
+      "fallback": "keep-local-updates-pending",
+      "description": "Provider reconnect started with local offline updates still pending.",
+      "domains": ["offline", "network"]
+    },
+    {
+      "code": "OFFLINE_RECONNECT_SYNCED",
+      "owner": "offline",
+      "severity": "info",
+      "recoverable": true,
+      "fallback": "clear-local-pending-count",
+      "description": "Pending local offline updates were synced after reconnect.",
+      "domains": ["offline", "network"]
+    },
+    {
+      "code": "OFFLINE_RECONNECT_CONFLICT_MERGED",
+      "owner": "offline",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "merge-yjs-conflict",
+      "description": "Local offline updates and remote updates were merged during reconnect.",
+      "domains": ["offline", "network"]
+    },
+    {
+      "code": "OFFLINE_RECONNECT_FAILED",
+      "owner": "offline",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "keep-local-updates-pending",
+      "description": "Provider reconnect failed and local offline updates remain pending.",
+      "domains": ["offline", "network"]
+    },
+    {
+      "code": "COLLAB_SNAPSHOT_STALE",
+      "owner": "snapshot",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "request-fresh-snapshot",
+      "description": "Snapshot metadata is older than the current update log and should be refreshed.",
+      "domains": ["history", "storage"]
+    },
+    {
+      "code": "COLLAB_SNAPSHOT_MISSING",
+      "owner": "snapshot",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "rebuild-from-update-log",
+      "description": "Snapshot metadata references a missing snapshot and the version must be rebuilt from the update log.",
+      "domains": ["history", "storage"]
+    },
+    {
+      "code": "COLLAB_HISTORY_ORIGIN_SKIPPED",
+      "owner": "history",
+      "severity": "info",
+      "recoverable": true,
+      "fallback": "skip-nonlocal-origin-in-undo",
+      "description": "Undo skipped remote or AI origins that are outside the local user scope.",
+      "domains": ["history"]
+    },
+    {
+      "code": "COLLAB_HISTORY_SERVER_FALLBACK",
+      "owner": "history",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "use-local-history-memory",
+      "description": "Client could not use server-backed history and fell back to in-memory history.",
+      "domains": ["history", "server"]
+    },
+    {
+      "code": "COLLAB_AUTH_DENIED",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "reject-protected-request",
+      "description": "Server auth hook denied a protected HTTP request before license or storage access.",
+      "domains": ["authorization", "auth-hook", "server"]
+    },
+    {
+      "code": "COLLAB_TENANT_DENIED",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "reject-tenant-scoped-request",
+      "description": "Server tenant hook denied document access before license, storage or relay work.",
+      "domains": ["authorization", "tenant-hook", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_HISTORY_STORAGE_MISSING",
+      "owner": "storage",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "disable-server-history-api",
+      "description": "Self-host server has no history storage service for the requested history operation.",
+      "domains": ["history", "storage", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_HISTORY_DOCUMENT_ID_REQUIRED",
+      "owner": "history",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "ask-client-to-resend-document-id",
+      "description": "History list request is missing a document id.",
+      "domains": ["history", "payload-limit", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_HISTORY_RECORD_PAYLOAD_INVALID",
+      "owner": "history",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "reject-invalid-history-record",
+      "description": "History record payload is invalid and must not be written to storage.",
+      "domains": ["history", "payload-limit", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_HISTORY_PREVIEW_PAYLOAD_INVALID",
+      "owner": "history",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "reject-invalid-history-preview",
+      "description": "History preview payload is invalid and must not read storage.",
+      "domains": ["history", "payload-limit", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_HISTORY_METADATA_MISMATCH",
+      "owner": "history",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "reject-history-body-metadata-mismatch",
+      "description": "History body metadata does not match URL or header metadata and must be rejected.",
+      "domains": ["history", "payload-limit", "server"]
+    },
+    {
+      "code": "COLLAB_AUTO_INSERTER_ANCHOR_REBASED",
+      "owner": "auto-inserter",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "rebase-inserter-anchor",
+      "description": "AI insertion anchor was rebased after concurrent local or remote edits.",
+      "domains": ["auto-insert"]
+    },
+    {
+      "code": "COLLAB_AUTO_INSERTER_ANCHOR_UNRESOLVED",
+      "owner": "auto-inserter",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "stop-pending-ai-flush",
+      "description": "AI insertion anchor became unresolved and pending AI text must stop flushing.",
+      "domains": ["auto-insert"]
+    },
+    {
+      "code": "COLLAB_AUTO_INSERTER_RANGE_REQUIRED",
+      "owner": "auto-inserter",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "reject-replace-without-range",
+      "description": "Replace mode requires a stable range before auto-insert text can flush.",
+      "domains": ["auto-insert"]
+    },
+    {
+      "code": "COLLAB_AUTO_INSERTER_ANCHOR_REQUIRED",
+      "owner": "auto-inserter",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "reject-insert-without-anchor",
+      "description": "Insert or append mode requires a stable anchor before auto-insert text can flush.",
+      "domains": ["auto-insert"]
+    },
+    {
+      "code": "COLLAB_AUTO_INSERTER_FLUSH_FAILED",
+      "owner": "auto-inserter",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "stop-current-auto-insert-session",
+      "description": "Auto-insert flush failed for a non-recoverable editor or transaction error.",
+      "domains": ["auto-insert"]
+    },
+    {
+      "code": "COLLAB_AUTO_INSERTER_POSITION_REQUIRED",
+      "owner": "auto-inserter",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "request-explicit-auto-insert-position",
+      "description": "Collaboration auto-insert session was started without a public position or range.",
+      "domains": ["auto-insert"]
+    },
+    {
+      "code": "COLLAB_AUTO_INSERTER_ABORTED",
+      "owner": "auto-inserter",
+      "severity": "info",
+      "recoverable": true,
+      "fallback": "keep-current-document-and-drop-pending-ai-text",
+      "description": "AI insertion was aborted and pending AI text must not be flushed.",
+      "domains": ["auto-insert"]
+    },
+    {
+      "code": "COLLAB_AUTO_INSERTER_RETRY_STARTED",
+      "owner": "auto-inserter",
+      "severity": "info",
+      "recoverable": true,
+      "fallback": "retry-auto-inserter-from-stable-anchor",
+      "description": "AI insertion retry started after a recoverable inserter failure.",
+      "domains": ["auto-insert"]
+    },
+    {
+      "code": "JWORD_COLLAB_AUTO_INSERT_RELAY_PAYLOAD_INVALID",
+      "owner": "auto-inserter",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "reject-invalid-auto-insert-relay",
+      "description": "Server auto-insert relay payload is invalid and must not accept the chunk.",
+      "domains": ["auto-insert", "payload-limit", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_AUTO_INSERT_RELAY_METADATA_MISMATCH",
+      "owner": "auto-inserter",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "reject-auto-insert-body-metadata-mismatch",
+      "description": "Auto-insert relay body metadata does not match URL or header metadata and must be rejected.",
+      "domains": ["auto-insert", "payload-limit", "server"]
+    },
+    {
+      "code": "COLLAB_RESTORE_CONFLICT_RESOLVED",
+      "owner": "restore",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "restore-local-snapshot-with-conflict-note",
+      "description": "Version restore met newer collaborative edits and resolved them through restore policy.",
+      "domains": ["history"]
+    },
+    {
+      "code": "COLLAB_LICENSE_MISSING",
+      "owner": "license",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "show-license-install-prompt",
+      "description": "Collaboration feature requires a commercial license entitlement before reading or sending document updates.",
+      "domains": ["authorization"]
+    },
+    {
+      "code": "COLLAB_LICENSE_EXPIRED",
+      "owner": "license",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "show-license-renewal-prompt",
+      "description": "Collaboration license entitlement expired and advanced collaboration must remain disabled.",
+      "domains": ["authorization"]
+    },
+    {
+      "code": "COLLAB_FEATURE_NOT_ENTITLED",
+      "owner": "license",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "disable-unentitled-collab-feature",
+      "description": "Current license entitlement does not include the requested collaboration feature key.",
+      "domains": ["authorization"]
+    },
+    {
+      "code": "COLLAB_LICENSE_SERVER_UNAVAILABLE",
+      "owner": "license",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "retry-license-status-check",
+      "description": "License status service is unavailable and paid collaboration cannot start without a confirmed entitlement.",
+      "domains": ["authorization", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_LICENSE_HOOK_REQUIRED",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "configure-server-license-hook",
+      "description": "Self-host server refused a paid endpoint because no license hook was configured.",
+      "domains": ["authorization", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_LICENSE_METADATA_REQUIRED",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "resend-license-metadata-in-url-or-header",
+      "description": "Paid endpoint metadata was missing from URL or headers and request body was not consumed.",
+      "domains": ["authorization", "payload-limit", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_LICENSE_STATUS_PAYLOAD_INVALID",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "reject-invalid-license-status-request",
+      "description": "License status HTTP payload is invalid and must not call the license hook.",
+      "domains": ["authorization", "payload-limit", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_SERVER_RATE_LIMITED",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "retry-after-rate-limit-window",
+      "description": "Self-host server rate limit rejected a request for the configured window.",
+      "domains": ["rate-limit", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_SERVER_PAYLOAD_TOO_LARGE",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "resend-smaller-request-payload",
+      "description": "HTTP request body exceeded the configured collaboration server payload limit.",
+      "domains": ["payload-limit", "server"]
+    },
+    {
+      "code": "JWORD_COLLAB_SERVER_INTERNAL_ERROR",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "surface-request-id-for-support",
+      "description": "Self-host server caught an unexpected request handling error.",
+      "domains": ["server"]
+    },
+    {
+      "code": "JWORD_COLLAB_SERVER_NOT_FOUND",
+      "owner": "server",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "check-self-host-route",
+      "description": "Self-host server did not recognize the requested route.",
+      "domains": ["server"]
+    },
+    {
+      "code": "PERSISTENCE_INDEXEDDB_UNAVAILABLE",
+      "owner": "storage",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "continue-online-without-offline-cache",
+      "description": "Current runtime cannot use IndexedDB for offline cache.",
+      "domains": ["offline", "storage"]
+    },
+    {
+      "code": "PERSISTENCE_VERSION_NOT_FOUND",
+      "owner": "storage",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "keep-current-document",
+      "description": "Requested history version does not exist or has already been removed.",
+      "domains": ["history", "storage"]
+    },
+    {
+      "code": "PERSISTENCE_SNAPSHOT_NOT_FOUND",
+      "owner": "storage",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "rebuild-from-update-log",
+      "description": "Requested snapshot is missing or its storage index is damaged.",
+      "domains": ["history", "storage"]
+    },
+    {
+      "code": "PERSISTENCE_VERSION_COMPACTED",
+      "owner": "storage",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "keep-current-document",
+      "description": "Requested version is older than the compaction boundary and cannot be restored.",
+      "domains": ["history", "storage"]
+    },
+    {
+      "code": "PERSISTENCE_RESTORE_FAILED",
+      "owner": "storage",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "keep-current-document",
+      "description": "Version restore failed while building an isolated document and the current document was not written.",
+      "domains": ["history", "storage"]
+    }
+  ]
+}

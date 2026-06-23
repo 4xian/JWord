@@ -1,0 +1,47 @@
+{
+  "fixtures": [
+    {
+      "id": "empty",
+      "description": "Empty canonical document package"
+    },
+    {
+      "id": "plain-text",
+      "description": "Plain text canonical document package"
+    },
+    {
+      "id": "formatting",
+      "description": "Text formatting canonical document package"
+    },
+    {
+      "id": "table",
+      "description": "Table canonical document package"
+    },
+    {
+      "id": "image",
+      "description": "Image resource canonical document package"
+    },
+    {
+      "id": "comments",
+      "description": "Comments canonical document package"
+    },
+    {
+      "id": "header-footer",
+      "description": "Header and footer canonical document package"
+    },
+    {
+      "id": "corrupt-resource",
+      "description": "Package with a corrupt resource entry",
+      "expectedDiagnostics": [
+        "JWORD_NATIVE_HASH_MISMATCH"
+      ]
+    },
+    {
+      "id": "old-schema",
+      "description": "Old schema package for migration coverage",
+      "expectedMigration": {
+        "sourceVersion": 0,
+        "targetVersion": 1
+      }
+    }
+  ]
+}

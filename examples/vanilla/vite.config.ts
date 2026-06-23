@@ -22,6 +22,14 @@ export function createVanillaDemoViteConfig() {
           replacement: fileURLToPath(new URL('../../packages/ui/src/styles/toolbar.css', import.meta.url))
         },
         {
+          find: '@4xian/jword-native/worker',
+          replacement: fileURLToPath(new URL('../../packages/native/src/worker.ts', import.meta.url))
+        },
+        {
+          find: '@4xian/jword-native',
+          replacement: fileURLToPath(new URL('../../packages/native/src/index.ts', import.meta.url))
+        },
+        {
           find: '@4xian/jword-ui',
           replacement: fileURLToPath(new URL('../../packages/ui/src/index.ts', import.meta.url))
         }

@@ -9,10 +9,15 @@
  */
 
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
 import { importDocx } from '../src/index'
+import { createDocxPublicApiLicense } from './public-api-fixtures'
+
+const repoRoot = fileURLToPath(new URL('../../..', import.meta.url))
 
 describe('Gate 5 T1 DOCX fixtures', () => {
   it('imports the real run styles fixture without warnings', async () => {
@@ -333,7 +338,8 @@ interface Gate5DocxFixture {
 
 /** 读取指定 DOCX fixture 的 registry 记录。 */
 function readDocxFixture(fixtureId: string): Gate5DocxFixture {
-  const registry = JSON.parse(readFileSync('fixtures/docx/registry.json', 'utf8')) as Gate5DocxRegistry
+  const registryPath = join(repoRoot, 'fixtures/docx/registry.json')
+  const registry = JSON.parse(readFileSync(registryPath, 'utf8')) as Gate5DocxRegistry
   const fixture = registry.fixtures.find((item) => item.id === fixtureId)
 
   if (fixture === undefined) {
@@ -353,9 +359,10 @@ async function importDocxFixture(fixtureId: string): Promise<{
   expect(fixture.status).toBe('fixture-input-ready')
   expect(fixture.input?.state).toBe('available')
 
-  const bytes = readFileSync(fixture.input.path)
+  const bytes = readFileSync(join(repoRoot, fixture.input.path))
   const result = await importDocx(bytes, {
-    requestId: `${fixtureId}-fixture`
+    requestId: `${fixtureId}-fixture`,
+    license: createDocxPublicApiLicense(['docx.import'])
   })
 
   return {

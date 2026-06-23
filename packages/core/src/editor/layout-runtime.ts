@@ -12,11 +12,11 @@ import { twipsToCssPx } from '../layout/page-config'
 import { isSelectionCollapsed } from '../model/selection'
 import type { Command, TextPosition } from '../operations/transaction'
 import { computeViewportPages } from '../canvas/viewport-virtualizer'
-import { JWordEditorFacadeRuntime } from './facade-runtime'
+import { JWordEditorMountFacadeRuntime } from './mount-facade-runtime'
 import { createPageStartKeys, isSameTextPosition, mergePageIndexes, renderPageBatch, resolveCanvasPixelRatio, resolveOperationDirtyPageIndexes } from './rendering'
 import type { RenderReason, TransientLayoutQuerySnapshot } from './types'
 
-export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime {
+export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRuntime {
   protected renderMountedLayout(reason: RenderReason): void {
     const mountedDom = this.mountedDom
 

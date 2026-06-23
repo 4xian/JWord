@@ -10,11 +10,100 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DocumentProjection } from '@4xian/jword-core'
+import { createJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
 
 import { createCancelDocxRequest, exportDocx, type DocxWorkerEvent } from '../src/index'
 import { dispatchDocxWorkerRequest } from '../src/worker'
 
 describe('@4xian/jword-docx worker runtime', () => {
+  it('fails import before reading invalid bytes when license is missing', async () => {
+    const posted: DocxWorkerEvent[] = []
+    const event = await dispatchDocxWorkerRequest(
+      {
+        type: 'import',
+        requestId: 'docx-worker-license-missing-import-1',
+        input: new ArrayBuffer(0),
+        options: {
+          requestId: 'docx-worker-license-missing-import-1'
+        }
+      },
+      (response) => {
+        posted.push(response)
+      }
+    )
+
+    expect(event).toMatchObject({
+      type: 'error',
+      requestId: 'docx-worker-license-missing-import-1',
+      error: {
+        name: 'JWordLicenseError',
+        code: 'JWORD_LICENSE_MISSING',
+        feature: 'docx.import',
+        requestId: 'docx-worker-license-missing-import-1'
+      }
+    })
+    expect(posted).toEqual([event])
+  })
+
+  it('fails export before producing bytes when license lacks the export feature', async () => {
+    const posted: DocxWorkerEvent[] = []
+    const event = await dispatchDocxWorkerRequest(
+      {
+        type: 'export',
+        requestId: 'docx-worker-license-mismatch-export-1',
+        document: createWorkerProjection(),
+        options: {
+          requestId: 'docx-worker-license-mismatch-export-1',
+          license: createWorkerLicense(['docx.import'])
+        }
+      },
+      (response) => {
+        posted.push(response)
+      }
+    )
+
+    expect(event).toMatchObject({
+      type: 'error',
+      requestId: 'docx-worker-license-mismatch-export-1',
+      error: {
+        name: 'JWordLicenseError',
+        code: 'JWORD_FEATURE_NOT_ENTITLED',
+        feature: 'docx.export',
+        requestId: 'docx-worker-license-mismatch-export-1'
+      }
+    })
+    expect(posted).toEqual([event])
+  })
+
+  it('fails inspect before reading invalid bytes when license is missing', async () => {
+    const posted: DocxWorkerEvent[] = []
+    const event = await dispatchDocxWorkerRequest(
+      {
+        type: 'inspect',
+        requestId: 'docx-worker-license-missing-inspect-1',
+        input: new ArrayBuffer(0),
+        options: {
+          requestId: 'docx-worker-license-missing-inspect-1'
+        }
+      },
+      (response) => {
+        posted.push(response)
+      }
+    )
+
+    expect(event).toMatchObject({
+      type: 'error',
+      requestId: 'docx-worker-license-missing-inspect-1',
+      error: {
+        name: 'JWordLicenseError',
+        code: 'JWORD_LICENSE_MISSING',
+        feature: 'docx.import',
+        requestId: 'docx-worker-license-missing-inspect-1'
+      }
+    })
+    expect(posted).toEqual([event])
+  })
+
   it('dispatches cancel requests and posts the stable response', async () => {
     const posted: DocxWorkerEvent[] = []
     const event = await dispatchDocxWorkerRequest(
@@ -45,7 +134,8 @@ describe('@4xian/jword-docx worker runtime', () => {
         requestId: 'docx-worker-cancel-running-1',
         document: createWorkerProjection(),
         options: {
-          requestId: 'docx-worker-cancel-running-1'
+          requestId: 'docx-worker-cancel-running-1',
+          license: createWorkerLicense(['docx.export'])
         }
       },
       (response) => {
@@ -83,7 +173,8 @@ describe('@4xian/jword-docx worker runtime', () => {
 
   it('aborts an in-flight inspect request with the same request id', async () => {
     const exportResult = await exportDocx(createWorkerProjection(), {
-      requestId: 'docx-worker-inspect-source-1'
+      requestId: 'docx-worker-inspect-source-1',
+      license: createWorkerLicense(['docx.export'])
     })
     const posted: DocxWorkerEvent[] = []
     const inspectTask = dispatchDocxWorkerRequest(
@@ -92,7 +183,8 @@ describe('@4xian/jword-docx worker runtime', () => {
         requestId: 'docx-worker-cancel-inspect-1',
         input: exportResult.bytes,
         options: {
-          requestId: 'docx-worker-cancel-inspect-1'
+          requestId: 'docx-worker-cancel-inspect-1',
+          license: createWorkerLicense(['docx.import'])
         }
       },
       (response) => {
@@ -126,7 +218,8 @@ describe('@4xian/jword-docx worker runtime', () => {
         requestId: 'docx-worker-export-1',
         document: createWorkerProjection(),
         options: {
-          requestId: 'docx-worker-export-1'
+          requestId: 'docx-worker-export-1',
+          license: createWorkerLicense(['docx.export'])
         }
       },
       (response) => {
@@ -150,7 +243,8 @@ describe('@4xian/jword-docx worker runtime', () => {
 
   it('dispatches import requests and posts the DOCX import response', async () => {
     const exportResult = await exportDocx(createWorkerProjection(), {
-      requestId: 'docx-worker-import-source-1'
+      requestId: 'docx-worker-import-source-1',
+      license: createWorkerLicense(['docx.export'])
     })
     const posted: DocxWorkerEvent[] = []
     const event = await dispatchDocxWorkerRequest(
@@ -159,7 +253,8 @@ describe('@4xian/jword-docx worker runtime', () => {
         requestId: 'docx-worker-import-1',
         input: exportResult.bytes,
         options: {
-          requestId: 'docx-worker-import-1'
+          requestId: 'docx-worker-import-1',
+          license: createWorkerLicense(['docx.import'])
         }
       },
       (response) => {
@@ -181,6 +276,24 @@ describe('@4xian/jword-docx worker runtime', () => {
     expect(posted).toEqual([event])
   })
 })
+
+/** 创建 DOCX worker 测试使用的有效授权。 */
+function createWorkerLicense(features: readonly string[]): JWordLicenseEntitlement {
+  const entitlement: JWordLicenseSignaturePayload = {
+    customerId: 'customer-docx-worker',
+    licenseToken: 'token-docx-worker',
+    features,
+    issuer: 'jword-test-issuer',
+    issuedAt: '2026-05-01T00:00:00Z',
+    expiresAt: '2026-06-01T00:00:00Z',
+    status: 'valid' as const
+  }
+
+  return {
+    ...entitlement,
+    signature: createJWordLicenseSignature(entitlement)
+  }
+}
 
 /** 创建 DOCX worker 测试使用的最小 projection。 */
 function createWorkerProjection(): DocumentProjection {

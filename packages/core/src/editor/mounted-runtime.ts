@@ -178,6 +178,16 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
     this.syncMountedAssistiveDom(this.cachedLayout ?? this.ensureCurrentLayout())
   }
 
+  /** 共享事务刷新文档后，同步当前稳定 selection 到新的正文位置。 */
+  protected refreshSelectionAfterSharedTransaction(previousSelection: SelectionState | null): void {
+    if (this.currentSelection === null) {
+      return
+    }
+
+    this.refreshMountedSelectionRuntime(previousSelection)
+    this.emitSelectionChange()
+  }
+
   protected syncCaretBlinkState(): void {
     this.stopCaretBlink()
 

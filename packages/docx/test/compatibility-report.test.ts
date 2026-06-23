@@ -15,16 +15,19 @@ import {
   createDocxCompatibilityReport,
   exportDocx
 } from '../src/index'
+import { createDocxPublicApiLicense } from './public-api-fixtures'
 
 describe('@4xian/jword-docx compatibility report', () => {
   it('records automated checks and pending manual app checks without compatibility percent', async () => {
     const exportResult = await exportDocx(createCompatibilityProjection(), {
-      requestId: 'docx-compat-export-1'
+      requestId: 'docx-compat-export-1',
+      license: createDocxPublicApiLicense(['docx.export'])
     })
     const report = await createDocxCompatibilityReport(exportResult.bytes, {
       fixtureId: 'docx-t1-compat-smoke',
       exportArtifact: 'memory://docx-t1-compat-smoke.docx',
-      requestId: 'docx-compat-report-1'
+      requestId: 'docx-compat-report-1',
+      license: createDocxPublicApiLicense(['docx.import', 'docx.export'])
     })
 
     expect(report.fixtureId).toBe('docx-t1-compat-smoke')
@@ -87,11 +90,13 @@ describe('@4xian/jword-docx compatibility report', () => {
 
   it('keeps missing manual app checks pending when one app result is provided', async () => {
     const exportResult = await exportDocx(createCompatibilityProjection(), {
-      requestId: 'docx-compat-export-2'
+      requestId: 'docx-compat-export-2',
+      license: createDocxPublicApiLicense(['docx.export'])
     })
     const report = await createDocxCompatibilityReport(exportResult.bytes, {
       fixtureId: 'docx-t1-compat-partial-app',
       exportArtifact: 'memory://docx-t1-compat-partial-app.docx',
+      license: createDocxPublicApiLicense(['docx.import', 'docx.export']),
       appResults: [
         {
           app: 'Word',
@@ -138,11 +143,13 @@ describe('@4xian/jword-docx compatibility report', () => {
 
   it('derives Open XML validator status from structured diagnostics', async () => {
     const exportResult = await exportDocx(createCompatibilityProjection(), {
-      requestId: 'docx-compat-export-3'
+      requestId: 'docx-compat-export-3',
+      license: createDocxPublicApiLicense(['docx.export'])
     })
     const report = await createDocxCompatibilityReport(exportResult.bytes, {
       fixtureId: 'docx-t1-compat-validator',
       exportArtifact: 'memory://docx-t1-compat-validator.docx',
+      license: createDocxPublicApiLicense(['docx.import', 'docx.export']),
       openXmlValidation: {
         evidence: 'openxml-validator-cli',
         diagnostics: [

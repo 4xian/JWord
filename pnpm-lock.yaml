@@ -90,6 +90,40 @@ importers:
 
   benchmarks: {}
 
+  examples/collab:
+    dependencies:
+      '@4xian/jword-collab':
+        specifier: workspace:*
+        version: link:../../packages/collab
+      '@4xian/jword-collab-server':
+        specifier: workspace:*
+        version: link:../../packages/collab-server
+      '@4xian/jword-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@4xian/jword-docx':
+        specifier: workspace:*
+        version: link:../../packages/docx
+      '@4xian/jword-license':
+        specifier: workspace:*
+        version: link:../../packages/license
+      '@4xian/jword-persistence':
+        specifier: workspace:*
+        version: link:../../packages/persistence
+      '@4xian/jword-ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@hocuspocus/server':
+        specifier: 4.0.0
+        version: 4.0.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
+    devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 8.0.12
+        version: 8.0.12(@types/node@25.6.2)(jiti@2.6.1)
+
   examples/docx:
     dependencies:
       '@4xian/jword-core':
@@ -98,6 +132,9 @@ importers:
       '@4xian/jword-docx':
         specifier: workspace:*
         version: link:../../packages/docx
+      '@4xian/jword-license':
+        specifier: workspace:*
+        version: link:../../packages/license
       '@4xian/jword-pdf':
         specifier: workspace:*
         version: link:../../packages/pdf
@@ -117,6 +154,9 @@ importers:
       '@4xian/jword-core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@4xian/jword-native':
+        specifier: workspace:*
+        version: link:../../packages/native
       '@4xian/jword-ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -128,6 +168,36 @@ importers:
         specifier: 8.0.12
         version: 8.0.12(@types/node@25.6.2)(jiti@2.6.1)
 
+  packages/collab:
+    dependencies:
+      '@4xian/jword-core':
+        specifier: workspace:*
+        version: link:../core
+      '@4xian/jword-license':
+        specifier: workspace:*
+        version: link:../license
+      '@hocuspocus/provider':
+        specifier: 4.0.0
+        version: 4.0.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
+      y-protocols:
+        specifier: 1.0.7
+        version: 1.0.7(yjs@13.6.30)
+      yjs:
+        specifier: 13.6.30
+        version: 13.6.30
+
+  packages/collab-server:
+    dependencies:
+      '@4xian/jword-license':
+        specifier: workspace:*
+        version: link:../license
+      '@4xian/jword-persistence':
+        specifier: workspace:*
+        version: link:../persistence
+      '@hocuspocus/server':
+        specifier: 4.0.0
+        version: 4.0.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)
+
   packages/core:
     dependencies:
       yjs:
@@ -135,6 +205,20 @@ importers:
         version: 13.6.30
 
   packages/docx:
+    dependencies:
+      '@4xian/jword-core':
+        specifier: workspace:*
+        version: link:../core
+      '@4xian/jword-license':
+        specifier: workspace:*
+        version: link:../license
+      jszip:
+        specifier: 3.10.1
+        version: 3.10.1
+
+  packages/license: {}
+
+  packages/native:
     dependencies:
       '@4xian/jword-core':
         specifier: workspace:*
@@ -148,6 +232,9 @@ importers:
       '@4xian/jword-core':
         specifier: workspace:*
         version: link:../core
+      '@4xian/jword-license':
+        specifier: workspace:*
+        version: link:../license
       fontkit:
         specifier: 2.0.4
         version: 2.0.4
@@ -157,6 +244,15 @@ importers:
       pdfjs-dist:
         specifier: 4.10.38
         version: 4.10.38
+
+  packages/persistence:
+    dependencies:
+      y-indexeddb:
+        specifier: 9.0.12
+        version: 9.0.12(yjs@13.6.30)
+      yjs:
+        specifier: 13.6.30
+        version: 13.6.30
 
   packages/ui:
     dependencies:
@@ -373,6 +469,12 @@ packages:
   '@hocuspocus/common@4.0.0':
     resolution: {integrity: sha512-7BE8TsKBkdiOZO6tfm3ny6bIHPbxkIZb3hsYdVn/X5xbXI8n8w9pnE6pXgEMKQhJm6zsWsa9IDRJIp/c9u+DmA==}
 
+  '@hocuspocus/provider@4.0.0':
+    resolution: {integrity: sha512-08gpeNZ6x2pmRD6m4XwRD52yQKnTl32a0HS9VSXZ5A1dIBVqxMz/x8Z06XbkKM2X8sp6vWEUCZCtzAGFSsofgg==}
+    peerDependencies:
+      y-protocols: ^1.0.6
+      yjs: ^13.6.8
+
   '@hocuspocus/server@4.0.0':
     resolution: {integrity: sha512-Pgm+kVtTrVvybIJUVot5XumSzD8rPLQglUV0QAAiN6J64dkYc2wWNdGcMwJz3q3yJPV0dO+eRU9JEck+iVdgzQ==}
     engines: {node: '>=22'}
@@ -415,6 +517,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@lifeomic/attempt@3.1.0':
+    resolution: {integrity: sha512-QZqem4QuAnAyzfz+Gj5/+SLxqwCAw2qmt7732ZXodr6VDWGeYLG6w1i/vYLa55JQM9wRuBKLmXmiZ2P0LtE5rw==}
 
   '@napi-rs/canvas-android-arm64@0.1.100':
     resolution: {integrity: sha512-hjhCKhntPv9+t4ckHymdx0phYNcVW+GKQR6Lzw2zE+pOVjOplSmtx9nNNknTjbEDLcuLZqA1y8ufKg1XfgftzQ==}
@@ -1855,12 +1960,30 @@ packages:
     resolution: {integrity: sha512-42AtmgqjV+X1VpdOfyTGOYRi0/zsoLqtXQckTmqTeybT+BDIbM/Guxo7x3pE2vtpr1ok6xRqM9OpBe+Jyoqyww==}
     engines: {node: '>=18'}
 
+  ws@8.21.0:
+    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
 
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
+
+  y-indexeddb@9.0.12:
+    resolution: {integrity: sha512-9oCFRSPPzBK7/w5vOkJBaVCQZKHXB/v6SIT+WYhnJxlEC61juqG0hBrAf+y3gmSMLFLwICNH9nQ53uscuse6Hg==}
+    engines: {node: '>=16.0.0', npm: '>=8.0.0'}
+    peerDependencies:
+      yjs: ^13.0.0
 
   y-protocols@1.0.7:
     resolution: {integrity: sha512-YSVsLoXxO67J6eE/nV4AtFtT3QEotZf5sK5BHxFBXso7VDUT3Tx07IfA6hsu5Q5OmBdMkQVmFZ9QOA7fikWvnw==}
@@ -2118,6 +2241,18 @@ snapshots:
     dependencies:
       lib0: 0.2.117
 
+  '@hocuspocus/provider@4.0.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)':
+    dependencies:
+      '@hocuspocus/common': 4.0.0
+      '@lifeomic/attempt': 3.1.0
+      lib0: 0.2.117
+      ws: 8.21.0
+      y-protocols: 1.0.7(yjs@13.6.30)
+      yjs: 13.6.30
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   '@hocuspocus/server@4.0.0(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30)':
     dependencies:
       '@hocuspocus/common': 4.0.0
@@ -2164,6 +2299,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@lifeomic/attempt@3.1.0': {}
 
   '@napi-rs/canvas-android-arm64@0.1.100':
     optional: true
@@ -3458,9 +3595,16 @@ snapshots:
       string-width: 7.2.0
       strip-ansi: 7.2.0
 
+  ws@8.21.0: {}
+
   xml-name-validator@5.0.0: {}
 
   xmlchars@2.2.0: {}
+
+  y-indexeddb@9.0.12(yjs@13.6.30):
+    dependencies:
+      lib0: 0.2.117
+      yjs: 13.6.30
 
   y-protocols@1.0.7(yjs@13.6.30):
     dependencies:

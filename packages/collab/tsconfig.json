@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "declaration": true,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "exactOptionalPropertyTypes": true,
+    "ignoreDeprecations": "6.0",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "paths": {
+      "@4xian/jword-core": [
+        "packages/core/dist/index.d.ts"
+      ],
+      "@4xian/jword-license": [
+        "packages/license/dist/index.d.ts"
+      ]
+    },
+    "target": "ES2022",
+    "useUnknownInCatchVariables": true
+  },
+  "exclude": [
+    "dist"
+  ],
+  "include": [
+    "src/**/*.ts"
+  ]
+}

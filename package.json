@@ -17,7 +17,7 @@
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test --project=perf-chromium --pass-with-no-tests",
     "test:visual": "node tools/visual/run-visual.mjs",
-    "build": "rollup -c",
+    "build": "rollup -c && node tools/release/normalize-dist-relative-imports.mjs",
     "dev": "node tools/dev/run-dev.mjs",
     "bench": "node tools/bench/run-bench.mjs",
     "size": "pnpm build && pnpm --filter @4xian/jword-example-vanilla build && node tools/size/check-size.mjs"

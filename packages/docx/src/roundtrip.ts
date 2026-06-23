@@ -21,8 +21,8 @@ import type {
   DocxImportTable,
   DocxWarning,
   ImportDocxOptions
-} from './index'
-import { convertDocxImportDocumentToCoreDocument } from './model'
+} from './index.js'
+import { convertDocxImportDocumentToCoreDocument } from './model.js'
 
 export interface DocxRoundtripDiffOptions extends ImportDocxOptions {}
 
@@ -93,7 +93,7 @@ export async function diffDocxRoundtrip(
   input: DocxBinaryInput,
   options: DocxRoundtripDiffOptions = {}
 ): Promise<DocxRoundtripDiffResult> {
-  const { exportDocx, importDocx } = await import('./index')
+  const { exportDocx, importDocx } = await import('./index.js')
   const importResult = await importDocx(input, options)
   const editor = createEditor()
 

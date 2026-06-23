@@ -4,9 +4,9 @@
 
 **Goal:** 按 canonical specs 从 0 到 1 实现 JWord 类 Word 在线编辑器 SDK，并保证第一天开始就是最终路线：分页 Canvas、Y.Doc 真源、OOXML 语义模型、统一 transaction pipeline、worker 互通、framework-agnostic core。
 
-**Architecture:** `@4xian/jword-core` 负责状态、事务、投影、排版、渲染、输入、历史和 Editor Facade；UI、docx、PDF、协同、持久化、devtools、React/Vue wrapper 都是独立包。所有编辑来源都先变成 Command/Operation，再进入 `ydoc.transact(origin)`，Layout/Render/docx/PDF 只消费只读 projection 或 LayoutBox。
+**Architecture:** `@4xian/jword-core` 负责状态、事务、投影、排版、渲染、输入、历史和 Editor Facade；UI、JWord 原生格式、docx、PDF、协同、协同服务端、授权、devtools、React/Vue wrapper 都是独立包。基础编辑器必须能用 JWord 原生 `.jword` 格式保存和打开；DOCX/PDF 互通、多人协作、离线和自动插入属于商业高级能力。所有编辑来源都先变成 Command/Operation，再进入 `ydoc.transact(origin)`，Layout/Render/native/docx/PDF 只消费公开 canonical model、只读 projection 或 LayoutBox。
 
-**Tech Stack:** pnpm workspace, TypeScript 6 strict, ESLint 10 flat config, Rollup, Vite, Vitest, Playwright, Yjs, DOMPurify, JSZip, pdf-lib, fontkit, hocuspocus 示例服务。依赖必须固定精确版本，不写 `^` 或 `~`。
+**Tech Stack:** pnpm workspace, TypeScript 6 strict, ESLint 10 flat config, Rollup, Vite, Vitest, Playwright, Yjs, DOMPurify, JSZip, Web Crypto, pdf-lib, fontkit, hocuspocus self-host 服务。依赖必须固定精确版本，不写 `^` 或 `~`。
 
 ---
 
@@ -32,8 +32,8 @@
 内部按 Gate 管理，外部只保留少量版本口径：
 
 - `0.1-alpha`：完成 Gate 0-3，证明最终架构可行，能编辑基础分页文档。
-- `0.5-beta`：完成 Gate 4-5 的 T1 能力，证明企业常用结构和 docx/PDF 基础互通可用。
-- `1.0-stable`：完成 Gate 6-7，证明协同、自动插入、SDK 集成、插件、诊断稳定。
+- `0.5-beta`：完成 Gate 4、Gate 4.5 和 Gate 5 的 T1 能力，证明企业常用结构、JWord 原生保存/打开、商业格式互通主路径和付费授权边界可用。
+- `1.0-stable`：完成 Gate 6-7，证明商业协作、自动插入、离线、授权、SDK 集成、插件、诊断稳定。
 - `post-1.0`：复杂 OOXML、复杂修订、脚注尾注、复杂浮动对象、复杂表格深度兼容。
 
 ### 0.3 全局硬约束
@@ -48,23 +48,29 @@
 - [ ] Layout/Render 只能读 `DocumentProjection` 或 `LayoutBox`，不能直接读写 Y.Doc。
 - [ ] import/export 必须在 worker 中执行，支持 progress、warning、cancel。
 - [ ] HTML 清洗必须使用 DOMPurify 或安全 `textContent` 路线，禁止正则 sanitizer。
+- [ ] 免费基础包不得 import 商业高级包；商业高级包只能通过公开 facade 和中立 hook 接入 core。
+- [ ] 商业高级能力必须有授权边界、版本兼容策略、诊断错误码和真实第三方集成示例。
 - [ ] 文档计划和实现过程不得自动 commit、tag、publish；这些动作必须人工审批。
 
 ### 0.4 目标包结构
 
 - [ ] `packages/core`：`@4xian/jword-core`，状态、事务、projection、layout、render、input、history、plugin host、Editor Facade。
 - [ ] `packages/ui`：`@4xian/jword-ui`，原生 TS 工具栏、菜单、状态栏、批注栏、基础对话框。
-- [ ] `packages/docx`：`@4xian/jword-docx`，OOXML import/export、fixture diff、worker bridge。
-- [ ] `packages/pdf`：`@4xian/jword-pdf`，LayoutBox 到 PDF、字体配置、worker bridge。
-- [ ] `packages/collab`：`@4xian/jword-collab`，provider adapter、awareness、remote cursor、offline、snapshot adapter。
-- [ ] `packages/persistence`：`@4xian/jword-persistence`，IndexedDB、本地恢复、保存适配器。
+- [x] `packages/native`：`@4xian/jword-native`，免费 `.jword` 原生保存/打开、资源打包、schema migration、worker bridge。
+  - 完成 2026-05-27：`packages/native` 已落地公开 API、worker runtime、fixture registry、release dry-run、benchmark 和 vanilla lazy worker 集成；验证记录见 Gate 4.5 执行记录。
+- [ ] `packages/docx`：`@4xian/jword-docx`，商业高级 OOXML import/export、fixture diff、worker bridge、授权校验。
+- [ ] `packages/pdf`：`@4xian/jword-pdf`，商业高级 LayoutBox 到 PDF、字体配置、worker bridge、授权校验。
+- [ ] `packages/collab`：`@4xian/jword-collab`，商业高级 provider adapter、awareness、remote cursor、offline、snapshot adapter、auto-insert client。
+- [ ] `packages/collab-server`：`@4xian/jword-collab-server`，商业高级 self-host 协同服务、history API、auth/tenant/storage/license hook。
+- [ ] `packages/license`：`@4xian/jword-license`，商业授权 entitlement 类型、签名验证、feature matrix 和 client/server handshake 契约。
+- [ ] `packages/persistence`：`@4xian/jword-persistence`，基础 storage contract、商业离线恢复和协作 history 后端复用的存储适配器。
 - [ ] `packages/devtools`：`@4xian/jword-devtools`，operation log、layout overlay、diagnostics panel。
 - [ ] `packages/react`：`@4xian/jword-react`，React 生命周期 wrapper。
 - [ ] `packages/vue`：`@4xian/jword-vue`，Vue 3 生命周期 wrapper。
 - [x] `examples/vanilla`：基础集成示例，所有 gate 的第一验证目标。
 - [ ] `examples/react`：React wrapper 集成示例。
 - [ ] `examples/vue`：Vue wrapper 集成示例。
-- [ ] `examples/collab`：hocuspocus 示例服务和双窗口协同验证。
+- [ ] `examples/collab`：真实第三方接入式协作示例，只使用公开包入口和 self-host server。
 - [ ] `fixtures`：文档、OOXML、PDF、协同、性能、视觉回归样本。
 - [ ] `benchmarks`：layout、render、input、docx/PDF、collab 压测。
 - [ ] `tools`：自定义 lint、fixture diff、bundle size、visual report、release dry-run 工具。
@@ -668,17 +674,150 @@
 - [x] 不把复杂修订接受/拒绝作为 `1.0-stable` 强承诺。
   - 完成 2026-05-24：`packages/ui/src/revisions/controller.ts` 只负责 revision metadata 的列表展示与定位，不实现 accept/reject 深度流程；当前 Gate 4 计划仍把复杂接受/拒绝明确保留到 post-1.0。
 
-## Gate 5 - DOCX 导入导出与 PDF 导出
+## Gate 4.5 - JWord 原生保存与打开
 
 ### 目标
 
-建立可演进的 DOCX 导入、DOCX 导出和 PDF 导出能力。Beta 阶段先保证常见 DOCX 导入后能保留基础格式和内容，导出 DOCX 后能重新导入并保持 T1 能力不丢结构、不丢样式、不丢资源；PDF 范围只包含从 JWord 当前文档导出 PDF，不包含 PDF 导入、PDF 编辑或 PDF 查看器能力。
+补齐基础编辑器的原生保存能力，使免费基础版在不依赖 DOCX/PDF 高级包的情况下也能保存、重新打开、继续编辑同一份文档。Gate 4.5 交付后，第三方宿主可以把当前 JWord 文档保存为 `.jword` 文件或字节流，再通过公开 API 加载回编辑器，资源、基础格式、表格、图片、批注、目录、页眉页脚和当前已支持的 canonical model 字段不丢失。
 
 ### 实现方案
 
-DOCX 主路径为 `JSZip + XML parser/serializer + 自研 OOXML mapping + canonical model`。PDF 主路径为 `DocumentLayout/LayoutBox -> PDF`，直接复用 JWord 分页布局结果，不使用浏览器打印、LibreOffice 转换或第三方在线服务作为主导出方案。导入、导出和 PDF 生成都放在独立包、独立 worker 和 lazy-load 边界内，避免进入 core 或首屏 bundle。
+新增 `@4xian/jword-native` 作为免费基础包。`.jword` 是 JWord 自己的原生 zip package，不是 DOCX，也不是 Y.Doc binary 的裸导出。主格式保存公开 canonical document model、资源文件、manifest、metadata 和校验信息；Y.Doc binary 只能作为可选加速或协作恢复信息，不能成为唯一可读主格式。这样后续即使内部协同实现、Yjs schema 或存储布局变化，`.jword` 文件仍可通过 schema migration 加载。
+
+`.jword` package 结构固定为：
+
+- `manifest.json`：格式标识、formatVersion、schemaVersion、createdBy、minimumReaderVersion、featureFlags、packageEntries。
+- `document.json`：JWord canonical document model，只包含公开模型字段，不保存 DOM、canvas layout cache、projection JSON 或内部 Y.Doc store。
+- `resources/`：图片、嵌入资源和资源 manifest 中声明的二进制文件。
+- `metadata.json`：标题、作者、创建时间、最后修改时间、应用版本、可选业务 metadata。
+- `checksums.json`：每个 entry 的 hash、byteLength 和 MIME type，用于损坏诊断。
+
+### 明确范围
+
+- [x] 支持导出 `.jword` 文件或 `Blob` / `Uint8Array`。
+- [x] 支持从 `.jword` 文件或 `Blob` / `Uint8Array` 解析出 canonical document model。
+- [x] 支持 `editor.loadDocumentModel()` 加载 `.jword` 解析结果并继续编辑。
+- [x] 支持资源打包、资源引用校验、缺失资源 warning 和损坏文件 error。
+- [x] 支持 schema migration：旧版可迁移文件给出 migration report，无法迁移时给明确 diagnostic。
+- [x] 支持 worker progress、warning、cancel 和大文件不阻塞输入。
+- [x] 不支持把 `.jword` 当作 DOCX、PDF 或协作 history 格式。
+- [x] 不支持保存 layout/render cache 作为可写真源。
+
+### 当前基线（2026-05-27）
+
+- [x] Gate 1-4 已有 canonical model、projection、resource registry、transaction pipeline、`loadDocumentModel()`、资源和结构化内容的基础能力。
+- [x] Gate 5 已有 DOCX 导入后进入 canonical model 的经验，但 DOCX/PDF 属于高级格式互通，不能替代基础保存能力。
+- [x] 已建立独立的 `.jword` 原生格式 package、格式 manifest、资源 checksum、schema migration 和真实保存/打开 demo。
+- [x] `examples/vanilla` 已有只依赖基础包公开 API 的保存/打开入口，native 实现按需进入 worker。
+
+### 推荐执行顺序
+
+1. 先冻结 `.jword` package 结构、manifest schema、document model 边界和禁止保存的内部状态。
+2. 再建立 `@4xian/jword-native` 的公开类型、worker message、diagnostics 和 fixture registry。
+3. 先做最小纯文本/段落 roundtrip，再扩展到 Gate 4 的表格、图片、批注、目录、页眉页脚和修订 metadata。
+4. 随后接入 `examples/vanilla` 保存/打开入口，验证第三方宿主只通过公开 API 完成原生保存/加载。
+5. 最后补 migration、checksum、损坏文件诊断、benchmark、bundle gate 和文档计划。
+
+### 迭代任务清单
+
+#### Iteration 0 - 冻结原生格式契约
+
+- [x] 冻结 `.jword` zip entries：`manifest.json`、`document.json`、`metadata.json`、`checksums.json`、`resources/`。
+- [x] 冻结 `formatVersion` 与 `schemaVersion` 规则：formatVersion 表示 package 结构，schemaVersion 表示 canonical document model。
+- [x] 冻结禁止保存项：DOM selection、canvas bitmap、layout cache、projection cache、内部 Y.Doc shared type、provider state、license token。
+- [x] 建立 fixture registry，至少包含 empty、plain-text、formatting、table、image、comments、header-footer、corrupt-resource、old-schema。
+
+#### Iteration 1 - `@4xian/jword-native` 公开 API 与 worker
+
+- [x] 建立 `packages/native`，只在有 contract tests、fixture 或真实 demo 入口时创建，不预建空壳。
+- [x] 定义公开 API：`saveJWordDocument(editorOrModel, options)`、`loadJWordDocument(input, options)`、`validateJWordPackage(input)`。
+- [x] 定义返回类型：result、warning、diagnostic、progress、cancel、resource manifest、migration report。
+- [x] 建立 worker runtime，保存和打开都支持 `requestId`、`AbortSignal`、progress、warning、cancel。
+- [x] 建立类型测试，确保外部 TypeScript 项目不用 import core 内部类型也能调用保存/打开。
+
+#### Iteration 2 - document model roundtrip
+
+- [x] 从 editor 读取公开 canonical document model，不直接读取 `document-store` 内部结构。
+- [x] 保存 `document.json` 时保留段落、run、inline image ref、表格、批注、目录目标、section、header/footer、revision metadata。
+- [x] 加载 `document.json` 后只能通过 `editor.loadDocumentModel()` 写回编辑器。
+- [x] 建立 roundtrip diff：保存 -> 打开 -> 加载 -> 再保存，比较 canonical model 和 resource refs。
+- [x] 禁止把 `.jword` 导入路径伪装成 DOCX 导入；`.jword` 是 JWord 原生格式，错误码和 warning 单独命名。
+
+#### Iteration 3 - resource package 与完整性诊断
+
+- [x] 将 resource registry 中的图片和二进制资源写入 `resources/`，并在 `manifest.json` / `checksums.json` 记录 id、MIME、byteLength、hash。
+- [x] 加载时校验资源存在、hash、MIME 和引用一致性。
+- [x] 缺失非关键资源时可加载正文并产生 recoverable warning。
+- [x] 文档主结构损坏、manifest 缺失、schema 不兼容时返回不可恢复 error，不写入 editor。
+- [x] 外部 URL 资源不直接抓取；只保存已进入 resource registry 的受控资源。
+
+#### Iteration 4 - schema migration 与兼容策略
+
+- [x] 建立 migration registry：每次 schemaVersion 变化必须有 migration 或明确不可兼容 diagnostic。
+- [x] migration 只能从旧 canonical model 迁移到新 canonical model，不能读取旧内部 Y.Doc store。
+- [x] migration report 记录 sourceVersion、targetVersion、appliedSteps、warnings。
+- [x] 建立 old-schema fixture，验证旧文件能升级并重新保存为当前版本。
+- [x] 建立 unknown future version 诊断，避免新版本文件被旧 SDK 静默损坏。
+
+#### Iteration 5 - `examples/vanilla` 真实第三方保存/打开
+
+- [x] 在 `examples/vanilla` 中只通过 `@4xian/jword-native` 公开 API 接入保存/打开。
+- [x] demo host 负责选择文件、触发下载、显示 progress/warning/error，不读取 native 包内部模块。
+- [x] 真实浏览器验证保存 `.jword`、重新打开、继续输入、再保存，projection 和 layout 保持一致。
+- [x] 增加架构测试，禁止 vanilla 直接 import `packages/native/src` 或 core 内部 store。
+- [x] 移动 viewport 下保存/打开入口不遮挡编辑区域，且长任务期间编辑器保持响应。
+
+#### Iteration 6 - benchmark、bundle 和文档计划
+
+- [x] 建立 native save/load benchmark，覆盖 1 页、50 页、200 页、含图片和含表格文档。
+- [x] 建立 bundle gate：native 包不进入 vanilla 首屏，只有触发保存/打开时按需加载。
+- [x] 建立 format spec 文档计划，后续 Gate 7 文档站必须包含 `.jword` 格式、API、warning、migration、错误处理。
+- [x] 建立 release dry-run 检查：`npm pack` 中包含 native dist、types、fixtures 示例，不包含测试私有文件。
+
+### 待办步骤
+
+- [x] Step 4.5.1：冻结 `.jword` package 结构、manifest schema、document model 边界和禁止保存项。
+- [x] Step 4.5.2：建立 `@4xian/jword-native` 公开类型、worker message、diagnostics 和 fixture registry。
+- [x] Step 4.5.3：实现最小 document model 保存/打开 roundtrip，并通过 `editor.loadDocumentModel()` 恢复。
+- [x] Step 4.5.4：实现资源打包、checksum、缺失资源 warning 和损坏文件 error。
+- [x] Step 4.5.5：实现 schema migration registry、old-schema fixture 和 future-version diagnostic。
+- [x] Step 4.5.6：接入 `examples/vanilla`，用真实第三方集成方式完成保存/打开。
+- [x] Step 4.5.7：建立 benchmark、bundle gate、format spec 文档计划和 release dry-run 检查。
+
+### 验收
+
+- [x] `.jword` 保存/打开不依赖 DOCX/PDF/collab 高级包。
+- [x] 基础编辑器可保存当前文档、重新打开、继续编辑、再次保存。
+- [x] 表格、图片、批注、目录、页眉页脚和当前已支持的 revision metadata 在原生 roundtrip 后不丢。
+- [x] 损坏文件、缺失资源、未知 schema 和取消任务都有稳定 diagnostics。
+- [x] 长文档保存/打开走 worker，不阻塞用户输入。
+- [x] `examples/vanilla` 只使用公开 API，不读取底层实现。
+
+### 禁止事项
+
+- [x] 不把 `.jword` 设计成 DOCX 包或 PDF 包。
+- [x] 不把 Y.Doc binary 当作唯一主格式。
+- [x] 不保存 layout cache、canvas bitmap、DOM selection 或 provider state 作为可写真源。
+- [x] 不让 native 包依赖商业高级 docx/PDF/collab/license 包。
+- [x] 不用原生保存能力绕过 transaction pipeline 或直接写 core store。
+
+执行记录（2026-05-27）：`@4xian/jword-native` 已提供 `saveJWordDocument`、`loadJWordDocument`、`validateJWordPackage` 与 `./worker` runtime；vanilla demo 通过 `native-worker.ts` 懒加载 worker，不在首屏静态引入 native。公开 API 测试覆盖固定 zip entries、`editor.loadDocumentModel()` 恢复、rich canonical model roundtrip、dataUrl 资源打包、外部资源 warning、缺失资源 recoverable warning、hash mismatch error、old schema migration、future schema diagnostic 和 AbortSignal 取消。Kimi WebBridge 真实 Chrome 验证 `KIMI_GATE45_WORKER_EDIT` 保存为 `.jword` 后打开成功，继续输入 `AFTER_KIMI_WORKER_OPEN` 后再次保存成功；保存中同步输入 `KIMI_DURING_NATIVE_SAVE_INPUT` 可进入 projection；performance resource 记录包含 `src/native-worker.ts?worker_file&type=module` 与 `packages/native/src/*` worker 资源。验证命令：`pnpm --filter @4xian/jword-native test` 为 2 files / 9 tests passed；`pnpm --filter @4xian/jword-native typecheck`、`pnpm --filter @4xian/jword-native build`、`pnpm --filter @4xian/jword-example-vanilla typecheck`、`pnpm --filter @4xian/jword-example-vanilla build`、`node tools/size/check-native-bundle.mjs`、`node tools/release/check-native-pack.mjs`、`node benchmarks/gate45-native-benchmark.mjs`、Gate 4.5 架构 Vitest 5 files / 13 tests passed、`pnpm playwright test examples/vanilla/tests/gate4_5-native.e2e.ts --project=chromium` 1 passed、targeted ESLint 均通过。
+
+当前工作树复核（2026-05-27）：Gate 4.5 focused 验证重新通过：`pnpm --filter @4xian/jword-native test` 为 2 files / 9 tests passed；`pnpm --filter @4xian/jword-native typecheck`、`pnpm --filter @4xian/jword-native build`、`pnpm --filter @4xian/jword-example-vanilla typecheck`、`node tools/size/check-native-bundle.mjs`、`node tools/release/check-native-pack.mjs`、`node benchmarks/gate45-native-benchmark.mjs` 均通过；Gate 4.5 架构 Vitest 为 5 files / 13 tests passed；`pnpm exec playwright test examples/vanilla/tests/gate4_5-native.e2e.ts --project=chromium --reporter=line` 为 1 passed。首次 Playwright 失败是 5173 端口残留 `examples/docx` Vite server 导致测到 DOCX 页面，清理旧进程后同一 Gate 4.5 用例通过，不作为 Gate 4.5 功能失败记录。
+
+## Gate 5 - 商业高级格式互通：DOCX 导入导出与 PDF 导出
+
+### 目标
+
+建立可演进、可授权、可按需加载的商业高级格式互通能力。Beta 阶段先保证常见 DOCX 导入后能保留基础格式和内容，导出 DOCX 后能重新导入并保持 T1 能力不丢结构、不丢样式、不丢资源；PDF 范围只包含从 JWord 当前文档导出 PDF，不包含 PDF 导入、PDF 编辑或 PDF 查看器能力。基础保存/打开不依赖 Gate 5，统一由 Gate 4.5 的 `.jword` 原生格式承担。
+
+### 实现方案
+
+DOCX 主路径为 `JSZip + XML parser/serializer + 自研 OOXML mapping + canonical model`。PDF 主路径为 `DocumentLayout/LayoutBox -> PDF`，直接复用 JWord 分页布局结果，不使用浏览器打印、LibreOffice 转换或第三方在线服务作为主导出方案。导入、导出和 PDF 生成都放在独立商业包、独立 worker 和 lazy-load 边界内，避免进入 core、native 或基础首屏 bundle。
 
 DOCX 导入应先解析 OPC package，再建立 style、numbering、relationship、media、comments、header/footer 等索引，随后映射到 JWord canonical import model。core 只暴露受控结构化写入入口，docx 包禁止直接访问 Y.Doc 或 `document-store` 内部结构。DOCX 导出应从 JWord projection/canonical model 生成 OOXML Transitional package，再用 roundtrip 重新导入验证。PDF 导出应从 editor layout 读取页面、文本、图片、表格线、页眉页脚和页码，使用字体配置 API 显式嵌入字体；缺少中文字体或字体不能覆盖字符时必须返回可恢复错误，不输出乱码 PDF。
+
+商业化边界（2026-05-26 调整）：Gate 5 整体作为高级格式互通能力处理，`@4xian/jword-docx` 与 `@4xian/jword-pdf` 默认不进入免费基础包。若未来要把 DOCX 导出降级为免费能力，必须先拆出独立免费 export-only 包并通过架构测试证明它不包含 DOCX import、PDF export 或授权绕过路径；当前计划不走该拆分路线。
 
 ### 参考资料与对标口径
 
@@ -711,11 +850,16 @@ Gate 5 可以参考外部技术文档和竞品能力，但参考材料必须分�
 
 Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容验收改为 WPS-only。Open XML validator、Microsoft Word 和 LibreOffice 继续保留在报告 schema 与 pending/not-run 记录中，用于后续扩展和补证，但不作为 Gate 5 当前完成阻塞项，也不得写入未验证的通过结论。
 
+Gate 5 商业化验收口径调整（2026-05-26）：既有 DOCX/PDF 技术闭环只能视为格式能力可用，不等于商业高级能力完成。Gate 5 进入产品化前必须补授权校验、私有 registry / npm pack 检查、第三方集成示例、feature matrix、诊断错误码和未授权失败路径。
+
 ### 明确范围
 
 - [x] 支持 DOCX 导入。
 - [x] 支持 DOCX 导出。
 - [x] 支持将当前 JWord 文档导出为 PDF。
+- [x] 支持按商业 entitlement 开启 DOCX 导入、DOCX 导出和 PDF 导出。
+- [x] 支持未授权、授权过期、feature 不匹配和 license server 不可用的稳定 diagnostics。
+- [x] 支持第三方通过公开高级包 API 集成 DOCX/PDF，不读取 `packages/docx/src`、`packages/pdf/src` 或 demo 内部 runtime。
 - [x] 不支持 PDF 导入查看。
 - [x] 不支持 PDF 编辑。
 - [x] 不支持把 PDF 反向转换为 JWord 文档。
@@ -758,15 +902,17 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 - [x] canonical model、projection、resource、transaction pipeline 与 `DocumentLayout` 已存在。
 - [x] core 当前公开 `EditorDocumentInput` 仍偏纯文本入口，不能直接承载 DOCX 的完整结构化导入结果。
 - [x] 当前已有 Gate 5 fixture registry、兼容矩阵模板、DOCX/PDF 最小公开 API、DOCX/PDF worker runtime、fixture diff、字体配置类型、PDF.js/JWord Canvas 截图 artifact、lazy-load、worker 内存峰值和长任务期间 editor 响应证据；WPS-only 真实兼容记录已在 2026-05-25 后补齐，Open XML validation、Word 和 LibreOffice 按当前口径保留 pending/not-run。
+- [x] 当前已补商业授权 API、entitlement 校验、私有 registry / `npm pack --dry-run` 发布检查、未授权失败真实浏览器路径和第三方真实高级包集成模式；正式文档站内容仍留在 Gate 7 落地。
 
 ### 推荐执行顺序
 
-1. 先冻结范围、fixture registry、warning schema、worker contract 和验收口径。
+1. 先冻结范围、商业 edition matrix、fixture registry、warning schema、worker contract、授权 contract 和验收口径。
 2. 再建立 `packages/docx`，完成 DOCX 解包、XML 解析、OPC 索引和 T1 import mapping。
 3. 随后补 core 结构化导入入口，让 DOCX import 经统一 transaction/mutation 边界写入 JWord。
 4. 再实现 DOCX export 和 roundtrip diff，确保导出后重新导入不丢 T1 格式和内容。
 5. 然后建立 `packages/pdf`，从 JWord layout 导出 PDF，先闭合中文字体和基础视觉验证。
-6. 最后补 `examples/docx`、人工兼容矩阵、benchmark、lazy-load 和 T2 种子。
+6. 再补 `examples/docx`、人工兼容矩阵、benchmark、lazy-load 和 T2 种子。
+7. 最后补商业授权、私有 registry / `npm pack` 检查、第三方集成示例、未授权失败路径和文档站计划。
 
 ### 迭代任务清单
 
@@ -774,6 +920,9 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 
 - [x] 将 Gate 5 标题和范围固定为 `DOCX 导入导出与 PDF 导出`。
 - [x] 明确 PDF 不包含导入查看、反向转换或编辑能力。
+- [x] 将 Gate 5 商业化范围固定为高级格式互通能力，不再承担基础保存/打开职责。
+- [x] 冻结 Gate 5 edition matrix：free 只包含 `.jword` 原生保存/打开；paid 包含 DOCX 导入、DOCX 导出和 PDF 导出。
+- [x] 冻结 Gate 5 授权 contract：feature key、customer id、license token、offline grace、diagnostic code、worker task fail-fast 规则。
 - [x] 冻结目录落点：
   - `packages/docx/src/`
   - `packages/docx/test/`
@@ -787,7 +936,8 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
   - `core` 提供 canonical model、projection、resource、layout、受控结构化写入入口。
   - `docx` 负责 OPC package、OOXML parsing、mapping、export、roundtrip diff。
   - `pdf` 负责 `DocumentLayout/LayoutBox -> PDF`、字体、图片、PDF 验证辅助。
-  - `examples/docx` 负责 demo host、fixture 切换、手动导入导出、warning 面板。
+  - `license` 提供 entitlement 类型、签名验证和 feature matrix，不让 worker 自行解析业务授权细节。
+  - `examples/docx` 负责真实第三方高级包装配、fixture 切换、手动导入导出、warning 面板和未授权失败演示。
 - [x] 冻结 T1/T2/T3 能力表，并把 T3 统一标记为 warning 或 opaque preserve，不作为 Gate 5 完成条件。
 - [x] 验证：文档中能清楚回答“做什么、不做什么、怎么验收”。
 
@@ -1383,7 +1533,7 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
   - 进展 2026-05-25：兼容 runner 现在会校验外部人工应用结果和外部 Open XML validator 结果中可选的 `exportArtifact` / `artifactByteLength` / `artifactSha256` 绑定字段；如果外部证据显式声明的 artifact 与本次导出不一致，runner 会把该证据降级为 pending stale，并在 `evidenceRequests` 中标记 `stale-artifact-evidence`，防止旧 artifact 的 Word/WPS/LibreOffice 或 validator 证据被套用到新导出上。验证先用 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts --testNamePattern "stale"` 确认红灯暴露 stale WPS pass 和 stale Open XML pass 都会误合并，再实现并通过；相关回归 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts packages/docx/test/compatibility-report.test.ts tests/architecture/gate5-fixture-registry.test.ts` 为 3 files / 18 tests passed。重新运行 `node tools/compat/run-gate5-docx-compatibility.mjs` 后默认结果仍为 7 reported、7 pending，artifact SHA-256 复查无 mismatch，证据请求仍为 28 pending 和 28 blocked-by-missing-artifact；当时完整矩阵证据仍缺，后续 WPS-only 口径只补 WPS 证据，当时按完整矩阵口径暂不勾选，后续以 WPS-only 收口记录为准。
   - 进展 2026-05-25：DOCX export 现在固定 ZIP file entry 与目录 entry 元数据，避免相同 projection 或同一 T1 fixture 在不同导出时间产生不同 SHA-256，从而保护 `artifactSha256` 绑定的人工/validator 证据不会被无意义刷新。验证先用 `pnpm exec vitest run packages/docx/test/public-api.test.ts --testNamePattern "deterministic"` 确认红灯暴露同一 projection 跨系统时间导出哈希不同，再固定 JSZip entry date 并关闭自动目录 entry 后通过；随后 `pnpm exec vitest run packages/docx/test/public-api.test.ts packages/docx/test/export-rich-blocks.test.ts packages/docx/test/roundtrip-diff.test.ts`、`pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts packages/docx/test/compatibility-report.test.ts tests/architecture/gate5-fixture-registry.test.ts`、`pnpm build` 通过。根构建后连续两次运行 `node tools/compat/run-gate5-docx-compatibility.mjs`，7 个 reported artifact 的 SHA-256 均无变化，结果文件中 artifact byteLength/SHA-256 与磁盘文件无 mismatch；证据请求仍为 28 pending 与 28 blocked-by-missing-artifact，当时完整矩阵证据仍缺，后续 WPS-only 口径只补 WPS 证据，当时按完整矩阵口径暂不勾选，后续以 WPS-only 收口记录为准。
   - 进展 2026-05-25：兼容 runner 现在拒绝无 artifact 绑定的外部通过/警告/失败证据。外部人工办公套件证据若已经给出打开、编辑、修复提示或视觉差异结论，必须声明并匹配当前 `exportArtifact` / `artifactByteLength` / `artifactSha256`；外部 Open XML validation JSON 也必须绑定当前导出 artifact。未绑定证据会降级为 pending，并在 `evidenceRequests` 中标记 `missing-artifact-binding`；纯 pending 过程证据仍可保留为 pending，不会被误写成通过。默认 `fixtures/docx/manual-compatibility-results.json` 中 WPS pending 过程证据也已绑定当前 artifact hash，避免后续导出变化时继续沿用旧过程记录。验证先用 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts --testNamePattern "unbound"` 确认红灯暴露无绑定 WPS pass 和无绑定 Open XML pass 会被误合并，再实现并通过；完整兼容 runner 回归 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts` 为 1 file / 13 tests passed，相关 Step 5.22 suite `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts packages/docx/test/compatibility-report.test.ts tests/architecture/gate5-fixture-registry.test.ts` 为 3 files / 20 tests passed。重新运行 `node tools/compat/run-gate5-docx-compatibility.mjs` 后默认结果仍为 7 reported，证据请求仍为 28 pending 与 28 blocked-by-missing-artifact，artifact byteLength/SHA-256 与磁盘文件无 mismatch；当时完整矩阵证据仍缺，后续 WPS-only 口径只补 WPS 证据，当时按完整矩阵口径暂不勾选，后续以 WPS-only 收口记录为准。
-  - 进展 2026-05-25：兼容 runner 现在在结果文档中输出 `evidenceTemplates`，按当前导出 artifact 自动生成可复制到 `fixtures/docx/manual-compatibility-results.json` 和 `fixtures/docx/openxml-validation-results.json` 的证据模板。模板只覆盖已有 artifact 的待验目标，写入 `exportArtifact` / `artifactByteLength` / `artifactSha256`，并保留 `pending` 与 TODO evidence 文案，避免后续人工 Word/WPS/LibreOffice 或 Open XML validator 补证时漏填当前 artifact 绑定。验证先用 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts --testNamePattern "artifact-bound templates"` 确认红灯暴露结果缺少模板，再实现并通过；完整 runner 回归 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts` 为 1 file / 14 tests passed。重新运行 `node tools/compat/run-gate5-docx-compatibility.mjs` 后结果仍为 7 reported、56 个 evidence requests（28 pending、28 blocked-by-missing-artifact），新增 21 条办公套件人工证据模板和 7 条 Open XML validator 证据模板；当时完整矩阵证据仍缺，后续 WPS-only 口径只补 WPS 证据，当时按完整矩阵口径暂不勾选，后续以 WPS-only 收口记录为准。
+  - 进展 2026-05-25：兼容 runner 现在在结果文档中输出 `evidenceTemplates`，按当前导出 artifact 自动生成可复制到 `fixtures/docx/manual-compatibility-results.json` 和 `fixtures/docx/openxml-validation-results.json` 的证据模板。模板只覆盖已有 artifact 的待验目标，写入 `exportArtifact` / `artifactByteLength` / `artifactSha256`，并保留 `pending` 与待补 evidence 文案，避免后续人工 Word/WPS/LibreOffice 或 Open XML validator 补证时漏填当前 artifact 绑定。验证先用 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts --testNamePattern "artifact-bound templates"` 确认红灯暴露结果缺少模板，再实现并通过；完整 runner 回归 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts` 为 1 file / 14 tests passed。重新运行 `node tools/compat/run-gate5-docx-compatibility.mjs` 后结果仍为 7 reported、56 个 evidence requests（28 pending、28 blocked-by-missing-artifact），新增 21 条办公套件人工证据模板和 7 条 Open XML validator 证据模板；当时完整矩阵证据仍缺，后续 WPS-only 口径只补 WPS 证据，当时按完整矩阵口径暂不勾选，后续以 WPS-only 收口记录为准。
   - 进展 2026-05-25：兼容 runner 现在会校验外部人工办公套件证据的枚举值，只有 `Word` / `WPS` / `LibreOffice` 目标和受支持的 `pass` / `warn` / `fail` / `blocked` / `pending` 状态、以及 `none` 修复提示/视觉差异观察值会被合并，避免 `result: "ok"` 这类无效人工记录污染兼容报告或 evidence request 状态。验证先用 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts --testNamePattern "unsupported result values"` 确认红灯暴露无效 WPS result 被写入报告，再收紧 schema 后通过；完整 runner 回归 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts` 为 1 file / 15 tests passed。重新运行 `node tools/compat/run-gate5-docx-compatibility.mjs` 后结果仍为 7 reported、56 个 evidence requests（28 pending、28 blocked-by-missing-artifact）、21 条人工证据模板和 7 条 Open XML validator 模板；本机 Docker daemon 可用但没有 .NET/OpenXML 镜像，且 `dotnet`、`openxml`、Word、LibreOffice 仍缺，WPS 当时仍只有 pending 过程证据，后续已补齐 WPS GUI 证据，因此当时按完整矩阵口径暂不勾选，后续以 WPS-only 收口记录为准。
   - 进展 2026-05-25：兼容 runner 结果文档新增 `evidenceInputDiagnostics`，外部人工办公套件证据或 Open XML validation JSON 中无法通过 schema 的 `results` 行不会再静默消失，而会记录 source、path、resultIndex 和 issue，方便补证时定位错误行；默认仓库证据文件当前 diagnostics 为 0。验证先分别用 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts --testNamePattern "unsupported result values"` 和 `--testNamePattern "invalid Open XML"` 确认红灯暴露无效人工 result 与无效 Open XML severity 缺少输入诊断，再实现并通过；完整 runner 回归 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts` 为 1 file / 16 tests passed。重新运行 `node tools/compat/run-gate5-docx-compatibility.mjs` 后结果仍为 7 reported、56 个 evidence requests（28 pending、28 blocked-by-missing-artifact）、21 条人工证据模板、7 条 Open XML validator 模板，`evidenceInputDiagnostics` 为 0；当时完整矩阵证据仍缺，后续 WPS-only 口径只补 WPS 证据，当时按完整矩阵口径暂不勾选，后续以 WPS-only 收口记录为准。
   - 进展 2026-05-25：兼容 runner 新增显式 `--write-evidence-templates` 选项，会把当前 artifact 绑定的待补证据模板落盘到 `fixtures/docx/evidence-templates/manual-compatibility-results.template.json` 和 `fixtures/docx/evidence-templates/openxml-validation-results.template.json`；默认运行不覆盖真实证据文件，模板文件只用于复制填写，不会被 runner 当作通过证据。验证先用 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts --testNamePattern "copyable evidence template"` 确认红灯暴露模板文件未写出，再实现并通过；完整 runner 回归 `pnpm exec vitest run tests/architecture/gate5-compatibility-runner.test.ts` 为 1 file / 17 tests passed。运行 `node tools/compat/run-gate5-docx-compatibility.mjs --write-evidence-templates` 后，默认结果仍为 7 reported、56 个 evidence requests（28 pending、28 blocked-by-missing-artifact）、`evidenceInputDiagnostics` 为 0，模板目录中有 21 条办公套件人工证据模板和 7 条 Open XML validator 模板；当时完整矩阵证据仍缺，后续 WPS-only 口径只补 WPS 证据，当时按完整矩阵口径暂不勾选，后续以 WPS-only 收口记录为准。
@@ -1431,6 +1581,22 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
   - WPS-only 人工证据推进 2026-05-25：按用户明确要求，本轮只验证 WPS；Open XML validator、Microsoft Word 和 LibreOffice 暂不验证，结果继续保持 pending，不写入通过证据。T1 的 8 个 DOCX 导出 artifact 已完成 WPS Office 12.1.25895 真实 GUI 打开、无可见修复/恢复提示、临时副本编辑、Ctrl+S 保存、关闭重开可见、zip 检查 `word/document.xml` marker、源 artifact hash 未变：`docx-t1-paragraphs`、`docx-t1-run-styles`、`docx-t1-paragraph-formatting`、`docx-t1-headings`、`docx-t1-lists`、`docx-t1-table-basic`、`docx-t1-inline-image`、`docx-t1-page-setup`。`fixtures/docx/manual-compatibility-results.json` 写入 8 条 WPS pass 证据，`node tools/compat/run-gate5-docx-compatibility.mjs` 后 `fixtures/docx/compatibility-results.json` 汇总为 T1 WPS pass 8、T2 WPS pending 6、Open XML validator pending 14、Word pending 14、LibreOffice pending 14，`evidenceRequests` 为 48。原完整矩阵口径不再作为当前 Gate 5 阻塞项。
   - WPS-only 收口 2026-05-25：按用户更新后的验收口径，Gate 5 兼容矩阵当前只要求 WPS 真实通过，Open XML validator、Microsoft Word 和 LibreOffice 保留 pending/not-run 记录，不作为当前 Gate 5 完成阻塞项。T1 8 个和 T2 6 个 DOCX 导出 artifact 均已完成 WPS 打开、编辑、保存、关闭重开与 zip marker 证据；兼容 runner 汇总为 WPS pass 14、open-xml-validator pending 14、Word pending 14、LibreOffice pending 14。仓库级 `pnpm test:e2e` 当前失败：140 passed、7 skipped、10 failed、2 did not run，失败集中在 Gate 2/4 vanilla geometry overlay、revisions panel、image drag ghost 1px 和 Firefox/WebKit clipboard permission；`pnpm test:visual` 当前失败：3 passed、4 failed，失败集中在 Gate 4 visual baseline/截图缺失和页眉页脚输入不可见；`pnpm size` 当前失败于既有 Gate 2 体积门槛，`packages/core/dist/index.js` 为 494356 > 260000，`examples/vanilla` 首屏 JS/CSS 为 581014 > 330000，不作为 Gate 5 WPS-only 兼容验收阻塞项。
 
+- [x] Step 5.34：补 Gate 5 商业 edition matrix，明确 `.jword` 原生保存/打开免费，DOCX 导入、DOCX 导出和 PDF 导出属于高级格式互通。
+- [x] Step 5.35：接入 `@4xian/jword-license` entitlement 校验，worker task 在未授权、授权过期或 feature 不匹配时 fail-fast，且不读取或输出用户文档内容。
+- [x] Step 5.36：补 `examples/docx` 真实第三方集成模式，只通过公开高级包 API 传入 license、feature、editor 和文件，不 import `packages/docx/src`、`packages/pdf/src` 或 worker 内部模块。
+- [x] Step 5.37：建立未授权失败 E2E：DOCX 导入、DOCX 导出和 PDF 导出分别返回稳定 diagnostic，编辑器正文、selection 和 active task 状态不被破坏。
+- [x] Step 5.38：建立商业包发布检查：私有 registry 说明、`npm pack` 内容审计、types/export map 审计、基础 bundle 扫描和高级包按需加载扫描。
+- [x] Step 5.39：把 Gate 5 公开 API 清单、授权错误码、feature key、集成步骤和收费边界加入 Gate 7 文档站计划。
+  - 完成 2026-05-27：新增 `@4xian/jword-license` 契约，冻结 Gate 5 feature key 为 `docx.import`、`docx.export`、`pdf.export`，授权诊断为 `JWORD_LICENSE_MISSING`、`JWORD_LICENSE_EXPIRED`、`JWORD_FEATURE_NOT_ENTITLED`、`JWORD_LICENSE_SERVER_UNAVAILABLE`。`packages/docx` worker 与 `packages/pdf` 导出入口在读取或输出用户内容前执行 entitlement fail-fast，`examples/docx` 改成第三方集成壳：宿主传入 license 和 feature，只通过公开 `@4xian/jword-docx`、`@4xian/jword-pdf`、`@4xian/jword-license` API 调用高级能力，不引用 `src` 或 worker 内部模块。`tools/release/check-gate5-commercial-pack.mjs` 已接入 `npm pack --dry-run --json`，审计私有 registry、export map、dist/type 文件、基础入口禁止静态引入高级包，以及高级示例按需加载。Kimi WebBridge 真实浏览器会话 `gate5-commercial-smoke` 复跑 `missing`、`expired`、`feature-mismatch`、`server-unavailable`、`valid` 五种模式：未授权/过期/server unavailable 的 DOCX 导入、DOCX 导出和 PDF 导出均返回单一稳定 code，active task 清空、selection 保留，且未加载 DOCX/PDF/jszip/pdf-lib 高级资源；feature mismatch 下 DOCX import 成功，DOCX export/PDF export 分别返回 `JWORD_FEATURE_NOT_ENTITLED`；valid 下 DOCX import/export 和 PDF export 成功。验证：`pnpm --filter @4xian/jword-example-docx typecheck`、`pnpm --filter @4xian/jword-example-docx build`、`node tools/release/check-gate5-commercial-pack.mjs`、`pnpm exec vitest run tests/architecture/gate5-commercial-readiness.test.ts` 通过。
+
+当前工作树复核（2026-05-27）：Gate 5 focused suite 重新通过，命令为 `pnpm exec vitest run tests/architecture/gate5-fixture-registry.test.ts tests/architecture/gate5-diagnostics-schema.test.ts tests/architecture/gate5-benchmark.test.ts tests/architecture/gate5-commercial-readiness.test.ts tests/architecture/gate5-compatibility-runner.test.ts packages/docx/test/public-api.test.ts packages/docx/test/xml.test.ts packages/docx/test/t1-fixtures.test.ts packages/docx/test/t1-roundtrip-fixtures.test.ts packages/docx/test/export-rich-blocks.test.ts packages/docx/test/roundtrip-diff.test.ts packages/docx/test/compatibility-report.test.ts packages/docx/test/worker.test.ts packages/pdf/test/public-api.test.ts packages/pdf/test/worker.test.ts packages/pdf/test/visual-report.test.ts examples/docx/tests/vite-config.test.ts examples/docx/tests/task-session.test.ts --reporter=dot`，结果为 18 files / 129 tests passed。补充验证：`pnpm --filter @4xian/jword-example-docx typecheck`、`pnpm --filter @4xian/jword-docx typecheck`、`pnpm --filter @4xian/jword-pdf typecheck`、`pnpm --filter @4xian/jword-example-docx build`、`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/compat/run-gate5-docx-compatibility.mjs` 均通过；兼容 runner 当前识别 WPS 可用，Open XML validator、Microsoft Word 和 LibreOffice 继续按 Gate 5 WPS-only 口径保留 missing/pending/not-run，不作为当前完成阻塞项。Kimi WebBridge 真实浏览器复核覆盖 `?license=valid`、`?license=missing`、`?license=feature-mismatch`：valid 路径 DOCX 导入完成、DOCX 导出 5852 bytes、roundtrip `matches: true` 且 warning 为空、PDF 导出 3121 bytes；missing 路径返回 `JWORD_LICENSE_MISSING: docx.import` 与 `JWORD_LICENSE_MISSING: pdf.export`；feature mismatch 路径 DOCX import 成功，DOCX export/PDF export 返回 `JWORD_FEATURE_NOT_ENTITLED`，所有路径 `activeTask` 均回到 `null`。本次复核中 PDF worker 公开 API 成功用例补充 `pdf.export` 测试授权，修正的是商业授权收口后的测试夹具，不改变生产授权逻辑。
+
+文件体量与 fresh 验证复核（2026-05-27）：新增 `tests/architecture/gate5-docx-file-budget.test.ts`，约束 `packages/docx/src` 与 `packages/docx/test` 下 TypeScript 文件不超过 1000 行；红灯先暴露 `packages/docx/src/export.ts`、`packages/docx/src/index.ts`、`packages/docx/test/public-api.test.ts` 过大，随后将公开 facade、类型、消息、package graph、import readers/sections、export helpers 和 public API fixtures 拆入 focused 文件，并扩展 `tests/architecture/gate5-diagnostics-schema.test.ts` 的 DOCX source scan 覆盖新拆分模块。验证：文件体量门禁、DOCX focused public API suites、Gate 5 diagnostics schema、Gate 5 focused matrix 均通过；当前 Gate 5 focused matrix 为 23 files / 130 tests passed，`pnpm --filter @4xian/jword-docx typecheck`、`pnpm --filter @4xian/jword-pdf typecheck`、`pnpm --filter @4xian/jword-example-docx typecheck`、`pnpm --filter @4xian/jword-example-docx build`、`node tools/release/check-gate5-commercial-pack.mjs` 均通过。包级 `pnpm --filter @4xian/jword-docx build` 会产生 Node 直接执行不友好的 extensionless ESM dist；本轮先用根级 `pnpm build` 恢复 Rollup dist，再运行 `node tools/compat/run-gate5-docx-compatibility.mjs`，结果为 `status: ok`、14 个 fixture 全部 available、WPS available，Open XML validator、Microsoft Word 和 LibreOffice 仍按 WPS-only 口径记录为 missing/not-run。Kimi WebBridge 真实 Chrome 会话 `jword-gate5-docx` 打开 `examples/docx`，内置 fixture 导入后状态为 `导入完成：word/document.xml`，warning 为 `[]`；DOCX 导出后 roundtrip `matches: true` 且 differences/import/export/reimport warnings 均为空；PDF 导出后 progress 为 `queued -> mapping -> writing -> done`，状态继续说明当前入口不提供 PDF 导入查看；截图证据保存为 `/tmp/jword-gate5-docx-demo.png`。
+
+PDF 文件体量补充复核（2026-05-27）：`tests/architecture/gate5-pdf-file-budget.test.ts` 红灯先暴露 `packages/pdf/src/index.ts` 与 `packages/pdf/test/public-api.test.ts` 超过 1000 行；随后将 PDF 公开类型拆到 `packages/pdf/src/types.ts`，将 public API fixture/font/image helper 拆到 `packages/pdf/test/public-api-fixtures.ts`。复核行数为 `packages/pdf/src/index.ts` 966、`packages/pdf/test/public-api.test.ts` 981。验证：`pnpm exec vitest run tests/architecture/gate5-docx-file-budget.test.ts tests/architecture/gate5-pdf-file-budget.test.ts tests/architecture/gate5-diagnostics-schema.test.ts tests/architecture/gate5-commercial-readiness.test.ts packages/docx/test/public-api.test.ts packages/docx/test/public-api-core-conversion.test.ts packages/docx/test/public-api-package.test.ts packages/docx/test/public-api-import.test.ts packages/docx/test/public-api-preservation.test.ts packages/docx/test/t1-fixtures.test.ts packages/docx/test/t1-roundtrip-fixtures.test.ts packages/docx/test/export-rich-blocks.test.ts packages/docx/test/roundtrip-diff.test.ts packages/docx/test/worker.test.ts packages/pdf/test/public-api.test.ts packages/pdf/test/worker.test.ts packages/pdf/test/visual-report.test.ts examples/docx/tests/vite-config.test.ts --reporter=dot` 为 18 files / 93 tests passed；`pnpm --filter @4xian/jword-docx typecheck` 和 `pnpm --filter @4xian/jword-pdf typecheck` 通过。
+
+公开 API 授权边界补充复核（2026-05-27）：只在 worker 层做 entitlement 校验仍会留下 `importDocx()`、`exportDocx()` 和 `exportPdfFromLayout()` 公开直调绕过路径。先补 `packages/docx/test/public-api-license.test.ts` 与 `packages/pdf/test/public-api-license.test.ts` 红灯，确认缺 license 或 feature 不匹配时旧实现仍会读入或输出内容；随后在 `importDocx()`、`buildExportDocxPackage()` / `exportDocx()` 和 `exportPdfFromLayout()` 入口的取消检查之后、读取或生成用户内容之前调用 `assertJWordFeatureEntitled()`。合法格式测试、diagnostics 测试、Gate 6 DOCX fixture 集成和兼容 runner 均改为显式传入测试 entitlement，避免测试夹具继续模拟授权绕过。验证：新增 public API license 测试为 2 files / 7 tests passed；DOCX/PDF focused suite 与 Gate 5 diagnostics/Gate 6 DOCX fixture 集成为 19 files / 96 tests passed；compatibility runner 为 2 files / 20 tests passed；Gate 5 商业 readiness 与文件体量门禁为 4 files / 6 tests passed；`pnpm lint`、`pnpm typecheck`、`pnpm test`（138 files / 676 tests）、`pnpm build`、`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/compat/run-gate5-docx-compatibility.mjs --dry-run` 均通过。当前兼容 dry-run 仍显示 WPS available，Open XML validator、Microsoft Word 和 LibreOffice missing/pending/not-run，继续按 WPS-only 口径处理。
+
 ### 验收
 
 - [x] T1 DOCX fixture 导入后文本、段落、run 样式、段落格式、Heading、列表、表格、inline 图片和页面设置可验证。
@@ -1444,6 +1610,9 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 - [x] DOCX/PDF 导入导出可取消、有 progress、不阻塞输入。
 - [x] DOCX/PDF worker lazy load，不进入 `examples/vanilla` 首屏 bundle。
 - [x] `examples/docx` 能在真实浏览器完成导入 DOCX、导出 DOCX、重新导入、导出 PDF 的人工验收路径。
+- [x] 未授权时 DOCX 导入、DOCX 导出和 PDF 导出均失败为稳定 diagnostic，且不读取或泄漏文档内容。
+- [x] 授权通过时 Gate 5 高级功能只在显式安装并按需加载高级包后可用。
+- [x] 第三方集成示例只使用公开 API，不依赖底层实现或 demo 私有 runtime。
 
 ### 禁止事项
 
@@ -1453,6 +1622,9 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 - [x] 不把 Mammoth 作为 DOCX 导入主路径。
 - [x] 不把 html-to-docx 或 docx 模板库作为 DOCX 导出主路径。
 - [x] 不用浏览器打印代替 PDF 主路径。
+- [x] 不把 Gate 5 当作基础保存/打开能力；基础保存必须走 Gate 4.5 `.jword`。
+- [x] 不让免费基础包 import `@4xian/jword-docx`、`@4xian/jword-pdf` 或授权实现。
+- [x] 不只做 client-side license check；商业授权必须至少在 worker task 或服务端/授权层形成可诊断边界。
 - [x] 不用 LibreOffice 转换代替 PDF 主路径。
 - [x] 不把互通逻辑放进 core 或首屏 bundle。
 - [x] 不让 `packages/docx` 直接访问 Y.Doc 或 `document-store` 内部结构。
@@ -1461,220 +1633,992 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 
 禁止项审计（2026-05-25）：`packages/pdf/src/index.ts` 明确只导出 PDF，不提供 PDF 导入、编辑或查看器；`packages/docx` 依赖仅为 core 与 JSZip，`packages/pdf` 依赖仅为 core、fontkit、pdf-lib、PDF.js，没有 Mammoth、html-to-docx、docx 模板库、浏览器打印或 LibreOffice 转换主路径。`packages/docx/src/*` 只经公开 core facade 和 projection 协作，文件头约束不访问 core store 或 Y.Doc；未知 OOXML、未知 style、断裂 relationship 与外链资源均有 warning/diagnostics 或 opaque preservation 记录；兼容 runner 和测试持续断言不输出 compatibility percent。
 
-## Gate 6 - 协同、离线、自动插入
+禁止项审计（2026-05-27）：Gate 4.5 已通过 `@4xian/jword-native` 和 `.jword` 完成免费基础保存/打开，Gate 5 只保留 DOCX import/export 与 PDF export 高级格式互通。`tests/architecture/gate45-native-boundary.test.ts` 持续约束 native 不依赖 `@4xian/jword-docx`、`@4xian/jword-pdf`、`@4xian/jword-collab` 或 `@4xian/jword-license`；`tools/size/check-size.mjs` 与 `tools/release/check-gate5-commercial-pack.mjs` 持续扫描 `examples/vanilla` 首屏入口不得静态引入 DOCX/PDF/license 高级包；`packages/docx/src/worker.ts` 与 `packages/pdf/src/index.ts` 在 worker/export task 读取或输出用户文档内容前执行 entitlement fail-fast，未授权、过期、feature 不匹配和授权服务不可用均返回稳定 diagnostic，避免只依赖浏览器 client-side 判断。
+
+## Gate 6 - 商业高级协作、离线与自动插入
 
 ### 目标
 
-完成在线文档和 AI/程序化写入关键能力：多人最终一致、离线恢复、远端光标、历史快照、自动插入与手动编辑并发。
+完成可商业化交付的在线文档高级能力：多个远端用户同时编辑同一份文件、远端光标和“xxx 正在输入”提示、离线恢复、历史快照、AI/程序化自动插入与手动编辑并发、client/server 版本一致性、授权校验和第三方真实集成示例。Gate 6 交付后，JWord 不只是能在内部 demo 证明 remote / local / auto-inserter 三类写入最终一致，还必须能作为付费高级 SDK 被第三方按公开 API 接入；未授权、版本不匹配、服务端不可用、离线冲突和自动插入取消都必须有稳定诊断。
 
 ### 实现方案
 
-协同不是后补功能，因为 Gate 1 已经以 Y.Doc 为真源。此阶段接入 provider、awareness、offline、snapshot 和 createInserter。重点验证 origin、undo scope、anchor 稳定和并发场景。
+协同不是后补功能，因为 Gate 1 已经以 Y.Doc 为真源，`packages/core/src/operations/transaction.ts` 已经把所有写入包在 `ydoc.transact(origin)` 里，`packages/core/src/operations/history.ts` 也已经默认只跟踪 `local-user` origin。Gate 6 不替换真源，不把 provider 或 wrapper 变成第二份编辑状态；它把商业高级能力封装在 `@4xian/jword-collab` 和 `@4xian/jword-collab-server` 中，通过 core 的中立 selection / anchor / transaction hook 接入。core 可以提供获取当前选区、创建 anchor/range、查找文本位置、加载 canonical model 等基础口子，但不能直接暴露“协作”“离线”“自动插入”这类高级产品 API。
 
-### 当前基线（2026-05-17）
+Gate 5 导入的 DOCX 也必须按同一规则处理：导入后不继续把 `.docx` 二进制包、OOXML XML 或 projection JSON 当可写真源，而是经 `DocxImportDocument -> core Document -> editor.loadDocumentModel() -> Y.Doc` 进入 JWord canonical model。只要导入内容已经被当前 mapping 支持，它在 Gate 6 中就必须像原生 JWord 文档一样可继续编辑、可协同、可离线恢复、可进入历史版本、可被 `createInserter()` 基于 stable anchor / range 自动插入；不支持或降级保留的 OOXML 结构只能通过 warning / diagnostics / opaque preservation 说明能力边界，不能伪装成协同可编辑能力。
+
+主路径分七层：
+
+1. `packages/core` 继续拥有 Y.Doc、transaction pipeline、projection、history、AnchorRef / RangeRef、selection snapshot、find/query location 和 Editor Facade；core 只暴露中立基础口子，不依赖 provider、license、server、IndexedDB 或 hocuspocus。
+2. `packages/collab` 作为付费 client SDK，负责公开 `connectJWordCollaboration(...)`、presence/awareness、远端光标/选区、typing label、offline client、auto-insert session、diagnostics 和 provider adapter。
+3. `packages/collab-server` 作为付费 self-host server，负责 Hocuspocus/Yjs WebSocket、room、auth、tenant hook、storage hook、history API、license enforcement、health/version endpoint、限流和可观测诊断。
+4. `packages/license` 负责商业 entitlement 契约、feature key、client/server handshake、签名校验、过期/撤销/离线宽限诊断。
+5. `packages/persistence` 负责 update log、snapshot、compaction、IndexedDB offline cache、版本列表、只读预览和恢复；它保存 Yjs binary update/snapshot，不把 DOCX、HTML 或 projection JSON 当成协同真源。
+6. `examples/collab` 只模拟第三方真实集成：基础 editor + UI 初始化后，引入 `@4xian/jword-collab`，连接 `@4xian/jword-collab-server`，传入 user/license/room/serverUrl，再演示多人协作、离线、历史和自动插入；不能 import 底层 `src`、demo runtime 或 Y.Doc store。
+7. Gate 7 文档站和公开 API 清单负责把基础版、高级格式互通和高级协作能力的集成步骤、授权、错误码、版本兼容和迁移指南正式对外。
+
+自动插入主路径应产品化为 `startAutoInsertSession(editor, options)` 或等价公开高级 API。它不能使用普通字符 offset，也不能绕过 transaction pipeline。调用方必须传入当前 selection snapshot、anchor、range 或由 `findText()` / `resolveLocation()` 得到的位置；session 创建后不再读取 live DOM caret，不调用 focus，不抢用户手动光标。自动插入应被建模为一个虚拟远端用户或自动化 actor，带 actor id、name、color、origin、request id、progress、abort/error 诊断，并默认不进入用户 undo；需要允许宿主把自动插入配置为独立 undo scope，但不能让它混入本地用户 undo 栈。
+
+版本历史主路径为 Yjs update log + periodic snapshot + metadata index。版本恢复不是把 DOCX 覆盖回编辑器，也不是把 projection JSON 当主存；恢复应基于目标 snapshot/update 在隔离 Y.Doc 中生成 readonly preview，用户确认后通过受控 restore transaction 写入当前 Y.Doc，并保留失败诊断和本地未同步变更保护。
+
+### 参考资料与技术选型
+
+Gate 6 的资料分为“主实现依据”“可选 provider”“替代方案研究”和“产品对标参考”。外部资料只能指导 adapter 和验收口径，不能绕开 JWord 已有 Y.Doc 真源、operation pipeline 和 framework-agnostic core。
+
+- 主实现依据：
+  - Yjs 官方文档 / README：Yjs update 是二进制增量，具备可交换、可结合、幂等特性；`Y.applyUpdate`、`Y.encodeStateAsUpdate`、`Y.encodeStateVector`、`Y.mergeUpdates`、`Y.diffUpdate` 是 update log、同步和 compaction 的核心 API。
+  - Yjs provider / offline 文档：Yjs provider 可组合，网络 provider 可和 `y-indexeddb` 这类 persistence provider 同时使用；`y-indexeddb` 用 IndexedDB 持久化更新，并在下次打开时先恢复本地状态，再同步最新网络更新。
+  - Yjs Awareness / y-protocols：awareness 适合在线用户、光标、选区、鼠标位置等临时状态；它没有历史，不应进入版本历史或持久正文。
+  - Yjs RelativePosition：协同光标、批注范围、自动插入 anchor 必须用相对位置或 JWord `AnchorRef` / `RangeRef` 的快照语义，禁止用普通字符 offset 作为长期定位。
+  - Yjs UndoManager：`trackedOrigins` 是 undo scope 的主实现依据；JWord 已有 `DEFAULT_HISTORY_ORIGIN = "local-user"`，Gate 6 应扩展 origin matrix 和可配置 scope，而不是重写 undo 系统。
+  - Hocuspocus 官方文档：作为 Gate 6 self-host demo provider 首选。它基于 Yjs，提供 WebSocket 后端、awareness、auth/persistence hooks 和本地服务示例；服务端主存储应保存 Y.Doc binary/update，不应把 JSON 投影反向伪造成 Yjs 数据。
+- 可选 provider 参考：
+  - `y-websocket` / `y-webrtc`：可作为最小 provider adapter 兼容参考，但 Gate 6 示例服务优先使用当前依赖中已有的 `@hocuspocus/server`。
+  - Liveblocks Yjs：可作为托管 provider adapter 的产品参考，覆盖 room、presence、Y.Doc、awareness、managed storage、REST/webhook、offline IndexedDB 选项和后台/AI 写入的 undo 隔离思路；不作为 JWord 默认自托管路线。
+  - Tiptap / Hocuspocus AI Toolkit 资料：用于自动插入的人机协作 UX 参考，尤其是 AI streaming 时允许其他用户继续编辑、AI edit attribution、review/track changes 和 abort/progress 语义；不引入 Tiptap/ProseMirror 作为 JWord core 依赖。
+- 替代方案研究结论：
+  - Automerge 3：官方定位是 local-first sync engine，强项是完整历史、离线、版本控制、branch/diff 和 rich text API；但它以 Automerge document 为真源，替换 Y.Doc 会推翻 Gate 1-5 的 transaction / projection / history / anchor 设计。Gate 6 不迁移到 Automerge。可在 Gate 7+ 或单独 spike 中研究“版本历史后端 / 导出型 archive / 长历史 diff”是否借鉴其模型。
+  - Loro 1：官方定位是 Rust/WASM/JS CRDT，强项是 rich text CRDT、stable cursor、time travel、version vector、shallow snapshot 和高性能历史；它比 Yjs 在“版本控制和富文本 CRDT 语义”上值得关注，但同样需要替换真源和文本定位模型，且会引入 WASM/runtime 边界。Gate 6 不迁移到 Loro，可列为 post-1.0 迁移可行性研究。
+  - Fluid Framework：强项是 Microsoft 生态、DDS 和服务端 sequencing；它不是 Yjs provider，接入会形成第二套 distributed data structure 和服务依赖，不适合作为 Gate 6 的低风险实现路线。
+  - 结论：当前没有足够理由在 Gate 6 替换 Yjs。对 JWord 当前架构而言，Yjs + provider adapter + update log/snapshot + origin/undo 约束是最小风险路线；Automerge/Loro 只能作为后续研究项，不能阻塞 Gate 6。
+- 产品对标参考：
+  - Google Docs / Microsoft Word Online / WPS / 腾讯文档：用于理解远端光标、在线用户、断网提示、版本历史、恢复确认和 AI 写入可撤销/可审查的用户预期。
+  - Liveblocks / Tiptap commercial collaboration：用于参考 presence、comments、AI edits、undo isolation、version history 和托管 provider 的能力矩阵；不照搬闭源云服务作为 SDK 内部实现。
+
+### 明确范围
+
+- [x] 支持本地双窗口多人协同 demo。
+- [x] 支持 provider adapter interface，可接本地 Hocuspocus 验证服务，也可让宿主接入其它 Yjs provider。
+- [x] 支持 awareness：在线用户、远端光标、远端选区。
+- [x] 支持远端光标附近显示用户名称和输入状态，例如 `Alice 正在输入`。
+- [x] 支持 user 初始化传入 `id`、`name`、`color`，未传 color 时由高级包生成稳定颜色。
+- [x] 支持 `@4xian/jword-collab-server` 作为可部署服务端包，降低第三方集成步骤。
+- [x] 支持 client/server protocolVersion、packageVersion 和 featureFlags 握手，不匹配时给 `COLLAB_VERSION_MISMATCH`。
+- [x] 支持商业 entitlement：未授权、过期、feature 不匹配、server license 不可用时阻止高级能力并返回稳定 diagnostic。
+- [x] 支持公开位置 API：读取当前选区、创建 anchor/range、查询文本位置、解析 location，以便第三方调用自动插入时传入明确位置或范围。
+- [x] 支持 remote update 进入 projection/layout/render，并可诊断 origin。
+- [x] 支持 browser IndexedDB 离线恢复；断网期间本地编辑不丢，重连后可同步。
+- [x] 支持 update log、snapshot、版本列表、只读预览和恢复最小闭环。
+- [x] 支持 `createInserter()`：stable anchor/range、chunk 写入、flush、abort、progress、error、request id。
+- [x] 支持 local / remote / auto-inserter / system-recovery origin matrix 与 undo scope 隔离。
+- [x] 支持协同、离线、版本历史、自动插入的 diagnostics schema 和真实浏览器验收入口。
+- [x] 支持 Gate 5 导入后的 DOCX 文档作为一等协同对象：导入后进入同一 Y.Doc 真源，并覆盖 remote/local/auto-inserter 并发、离线恢复、历史预览和恢复验证。
+- [x] 支持 self-host 场景下的 auth hook、tenant hook、storage hook、license hook 和基础审计事件；不在 core 中实现这些能力。
+- [x] 不支持 JWord 托管云服务和复杂组织通讯录；这些保留到 post-1.0 或独立商业服务。
+- [x] 不支持端到端加密、presence 隐私策略、复杂组织通讯录。
+- [x] 不支持 CRDT 算法迁移，不在 Gate 6 替换 Yjs 为 Automerge、Loro、Fluid 或自研 OT。
+
+### 当前基线（2026-05-25）
 
 - [x] Gate 1/3 已经把 Y.Doc 真源、transaction pipeline、origin 与 history metadata 落到本地单人路径；协同和自动插入只能在这条主干上继续扩展。
-- [x] 当前 repo 尚无 `packages/collab`、`packages/persistence`、`examples/collab`，符合“不写无法验证空包”的约束。
-- [ ] 当前仍没有 provider adapter、awareness、offline recovery、snapshot adapter、版本历史最小闭环和 `createInserter()` 的可执行证据。
-- [ ] remote / AI / local 三类写入的并发语义还没有被真实双窗口或断网场景验证。
+- [x] Gate 4 已经有当前用户、批注范围、链接、修订和选择区相关基础能力；远端光标、批注 anchor 和 AI 写入应复用这套用户/范围语义。
+- [x] Gate 4.5 计划已把 `.jword` 原生保存/打开定义为基础能力；Gate 6 不再承担基础保存职责。
+- [x] Gate 5 已完成 WPS-only DOCX/PDF 技术互通主路径，worker progress/cancel、diagnostics、lazy-load 和真实浏览器长任务不阻塞输入证据可作为 Gate 6 async task 设计参考；Gate 5 商业授权补充仍是未完成项。
+- [x] Gate 5 已有 `convertDocxImportDocumentToCoreDocument()` 与 `editor.loadDocumentModel()` 结构化导入路径；导入后的 DOCX 内容已进入 core `Document` / Y.Doc 初始化事务，而不是继续编辑 `.docx` 文件本身。
+- [x] 当前 repo 已有 `packages/core`、`packages/ui`、`packages/docx`、`packages/pdf`、`packages/collab`、`packages/persistence`、`examples/docx` 和 `examples/collab`；新增 Gate 6 目录均有 focused tests、fixture registry 或真实浏览器入口，仍符合“不写无法验证空包”的约束。
+- [x] 根依赖已有 `yjs@13.6.30`、`@hocuspocus/server@4.0.0`、`@hocuspocus/provider@4.0.0` 和 `y-protocols@1.0.7`；仍没有 `y-indexeddb` 或托管 provider 依赖。
+- [x] core 的 `createHistoryManager()` 默认只 track `local-user`，这与 Gate 6 remote/AI 不进入用户 undo 的目标一致。
+- [x] 当前已有 provider adapter、真实 Hocuspocus provider adapter、真实 provider awareness 多页面可见层、awareness helper、offline unavailable diagnostic、真实浏览器 IndexedDB reload restore、真实浏览器断网/重连、memory snapshot/version/restore adapter 和 `createInserter()` 的可执行证据；结构化 range snapshot / relative position 选区已由真实 Hocuspocus awareness 与并发选区回归覆盖。
+- [x] remote / AI / local 三类写入的并发语义已被真实 Hocuspocus provider、Playwright 双页和 Kimi WebBridge 真实浏览器验证覆盖；服务端共享 history service 已按注入式 storage-backed contract 收口，具体生产数据库产品仍由宿主接入。
+- [x] 当前已有 Gate 6 fixture registry、协同诊断 schema、版本历史 artifact、Playwright smoke、Kimi WebBridge 真实浏览器证据、真实 Hocuspocus provider 双页面同步、真实 Hocuspocus provider awareness 跨页面渲染、真实浏览器 IndexedDB reload restore、断网 pending、重连同步、冲突合并、重连失败保留 pending、Gate 6 benchmark 和总验收记录。
+- [x] 当前 Gate 6 商业化收口已覆盖：`@4xian/jword-collab-server` 正式包、license enforcement、client/server version handshake、远端光标用户名/输入提示、公开位置 API、真实编辑器 SDK demo、禁止 demo 使用底层实现的架构测试、私有 registry / 发布检查和对外集成文档计划；Gate 7 仍单独承担文档站正文、React/Vue wrapper、插件 API、devtools 和 release dry-run 的稳定化。
 
 ### 推荐执行顺序
 
-1. 先冻结 origin、undo scope、版本历史的语义边界，再接入任一 provider。
-2. 先做 provider demo 与 remote render path `Step 6.1 -> 6.4`，确保协同更新仍走同一 transaction trunk。
-3. 再做 offline、snapshot 与历史版本闭环 `Step 6.5 -> 6.6 -> 6.13`。
-4. 随后做 `createInserter()` 与 undo scope 策略 `Step 6.7 -> 6.9`。
-5. 最后做并发、断网恢复和失败诊断 `Step 6.10 -> 6.12`。
+1. 先冻结 Gate 6 商业 edition matrix、package graph、client/server protocol、license contract、origin matrix、undo scope、目录落点、diagnostics 和版本历史契约。
+2. 再补 core 中立位置 API：selection snapshot、selection -> anchor/range、find/query location、resolve location；这些是基础编辑口子，不命名为协作或自动插入能力。
+3. 收口 `@4xian/jword-collab` client API，隐藏 provider/Yjs/hocuspocus 内部类型，提供 connect/disconnect/status/diagnostics/awareness/auto-insert session。
+4. 正式抽出 `@4xian/jword-collab-server`，让第三方能最少步骤部署 self-host 协作服务，而不是复制 `examples/collab/server`。
+5. 接入 `@4xian/jword-license` entitlement 和 client/server 版本握手，未授权或版本不匹配时 fail-fast。
+6. 补 awareness 与远端光标/选区渲染：用户名称、颜色、`xxx 正在输入`、过期清理，只保存临时 presence，不写入正文历史。
+7. 收口 `packages/persistence` 的商业离线、history、snapshot、restore 与服务端 storage hook。
+8. 产品化自动插入：公开 API 必须接收 stable position/range，把自动插入当虚拟远端 actor，绝不抢用户光标。
+9. 重写 `examples/collab` 为第三方真实集成 demo：基础 editor + UI + 高级 client 包 + self-host server + license，不使用底层源码或测试 helper。
+10. 最后补商业 readiness：私有 registry / `npm pack`、bundle gate、真实浏览器双用户验收、未授权/版本不匹配验收、文档站计划和发布 dry-run。
 
 ### 迭代任务清单
 
-#### Iteration 0 - 冻结 Gate 6 语义边界
+#### Iteration 0 - 冻结 Gate 6 范围、技术选型和验收口径
 
-- [ ] 冻结 origin matrix：
+- [x] 将 Gate 6 标题和范围固定为商业高级协作、离线、历史与自动插入。
+- [x] 明确不替换 Yjs 真源；Automerge、Loro、Fluid、自研 OT 只进入后续研究，不作为 Gate 6 主路径。
+- [x] 冻结主实现路径：
+  - Y.Doc 继续是唯一可写真源。
+  - remote update 使用 Yjs binary update。
+  - offline 使用 IndexedDB persistence provider 或等价 adapter。
+  - version history 使用 update log + snapshot + metadata index。
+  - auto inserter 使用 Editor Facade + AnchorRef/RangeRef + transaction origin。
+- [x] 冻结 origin matrix：
   - `local-user`
   - `remote-user`
   - `auto-inserter`
   - `system-recovery`
-- [ ] 冻结 undo scope 规则：
+  - `version-restore`
+- [x] 冻结每类 origin 的诊断字段：
+  - `requestId`
+  - `roomId`
+  - `clientId`
+  - `authorId`
+  - `source`
+  - `commandName`
+  - `operationKinds`
+  - `updateByteLength`
+  - `snapshotId`
+  - `versionId`
+  - `recoverable`
+- [x] 冻结 undo scope 规则：
   - 本地用户默认进入用户 undo
   - remote 默认不进入用户 undo
   - auto inserter 默认不进入用户 undo
   - 可配置独立 undo scope
-- [ ] 为 Gate 6 明确目录落点，但不预创建空壳包：
+  - version restore 默认进入独立 restore scope，不吞掉本地未同步变更
+- [x] 为 Gate 6 明确目录落点，但不预创建空壳包：
   - `packages/collab/src/`
+  - `packages/collab/test/`
   - `packages/persistence/src/`
+  - `packages/persistence/test/`
   - `examples/collab/`
-- [ ] 冻结版本历史的最小可观察契约：版本列表、只读预览、恢复、失败诊断都必须基于 update log / snapshot，而不是 docx 覆盖真源。
+  - `examples/collab/tests/`
+  - `fixtures/collab/`
+  - `fixtures/history/`
+- [x] 不预创建空壳包；只有第一个 focused test、fixture registry 或真实浏览器入口能验证时才创建对应目录。
+- [x] 冻结分层：
+  - `core` 提供 Y.Doc、Editor Facade、transaction、history、anchor、projection、layout 和受控协同 hook。
+  - `collab` 提供 provider adapter、awareness、远端光标/选区、connection diagnostics。
+  - `persistence` 提供 update log、snapshot、IndexedDB offline、version history 和 restore。
+  - `collab-server` 提供 self-host WebSocket、auth/tenant/storage/license hook、history API 和版本握手。
+  - `examples/collab` 只提供真实第三方装配入口、双页面验收、断网/重连、auto inserter demo 和宿主级测试钩子。
+- [x] 冻结版本历史最小可观察契约：
+  - 版本列表有稳定 `versionId`、label、author、createdAt、update count、snapshot id。
+  - 只读预览来自隔离 Y.Doc，不复用当前可写 editor。
+  - 恢复必须有确认步骤、restore origin 和失败诊断。
+  - 恢复失败不得覆盖本地未同步变更。
+  - 不以 docx 覆盖真源。
+- [x] 冻结 Gate 6 验收口径：
+  - 单元测试覆盖 adapter contract。
+  - Vitest 双 Y.Doc 模拟覆盖最终一致和 origin。
+  - Playwright 双窗口覆盖真实协同。
+  - 真实浏览器覆盖断网/重连、auto inserter streaming 和历史恢复。
+  - DOCX 导入 fixture 至少覆盖 1 个 T1 文档和 1 个带 warning 的 T2 文档；导入后必须走同一 `loadDocumentModel()` / Y.Doc 路径，再参与双窗口协同、自动插入、离线恢复和版本恢复验证。
+  - Kimi WebBridge 优先，Playwright 作为自动化回归补充。
+- [x] 验证：计划文档能清楚回答“为什么不替换 Yjs、做什么、不做什么、如何验证”。
+  - 完成 2026-05-26：Gate 6 范围、Yjs 主路径、origin/diagnostics/undo scope、目录落点、分层和验收口径已冻结；本轮只按可验证入口创建 `packages/collab`、`packages/persistence`、`examples/collab`、`fixtures/collab`、`fixtures/history`，未预建无测试空壳。
 
-#### Iteration 1 - provider / awareness / remote render（Step 6.1-6.4）
+#### Iteration 1 - core 协同 hook、origin 和 history scope（Step 6.1 / 6.4 / 6.8 / 6.9）
 
-- [ ] 实现 collab provider adapter，让宿主负责 `roomId`、鉴权、生产存储与 reconnect 策略。
-- [ ] 实现 hocuspocus 示例服务和本地双窗口 demo，先证明 remote update 能进入 projection / layout / render。
-- [ ] 实现 awareness：在线用户、远端光标、远端选区，禁止额外保存第二份编辑状态。
+- [x] 审查 `TransactionPipeline`、`createHistoryManager()`、`EditorCommandOptions.origin`、`AnchorRef` / `RangeRef` 和 `loadDocumentModel()` 的当前边界。
+  - 完成 2026-05-26：通过 CodeGraph、focused tests 和边界检查确认当前 history manager 仍只默认 track `local-user`，remote/auto 默认不进用户 undo；独立 `auto-inserter` / `version-restore` undo scope 仍是后续项。
+- [x] 定义 core 内部 remote update apply hook：
+  - 输入 `Uint8Array update`
+  - 输入 `origin = "remote-user" | "system-recovery" | "version-restore"`
+  - 输出 projection、dirty、diagnostics
+  - 禁止 provider 直接操作 DOM 或 layout cache
+- [x] 定义 transaction diagnostics event：
+  - 记录 origin、commandName、operationKinds、update byte length、local/remote 标记。
+  - 不暴露 Yjs 内部 struct、client clock 或 store internals 到稳定 public API。
+- [x] 扩展 history manager 配置：
+  - 默认仍只 track `local-user`
+  - 允许创建独立 `auto-inserter` scope
+  - 允许创建独立 `version-restore` scope
+  - remote update 永不进入本地用户 undo
+- [x] 补 focused tests：
+  - remote update 不增加用户 undo。
+  - auto inserter 默认不增加用户 undo。
+  - auto inserter 独立 scope 可单独 undo。
+  - version restore 不清空用户 undo metadata。
+- [x] 验证：`packages/core` 仍不依赖 provider、IndexedDB、WebSocket、hocuspocus、DOM 外部服务。
+  - 进展 2026-05-26：已新增 `packages/core/src/editor/collaboration-runtime.ts`、`TransactionPipeline.applyUpdate()`、`Editor.encodeCollaborationUpdate()`、`Editor.applyRemoteUpdate()` 和 transaction diagnostic 字段；focused tests 覆盖 remote update diagnostics、update replay byte length 为 0、remote/auto 默认不进用户 undo、auto inserter 默认 origin。尚未完成独立 `auto-inserter` / `version-restore` undo scope 和 version restore undo metadata 回归。
+  - 续做 2026-05-26：`createHistoryManager()` 已扩展 `HistoryScope = "user" | "auto-inserter" | "version-restore"`，每个 scope 使用独立 `Y.UndoManager` 和内部 tracked origin；`EditorCommandOptions.historyScope` 通过 transaction metadata 的 `historyOrigin` 接入 Yjs origin，公开 diagnostics 仍保留原始 `origin`。`createInserter()` 支持 `undoScope: "auto-inserter"`，focused test 已覆盖 AI 写入默认不进用户 undo、独立 `auto-inserter` scope 可单独 undo/redo，根入口已导出 `HistoryScope`。验证：`pnpm exec vitest run packages/core/test/index.test.ts packages/core/test/collaboration/inserter.test.ts packages/core/test/collaboration/editor-update.test.ts packages/core/test/operations/history.test.ts`、`pnpm --filter @4xian/jword-core typecheck`、`node tools/lint/check-comments.mjs`、`git diff --check` 通过。`version-restore` scope token/API 已有，但完整版本恢复 undo metadata 回归和真实 provider 并发仍未完成。
+  - 完成 2026-05-26：补齐 `version-restore` 独立 undo scope focused test；`packages/core/test/collaboration/editor-update.test.ts` 验证 version restore 写入可进入独立 `version-restore` undo scope，撤销 restore 后默认用户 undo metadata 仍可继续撤销本地用户命令。验证：`pnpm exec vitest run packages/core/test/collaboration/editor-update.test.ts` 4 passed，focused ESLint 通过。
 
-#### Iteration 2 - offline / snapshot / 版本历史（Step 6.5 / 6.6 / 6.13）
+#### Iteration 2 - provider adapter 与 hocuspocus 双窗口 demo（Step 6.1-6.4）
 
-- [ ] 接入 `y-indexeddb` 或等价离线恢复能力，断网编辑后可恢复并同步。
-- [ ] 定义 snapshot adapter：update log、snapshot 保存、snapshot 加载、版本列表。
-- [ ] 实现历史版本最小闭环：
+- [x] 建立 `packages/collab` 最小包和公开类型，只在有 adapter contract test 时创建。
+- [x] 定义 `JWordCollabProviderAdapter`：
+  - `connect()`
+  - `disconnect()`
+  - `destroy()`
+  - `sendUpdate(update, metadata)`
+  - `onUpdate(listener)`
+  - `onStatus(listener)`
+  - `onSynced(listener)`
+  - `awareness`
+- [x] 定义 provider status：
+  - `idle`
+  - `connecting`
+  - `connected`
+  - `synced`
+  - `disconnected`
+  - `reconnecting`
+  - `offline`
+  - `error`
+- [x] 定义 provider error：
+  - auth rejected
+  - room missing
+  - websocket closed
+  - update rejected
+  - protocol mismatch
+  - persistence unavailable
+- [x] 实现 hocuspocus adapter：
+  - 示例服务使用 `@hocuspocus/server`
+  - client 侧 provider 作为可选依赖接入
+  - room id、token、user metadata 由宿主传入
+  - 不把 auth/token 放进 core
+  - 进展 2026-05-26：已新增 `examples/collab/server/hocuspocus-service.ts` 和 `examples/collab/server/dev-server.ts`，示例服务使用 `@hocuspocus/server@4.0.0`，支持本地 `address` / `port` / `roomPrefix`，默认监听 `127.0.0.1:4188`，`examples/collab` 新增 `dev:server` 脚本。红测 `pnpm exec vitest run examples/collab/tests/hocuspocus-service.test.ts` 先失败于缺少服务入口，随后转绿并验证随机端口启动、HTTP welcome 响应、WebSocket URL 和关闭。当前仍未接 `@hocuspocus/provider` 或浏览器 client provider，真实双窗口 Hocuspocus 协同仍未完成。
+  - 续做 2026-05-26：已新增 `packages/collab/src/hocuspocus-adapter.ts` 和 `createHocuspocusCollabProviderAdapter()`，使用 `@hocuspocus/provider@4.0.0` 连接真实 Hocuspocus WebSocket；`autoConnect` 由 `HocuspocusProviderWebsocket` 管理，复用 websocket provider 时显式 `provider.attach()`，并保持 hocuspocus 类型不进入 core public API。`examples/collab/tests/hocuspocus-provider.test.ts` 启动本地 Hocuspocus 服务并验证两个 `Y.Doc` 通过真实 provider 收敛。
+- [x] 建立 `examples/collab`：
+  - 两个 editor 面板或双窗口入口
+  - room id 输入
+  - 当前用户切换
+  - connection 状态条
+  - update/diagnostics 面板
+  - reset room 仅作用于 demo 数据
+- [x] 实现 remote update render path：
+  - 本地 editor 写入后 provider 收到 update。
+  - 远端 editor apply update。
+  - 远端 projection/layout/render 刷新。
+  - 本地 selection 不被远端更新强制覆盖。
+- [x] 补双 Y.Doc Vitest convergence tests：
+  - A 输入后 B 收到 update。
+  - B 输入后 A 收到 update。
+  - update 重放两次仍不重复。
+  - update 乱序后最终一致。
+- [x] 补 Playwright Chromium 双窗口测试：
+  - 两个浏览器上下文进入同一 room。
+  - A 输入文本，B 可见。
+  - B 输入文本，A 可见。
+  - 两边 projection 文本一致。
+- [x] 验证：provider adapter 可替换，不把 hocuspocus 类型泄漏到 core public API。
+  - 进展 2026-05-26：已新增 `@4xian/jword-collab`、内存 `JWordCollabProviderAdapter`、`destroy()`、`onStatus()`、完整 provider status 枚举、awareness adapter、provider error/update metadata/diagnostic 类型和 contract tests；`packages/collab/test/contract.test.ts` 覆盖同 room update/awareness 广播、Yjs update replay 幂等和依赖 update 乱序后最终一致。当前仍缺真实 hocuspocus adapter、真实双窗口 provider demo 和 Playwright 双上下文协同测试。
+  - 续做 2026-05-26：`examples/collab` 已支持 `?provider=hocuspocus&ws=...&room=...&client=client-a|client-b`，通过 `examples/collab/src/runtime/hocuspocus-runtime.ts` 和 `loadHocuspocusDemoRuntime()` 接入真实 provider；`examples/collab/tests/collab-smoke.e2e.ts` 在 Chromium 双页面连接同一 Hocuspocus room 后验证 A 输入同步到 B。Kimi WebBridge 真实浏览器双标签验收读回 `providerMode: "hocuspocus"`、两端 `status: "synced"`，并确认 `Gate 6 Kimi real Hocuspocus sync` 从 client-a 同步到 client-b。当前仍缺真实 provider 多窗口 awareness、WebSocket reconnect failed、IndexedDB 浏览器恢复和真实断网恢复。
+
+#### Iteration 3 - awareness、远端光标和远端选区（Step 6.3）
+
+- [x] 定义 awareness state schema：
+  - user authorId
+  - display name
+  - color
+  - avatar
+  - cursor anchor snapshot
+  - selection range snapshot
+  - viewport/page index
+  - updatedAt
+- [x] awareness 只保存 ephemeral state，不写入 Y.Doc 正文，不进入 update log，不进入版本历史。
+- [x] 远端 selection 必须使用 JWord `TextRangeRecord` / relative position snapshot；解析失败时降级为用户在线状态，不抛出阻断错误。
+- [x] 在 `packages/ui` 或 `examples/collab` 建立远端光标/选区 overlay：
+  - 显示用户颜色。
+  - 显示用户名 tooltip。
+  - 多用户重叠时稳定排序。
+  - 当前用户不显示自己的 remote cursor。
+- [x] 补 focused tests：
+  - awareness state parse/serialize。
+  - stale awareness 清理。
+  - unresolved remote anchor 不阻断渲染。
+  - presence 不影响 undo。
+- [x] 补真实浏览器验收：
+  - A 移动光标，B 看到 A 的远端光标。
+  - A 拖选文本，B 看到 A 的远端选区。
+  - [x] A 断开连接后，B 的在线用户列表移除或标记离线。
+- [x] 验证：awareness 断开、过期或权限不足时，正文协同仍可继续。
+  - 进展 2026-05-26：`packages/collab` 已提供 awareness serialize/parse、stale cleanup 和 unresolved anchor 降级为 presence 的 helper，并有 contract tests；当前还没有远端光标/选区 overlay、真实浏览器多用户光标验收，也没有把 selection 升级为 JWord `TextRangeRecord` / relative position snapshot 的完整实现。
+  - 续做 2026-05-26：`examples/collab` 内存 demo 已增加远端光标/选区可见层，页面以 `data-jword-remote-cursor` / `data-jword-remote-selection` 渲染用户颜色、用户名、cursor offset 和 selection range。Playwright Chromium 覆盖 Alice/Bao 远端光标可见，以及 Client A 选区 `5-12` 后页面显示 `Alice selection 5-12`。Kimi WebBridge 真实浏览器读回 `Alice cursor 8`、`Bao cursor 16`，触发 Client A 选区后读回 `Alice cursor 12`、`Alice selection 5-12`，debug API 中 `selectionStart: 5`、`selectionEnd: 12`。当前仍未接真实 provider 多窗口 awareness，也未把 selection 升级为 JWord `TextRangeRecord` / relative position snapshot。
+  - 续做 2026-05-26：补真实 Hocuspocus awareness 红测，先用 `pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "Hocuspocus awareness"` 复现 client-b debug API 已读到 client-a awareness、但 DOM 没刷新远端 cursor/selection；根因是 `hocuspocus-runtime.ts` 未订阅 `adapter.awareness.onChange()`。修复后新增 `adapter.awareness.onChange(() => notify())` 并在 destroy 时取消订阅。验证：`pnpm exec vitest run examples/collab/tests/hocuspocus-provider.test.ts packages/collab/test/contract.test.ts`、`pnpm --filter @4xian/jword-collab typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium` 均通过；Kimi WebBridge 双标签真实浏览器在 room `jword-collab-kimi-awareness-*` 中读回 client-b DOM `Client A cursor 8`、`Client A selection 2-8`，debug API 中 `selectionStart: 2`、`selectionEnd: 8`。
+  - 续做 2026-05-26：补真实 Hocuspocus 断连 presence 回归 `Gate 6 collab demo removes Hocuspocus awareness after a browser page disconnects`；client-a 断开前 client-b 能看到 `client-a` 的 cursor/selection，调用 `simulateDisconnect()` 后 client-b 的 `readAwarenessState().users` 不再包含 `client-a`，`data-jword-remote-cursor="client-a"` 和 `data-jword-remote-selection="client-a"` DOM 数量为 0，正文仍保留同步文本。验证：`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "awareness"` 2 项通过，完整 `examples/collab/tests/collab-smoke.e2e.ts` Chromium 12 项通过，`pnpm --filter @4xian/jword-example-collab typecheck` 和 `pnpm --filter @4xian/jword-example-collab build` 通过；Kimi WebBridge 真实 Chrome 双标签在 room `jword-collab-kimi-awareness-disconnect-room` 中读回断连前 `ids: ["client-a"]`、`Client A selection 0-11`，断连后 `ids: []`、cursor/selection DOM 数量均为 0。
+  - 续做 2026-05-26：补 awareness `rangeSnapshot` 结构契约和真实 Hocuspocus 写入路径；`JWordAwarenessState` 现在可携带结构兼容的 JWord range snapshot，包含 `documentId`、`sectionId`、`blockId`、`runId`、`graphemeIndex` 和 Yjs `relativePosition` JSON，内存 parser 与 Hocuspocus adapter 均拒绝非法 range snapshot。红绿验证：`pnpm exec vitest run packages/collab/test/contract.test.ts --testNamePattern "range snapshots"` 先失败于非法 snapshot 被放行后转绿，`pnpm exec vitest run examples/collab/tests/hocuspocus-provider.test.ts --testNamePattern "filters invalid awareness range snapshots"` 先失败于真实 provider 放行非法 snapshot 后转绿，`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "renders Hocuspocus awareness"` 先失败于 `rangeSnapshot` 为 `null` 后转绿。Kimi WebBridge 真实 Chrome 双标签在 room `jword-collab-kimi-range-snapshot-room` 验证 client-b 读回 `client-a-selection`，anchor/focus `graphemeIndex` 为 `2/8`，relative position `tname: "body"` 且携带 Yjs item clock。当前 Step 6.3 仍未整体完成：viewport/page index、用户名 tooltip、多用户重叠稳定排序和更完整的 unresolved range 降级验收仍需补齐。
+  - 续做 2026-05-26：补 awareness viewport/page index、用户名 tooltip 和多用户重叠稳定排序的可执行证据；`JWordAwarenessState.viewport.pageIndex` 已通过 parser、Hocuspocus adapter guard、provider test 和 Hocuspocus runtime 写入路径传递到 debug snapshot，`examples/collab` 远端 cursor/selection DOM 写入 `title`，presence 渲染按 `clientId` 返回新数组排序且不修改输入。红绿验证：`examples/collab/tests/vite-config.test.ts --testNamePattern "awareness users render"` 先失败于 `sortAwarenessUsers is not a function` 后转绿；`examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "remote cursor and selection presence|renders Hocuspocus awareness"` 先失败于 cursor 缺少 `title` 后转绿。Kimi WebBridge 真实 Chrome 双标签在 room `jword-collab-kimi-step63-awareness-order-room` 验证 client-b 同步正文 `awareness order viewport text`，DOM 顺序为 `["client-a"]`，cursor/selection `title` 均为 `Client A`，selection 为 `2-8`，debug API 读回 `viewport.pageIndex: 0`。当前 Step 6.3 仍未整体完成：更完整的 unresolved range 降级验收、presence 不影响 undo 的 focused test、权限不足 awareness 降级路径仍需补齐。
+
+#### Iteration 4 - offline recovery 与 IndexedDB persistence（Step 6.5 / 6.12）
+
+- [x] 建立 `packages/persistence` 最小包和公开类型，只在 offline adapter test 可运行时创建。
+- [x] 定义 offline adapter：
+  - `load(roomId, doc)`
+  - `whenSynced`
+  - `readState()`
+  - `clearLocalData(roomId)`
+  - `destroy()`
+  - `onDiagnostic(listener)`
+- [x] 接入 `y-indexeddb` 或等价 adapter：
+  - IndexedDB key 与 room id 对齐。
+  - 本地数据加载完成前显示 restoring 状态。
+  - IndexedDB 不可用时返回 recoverable diagnostic。
+  - 清理本地缓存必须显式调用，不在 reconnect 时自动删除。
+- [x] 定义 offline diagnostics：
+  - `OFFLINE_CACHE_SYNCED`
+  - `OFFLINE_CACHE_UNAVAILABLE`
+  - `OFFLINE_LOCAL_UPDATE_QUEUED`
+  - `OFFLINE_RECONNECT_STARTED`
+  - `OFFLINE_RECONNECT_SYNCED`
+  - `OFFLINE_RECONNECT_CONFLICT_MERGED`
+  - `OFFLINE_RECONNECT_FAILED`
+- [x] 补断网恢复测试：
+  - [x] 已同步文档 reload 后从 IndexedDB 恢复。
+  - [x] 网络断开期间输入进入本地 doc。
+  - [x] 重连后远端收到离线期间输入。
+  - [x] 服务端先有远端更新，本地重连后最终一致。
+  - IndexedDB 不可用时不阻断在线协同。
+- [x] 补真实浏览器验收：
+  - [x] 打开 room、输入内容、刷新页面，离线缓存先恢复内容。
+  - [x] 模拟 WebSocket 断开，继续输入，状态显示 offline/local pending。
+  - [x] 恢复连接后两窗口内容一致，诊断显示 synced。
+- [x] 验证：offline cache 只是 Yjs update cache，不保存第二份 projection JSON 作为真源。
+  - 进展 2026-05-26：已新增 `@4xian/jword-persistence`、offline adapter 类型和 `createUnavailableIndexedDbOfflineAdapter()`，focused tests 覆盖 IndexedDB unavailable recoverable diagnostic；当前仍未接入真实 `y-indexeddb`，也没有浏览器断网、刷新恢复、重连同步证据。
+  - 续做 2026-05-26：已新增 `packages/persistence/src/indexeddb-adapter.ts` 和 `createIndexedDbOfflineAdapter()`，基于 `y-indexeddb@9.0.12` 接入真实浏览器 IndexedDB；adapter 公开 `whenSynced`、`readState()`、`clearLocalData()`、`destroy()`、`onDiagnostic()`，IndexedDB key 默认与 room id 对齐，Node/不可用环境返回 `PERSISTENCE_INDEXEDDB_UNAVAILABLE` recoverable diagnostic。`examples/collab` 的 Hocuspocus 模式支持 `offline=indexeddb`，写入时保存 Yjs state update checkpoint，reload 时从 IndexedDB 临时 Y.Doc 恢复；未保存 projection JSON。验证：先用 `pnpm exec vitest run packages/persistence/test/indexeddb-adapter.test.ts --testNamePattern "IndexedDB offline adapter"` 观察到 `createIndexedDbOfflineAdapter is not a function` 红灯，再实现并通过；随后 `pnpm exec vitest run packages/persistence/test/indexeddb-adapter.test.ts packages/persistence/test/memory-adapter.test.ts examples/collab/tests/vite-config.test.ts`、`pnpm --filter @4xian/jword-persistence typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "IndexedDB"` 均通过。
+  - 真实浏览器补证 2026-05-26：Kimi WebBridge 真实 Chrome 在 room `jword-collab-kimi-indexeddb-room-1779741366418` 输入 `Gate 6 Kimi IndexedDB reload text` 后读回 `offline.lastEvent: "indexeddb-synced"`、`databaseName` 等于 room id、`updateByteLength: 50`；随后停止 Hocuspocus 服务并重新打开同一 URL，页面仍从 IndexedDB 恢复同一文本，debug API 显示 `connected: false`、`lastEvent: "indexeddb-synced"`、`updateByteLength: 50`。当前仍未完成模拟 WebSocket 断开期间继续输入、重连最终一致、offline local pending 和重连诊断矩阵。
+  - 续做 2026-05-26：`fixtures/collab/diagnostics-registry.json` 已把 offline registry 从旧的单个 `COLLAB_OFFLINE_QUEUE_REPLAYED` 收敛为计划内 7 个稳定 `OFFLINE_*` code；`examples/collab` Hocuspocus + IndexedDB runtime 现在在断开期间保留本地 Y.Doc 写入，`readOfflineState()` 暴露 `queuedOperations`、`offline-local-pending`、`OFFLINE_LOCAL_UPDATE_QUEUED`，重连时暴露 `OFFLINE_RECONNECT_STARTED`，Hocuspocus synced 后清空 pending 并记录 `OFFLINE_RECONNECT_SYNCED`。新增 Playwright 双页面回归 `Gate 6 collab demo keeps IndexedDB offline edits pending until Hocuspocus reconnects`，覆盖 A/B 已同步、A 断开后继续输入、B 断开期间不提前看到、A 重连后 B 收到离线文本。Kimi WebBridge 真实 Chrome 双标签在 room `jword-collab-kimi-offline-reconnect-1779742573` 验证：A 离线输入后 `queuedOperations: 1`、`lastEvent: "offline-local-pending"`、诊断含 `OFFLINE_LOCAL_UPDATE_QUEUED`，B 仍是旧文本；A 重连后 `lastEvent: "offline-reconnect-synced"`、`queuedOperations: 0`、诊断含 `OFFLINE_RECONNECT_STARTED` / `OFFLINE_RECONNECT_SYNCED`，B 收到 `Gate 6 Kimi reconnect offline pending text`。当前仍未覆盖服务端先有远端更新再合并、provider auth failed、WebSocket reconnect failed 和真实 provider 历史版本恢复。
+  - 续做 2026-05-26：补齐“服务端先有远端更新，本地重连后最终一致”路径。Playwright 红测 `Gate 6 collab demo merges remote server updates with offline local edits on reconnect` 先失败于 A/B 文本已合并但缺少 `OFFLINE_RECONNECT_CONFLICT_MERGED` 诊断；修复后同测转绿，并且 `keeps IndexedDB offline edits` / `merges remote server updates` 子集与完整 `examples/collab` Chromium smoke 10 项通过。Kimi WebBridge 真实 Chrome 双标签在 room `jword-collab-kimi-offline-merge-1779745189754` 验证：A 断开后写入 `Gate 6 Kimi merge offline local text`，B 在线写入 `Gate 6 Kimi merge remote server text`，A 重连后 A/B 最终文本一致且同时包含本地离线文本和远端文本；A 侧 `readOfflineState()` 导出 `queuedOperations: 0`、`lastEvent: "offline-reconnect-synced"`，诊断含 `OFFLINE_RECONNECT_STARTED`、`OFFLINE_RECONNECT_SYNCED` 和 `OFFLINE_RECONNECT_CONFLICT_MERGED`。当前仍未覆盖 provider auth failed、WebSocket reconnect failed、update rejected 和生产共享历史服务。
+  - 续做 2026-05-26：补齐 WebSocket reconnect failed 路径。Playwright 红测 `Gate 6 collab demo preserves pending offline edits when Hocuspocus reconnect fails` 先失败于停止 Hocuspocus 服务后只导出 `OFFLINE_RECONNECT_STARTED`，没有 `OFFLINE_RECONNECT_FAILED`；修复后 runtime 在重连 pending 时增加可取消失败兜底，成功 synced 会取消，服务不可达时保留本地 pending 并导出 `OFFLINE_RECONNECT_FAILED`。验证：该 focused 测试转绿，`keeps IndexedDB offline edits` / `merges remote server updates` / `reconnect fails` 三项子集通过，完整 `examples/collab` Chromium smoke 11 项通过。Kimi WebBridge 真实 Chrome 在 room `jword-collab-kimi-reconnect-failed-1779745807282` 验证：停止本地 Hocuspocus 服务后重连失败，页面状态为 `offline-reconnect-failed`，`queuedOperations: 1`，pending 文本 `Gate 6 Kimi reconnect failure pending local text` 未丢失，诊断含 `OFFLINE_RECONNECT_STARTED` 和 `OFFLINE_RECONNECT_FAILED`。当前仍未覆盖 provider auth failed、update rejected 和生产共享历史服务。
+
+#### Iteration 5 - update log、snapshot 和版本历史（Step 6.6 / 6.13）
+
+- [x] 定义 snapshot adapter：
+  - `appendUpdate(update, metadata)`
+  - `createSnapshot(metadata)`
+  - `listVersions(query)`
+  - `loadVersion(versionId)`
+  - `createPreview(versionId)`
+  - `restoreVersion(versionId, options)`
+  - `compact(beforeVersionId)`
+- [x] 定义 update log record：
+  - `updateId`
+  - `roomId`
+  - `clientId`
+  - `origin`
+  - `authorId`
+  - `createdAt`
+  - `byteLength`
+  - `sha256`
+  - `stateVector`
+  - `snapshotId`
+  - 续做 2026-05-26：内存 update log record 已补 `snapshotId`，`createSnapshot()` 会把生成的 `snapshotId` 反向挂到对应 `baseUpdateId` 的 update log 记录，形成可审计的 update -> snapshot 链路。验证：先用 `pnpm exec vitest run packages/persistence/test/memory-adapter.test.ts --testNamePattern "metadata"` 观察 `baseUpdateId` / `documentSummary` / `updateByteLength` / `snapshotId` 缺失红灯，再实现并转绿；随后 `pnpm exec vitest run packages/persistence/test/memory-adapter.test.ts`、`pnpm --filter @4xian/jword-persistence typecheck` 均通过。
+- [x] 定义 snapshot record：
+  - `snapshotId`
+  - `roomId`
+  - `createdAt`
+  - `label`
+  - `authorId`
+  - `baseUpdateId`
+  - `stateVector`
+  - `updateByteLength`
+  - `documentSummary`
+  - 续做 2026-05-26：内存 snapshot record 已包含 `snapshotId`、`documentId`、`versionId`、`roomId`、`clientId`、`createdAt`、`label`、`authorId`、`origin`、`baseUpdateId`、`stateVector`、`byteLength`、`updateByteLength`、标准 `sha256`、`updateCount` 和 `documentSummary`。`documentSummary` 仅从隔离 `Y.Doc` 提取 shared type 名称、updateCount 和 updateByteLength，不保存 projection JSON。
+- [x] 使用 Yjs update API 实现：
+  - 追加 incremental update。
+  - `Y.mergeUpdates()` 合并 update。
+  - `Y.encodeStateVectorFromUpdate()` 建版本索引。
+  - 必要时加载到隔离 Y.Doc 做 garbage collection / projection preview。
+- [x] 实现历史版本最小闭环：
   - 版本列表
   - 只读预览
   - 恢复
   - 恢复失败诊断
+- [x] 只读预览必须满足：
+  - 不连接 provider。
+  - 不写当前 editor。
+  - 可生成 projection/layout。
+  - 显示版本 metadata 和 warning。
+- [x] 版本恢复必须满足：
+  - [x] 恢复前检测当前 doc 是否有未同步本地 update。
+  - [x] 恢复操作带 `version-restore` origin。
+  - [x] 恢复失败保留当前可写 doc。
+  - [x] 恢复成功后产生新的版本记录，而不是删除历史。
+- [x] 补 focused tests：
+  - update log 可重建 Y.Doc。
+  - snapshot + tail updates 可重建指定版本。
+  - 版本预览不修改当前 doc。
+  - 恢复失败不半写。
+  - compact 后最新版本仍可恢复。
+  - update / snapshot / version metadata 可记录 room、client、origin、snapshotId、baseUpdateId、documentSummary、updateByteLength、标准 sha256 和 state vector。
+  - 恢复成功会追加 `restore:*` 版本记录，不删除历史。
+  - 空占位 snapshot 使用标准空字节 SHA-256 摘要。
+- [x] 补真实浏览器验收：
+  - [x] 创建两个版本。
+  - [x] 打开历史列表。
+  - [x] 预览旧版本。
+  - [x] 恢复旧版本。
+  - [x] 新版本列表出现 restore 记录。
+- [x] 验证：历史版本可查看、可恢复、可解释；不以 DOCX、HTML 或 projection JSON 覆盖真源。
+  - 续做 2026-05-26：内存 persistence adapter 已覆盖 update log 重建、snapshot + tail update、隔离 preview、restore、restore failed diagnostic、compact 后最新版本恢复；metadata 已补 `roomId` / `clientId` / `origin` / `authorId` / `byteLength` / 标准 `sha256` / `stateVector`，成功 restore 已追加 `restore:*` 新版本记录。验证：`pnpm vitest run packages/persistence/test/memory-adapter.test.ts`、`pnpm --filter @4xian/jword-persistence typecheck`、Gate 6 focused suite、根 `pnpm typecheck`、comment/boundary/diff checks 均通过。当前仍未做浏览器历史列表/预览/恢复验收，也未接真实 IndexedDB。
+  - 续做 2026-05-26：`examples/collab` 内存 demo 已新增可编辑双客户端、历史版本下拉、只读预览和恢复按钮；Playwright Chromium 覆盖 A/B 输入同步、创建两个版本、选择旧版本、预览旧版本、恢复旧版本和 `restore:v1` 记录。Kimi WebBridge 真实浏览器验证：在 `http://127.0.0.1:4187/` 输入 `Gate 6 Kimi synced text` 后 A/B 同步，历史记录出现 `Client A edit`；选择 `v1` 后预览显示 `Gate 6 memory collab draft`；点击恢复后 A/B 均回到初始文本，历史记录包含 `restore:v1`。这仍是 demo host 内存验证，不代表真实 provider、真实 IndexedDB 或生产历史 UI 完成。
+  - 续做 2026-05-26：`examples/collab` 真实 Hocuspocus provider 模式已覆盖本地 history 索引、隔离只读预览和恢复后同步到另一浏览器页面。Playwright Chromium 新增 `Gate 6 collab demo restores Hocuspocus history versions across browser pages`：client-a 写入 `Gate 6 provider history v1` / `Gate 6 provider history v2`，client-b 跟随同步；client-a 选择 v1 版本后预览显示 v1，点击 restore 后 client-a/client-b 均回到 v1，历史列表出现 `restore:Client A edit`。Kimi WebBridge 真实 Chrome 双标签在 room `jword-collab-kimi-history-1779743550` 验证同一路径：最终 `providerMode: "hocuspocus"`、两端状态为 `synced`、A/B 文本均为 `Gate 6 Kimi provider history v1`，预览同为 v1。当前历史索引仍是每页 runtime 本地 memory persistence，不是生产共享历史服务；未覆盖 restore conflicts with unsynced local update、真实 provider 历史失败诊断或 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：真实 Hocuspocus provider + IndexedDB 模式已覆盖 `restore conflicts with unsynced local update`。红测 `pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "blocks Hocuspocus history restore"` 先失败于 pending 本地文本被旧版本覆盖；修复后同命令转绿。实现只在 `examples/collab/src/runtime/hocuspocus-runtime.ts` 的 restore 入口检测 `queuedOperations` / offline pending 状态，阻止恢复、保留当前可写 Y.Doc、保留 pending 计数，并导出 `COLLAB_RESTORE_CONFLICT_RESOLVED` 诊断。Kimi WebBridge 真实 Chrome 双标签在 room `jword-collab-kimi-restore-conflict-1779744180` 验证：client-a 离线 pending 后点击 restore，A 保留 `Gate 6 Kimi restore conflict pending local`，B 保持 `Gate 6 Kimi restore conflict synced`，A 的 `lastEvent` 为 `restore-conflict-local-pending`、`queuedOperations: 1`、诊断含 `COLLAB_RESTORE_CONFLICT_RESOLVED`。当前仍未覆盖生产共享历史服务、真实 provider 历史失败诊断的完整矩阵和 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：persistence 内存契约补齐 update log / snapshot 生产历史 metadata 字段，覆盖 `JWordUpdateLogRecord.snapshotId`、`JWordSnapshotRecord.baseUpdateId`、`updateByteLength`、`documentSummary` 和 update -> snapshot 反向链路。该收口仍是 persistence contract 层，不代表生产共享历史服务、真实 provider 历史失败诊断矩阵或 Gate 6 总体验收完成。
 
-#### Iteration 3 - auto inserter 主通道（Step 6.7-6.9）
+#### Iteration 6 - auto inserter 主通道（Step 6.7-6.9）
 
-- [ ] 实现 `createInserter()` API，支持 stable anchor、throttle、flush、abort、progress、error。
-- [ ] 实现 auto inserter origin 策略，默认不进入用户 undo 栈。
-- [ ] 实现可配置 undo scope，允许 AI/程序化写入进入独立 undo scope。
+- [x] 实现 `createInserter()` API，支持 stable anchor、throttle、flush、abort、progress、error。
+- [x] 定义 `createInserter()` 输入：
+  - `editor`
+  - `requestId`
+  - `anchor` 或 `range`
+  - `origin = "auto-inserter"`
+  - `mode = "insert" | "replace" | "append"`
+  - `flushPolicy`
+  - `undoScope`
+  - `AbortSignal`
+  - progress/error listener
+- [x] 定义 auto inserter event：
+  - `queued`
+  - `anchored`
+  - `streaming`
+  - `flushing`
+  - `committed`
+  - `aborted`
+  - `failed`
+- [x] 定义 auto inserter error：
+  - anchor unresolved
+  - range deleted
+  - abort requested
+  - command rejected
+  - concurrent restore
+  - provider disconnected
+  - 进展 2026-05-26：已新增公开 `InserterError` / `InserterErrorCode`，并从 `@4xian/jword-core` 根入口导出；当前已覆盖 `AUTO_INSERTER_ANCHOR_UNRESOLVED`、`AUTO_INSERTER_RANGE_REQUIRED`、`AUTO_INSERTER_ANCHOR_REQUIRED`、`AUTO_INSERTER_FLUSH_FAILED`。`range deleted`、`abort requested`、`command rejected`、`concurrent restore`、`provider disconnected` 的完整诊断矩阵仍未完成。
+- [x] 写入策略：
+  - 每个 chunk 先解析 anchor 当前绝对位置。
+  - 多个 token 聚合为小 batch，避免每字符 transaction。
+  - 每次 flush 经 Editor command/transaction。
+  - selection 不强制抢占用户当前输入。
+  - 用户在插入点附近编辑时，anchor 跟随 Yjs relative position。
+- [x] undo 策略：
+  - 默认不进入用户 undo。
+  - 可选独立 auto-inserter undo scope。
+  - 用户 undo 不撤销 remote/AI 内容。
+  - abort 后已提交 chunk 保持可诊断，不做不可控回滚。
+- [x] 补 focused tests：
+  - stable anchor 后插入。
+  - replace range 后插入。
+  - 用户同时在同段输入，AI chunk 不丢不重复。
+  - abort 停止后续 flush。
+  - progress 顺序稳定。
+  - anchor deleted 时返回可恢复错误。
+  - 进展 2026-05-26：`packages/core/test/collaboration/inserter.test.ts` 已覆盖 stable anchor、replace range、abort、progress 顺序、默认不进用户 undo，以及文档替换后旧 anchor 无法解析时返回 `AUTO_INSERTER_ANCHOR_UNRESOLVED` recoverable error；`packages/core/test/index.test.ts` 覆盖根入口导出 auto inserter 结构化错误类型。续做已补 core 级同段并发回归：本地用户或 `remote-user` origin 在 AI queue 后、flush 前写入同段，AI chunk 仍跟随稳定 anchor，不丢不重复，且 remote+AI 默认不进入用户 undo。最新续做已补 `undoScope: "auto-inserter"` 独立 undo/redo 回归。仍缺真实 provider 并发和 throttle/batch。
+- [x] 补真实浏览器验收：
+  - 启动 AI streaming 插入。
+  - 插入期间用户继续输入。
+  - 插入期间远端用户继续输入。
+  - abort 后 editor 仍可输入。
+  - 用户 undo 不撤销 AI 内容，独立 AI undo scope 可撤销 AI 内容。
+- [x] 验证：auto inserter 不使用普通字符 offset，不阻塞本地输入，不绕过 Editor transaction。
+  - 进展 2026-05-26：已新增 `packages/core/src/collaboration/inserter.ts` 和公开 `createInserter()`，支持 `requestId`、`anchor` / `range`、`mode`、`flushPolicy`、`undoScope`、`AbortSignal`、progress/error listener；focused tests 覆盖 stable anchor、replace range、abort、progress 顺序、anchor unresolved 结构化可恢复错误、local/remote origin 与 AI queue 的同段并发、默认不进用户 undo，以及 `undoScope: "auto-inserter"` 独立 undo/redo；根入口已导出 `InserterError` / `InserterErrorCode` / `HistoryScope`。当前仍缺 throttle/batch、真实 provider 并发验收和 range deleted 完整诊断。
 
-#### Iteration 4 - 并发矩阵（Step 6.10-6.11）
+#### Iteration 7 - remote/local/AI 并发矩阵（Step 6.10-6.11）
 
-- [ ] 建立 remote/local 并发测试：
-  - 双用户同段不同位置输入
-  - 双用户同位置输入
-  - 删除与格式化冲突
-  - 批注 anchor 远端编辑稳定
-- [ ] 建立 AI 自动插入与手动编辑并发测试，确认不重复、不丢失、不阻塞输入。
+- [x] 建立 remote/local 并发测试：
+  - [x] 双用户同段不同位置输入
+  - [x] 双用户同位置输入
+  - [x] 删除与远端插入冲突
+  - [x] 格式化冲突
+  - [x] 批注 anchor 远端编辑稳定
+- [x] 扩展 remote/local 并发测试：
+  - [x] A 删除 B 正在格式化的范围。
+  - [x] A 新增批注，B 在批注前插入文本。
+  - [x] A 移动 selection，B 替换同段文本。
+  - [x] A undo 本地输入，B 的 remote 输入保留。
+- [x] 建立 AI/local 并发测试：
+  - AI 在 anchor 处流式插入，用户在 anchor 前输入。
+  - AI 替换 range，用户在 range 后输入。
+  - 用户删除 AI anchor 所在 run，AI 返回 anchor unresolved。
+  - 用户 undo 本地输入，AI 内容保留。
+- [x] 建立 AI/remote 并发测试：
+  - AI 写入时远端用户同段输入。
+  - AI 写入时远端用户删除相邻文本。
+  - AI 写入期间 provider 断开再恢复。
+- [x] 每个并发 fixture 必须记录：
+  - 初始文档。
+  - 操作序列。
+  - origin 序列。
+  - 预期最终 projection 摘要。
+  - undo 预期。
+  - diagnostics 预期。
+- [x] 补 `fixtures/collab/registry.json`，约束每个并发 fixture 的输入、操作序列和预期摘要。
+- [x] 验证：并发矩阵不追求固定字符顺序之外的不可控 UI 细节，但必须验证“不重复、不丢失、不阻塞、不污染 undo”。
+  - 进展 2026-05-26：已新增 `fixtures/collab/registry.json` 和 `fixtures/history/registry.json`，并用架构测试约束输入、操作序列、origin、projection 摘要、undo 和 diagnostics 期望；`packages/core/test/collaboration/inserter.test.ts` 已覆盖 core 级 local/remote origin 与 AI queue 同段并发，不丢、不重复、不污染用户 undo。当前仍没有真实 provider 双窗口回放执行器，也未覆盖删除/格式化冲突、批注 anchor 远端编辑稳定和浏览器并发输入。
+  - 续做 2026-05-26：已补真实 Hocuspocus provider 模式下 remote/local 双用户同段不同位置输入首条闭环；新增 `examples/collab/src/runtime/hocuspocus-text-command.ts`，用 `previousText -> nextText` 计算本地输入 diff，再按当前共享正文 rebase diff 起点，避免另一个 client 的前缀输入被完整 textarea value 覆盖删除；`examples/collab/src/main.ts` 改为通过 `beforeinput` 捕获本地编辑基线，render 只刷新可见文本，不覆盖本地输入基线；`examples/collab/tests/collab-concurrency.e2e.ts` 补 `Gate 6 provider 双用户同段不同位置输入后不互相覆盖`，先红于最终只剩 `provider base-B`，随后绿于最终 A/B 均为 `A-provider base-B`。验证：`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium --grep "不同位置"`、`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium`、`pnpm --filter @4xian/jword-example-collab typecheck`、`node tools/lint/check-comments.mjs`、targeted `git diff --check` 通过。Kimi WebBridge 真实 Chrome session `jword-gate6-a` / `jword-gate6-b` 在本地 4186/4188 双标签验证：先写入 `provider base`，再并发提交 A 前缀和 B 后缀，A/B 均读回 `A-provider base-B`，offline 保持 `connected: true`、`lastEvent: "synced"`、诊断为空；验证后已关闭 Kimi sessions 并确认 4186/4188 无监听残留。Step 6.10 仍保持未完成：还缺双用户同位置输入、删除与格式化冲突、批注 anchor 远端编辑稳定、local undo 不撤销 remote 的真实 provider 路径。
+  - 续做 2026-05-26：继续补真实 Hocuspocus provider 同位置和 undo 并发路径；`examples/collab/tests/collab-concurrency.e2e.ts` 新增 `Gate 6 provider 双用户同段同位置输入后不丢失不重复`、`Gate 6 provider 旧基线同位置提交不重复远端后缀`、`Gate 6 provider 本地 undo 不撤销远端输入`、`Gate 6 provider 旧基线本地输入不重复远端后缀`。先红于真实 Kimi 路径暴露的 `A-B-provider baseprovider base` / `provider base remote local remote`，随后 `hocuspocus-text-command.ts` 增加旧 baseline 合并：无 `beforeinput` 时按 current/next 共享正文只插入本地前后缀；旧 baseline 追加时裁掉 current 已存在的远端追加片段，避免重复后缀并保留本地 undo 栈。Kimi WebBridge 真实 Chrome 双标签复跑：同位置最终 `A-B-provider base`，A/B token 各一次且 `provider base` 一次；undo 路径最终回到 `provider base remote`，offline 均为 `indexeddb-synced`，仅有 `OFFLINE_CACHE_SYNCED` info 诊断。验证：`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium --grep "同位置|旧基线|本地 undo"`、`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium`、`pnpm exec vitest run packages/core/test/collaboration/editor-update.test.ts examples/collab/tests/vite-config.test.ts`、`pnpm --filter @4xian/jword-core typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck`、`node tools/lint/check-comments.mjs`、targeted `git diff --check` 通过。Step 6.10 仍保持未完成：还缺删除与格式化冲突、批注 anchor 远端编辑稳定，以及 AI/local、AI/remote 并发矩阵。
+  - 续做 2026-05-26：补真实 Hocuspocus provider 下删除与远端插入冲突路径；`examples/collab/tests/collab-concurrency.e2e.ts` 新增 `Gate 6 provider 旧基线删除不吞掉远端插入`，RED 先失败于 A 旧基线删除 `AB` 时误删远端插入前缀并最终得到 `remote-B`。随后 `hocuspocus-text-command.ts` 对旧基线纯删除增加非连续 rebase：把旧基线 grapheme 映射到当前共享正文位置，合并删除 range 并倒序生成 `deleteRange`，避免吞掉远端插入。验证：`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium --grep "旧基线删除"`、完整 `pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium`、`pnpm --filter @4xian/jword-example-collab typecheck` 通过；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-delete-insert` 验证 A/B 从 `AB`，B 远端插入为 `A-remote-B` 后，A 旧基线删除最终两端收敛为 `-remote-`，offline `synced` 且 diagnostics 为空。Step 6.10 仍保持未完成：还缺格式化冲突、批注 anchor 远端编辑稳定，以及 AI/local、AI/remote 并发矩阵。
+  - 续做 2026-05-26：补真实 Hocuspocus provider 下删除与远端格式化冲突路径；`examples/collab/tests/collab-concurrency.e2e.ts` 新增 `Gate 6 provider 删除远端格式化范围后不残留格式冲突`，RED 先失败于 demo debug API 缺失，补 API 后继续红于远端加粗把 `target` 拆成独立 run，A 旧基线删除 `target` 时最终仍残留 `keep target tail`。随后新增 `hocuspocus-format.ts` 和 `hocuspocus-projection.ts`，把格式化 debug 写入约束到 Editor facade / transaction pipeline，并让 `hocuspocus-text-command.ts` 按 projection 的实际 run 边界倒序拆分删除 range，避免 core 单个 `deleteRange` 跨 run 限制吞掉删除。验证：`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium --grep "格式化"`、完整 `pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium`、`pnpm --filter @4xian/jword-example-collab typecheck` 通过；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-format-delete` 验证 A/B 从 `keep target tail`，B 将 `target` 加粗，A 旧基线删除后两端收敛为 `keep  tail`，`readTextFormatRanges()` 中 bold range 为空，offline `synced` 且 diagnostics 为空。Step 6.10 仍保持未完成：还缺批注 anchor 远端编辑稳定，以及 AI/local、AI/remote 并发矩阵。
 
-#### Iteration 5 - 失败恢复与 Gate 6 回归（Step 6.12）
+#### Iteration 8 - 失败恢复、diagnostics 和真实浏览器验收（Step 6.12）
 
-- [ ] 建立断网恢复测试，失败时保留本地未同步变更并给出诊断事件。
-- [ ] 补齐 reconnect、版本恢复、auto inserter abort / retry 的 focused tests。
-- [ ] 验证协同、离线、版本历史、自动插入都没有绕开 `Editor` transaction。
+- [x] 建立 Gate 6 diagnostics registry：
+  - provider diagnostics
+  - awareness diagnostics
+  - offline diagnostics
+  - snapshot/history diagnostics
+  - auto inserter diagnostics
+  - restore diagnostics
+- [x] 失败恢复覆盖：
+  - [x] provider auth failed。
+  - [x] websocket reconnect failed。
+  - [x] update rejected。
+  - [x] IndexedDB unavailable。
+  - [x] snapshot missing。
+  - [x] restore conflicts with unsynced local update。
+  - [x] auto inserter abort。
+  - [x] auto inserter retry。
+- [x] 失败时必须满足：
+  - 本地未同步变更保留。
+  - 当前 editor 可继续输入。
+  - diagnostics 可导出。
+  - UI 状态不假装 synced。
+  - 不自动清空 IndexedDB。
+- [x] 补 `examples/collab` debug API：
+  - `readCollabState()`
+  - `readAwarenessState()`
+  - `readOfflineState()`
+  - `readVersionHistory()`
+  - `startAutoInsert()`
+  - `abortAutoInsert()`
+  - `retryAutoInsert()`
+  - `simulateDisconnect()`
+  - `simulateReconnect()`
+- [x] 真实浏览器验收：
+  - 双窗口同时编辑最终一致。
+  - 远端光标和选区可见。
+  - 断网期间继续输入。
+  - 重连后最终一致。
+  - AI streaming 期间用户输入不阻塞。
+  - abort AI 后继续输入。
+  - [x] 历史版本预览与恢复。
+  - 用户 undo 默认不撤销 remote/AI 内容。
+- [x] 验证：协同、离线、版本历史、自动插入都没有绕开 `Editor` transaction。
+  - 进展 2026-05-26：已新增 `fixtures/collab/diagnostics-registry.json` 和架构测试，覆盖 provider、awareness、offline、snapshot、history、auto-inserter、restore 诊断归属；`examples/collab` 暴露 8 个 debug API，并已用 Playwright Chromium 与 Kimi WebBridge 真实浏览器验证内存 demo 的 connected/disconnected/reconnected、auto insert start/abort 状态。当前仍未覆盖真实 provider auth failed、WebSocket reconnect failed、IndexedDB 浏览器恢复、双窗口最终一致和历史版本恢复。
+  - 续做 2026-05-26：`examples/collab` 的真实浏览器入口进一步覆盖内存双客户端输入同步和历史版本预览/恢复：Playwright Chromium 新增 UI 流程测试，Kimi WebBridge 真实浏览器读回 A/B 同步、`Client A edit`、预览旧文本和 `restore:v1`。当前仍未覆盖真实 provider auth failed、WebSocket reconnect failed、IndexedDB 浏览器恢复、远端光标/选区、真实双窗口最终一致和真实断网恢复。
+  - 续做 2026-05-26：`examples/collab` 的真实浏览器入口进一步覆盖内存远端光标/选区可见层：Playwright Chromium 新增 remote cursor/selection presence 测试，Kimi WebBridge 真实浏览器读回 Alice/Bao 光标、Client A 选区 `5-12` 和对应 awareness debug state。当前仍未覆盖真实 provider 多窗口 awareness、WebSocket reconnect failed、IndexedDB 浏览器恢复、真实双窗口最终一致和真实断网恢复。
+  - 续做 2026-05-26：`examples/collab` 的真实 Hocuspocus provider 模式已覆盖跨页面 awareness 渲染：Playwright Chromium 新增 `Gate 6 collab demo renders Hocuspocus awareness across browser pages`，先同步 `awareness range text`，再在 client-a 选择 `2-8`，client-b 页面显示 `Client A cursor 8` 和 `Client A selection 2-8`。Kimi WebBridge 双标签真实浏览器验证同一流程通过。当前仍未覆盖真实 provider auth failed、WebSocket reconnect failed、IndexedDB 浏览器恢复、真实断网恢复和历史版本真实 provider 路径。
+  - 续做 2026-05-26：真实 Hocuspocus provider history 路径已补齐浏览器验收：Playwright Chromium 覆盖跨页面版本创建、旧版本预览、restore 后同步到另一页面；Kimi WebBridge 真实 Chrome 双标签验证 room `jword-collab-kimi-history-1779743550` 下 A/B 最终均恢复到 `Gate 6 Kimi provider history v1`，history 记录包含 `restore:Client A edit`。当前仍未覆盖真实 provider auth failed、WebSocket reconnect failed、restore conflicts with unsynced local update、生产共享历史服务和 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：真实 Hocuspocus provider + IndexedDB 模式已覆盖 restore 与未同步本地 update 的冲突保护：Playwright 红绿测试和 Kimi WebBridge 真实 Chrome 双标签均验证 restore 被阻止，pending 本地变更保留，诊断可通过 `readOfflineState()` 导出，UI 状态显示 `restore-conflict-local-pending`，且未自动清空 IndexedDB/pending 计数。当前仍未覆盖真实 provider auth failed、WebSocket reconnect failed、update rejected、snapshot missing、auto inserter retry、生产共享历史服务和 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：真实 Hocuspocus provider + IndexedDB 模式已覆盖 WebSocket reconnect failed：Playwright 红绿测试验证服务不可达时保留 pending、本地 editor 仍显示 pending 文本、UI 不假装 synced、诊断导出 `OFFLINE_RECONNECT_FAILED`，Kimi WebBridge 真实 Chrome room `jword-collab-kimi-reconnect-failed-1779745807282` 验证同一路径。当前仍未覆盖真实 provider auth failed、update rejected、snapshot missing、auto inserter retry、生产共享历史服务和 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：真实 Hocuspocus provider auth failed 路径已覆盖；`examples/collab/server/hocuspocus-service.ts` 支持本地 `requiredToken`，`packages/collab` adapter 将 Hocuspocus `onAuthenticationFailed` 映射为 `COLLAB_PROVIDER_AUTH_FAILED`，`examples/collab` 通过 URL `token` 传入 provider 并在 `readOfflineState()` 导出 `provider-error` 和不可恢复诊断。红绿验证覆盖 Node provider auth failed、diagnostics registry、浏览器 valid token 成功和 invalid token 失败；Kimi WebBridge 真实 Chrome 验证 invalid token 页面 `status: "provider-error"`、diagnostics 含 `COLLAB_PROVIDER_AUTH_FAILED` 且 `recoverable: false`，valid token 页面 `status: "synced"` 且 diagnostics 为空。当前仍未覆盖 update rejected、snapshot missing、auto inserter retry、生产共享历史服务和 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：真实 Hocuspocus provider update rejected 路径已覆盖；本地 Hocuspocus 服务新增 `rejectUpdates` 测试开关，服务端在 Yjs update message 被拒绝时关闭连接并发送 `COLLAB_UPDATE_REJECTED` reason，`packages/collab` adapter 仅在明确 close reason 等于该 code 时导出 recoverable provider error，不把普通断连误报为错误。红绿验证覆盖 diagnostics registry、Node provider update rejected、浏览器 provider-error UI 和本地文本保留；Kimi WebBridge 真实 Chrome 在 room `jword-collab-kimi-update-rejected-room` 验证 `status: "provider-error"`、`readOfflineState().diagnostics` 含 `COLLAB_UPDATE_REJECTED` 且 `recoverable: true`，textarea 和 debug text 均保留 `Gate 6 Kimi update rejected text`。当前仍未覆盖 snapshot missing、auto inserter retry、生产共享历史服务和 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：snapshot missing 路径已覆盖到 persistence contract 和统一 diagnostics registry；`loadVersion()` 在版本元数据引用的 snapshot 缺失时导出 recoverable `PERSISTENCE_SNAPSHOT_NOT_FOUND` 并从 update log 重建，`createPreview()` 和 `restoreVersion()` 可继续使用 fallback update，同时回传诊断；Gate 6 registry 新增 `COLLAB_SNAPSHOT_MISSING`，owner 为 `snapshot`，fallback 为 `rebuild-from-update-log`。红绿验证覆盖 `packages/persistence/test/memory-adapter.test.ts --testNamePattern "missing snapshot"` 和 `tests/architecture/gate6-diagnostics-registry.test.ts`。当前仍未覆盖 auto inserter retry、生产共享历史服务和 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：auto inserter retry 路径已覆盖；`createInserter()` 新增 `retry()`，在 recoverable anchor flush 失败后保留待写文本，并允许调用方传入新的 stable anchor/range 重试，progress 导出 `retrying`，仍走 Editor facade 与原 transaction pipeline。统一 registry 新增 `COLLAB_AUTO_INSERTER_RETRY_STARTED`，`examples/collab` debug API 新增 `retryAutoInsert()`，内存 demo可导出 retry 诊断并把 token 同步到 A/B。红绿验证覆盖 `packages/core/test/collaboration/inserter.test.ts --testNamePattern "retryable"`、`tests/architecture/gate6-diagnostics-registry.test.ts`、`examples/collab/tests/vite-config.test.ts` 和 Playwright Chromium `debug API` 用例；Kimi WebBridge 真实 Chrome 在 `http://127.0.0.1:4186/` 验证 `lastEvent: "retry-started"`、diagnostics 含 `COLLAB_AUTO_INSERTER_RETRY_STARTED`、A/B 文本均追加 `协同`。当前仍未覆盖生产共享历史服务和 DOCX 导入文档在真实 provider history 全链路。
+  - 续做 2026-05-26：IndexedDB unavailable 和 auto inserter abort 路径已收敛；`examples/collab` Playwright Chromium 用 `addInitScript()` 将浏览器 `window.indexedDB` 置为不可用，验证 Hocuspocus 在线协同仍可用、`readOfflineState()` 导出 recoverable `OFFLINE_CACHE_UNAVAILABLE`，且 UI 不进入 disconnected；统一 registry 新增 `COLLAB_AUTO_INSERTER_ABORTED`，内存 demo 的 `abortAutoInsert()` 导出 abort 诊断并保留 `lastEvent: "aborted"`。验证：`pnpm exec vitest run tests/architecture/gate6-diagnostics-registry.test.ts`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "debug API|IndexedDB is unavailable"`。后续已补 transaction 不绕路证明和 Kimi WebBridge 真实浏览器总验收，见本小节后续记录。
+  - 续做 2026-05-26：Kimi WebBridge 真实 Chrome 总验收已复跑断网/重连矩阵，session `jword-gate6-1779756894859` 覆盖 7 条路径：memory auto insert abort/retry、Hocuspocus 双标签同步、IndexedDB reload restore（update bytes 851）、断开期间 pending 且重连后远端收到、远端在线更新与本地离线更新冲突合并并导出 `OFFLINE_RECONNECT_CONFLICT_MERGED`、provider history preview/restore 后另一标签同步、独立 Hocuspocus 服务停止后重连失败并保留 pending 与 `OFFLINE_RECONNECT_FAILED`。补充自动化验证：`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "debug API|syncs two browser pages through Hocuspocus provider|restores Hocuspocus history versions|restores Hocuspocus document from IndexedDB after reload|keeps IndexedDB offline edits pending|merges remote server updates|preserves pending offline edits"` 7 tests passed；`pnpm --filter @4xian/jword-example-collab typecheck` 通过。Step 6.12 仍不代表 Gate 6 总完成：Step 6.10/6.11 真实并发矩阵、生产共享历史服务、DOCX 导入文档真实 provider/history 全链路和 Gate 6 总验收仍未完成。
+
+#### Iteration 9 - lazy-load、bundle、benchmark 与 Gate 6 总验收
+
+- [x] `packages/collab` 和 `packages/persistence` 不进入 `examples/vanilla` 首屏 bundle。
+- [x] `examples/collab` 按需加载 provider/offline/history 运行时。
+  - 完成 2026-05-26：`examples/collab/src/main.ts` 不再静态拉入 runtime 值，只保留 type import，并通过 `import('./lazy-runtime')` 异步装配；`lazy-runtime.ts` 动态加载 `./runtime/provider-runtime`、`./runtime/offline-runtime`、`./runtime/history-runtime` 和内存 runtime。`pnpm --filter @4xian/jword-example-collab build` 产物中 provider/offline/history/lazy/runtime 均为独立 chunk；Kimi WebBridge 真实浏览器在 `http://127.0.0.1:4186/` 读到 `lazy-runtime.ts`、`provider-runtime.ts`、`offline-runtime.ts`、`history-runtime.ts` 运行时资源，并验证 debug API、断连/重连、auto insert start/abort 可用。该证据只说明 demo host 懒加载与内存状态可用，不代表真实 provider 或 IndexedDB 离线恢复完成。
+- [x] 建立 Gate 6 benchmark：
+  - [x] 双客户端 1k / 10k updates apply 时间。
+  - [x] update byte length。
+  - [x] snapshot create/load 时间。
+  - [x] version preview 时间。
+  - [x] auto inserter 1k / 10k 字写入期间输入响应。
+  - [x] IndexedDB restore 时间。
+  - 完成 2026-05-26：新增 `benchmarks/gate6-collab-benchmark.mjs`，并接入 `tools/bench/run-bench.mjs`。benchmark 通过公开 `createEditor()` / `encodeCollaborationUpdate()` / `applyRemoteUpdate()`、`createMemoryCollabProviderAdapter()`、`createMemoryPersistenceAdapter()` 和 `createInserter()` 覆盖 `gate6-1k` 与 `gate6-10k`，输出 `updateApplyDurationMs`、`updateByteLength`、`snapshotCreateDurationMs`、`snapshotLoadDurationMs`、`versionPreviewDurationMs`、`autoInsertDurationMs`、`autoInsertInputProbeDurationMs`；真实 Playwright Chromium IndexedDB restore 探针已补齐，输出 `indexedDbRestoreStatus: "restored"`、`indexedDbRestoreDurationMs` 和 `indexedDbRestoreByteLength`。Node 离线 adapter 不可用诊断仍单独保留，不能用内存 adapter 冒充 IndexedDB。
+- [x] 建立 Gate 6 focused suite：
+  - core origin/history tests。
+  - collab adapter tests。
+  - persistence snapshot tests。
+  - auto inserter tests。
+  - collab fixture registry tests。
+  - examples/collab Playwright tests。
+- [x] 跑仓库级回归：
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm build`
+  - affected Playwright collab tests
+  - affected visual tests
+  - `pnpm bench`
+- [x] 回写 Gate 6 执行记录、真实浏览器证据、失败项和非阻塞遗留。
+  - 早期记录 2026-05-26：focused suite 已覆盖 core collaboration update、auto inserter、collab contract、persistence memory adapter、fixture registry、diagnostics registry 和 `examples/collab` Playwright smoke；根级 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build` 均通过，`examples/collab` production build 通过。当时尚未运行 `pnpm bench` / `pnpm test:visual`，Gate 6 benchmark 和真实双窗口/断网/历史恢复总验收后续已在 Step 6.17 / 6.18 收口。
+
+#### Iteration 10 - 商业包边界与授权矩阵（Step 6.19-6.21）
+
+- [x] 冻结 Gate 6 edition matrix：free 不包含协作、离线、自动插入或协作历史；paid 包含 collab client、collab server、offline、history、auto-insert。
+- [x] 冻结高级包导出分级：`stable` 只暴露第三方集成 API，`experimental` 暴露可替换 provider adapter，`internal` 不进入 export map。
+- [x] 建立架构测试：`packages/core`、`packages/native`、`examples/vanilla` 不得 import `@4xian/jword-collab`、`@4xian/jword-collab-server`、`@4xian/jword-license`。
+- [x] 建立授权 feature key：`collaboration.multiplayer`、`collaboration.offline`、`collaboration.history`、`automation.autoInsert`、`collaboration.server`。
+- [x] 建立未授权诊断：`COLLAB_LICENSE_MISSING`、`COLLAB_LICENSE_EXPIRED`、`COLLAB_FEATURE_NOT_ENTITLED`、`COLLAB_LICENSE_SERVER_UNAVAILABLE`。
+
+#### Iteration 11 - core 中立位置 API（Step 6.22-6.24）
+
+- [x] 在 core 中定义中立位置类型：selection snapshot、anchor snapshot、range snapshot、text location、query result；类型名不得带 `collab`、`ai` 或 `autoInsert` 前缀。
+- [x] 提供读取当前位置 API：当前 selection -> anchor/range，支持 collapsed 和 non-collapsed selection。
+- [x] 提供查询位置 API：按文本、block id、heading、comment id 或 range snapshot 查询可插入位置。
+- [x] 提供 location 解析和滚动定位 API：第三方可把查询结果传给高级包，也可用于普通编辑器跳转。
+- [x] 测试必须证明这些 API 不泄漏 Yjs RelativePosition、document-store、DOM Range 或 canvas 坐标。
+
+#### Iteration 12 - `@4xian/jword-collab` client SDK 产品化（Step 6.25-6.28）
+
+- [x] 定义公开入口 `connectJWordCollaboration(editor, options)`，options 至少包含 `serverUrl`、`documentId`、`roomId`、`user`、`token`、`license`、`features`。
+- [x] user 初始化支持 `id`、`name`、`color`、`avatarUrl`；未传 color 时按 user id 生成稳定颜色。
+- [x] 返回 connection handle：`status`、`diagnostics`、`awareness`、`history`、`offline`、`startAutoInsertSession()`、`disconnect()`、`destroy()`。
+- [x] provider/Yjs/Hocuspocus 内部类型不得出现在 stable API；可替换 provider 只走 adapter contract。
+- [x] 类型测试必须模拟外部 TypeScript 项目，仅从包入口导入 API 并完成 connect/disconnect/auto insert 调用。
+
+#### Iteration 13 - `@4xian/jword-collab-server` self-host 服务包（Step 6.29-6.34）
+
+- [x] 从 `examples/collab/server` 抽出正式 server package，不让第三方复制 demo server 源码。
+- [x] 提供 Node 服务入口和可嵌入 handler：`createJWordCollabServer(options)`、`startJWordCollabServer(options)`。
+- [x] server options 支持 `authHook`、`tenantHook`、`licenseHook`、`historyStorage`、`snapshotStorage`、`rateLimit`、`maxPayloadBytes`、`allowedOrigins`。
+- [x] 提供 `/health`、`/version`、`/history`、`/license/status` API，并返回 protocolVersion、packageVersion、featureFlags。
+- [x] 服务端必须强制 license enforcement；client-side license check 只能用于 UX 提示，不能作为唯一付费边界。
+- [x] 服务端 history 写入必须有 document 级并发锁或事务边界，防止多用户同时保存版本时覆盖版本链。
+- [x] 提供最小部署示例：本地 Node、Dockerfile 或等价启动脚本、环境变量、反向代理 WebSocket 注意事项。
+
+#### Iteration 14 - client/server 版本握手与协议兼容（Step 6.35-6.37）
+
+- [x] 定义 `protocolVersion`、`clientPackageVersion`、`serverPackageVersion`、`featureFlags`、`minimumServerVersion`。
+- [x] client 连接时先完成 handshake；协议不匹配、server 过旧、client 过旧或 feature 不支持时返回 `COLLAB_VERSION_MISMATCH` 或更具体诊断。
+- [x] server `/version` 和 client diagnostics export 必须输出同一版本信息，便于第三方排障。
+- [x] E2E 覆盖版本匹配成功、server 过旧失败、featureFlags 缺失失败、失败后编辑器仍可本地单人编辑。
+
+#### Iteration 15 - 远端光标、输入提示和 presence polish（Step 6.38-6.41）
+
+- [x] 远端 cursor 在光标附近显示用户名称和输入状态，显示格式为 `用户名称 正在输入`。
+- [x] 多用户颜色来自初始化 user color 或稳定 fallback；相邻光标颜色和标签不得混淆。
+- [x] typing activity 必须有节流和过期时间，停止输入后自动隐藏 `正在输入`，但可继续显示远端 cursor。
+- [x] 多用户重叠时使用稳定排序和轻量错位，不遮挡当前用户输入点。
+- [x] presence 不进入版本历史、不进入 undo、不影响正文 transaction。
+
+#### Iteration 16 - 自动插入公开 API 与虚拟 actor（Step 6.42-6.46）
+
+- [x] 定义 `startAutoInsertSession()`：必须接收 `position` 或 `range`，来源可以是 selection snapshot、anchor/range、findText result 或 resolveLocation result。
+- [x] 自动插入 session 创建后不得读取 live DOM caret，不得调用 editor focus，不得改变用户当前 selection。
+- [x] 自动插入以虚拟 actor 进入 awareness，可配置 actor name/color，例如 `AI Assistant` 或业务方传入的机器人名称。
+- [x] 流式写入支持 progress、abort、error、requestId、chunk metadata 和独立 undo scope。
+- [x] 真实浏览器验收必须覆盖自动插入进行中，用户手动点击其它位置并继续输入，两条写入都保留且不抢光标。
+
+#### Iteration 17 - 真实第三方集成 demo 和测试边界（Step 6.47-6.51）
+
+- [x] 重写 `examples/collab` 主入口为真实编辑器集成：创建基础 editor/UI，动态 import 高级 client 包，连接 self-host server。
+- [x] demo 测试不能直接 import `packages/collab/src`、`examples/collab/src/runtime/*`、server 内部 service 或 core store；只允许通过公开包入口和浏览器用户行为验收。
+- [x] 建立架构测试扫描 examples 和 tests import graph，禁止底层源码路径、测试 helper 绕过公开 API。
+- [x] 双页面验收必须是两个浏览器页面、两个 user、同一 room、同一 documentId；不得用同一页面两个 textarea 实例作为主验收。
+- [x] 保留内部 debug API 时只能暴露宿主级测试钩子，不能成为第三方集成 API 或绕过公开包。
+
+#### Iteration 18 - 商业 readiness、发布和文档计划（Step 6.52-6.56）
+
+- [x] 私有 registry / `npm pack` 检查：高级 client、server、license 包只包含 dist、types、README、license metadata，不包含 fixtures 中的敏感样本或测试私有文件。
+- [x] bundle gate：free vanilla 首屏不包含 collab、hocuspocus、license、IndexedDB offline runtime、server client code；高级示例按需加载。
+- [x] diagnostics registry 覆盖授权、版本、server、network、offline、history、auto-insert、presence、storage 和 rate limit。
+- [x] benchmark 覆盖 2/5/20 用户、1k/10k updates、离线重连、版本 snapshot、自动插入 1k/10k 字和 server history API。
+- [x] Gate 7 文档站必须包含协作快速开始、self-host server 部署、授权接入、client/server 版本策略、公开 API 清单、故障排查和收费能力边界。
 
 ### 待办步骤
 
-- [ ] Step 6.1：定义 collab provider adapter 接口，宿主负责 room id、auth、生产存储。
-- [ ] Step 6.2：实现 hocuspocus 示例服务，提供本地双窗口协同 demo。
-- [ ] Step 6.3：实现 awareness，展示在线用户、远端光标、远端选区。
-- [ ] Step 6.4：实现 remote update 进入 projection/render 的路径，确保仍走统一状态真源。
-- [ ] Step 6.5：接入 y-indexeddb 或等价离线恢复能力，断网编辑后可恢复并同步。
-- [ ] Step 6.6：定义 snapshot adapter，支持 update log、snapshot 保存、snapshot 加载、版本列表。
-- [ ] Step 6.7：实现 `createInserter()` API，支持 stable anchor、throttle、flush、abort、progress、error。
-- [ ] Step 6.8：实现 auto inserter origin 策略，默认不进入用户 undo 栈。
-- [ ] Step 6.9：实现可配置 undo scope，允许 AI/程序化写入进入独立 undo scope。
-- [ ] Step 6.10：实现并发测试：双用户同段输入、同位置输入、删除与格式化冲突、批注 anchor 远端编辑稳定。
-- [ ] Step 6.11：实现 AI 自动插入与用户手动编辑并发测试，确认不重复、不丢失、不阻塞输入。
-- [ ] Step 6.12：实现断网恢复测试，失败时保留本地未同步变更并给出诊断事件。
-- [ ] Step 6.13：实现历史版本最小闭环：版本列表、只读预览、恢复、失败诊断；基于 update log / snapshot，不以 docx 覆盖真源。
+- [x] Step 6.1：定义 collab provider adapter 接口，宿主负责 room id、auth、生产存储和 reconnect 策略。
+- [x] Step 6.2：实现本地 Hocuspocus 验证服务，提供本地双窗口协同 demo。
+  - 进展 2026-05-26：已完成 Node-only Hocuspocus 示例服务入口和 `dev:server` 脚本，`examples/collab/tests/hocuspocus-service.test.ts` 覆盖 `createCollabHocuspocusService()` 随机端口启动、HTTP 健康响应、WS URL 和关闭；`examples/collab/tests/vite-config.test.ts` 锁定 `dev:server` 脚本与 `@hocuspocus/server@4.0.0` 依赖声明。验证：`pnpm exec vitest run examples/collab/tests/vite-config.test.ts examples/collab/tests/hocuspocus-service.test.ts`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm --filter @4xian/jword-example-collab build`、`pnpm typecheck`、`pnpm lint`、`git diff --check` 通过。未完成项：浏览器端 Hocuspocus provider、真实双窗口协同、remote update 渲染闭环和真实 provider awareness。
+  - 续做 2026-05-26：已接入 `@hocuspocus/provider@4.0.0` 的真实 provider adapter，并在 `examples/collab` 增加 Hocuspocus 浏览器模式。验证：`pnpm exec vitest run examples/collab/tests/vite-config.test.ts examples/collab/tests/hocuspocus-service.test.ts examples/collab/tests/hocuspocus-provider.test.ts packages/collab/test/contract.test.ts`、`pnpm --filter @4xian/jword-collab typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium` 通过；Kimi WebBridge 双标签真实浏览器验证 client-a 输入 `Gate 6 Kimi real Hocuspocus sync` 后 client-b 同步显示同一文本。后续已补真实 provider awareness、IndexedDB 浏览器恢复、真实断网重连和 WebSocket reconnect failed 证据；剩余失败矩阵见 Step 6.12。
+- [x] Step 6.3：实现 awareness，展示在线用户、远端光标、远端选区；presence 不进入正文历史。
+  - 续做 2026-05-26：真实 Hocuspocus provider awareness 已接入 `examples/collab` 可见层；client-a 选区通过 `adapter.awareness.setLocalState()` 进入 Hocuspocus awareness，client-b 页面经 `adapter.awareness.onChange()` 触发 render，并显示远端 cursor/selection。后续已补 Hocuspocus 断连 presence 浏览器回归和 Kimi WebBridge 证据；client-a `simulateDisconnect()` 后，client-b 的在线用户列表移除 `client-a`，远端 cursor/selection DOM 同步消失，正文协同文本保持不变。
+  - 续做 2026-05-26：真实 Hocuspocus awareness 已携带结构兼容的 JWord `TextRangeRecord` / relative position snapshot；自动化和 Kimi WebBridge 均验证 client-b 可读到 client-a 的 `client-a-selection`、anchor/focus `graphemeIndex: 2/8` 与 `relativePosition.tname: "body"`。Step 6.3 仍未完成：viewport/page index、用户名 tooltip、多用户重叠稳定排序和更完整的 unresolved range 降级验收仍需补齐。
+  - 续做 2026-05-26：已补 viewport/page index、用户名 tooltip 和稳定排序证据；Playwright Chromium 覆盖 memory presence 的 cursor/selection `title` 与 Hocuspocus awareness 的 `viewport.pageIndex: 0`，Vitest 锁定 `sortAwarenessUsers()` 按 `clientId` 返回新数组且不修改输入。Kimi WebBridge 真实 Chrome 双标签验证 client-b 读回 client-a 的 `Client A` tooltip、`Client A selection 2-8` 和 `viewport.pageIndex: 0`。Step 6.3 仍未完成：更完整的 unresolved range 降级、presence 不影响 undo、权限不足 awareness 降级路径仍需补齐。
+  - 完成 2026-05-26：补齐 Step 6.3 剩余三项。`parseAwarenessState()` 与 Hocuspocus adapter 会把非法 `rangeSnapshot` 降级为 presence-only，并记录 `COLLAB_AWARENESS_ANCHOR_UNRESOLVED` warning；`examples/collab/tests/collab-awareness.e2e.ts` 覆盖真实 Hocuspocus presence 不进入本地 undo 栈，以及 auth failed 后 selection 事件不再写入 awareness。Kimi WebBridge 真实 Chrome 双标签验证 room `jword-collab-kimi-step63-awareness-undo`：A 写入 `awareness undo base` 后 B selection `0-9` 在 A 可见为 `Client B selection 0-9`，A 追加 ` local` 后调用 `undoLocalUserEdit()` 回到 `awareness undo base`，B presence 仍保留；auth 失败 room `jword-collab-auth-kimi-room` 使用 invalid token 后 selection 前后 `awareness.users` 均为 `[]`，诊断保留 `COLLAB_PROVIDER_AUTH_FAILED`。验证：`pnpm exec vitest run packages/collab/test/contract.test.ts examples/collab/tests/hocuspocus-provider.test.ts --testNamePattern "downgrades invalid awareness range|awareness range"`、`pnpm exec vitest run tests/architecture/gate6-diagnostics-registry.test.ts`、`pnpm exec playwright test examples/collab/tests/collab-awareness.e2e.ts --project=chromium` 通过。
+- [x] Step 6.4：实现 remote update 进入 projection/layout/render 的路径，确保仍走统一 Y.Doc 真源和受控 transaction hook。
+- [x] Step 6.5：接入 `y-indexeddb` 或等价离线恢复能力，断网编辑后可恢复并同步。
+- [x] Step 6.6：定义 snapshot adapter，支持 update log、snapshot 保存、snapshot 加载、版本列表、readonly preview 和 compaction。
+- [x] Step 6.7：实现 `createInserter()` API，支持 stable anchor/range、chunk、throttle、flush、abort、progress、error。
+- [x] Step 6.8：实现 auto inserter origin 策略，默认不进入用户 undo 栈。
+- [x] Step 6.9：实现可配置 undo scope，允许 AI/程序化写入进入独立 undo scope，但不混入本地用户 undo。
+  - 完成 2026-05-26：先写红测 `pnpm exec vitest run packages/core/test/collaboration/inserter.test.ts --testNamePattern "independent undo scope"`，失败于 `editor.canUndo("auto-inserter")` 仍为 `false`；随后扩展 `HistoryManager` scoped `Y.UndoManager`、`EditorCommandOptions.historyScope`、transaction `historyOrigin` 和 `createInserter({ undoScope: "auto-inserter" })`。验证覆盖默认用户 undo 不撤销 AI、`editor.undo("auto-inserter")` 可撤销 AI、`editor.redo("auto-inserter")` 可恢复 AI，且公开 diagnostics origin 仍为 `auto-inserter`。聚合验证：`pnpm exec vitest run packages/core/test/index.test.ts packages/core/test/collaboration/inserter.test.ts packages/core/test/collaboration/editor-update.test.ts packages/core/test/operations/history.test.ts`、`pnpm --filter @4xian/jword-core typecheck`、`node tools/lint/check-comments.mjs`、`git diff --check` 通过。`version-restore` scope token/API 已接入 history 层，但完整版本恢复 undo metadata 和真实 provider 并发不计入本 Step 完成证据。
+- [x] Step 6.10：实现 remote/local 并发测试：双用户同段输入、同位置输入、删除与格式化冲突、批注 anchor 远端编辑稳定、local undo 不撤销 remote。
+  - 续做 2026-05-26：已完成真实 Hocuspocus provider 下“双用户同段不同位置输入”子项；RED 先失败于 B 的完整 textarea value 覆盖 A 前缀，GREEN 后 A/B 最终均为 `A-provider base-B`。自动化验证覆盖 focused 用例、完整 `examples/collab/tests/collab-concurrency.e2e.ts`、collab typecheck、中文注释检查和 targeted diff check；Kimi WebBridge 真实 Chrome 双标签补证 A/B 最终一致、offline `synced` 且 diagnostics 为空。Step 6.10 总项仍未完成，剩余同位置输入、删除与格式化冲突、批注 anchor 远端编辑稳定、local undo 不撤销 remote。
+  - 续做 2026-05-26：已完成真实 Hocuspocus provider 下“旧基线删除不吞掉远端插入”子项；RED 先失败于 A 旧基线删除 `AB` 后最终得到 `remote-B`，GREEN 后 A/B 从 `AB`、远端变为 `A-remote-B`、旧基线删除最终收敛为 `-remote-`。实现侧对旧基线纯删除增加非连续 grapheme rebase，并倒序生成 `deleteRange`，避免前序删除改变后续索引。验证覆盖 focused 用例、完整 `examples/collab/tests/collab-concurrency.e2e.ts`、collab typecheck 和 Kimi WebBridge 真实 Chrome room `jword-collab-kimi-delete-insert`；Step 6.10 总项仍未完成，剩余格式化冲突、批注 anchor 远端编辑稳定，以及 AI/local、AI/remote 并发矩阵。
+  - 续做 2026-05-26：已完成真实 Hocuspocus provider 下“删除远端格式化范围后不残留格式冲突”子项；RED 先失败于缺少 debug API，又失败于远端加粗拆 run 后 A 旧基线删除仍残留 `target`，GREEN 后 A/B 从 `keep target tail`、B 加粗 `target`、A 删除后最终收敛为 `keep  tail` 且 bold range 为空。实现侧新增格式化 debug helper，并把删除 range 按 projection 实际 run 边界倒序拆成多个 `deleteRange`。验证覆盖 focused 用例、完整 `examples/collab/tests/collab-concurrency.e2e.ts`、collab typecheck 和 Kimi WebBridge 真实 Chrome room `jword-collab-kimi-format-delete`；Step 6.10 总项仍未完成，剩余批注 anchor 远端编辑稳定，以及 AI/local、AI/remote 并发矩阵。
+  - 续做 2026-05-26：已完成真实 Hocuspocus provider 下“批注 anchor 远端编辑后稳定”子项；`examples/collab/tests/collab-concurrency.e2e.ts` 新增 `Gate 6 provider 批注 anchor 在远端前方编辑后仍定位原文本`，RED 先失败于缺少 `addCommentRange()` debug API。GREEN 后新增 `hocuspocus-comments.ts`，批注创建通过 `buildAddCommentThreadCommand`、`Editor.setSelection()` 和 `Editor.executeCommand()` 进入 core transaction pipeline，读取通过 `Editor.locateRangeSnapshot()` 解析稳定 range 快照，不退回普通字符 offset。自动化验证覆盖 focused 用例、完整 `examples/collab/tests/collab-concurrency.e2e.ts` 9 passed、collab typecheck 和中文注释检查；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-comment-anchor-1779766124549` 验证 A 创建 `target` 批注，B 在批注前插入 `remote ` 后，两端文本均为 `remote prefix target tail`，批注 range 跟随到 `start: 14, end: 20` 且 text 仍为 `target`，offline `synced` 且 diagnostics 为空。Step 6.10 总项仍未完成：还缺 `A 移动 selection，B 替换同段文本`，以及 Step 6.11 的 AI/local、AI/remote 并发矩阵。
+  - 完成 2026-05-26：已完成真实 Hocuspocus provider 下“selection 与远端同段替换”子项；`examples/collab/tests/collab-concurrency.e2e.ts` 新增 `Gate 6 provider 远端替换同段文本后 selection snapshot 仍可解释`，RED 先失败于 B 在 A selection 前插入 `remote ` 后，B 仍读到 A 的旧 offset `7-13` 且 `selectionText: null`。GREEN 后新增 `hocuspocus-awareness.ts`，维护 awareness 专用 Y.Text 镜像并在 debug snapshot 读取时通过 relative position 解析当前 selection offset/text，不修改 provider 通用 schema。自动化验证覆盖 focused 用例、完整 `examples/collab/tests/collab-concurrency.e2e.ts` 10 passed、collab typecheck 和中文注释检查；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-selection-replace-1779766852732` 验证 A 选中 `target`，B 在同段前方插入 `remote ` 后，两端文本均为 `remote prefix target tail`，B 看到 A selection 跟随为 `selectionStart: 14, selectionEnd: 20, selectionText: "target"`，offline `synced` 且 diagnostics 为空。至此 Step 6.10 的 remote/local provider 并发矩阵已完成；AI/local、AI/remote 剩余项继续归 Step 6.11。
+- [x] Step 6.11：实现 AI 自动插入与用户手动编辑并发测试，确认不重复、不丢失、不阻塞输入、不污染 undo。
+  - 续做 2026-05-26：已补真实 Hocuspocus provider 模式下 AI 自动插入与用户手动输入并发的首条闭环；新增 `examples/collab/tests/collab-concurrency.e2e.ts`，先红于 `startAutoInsert()` 仍返回 `provider-noop`，随后 `examples/collab/src/runtime/hocuspocus-runtime.ts` 接入 core `createInserter()`，在当前正文末尾通过 `Editor.createTextAnchor()` / `Editor.executeCommand()` 写入 `协同` token，并保持 auto-inserter 独立 undo scope。验证：`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium --grep "AI"` 红绿闭环，最终同文件完整 Chromium 1 passed；`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "debug API|syncs two browser pages through Hocuspocus provider"` 2 passed；`pnpm --filter @4xian/jword-example-collab typecheck`、`node tools/lint/check-comments.mjs` 和 targeted `git diff --check` 通过。Kimi WebBridge 真实 Chrome session `jword-gate6-ai-a` / `jword-gate6-ai-b` 在本地 4186/4188 双标签验证：A 调用 `startAutoInsert()` 后 A/B 正文同步为 `协同`，A 侧 autoInsert 为 `running: true`、`insertedCount: 1`、`lastToken: "协同"`、`lastEvent: "started"`；B 继续输入后 A/B 均读回 `协同 Gate 6 Kimi provider manual input`，offline 保持 `connected: true`、`lastEvent: "synced"`、诊断为空。当时 Step 6.11 仍未完成：还缺真实 provider 下 token 去重、长流式插入不丢失、不污染用户 undo 的 focused 证明，以及与 Step 6.10 的更完整 remote/local 并发矩阵。
+  - 完成 2026-05-26：已补真实 Hocuspocus provider 的 AI/local 与 AI/remote 并发矩阵。新增 `examples/collab/src/runtime/hocuspocus-auto-insert.ts`，provider auto inserter 支持 `协同`、`版本`、`离线`、`回放` 多 token 流式写入，`startAutoInsert({ rangeStart, rangeEnd })` 支持 range replace，flush 后重建 active anchor 到 token 尾部，anchor 所在正文被删时停止后续 flush 并导出 `COLLAB_AUTO_INSERTER_ANCHOR_UNRESOLVED`。`fixtures/collab/registry.json` 已登记 `ai-local-range-replace`、`ai-local-anchor-unresolved`、`ai-remote-same-paragraph`、`ai-remote-adjacent-delete`、`ai-remote-provider-reconnect`。RED/GREEN 覆盖首轮 provider 只插 1 token、range replace token 逆序、anchor 删除无诊断三类失败。验证：`pnpm exec vitest run tests/architecture/gate6-fixture-registry.test.ts tests/architecture/gate6-diagnostics-registry.test.ts` 7 passed；`pnpm exec playwright test examples/collab/tests/collab-auto-insert-concurrency.e2e.ts --project=chromium` 6 passed；`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium` 10 passed；`pnpm --filter @4xian/jword-example-collab typecheck`、`node tools/lint/check-comments.mjs`、`git diff --check`、新增 registry `git diff --no-index --check` 均通过。Kimi WebBridge 真实 Chrome 在 `jword-collab-kimi-ai-local-1779769226699` 验证 A/B 从 `local anchor协同版本离线回放` 本地 undo 后收敛为 `anchor协同版本离线回放`，诊断为空；在 `jword-collab-kimi-ai-remote-1779769289176` 验证 A/B 收敛为 `remote-base协同remote-user版本离线回放`，四个 AI token 与远端输入各出现一次，offline/autoInsert 诊断为空。至此 Step 6.11 完成；不等同于 Step 6.12、Step 6.13 或 Gate 6 总验收完成。
+  - 复核 2026-05-26：真实 provider 的 AI token flush 已增加用户编辑空闲期保护，`local-user` 或远端非 auto/history transaction 会延迟下一次 token flush，避免 AI token 插入到用户逐字符输入批次中间。回归覆盖 `AI 自动插入与手动输入` focused 用例、`examples/collab/tests/collab-concurrency.e2e.ts` 与 `examples/collab/tests/collab-auto-insert-concurrency.e2e.ts` Chromium 16 tests passed；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-ai-1779774364202` 验证手动文本保留、四个 token 各一次、historyCount 为 5。
+- [x] Step 6.12：实现断网恢复测试，失败时保留本地未同步变更并给出诊断事件。
+  - 续做 2026-05-26：已覆盖 IndexedDB reload、断开期间本地 pending、重连后远端收到离线输入、服务端先有远端更新时最终一致并导出 `OFFLINE_RECONNECT_CONFLICT_MERGED`，以及 WebSocket reconnect failed 时保留 pending 并导出 `OFFLINE_RECONNECT_FAILED`。Step 6.12 仍保持未完成：provider auth failed、update rejected 等失败恢复矩阵尚未补齐。
+  - 续做 2026-05-26：已覆盖 provider auth failed；本地 Hocuspocus 服务要求 `requiredToken` 时，invalid token 会在 adapter 和浏览器 demo 中导出 `COLLAB_PROVIDER_AUTH_FAILED`、`recoverable: false`、UI 状态 `provider-error`，valid token 仍可进入 `synced`。验证：`pnpm exec vitest run examples/collab/tests/hocuspocus-provider.test.ts tests/architecture/gate6-diagnostics-registry.test.ts`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium`、Kimi WebBridge 真实 Chrome valid/invalid token 双路径。Step 6.12 仍保持未完成：update rejected 等失败恢复矩阵尚未补齐。
+  - 续做 2026-05-26：已覆盖 update rejected；本地 Hocuspocus 服务 `rejectUpdates: true` 时，client 已 synced 后的本地 update 会被服务端以 `COLLAB_UPDATE_REJECTED` close reason 拒绝，adapter 和浏览器 demo 导出 recoverable `provider-error`，且当前可写文本仍保留在本地。验证：`pnpm exec vitest run examples/collab/tests/hocuspocus-provider.test.ts tests/architecture/gate6-diagnostics-registry.test.ts`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium`、Kimi WebBridge 真实 Chrome update rejected 路径。Step 6.12 仍保持未完成：snapshot missing、auto inserter retry 等失败恢复矩阵尚未补齐。
+  - 续做 2026-05-26：已覆盖 snapshot missing；persistence 内存 adapter 在 snapshot 索引损坏时会保留可恢复诊断并从 update log 重建，preview 和 restore 均使用同一 fallback update，不吞掉诊断；统一 registry 已登记 `COLLAB_SNAPSHOT_MISSING`。验证：`pnpm exec vitest run packages/persistence/test/memory-adapter.test.ts tests/architecture/gate6-diagnostics-registry.test.ts`、`pnpm --filter @4xian/jword-persistence typecheck`、`pnpm typecheck`。Step 6.12 仍保持未完成：auto inserter retry 等失败恢复矩阵尚未补齐。
+  - 续做 2026-05-26：已覆盖 auto inserter retry；core `createInserter().retry()` 保留 recoverable flush 失败后的 queued text，并用新的 stable anchor/range 重试，demo debug API 暴露 `retryAutoInsert()` 和 `COLLAB_AUTO_INSERTER_RETRY_STARTED` 诊断。验证：`pnpm exec vitest run packages/core/test/collaboration/inserter.test.ts examples/collab/tests/vite-config.test.ts tests/architecture/gate6-diagnostics-registry.test.ts`、`pnpm --filter @4xian/jword-core typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm typecheck`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "debug API"`、Kimi WebBridge 真实 Chrome retry debug 路径。Step 6.12 仍保持未完成：IndexedDB unavailable、auto inserter abort 等失败恢复矩阵尚未最终收敛。
+  - 续做 2026-05-26：已覆盖 IndexedDB unavailable 和 auto inserter abort；浏览器 Hocuspocus 模式在 `window.indexedDB` 不可用时仍可在线同步并导出 recoverable `OFFLINE_CACHE_UNAVAILABLE`，内存 demo `abortAutoInsert()` 导出 `COLLAB_AUTO_INSERTER_ABORTED`，停止 running 且保留当前文档。验证：`pnpm exec vitest run tests/architecture/gate6-diagnostics-registry.test.ts`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "debug API|IndexedDB is unavailable"`。后续已补 transaction 不绕路证明和 Kimi WebBridge 真实浏览器总验收，见本小节后续记录。
+  - 续做 2026-05-26：已补 Hocuspocus runtime 本地正文写入不绕过 Editor transaction pipeline 的证明；`examples/collab/tests/vite-config.test.ts` 先红于 `document.transact()` / `Y.Text` 直接写入，随后 `examples/collab/src/runtime/hocuspocus-runtime.ts` 改为内部共享 `EditorCollaborationDocument`，provider/offline/history 仍绑定同一底层 `Y.Doc`，但本地正文替换必须经 `Editor.executeCommand({ name: "hocuspocusClientText", ... })`。同时修复 demo history restore 对 core document-store 嵌套 `Y.Text` 的恢复路径：`packages/persistence` 对 preview 文档中的 `Y.Array` / `Y.Map` / `Y.Text` 做递归克隆，避免恢复时复用已挂载共享类型或只浅替换顶层容器。验证：`pnpm exec vitest run packages/core/test/collaboration/editor-update.test.ts examples/collab/tests/vite-config.test.ts packages/persistence/test/memory-adapter.test.ts`、`pnpm --filter @4xian/jword-core typecheck`、`pnpm --filter @4xian/jword-persistence typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "syncs two browser pages through Hocuspocus provider|restores Hocuspocus history versions|restores Hocuspocus document from IndexedDB after reload|IndexedDB is unavailable"`、`node tools/lint/check-comments.mjs`、`git diff --check` 均通过。Kimi WebBridge 真实浏览器总验收与断网/重连全矩阵复跑已在下一条补齐。
+  - 续做 2026-05-26：Kimi WebBridge 真实 Chrome 总验收已复跑断网/重连全矩阵，session `jword-gate6-1779756894859` 覆盖 memory auto insert abort/retry、Hocuspocus 双标签同步、IndexedDB reload restore、断开期间 pending、重连后远端收到、离线本地变更与在线远端变更冲突合并、provider history preview/restore 和重连失败 pending 保留；失败路径使用独立临时 Hocuspocus 服务，断开后真实停止服务再触发 reconnect，验证 `OFFLINE_RECONNECT_FAILED`、`queuedOperations: 1` 和本地 pending 文本保留。自动化补证：`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "debug API|syncs two browser pages through Hocuspocus provider|restores Hocuspocus history versions|restores Hocuspocus document from IndexedDB after reload|keeps IndexedDB offline edits pending|merges remote server updates|preserves pending offline edits"` 7 tests passed；`pnpm --filter @4xian/jword-example-collab typecheck` 通过。Step 6.12 的 demo 级断网恢复与失败诊断证据已齐，但仍不等同于 Step 6.13 生产共享历史服务或 Step 6.18 Gate 6 总验收完成。
+  - 复核 2026-05-26：离线本地全文替换与在线远端全文替换重连时不再让 Yjs replacement 交错破坏文本；runtime 记录断网基线和 pending local text，重连冲突后用 `system-recovery` 写回包含远端候选与本地 pending 的正文，并记录 `OFFLINE_RECONNECT_CONFLICT_MERGED`。回归覆盖 `merges remote server updates` focused 用例、smoke 断网相关三条和完整 Gate 6 Chromium 组 35 tests passed；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-merge-1779774365880` 验证远端 `Kimi merge remote server text` 与本地 `Kimi merge offline local text` 均保留。
+  - 完成 2026-05-26：只读审计确认 auth failed、update rejected、IndexedDB reload/unavailable、offline pending、reconnect synced、remote/local conflict merge、reconnect failed pending 保留和 diagnostics registry 已覆盖 Step 6.12 要求；本轮补充 DOCX 导入文档的真实 Hocuspocus `offline=indexeddb` reload 与断网 pending/reconnect 验收，`pnpm exec playwright test examples/collab/tests/collab-docx-provider-history.e2e.ts --project=chromium -g "Gate 6 DOCX"` 3 passed；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-docx-offline-1779776195298` 验证 T1 DOCX 导入无 warning、断网本地 pending、重连后远端同步，诊断包含 `OFFLINE_LOCAL_UPDATE_QUEUED`、`OFFLINE_RECONNECT_STARTED`、`OFFLINE_RECONNECT_SYNCED`。
+- [x] Step 6.13：实现历史版本最小闭环：版本列表、只读预览、恢复、失败诊断；基于 update log / snapshot，不以 docx 覆盖真源。
+  - 续做 2026-05-26：真实 Hocuspocus provider demo 已覆盖版本列表、只读预览和恢复后跨页面同步；自动化验证 `pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "restores Hocuspocus history versions"` 通过，完整 `examples/collab` Chromium smoke 8 项通过，Kimi WebBridge 真实 Chrome 双标签也验证通过。此项仍保持未完成：当前 provider history 是 demo runtime 的本地 memory persistence，不是生产共享历史服务；还未覆盖 restore conflicts with unsynced local update、真实 provider 历史失败诊断、DOCX 导入文档参与真实 provider history 和生产 update log/snapshot 持久化。
+  - 续做 2026-05-26：已补 restore conflict 失败路径；`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "blocks Hocuspocus history restore"` 先红后绿，Kimi WebBridge 真实 Chrome 双标签验证 A 离线 pending 时 restore 不覆盖当前可写文档并导出 `COLLAB_RESTORE_CONFLICT_RESOLVED`。此项仍保持未完成：当前 provider history 是 demo runtime 的本地 memory persistence，不是生产共享历史服务；仍未覆盖真实 provider 历史失败诊断完整矩阵、DOCX 导入文档参与真实 provider history 和生产 update log/snapshot 持久化。
+  - 续做 2026-05-26：已补 DOCX 导入文档参与真实 Hocuspocus provider history + auto insert 的验收路径。`examples/collab/tests/collab-docx-provider-history.e2e.ts` 使用 `docx-t1-paragraphs.docx` 经 `importDocxForCollabAcceptance()` 写入同一 provider `Y.Doc`，B 页面可读取导入正文和导入版本历史，B 自动插入 `协同版本离线回放` 后选择导入版本预览并恢复，A/B 最终都回到 `First paragraph text.\nSecond paragraph text.`。修复点：demo provider history restore 需要先用 `getArray()` / `getMap()` 物化 preview core 容器，再递归克隆替换当前 core 容器，避免 restore 时只清空不回填。验证：`pnpm --filter @4xian/jword-example-collab typecheck`、targeted ESLint、`pnpm exec playwright test examples/collab/tests/collab-docx-provider-history.e2e.ts --project=chromium -g "Gate 6 DOCX"`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "restores Hocuspocus history"`、`pnpm exec playwright test examples/collab/tests/collab-auto-insert-concurrency.e2e.ts --project=chromium`、`node tools/lint/check-comments.mjs`、`git diff --check` 通过；Kimi WebBridge 真实 Chrome room `jword-collab-docx-real-1779772142` 验证导入、跨标签同步、自动插入、预览和 restore 后 DOM/debug state 均一致。此项仍保持未完成：生产共享历史服务、真实 provider 历史失败诊断完整矩阵和生产 update log/snapshot 持久化仍未收口。
+  - 复核 2026-05-26：真实 Hocuspocus provider history 的版本 update 已改为只编码 core document-store 容器，不再把 `jword:collab:history:*` 顶层 shared types 递归保存进下一版历史，避免 history update 嵌套膨胀触发 payload 上限或 ArrayBuffer 分配失败。新增 `examples/collab/tests/hocuspocus-history.test.ts` 覆盖连续追加版本时 stored update 不包含 history shared types、第二版 update 不指数增长，并保留 preview/restore 需要的 core 容器物化路径。聚合验证覆盖 Gate 6 Vitest 13 files / 62 tests passed、完整 Gate 6 Chromium 组 35 tests passed、`pnpm typecheck`、collab typecheck、中文注释检查和 `git diff --check`；Kimi WebBridge 真实 Chrome rooms `jword-collab-kimi-ai-1779774364202` 与 `jword-collab-kimi-merge-1779774365880` 补证 AI/manual 与离线冲突合并路径。此项仍保持未完成：生产共享历史服务、真实 provider 历史失败诊断完整矩阵和生产 update log/snapshot 持久化仍未收口。
+  - 续做 2026-05-26：补充 DOCX 导入文档在真实 Hocuspocus `offline=indexeddb` 下的 reload 与断网 pending/reconnect 验收；这只补齐 DOCX 普通文档离线证据，不改变 Step 6.13 状态。Step 6.13 仍保持未完成：生产共享历史服务、真实 provider 历史失败诊断完整矩阵和生产 update log/snapshot 持久化仍未收口。
+  - 续做 2026-05-26：真实 Hocuspocus runtime 已从旧同步 history helper 切到 `JWordPersistenceSnapshotAdapter` 契约，新增 `hocuspocus-history-bridge.ts` 统一调用 `createHocuspocusHistoryPersistenceAdapter()` 完成 append update、create snapshot、readonly preview、restore 和 persistence diagnostics 转发；`hocuspocus-history.ts` 的 adapter 追加版本时会从 state update 中剥离 `jword:collab:history:*` shared types，避免真实 runtime 重新引入历史索引递归。验证：`pnpm exec vitest run examples/collab/tests/vite-config.test.ts --testNamePattern "persistence adapter"`、`pnpm exec vitest run examples/collab/tests/vite-config.test.ts examples/collab/tests/hocuspocus-history.test.ts packages/persistence/test/memory-adapter.test.ts`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "restores Hocuspocus history|blocks Hocuspocus history restore"`、`pnpm exec playwright test examples/collab/tests/collab-docx-provider-history.e2e.ts --project=chromium -g "Gate 6 DOCX"`、`node tools/lint/check-comments.mjs`、`git diff --check` 通过；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-adapter-1779778267087` 验证 provider mode 为 hocuspocus，A/B 同步、v1 预览、恢复后 A/B 回到 v1，history labels 包含 `restore:Client A edit`，diagnostics 为空。Step 6.13 仍保持未完成：生产级共享 history service / 持久化 update log 和 snapshot backend 仍未收口。
+  - 续做 2026-05-26：`packages/persistence` 新增 storage-backed history adapter contract，宿主通过 `JWordHistoryStorage` 持久化序列化 update log、snapshot 和版本元数据，公开 `createStoragePersistenceAdapter()` / `createVolatileHistoryStorage()`，并覆盖跨 adapter 生命周期 list、preview、restore 和 restore 版本审计。验证：先红 `pnpm exec vitest run packages/persistence/test/storage-history-adapter.test.ts` 失败于 `createVolatileHistoryStorage is not a function`；随后转绿 `pnpm exec vitest run packages/persistence/test/storage-history-adapter.test.ts`、`pnpm exec vitest run packages/persistence/test/storage-history-adapter.test.ts packages/persistence/test/memory-adapter.test.ts`、`pnpm --filter @4xian/jword-persistence typecheck`、`pnpm --filter @4xian/jword-persistence build`、`node tools/lint/check-comments.mjs`、`git diff --check`。Step 6.13 仍保持未完成：真实 Hocuspocus runtime 尚未切到服务端共享 storage history service，生产部署的存储 backend、并发锁/事务边界和完整 provider 历史失败诊断矩阵仍未收口。
+  - 续做 2026-05-26：`examples/collab/server` 新增服务端共享 history service，`createCollabHocuspocusService()` 绑定 `historyStorage`，同一服务生命周期内通过 `recordVersion()` 创建 storage-backed update log + snapshot，并用 document 级串行锁避免并发 load/save 覆盖版本链；同一 `JWordHistoryStorage` 可跨 Hocuspocus 服务实例复用，重启后仍可 list、preview、restore。验证：先红 `pnpm exec vitest run examples/collab/tests/hocuspocus-history-service.test.ts` 失败于缺少 `../server/hocuspocus-history-service`；随后转绿 `pnpm exec vitest run examples/collab/tests/hocuspocus-history-service.test.ts examples/collab/tests/hocuspocus-service.test.ts`、`pnpm --filter @4xian/jword-example-collab typecheck`。Step 6.13 仍保持未完成：浏览器 Hocuspocus runtime 尚未通过服务端 history API 读写该共享 backend，restore 的服务端 API/真实浏览器验收和完整 provider 历史失败诊断矩阵仍未收口。
+  - 完成 2026-05-26：浏览器 Hocuspocus runtime 已通过 `history` query 接入服务端 history HTTP API，版本写入进入 `CollabHocuspocusHistoryService` 的 storage-backed update log + snapshot backend，版本列表/只读预览/恢复均由服务端 API 回读，不再依赖 provider Y.Doc 内部 history shared map。新增 `hocuspocus-server-history.test.ts` 先红后绿，覆盖服务端 API 失败时记录 `PERSISTENCE_RESTORE_FAILED` 且 restore 不覆盖当前文档；新增 `collab-history-api.e2e.ts` 从超长 smoke 拆出真实浏览器 server-history 路径，验证 A 写 v1/v2、服务端 list 可见、B 读到 v2、A 预览并恢复 v1 后 A/B 均回到 v1。验证：`pnpm vitest run examples/collab/tests/hocuspocus-server-history.test.ts examples/collab/tests/vite-config.test.ts --config vitest.config.ts`、`pnpm exec playwright test examples/collab/tests/collab-history-api.e2e.ts --project=chromium --reporter=line` 通过；同时将 `hocuspocus-runtime.ts` 的重连合并 helper 拆到 `hocuspocus-reconnect-merge.ts`，`collab-smoke.e2e.ts` 降到 1000 行以内。Step 6.13 最小闭环完成；生产宿主的具体持久化存储实现仍通过 `JWordHistoryStorage` 注入，不在 Gate 6 内绑定数据库产品。
+- [x] Step 6.14：建立 Gate 6 fixture registry 和 diagnostics registry，约束 collab/offline/history/inserter 的输入、事件和预期。
+- [x] Step 6.14a：把 Gate 5 DOCX 导入 fixture 纳入 Gate 6 registry，至少覆盖一个 T1 成功导入文档和一个 T2 warning 文档；验证导入后内容通过 `loadDocumentModel()` 写入同一 Y.Doc，并可参与协同、离线、历史和自动插入场景。
+  - 完成 2026-05-26：新增 `tests/architecture/gate6-docx-fixture-integration.test.ts`，覆盖 registry 中 `docx-import-t1-collab` 和 `docx-import-t2-warning` 两个 DOCX 导入 fixture。测试读取真实 `.docx` bytes，经 `importDocx()`、`convertDocxImportDocumentToCoreDocument()` 和 `editor.loadDocumentModel()` 写入 core Editor/Y.Doc，再通过 `encodeCollaborationUpdate()` / `applyRemoteUpdate()` 同步到另一 editor，执行 remote insert，写入 memory persistence update log，创建隔离 preview，加载版本 state update，并用 `createInserter()` 基于公开 anchor 自动插入。T1 断言无 import warning；T2 改用 `docx-t2-floating-object-warning.docx` 并断言 `DOCX_DRAWING_FLOATING_UNSUPPORTED` warning。离线路径仍只覆盖 `createUnavailableIndexedDbOfflineAdapter()` 的 recoverable diagnostic，不能视为真实 IndexedDB 恢复、真实 provider 或双窗口协同完成。
+  - 续做 2026-05-26：`examples/collab/tests/collab-docx-provider-history.e2e.ts` 已补 T1 DOCX 真实 Hocuspocus provider 下的 IndexedDB reload、断网本地 pending 和重连后远端同步；同轮保留 T2 warning 的 architecture 级 registry 覆盖。验证：`pnpm exec playwright test examples/collab/tests/collab-docx-provider-history.e2e.ts --project=chromium -g "Gate 6 DOCX"`、`pnpm exec vitest run tests/architecture/gate6-docx-fixture-integration.test.ts tests/architecture/gate6-fixture-registry.test.ts`、`pnpm --filter @4xian/jword-example-collab typecheck` 通过；Kimi WebBridge 真实 Chrome room `jword-collab-kimi-docx-offline-1779776195298` 通过。
+- [x] Step 6.15：实现 `examples/collab` debug API 与真实浏览器验收入口。
+  - 复核 2026-05-26：`examples/collab/tests/collab-smoke.e2e.ts` 的 debug API key 期望已同步当前真实入口，覆盖 `addCommentRange`、`formatClientRange`、`importDocxForCollabAcceptance`、`readCommentRanges`、`readTextFormatRanges` 和 `undoLocalUserEdit` 等 provider 回归需要的调试能力，避免 smoke 用旧 API 清单误报。
+- [x] Step 6.16：验证 collab/offline/history/inserter lazy-load，不进入 vanilla 首屏 bundle。
+  - 完成 2026-05-26：先用红测锁定 `examples/collab/tests/vite-config.test.ts` 中 provider/offline/history runtime 只通过动态 import 进入 demo，初始失败于缺少 `examples/collab/src/lazy-runtime.ts`；实现后 `pnpm exec vitest run examples/collab/tests/vite-config.test.ts --testNamePattern "provider offline history runtime"` 转绿。聚合验证 `pnpm exec vitest run examples/collab/tests/vite-config.test.ts tests/architecture/gate6-fixture-registry.test.ts tests/architecture/gate6-docx-fixture-integration.test.ts`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm --filter @4xian/jword-example-collab build`、`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium`、`pnpm typecheck`、`pnpm lint`、`node tools/lint/check-comments.mjs`、`git diff --check` 均通过。Kimi WebBridge 真实浏览器确认懒加载资源和 demo API 可用；当前仍不声明真实双窗口 provider、真实 IndexedDB 或生产离线恢复完成。
+- [x] Step 6.17：建立 Gate 6 benchmark，覆盖 update apply、snapshot create/load、version preview、offline restore 和 auto inserter streaming。
+  - 完成 2026-05-26：架构红测 `pnpm exec vitest run tests/architecture/gate6-benchmark.test.ts` 先失败于缺少 `benchmarks/gate6-collab-benchmark.mjs` 和 runner 接入，随后转绿。`pnpm build` 后执行 `pnpm bench`，Gate 6 输出 `gate6-1k`：update apply 0.96ms、update bytes 3046、snapshot create/load 0.66ms/0.17ms、version preview 0.31ms、auto insert/input probe 1.44ms/0.58ms、IndexedDB restore 0.1ms；`gate6-10k`：update apply 0.29ms、update bytes 23121、snapshot create/load 0.92ms/0.19ms、version preview 0.29ms、auto insert/input probe 0.24ms/3.19ms、IndexedDB restore 0.1ms。真实浏览器 IndexedDB restore 路径已进入 benchmark，Node 离线 adapter 不可用诊断仍单独保留。
+- [x] Step 6.18：跑 Gate 6 总验收，回写每个完成项、真实浏览器证据、失败项和遗留项。
+  - 完成 2026-05-26：Gate 6 readiness sweep 已完成并回写验收口径。协同 E2E 并行稳定性已通过隔离 Vite 端口收口：smoke `4186`、awareness `4187`、auto-insert `4188`、history-api `4189`、docx-provider-history `4191`、concurrency `4192`；同时改用绝对 Vite 启动路径和 1s readiness fetch timeout，避免并行测试互相关闭服务或卡住。
+  - 验证 2026-05-26：`pnpm lint`、`pnpm typecheck`、`pnpm test`（109 files / 574 tests passed）、`pnpm build`、`pnpm exec playwright test examples/collab/tests/collab-concurrency.e2e.ts --project=chromium --reporter=line`（10 passed）、`pnpm exec playwright test examples/collab/tests --project=chromium --reporter=line`（38 passed）和 `pnpm bench` 均通过。`pnpm bench` 的 Gate 6 benchmark 现在报告 `indexedDbRestoreStatus: restored` / `offlineRestoreStatus: indexeddb-restored`，真实浏览器 IndexedDB restore 已纳入 benchmark；Node 离线 adapter 的 recoverable diagnostic 仍单独保留。
+  - 遗留 2026-05-26：`pnpm test:visual` 已执行但未通过，失败集中在 Gate 4 visual baseline：`tests/visual/gate4.visual.ts` 桌面基线等待 `input[aria-label="Header"]` 可见超时，以及 `gate4-media-failure-darwin.png`、`gate4-long-table-darwin.png`、`gate4-mobile-baseline-darwin.png` 三个 darwin snapshot 缺失。该失败记录为 Gate 4 visual 基线遗留，不计为 Gate 6 协同、离线、历史或自动插入阻塞项。
+- [x] Step 6.19：冻结 Gate 6 商业 edition matrix，明确免费基础版不包含多人协作、离线协作、协作历史、协作服务端或自动插入；付费高级版按 feature key 开启 `collaboration.multiplayer`、`collaboration.offline`、`collaboration.history`、`collaboration.server`、`automation.autoInsert`。
+  - 完成 2026-05-27：`@4xian/jword-license` 新增 `GATE6_COLLAB_FEATURES`，冻结 Gate 6 高级 feature key 为 `collaboration.multiplayer`、`collaboration.offline`、`collaboration.history`、`collaboration.server`、`automation.autoInsert`；`packages/license/test/entitlement.test.ts` 覆盖这些 feature key 能进入同一 entitlement 检查。免费基础版继续只通过 Gate 4.5 `.jword` 和基础编辑能力交付，不包含多人协作、离线协作、协作历史、协作服务端或自动插入。
+- [x] Step 6.20：冻结 `@4xian/jword-collab`、`@4xian/jword-collab-server`、`@4xian/jword-license` 的导出分级和 export map；stable API 只包含第三方可承诺入口，experimental 只包含可替换 provider/storage adapter，internal 不允许从包入口导出。
+  - 完成 2026-05-27：新增 `tests/architecture/gate6-package-exports.test.ts`，约束 `@4xian/jword-collab`、`@4xian/jword-collab-server`、`@4xian/jword-license` 都是正式 workspace package，公开 export map 只从 `dist` 暴露，且不暴露 `internal` 子路径。`@4xian/jword-collab` stable 入口保留 feature gate、内存 adapter、awareness 和诊断类型；Hocuspocus provider adapter 移入 `@4xian/jword-collab/experimental` 子入口，`examples/collab` 与 provider tests 已改用该 experimental 入口。新增正式 `packages/collab-server`，提供 `createJWordCollabServer()`、`startJWordCollabServer()`、`JWORD_COLLAB_SERVER_PROTOCOL_VERSION`、`/health`、`/version` 和 featureFlags/minimumClientVersion 版本壳；该包目前只完成 self-host server 的最小公开入口与 export map，完整 WebSocket、history API、license hook enforcement、部署路径和并发边界仍按 Step 6.29-6.34 继续实现。验证：`pnpm exec vitest run tests/architecture/gate6-package-exports.test.ts packages/collab/test/contract.test.ts packages/collab-server/test/server.test.ts`、`pnpm --filter @4xian/jword-collab typecheck`、`pnpm --filter @4xian/jword-collab build`、`pnpm --filter @4xian/jword-collab-server test`、`pnpm --filter @4xian/jword-collab-server typecheck`、`pnpm --filter @4xian/jword-collab-server build`、`pnpm --filter @4xian/jword-example-collab typecheck` 通过。
+- [x] Step 6.21：建立商业边界架构测试和授权 diagnostics，证明 `packages/core`、`packages/native`、`examples/vanilla` 不 import collab/server/license 高级包；未授权、过期、feature 不匹配、license server 不可用分别返回稳定诊断，且不读取或泄漏用户文档内容。
+  - 完成 2026-05-27：新增 `tests/architecture/gate6-commercial-readiness.test.ts`，扫描 `packages/core/src`、`packages/native/src` 和 `examples/vanilla/src` 的运行时 import/export/dynamic import，禁止免费基础侧引入 `@4xian/jword-collab`、`@4xian/jword-collab-server` 或 `@4xian/jword-license`；`fixtures/collab/diagnostics-registry.json` 和 `tests/architecture/gate6-diagnostics-registry.test.ts` 新增 `COLLAB_LICENSE_MISSING`、`COLLAB_LICENSE_EXPIRED`、`COLLAB_FEATURE_NOT_ENTITLED`、`COLLAB_LICENSE_SERVER_UNAVAILABLE`；`@4xian/jword-collab` 新增 `createJWordCollabFeatureGate()`，在高级协作读取文档内容前把 license entitlement 错误映射成 `COLLAB_*` 稳定 diagnostic，不携带用户文档内容。验证：`pnpm exec vitest run packages/license/test/entitlement.test.ts packages/collab/test/contract.test.ts tests/architecture/gate6-diagnostics-registry.test.ts tests/architecture/gate6-commercial-readiness.test.ts` 通过。
+- [x] Step 6.22：在 core 中补中立位置 API，命名必须保持基础能力语义，例如 selection snapshot、anchor snapshot、range snapshot、text location、query result；类型名和方法名不得带 `collab`、`ai`、`autoInsert` 等高级功能前缀。
+  - 完成 2026-05-27：`packages/core/src/editor/location-types.ts` 新增 `EditorTextLocation`、`EditorAnchorSnapshot`、`EditorRangeSnapshot`、`EditorSelectionSnapshot`、`EditorLocationQuery` 和 `EditorTextQueryResult`；`packages/core/src/editor/runtime.ts` 与根入口 `packages/core/src/index.ts` 已导出这些公开类型。类型名和方法名保持中立基础语义，没有出现 `collab`、`ai` 或 `autoInsert` 前缀；`EditorLocationQuery.rangeSnapshot` 只接受公开 `EditorRangeSnapshot`，不接受内部 `TextRangeRecord`，避免把 `relativePosition`、`documentId` 或内部 range `id` 带入新公开 API。
+- [x] Step 6.23：实现获取当前位置和查询内容位置的方法，支持从当前 selection 创建 anchor/range，也支持按文本、block id、heading、comment id 或 range snapshot 查询插入位置；返回值必须可序列化，供高级包、普通跳转和宿主业务共同使用。
+  - 完成 2026-05-27：`JWordEditorLocationRuntime` 已接入 Editor facade，提供 `createAnchorSnapshot()`、`createRangeSnapshot()`、`readSelectionSnapshot()` 和 `findTextLocations()`；查询支持 `text`、`block`、`heading`、`comment` 和公开 `rangeSnapshot`。`location-query.ts` 只读取 `DocumentProjection`，不访问 DOM、layout、Y.Doc provider 或 document-store；`location-runtime.ts` 仅在 runtime 层复用既有 `locateCommentThread()` 和 `locateRangeSnapshot()` 能力，把结果转换成 JSON 兼容公开位置。`block-record-factory.ts` 同步修复 `loadDocumentModel()` 路径下 paragraph `styleId` 和 list 信息未写入 store properties 的问题，保证 heading 查询在 canonical model 导入后可解释。
+- [x] Step 6.24：建立位置 API 的 focused tests、类型测试和真实浏览器验收，证明返回值不泄漏 Yjs RelativePosition、document-store、DOM Range、canvas 坐标或 provider 内部状态；自动插入和普通跳转都只能消费这层公开位置结果。
+  - 完成 2026-05-27：新增 `packages/core/test/editor/location-api.test.ts`，覆盖 selection snapshot、anchor/range snapshot、text/block/heading/comment/rangeSnapshot 查询、JSON round-trip 和内部关键字泄漏检查；`packages/core/test/index.test.ts` 覆盖根入口类型导出。验证命令：`pnpm exec vitest run packages/core/test/editor/location-api.test.ts packages/core/test/index.test.ts` 通过 2 files / 10 tests；`pnpm --filter @4xian/jword-core typecheck` 通过；`pnpm exec vitest run packages/core/test/editor/user-and-range-snapshot.test.ts packages/core/test/heading/outline.test.ts packages/core/test/find-replace/find-replace.test.ts` 通过 3 files / 5 tests。真实浏览器验收在 `http://127.0.0.1:4192/` 的 vanilla demo 中通过 Kimi WebBridge 控制真实 Chrome 完成，公开路径只使用 `window.__jwordDemo.editor` 和 `selectTextRange()`：页面标题为 `Vanilla Demo`，`window.__jwordDemo` 可用，页面无框架错误 overlay；`readSelectionSnapshot()` 返回 `paragraph-1 / run-1 / 0->4` 非折叠 selection；`findTextLocations({ kind: "text", text: "English" })`、大小写不敏感文本查询、block 查询和公开 rangeSnapshot 查询均返回结果；JSON round-trip 为 true，泄漏检查未出现 `RelativePosition`、`Yjs`、`Y.Text`、`document-store`、`DocumentStore`、`DOM Range`、`LayoutRect`、`canvas` 或 `provider`。
+  - 补充完成 2026-05-27：`Editor` facade 新增 `resolveLocation()` 和 `scrollToLocation()`。`resolveLocation()` 可消费公开 text location、anchor snapshot、range snapshot、selection snapshot 和 query result，并只返回 JSON 兼容 `resolvedLocation`；`scrollToLocation()` 只在已挂载编辑器内部计算滚动，不改变当前 selection，不把 DOM Range、LayoutRect、canvas 坐标、provider 或 `scrollTop` 暴露为公开返回值。TDD 红灯先确认缺少 `resolveLocation` / `scrollToLocation`；实现后 `pnpm exec vitest run packages/core/test/editor/location-api.test.ts packages/core/test/editor/location-scroll.test.ts packages/core/test/index.test.ts --reporter=dot` 通过 3 files / 12 tests。
+- [x] Step 6.25：定义 `connectJWordCollaboration(editor, options)` 公开入口，options 至少包含 `serverUrl`、`documentId`、`roomId`、`user`、`token`、`license`、`features`；初始化失败必须返回 diagnostic，不允许半连接状态。
+- [x] Step 6.26：定义用户身份与 presence 配置，`user` 支持 `id`、`name`、`color`、`avatarUrl`，未传 `color` 时按 user id 生成稳定颜色；远端光标、选区和输入提示都从这份公开用户信息派生。
+- [x] Step 6.27：定义 collaboration connection handle，至少包含 `status`、`diagnostics`、`awareness`、`history`、`offline`、`startAutoInsertSession()`、`disconnect()`、`destroy()`；handle 销毁后必须清理 provider、awareness、offline watcher 和 event listener。
+- [x] Step 6.28：建立外部 TypeScript 消费测试，只从 `@4xian/jword-collab` 包入口导入 API，完成 connect、disconnect、history、offline 和 auto insert 调用；stable API 中不得出现 Hocuspocus、Y.Doc、Yjs update store 或 demo runtime 类型。
+  - 完成 2026-05-27：新增 `packages/collab/src/client-sdk.ts` 并从 `@4xian/jword-collab` stable 入口导出 `connectJWordCollaboration()` 和公开 handle/type。公开 options 显式包含 `serverUrl`、`documentId`、`roomId`、`user`、`token`、`license`、`features`；初始化先做授权与 provider 可用性检查，失败返回 `error` handle 和 `COLLAB_*` diagnostic，不连接 provider、不读取文档内容。`user` 支持 `id`、`name`、`color`、`avatarUrl`，未传 `color` 时按 user id 生成稳定 hex 颜色；presence 的 typing label 由同一公开用户信息派生。connection handle 暴露 `status`、`diagnostics`、`awareness`、`history`、`offline`、`startAutoInsertSession()`、`disconnect()`、`destroy()`，销毁时清理 provider awareness 和所有订阅。新增 `packages/collab/test/public-client.test.ts` 作为外部 TypeScript 消费测试，只从 `@4xian/jword-collab` 包入口导入 API，覆盖 connect、license diagnostic、disconnect、destroy、history、offline 和 auto insert 调用；`tests/architecture/gate6-package-exports.test.ts` 已把 `connectJWordCollaboration` 纳入 stable token，并禁止 stable client 源码出现具体 provider、底层同步结构或 demo runtime 名称。验证：`pnpm exec vitest run packages/collab/test/public-client.test.ts` 先红于 `connectJWordCollaboration is not a function`，随后转绿；`pnpm exec vitest run packages/collab/test/public-client.test.ts packages/collab/test/contract.test.ts tests/architecture/gate6-package-exports.test.ts tests/architecture/gate6-commercial-readiness.test.ts packages/license/test/entitlement.test.ts` 通过 5 files / 22 tests；`pnpm --filter @4xian/jword-collab typecheck` 和 `pnpm --filter @4xian/jword-collab build` 通过。`node tools/lint/check-comments.mjs` 仍因前序未触碰文件头注释失败：`packages/collab/src/experimental.ts`、`packages/core/src/editor/location-runtime.ts`；本轮触碰的 package export 架构测试已从失败列表移除。
+- [x] Step 6.29：从 `examples/collab/server` 抽出 `@4xian/jword-collab-server` 正式服务包，第三方不需要复制 demo server 源码；demo server 只能变成该正式包的最小启动器。
+- [x] Step 6.30：提供 Node 服务入口和可嵌入 handler：`createJWordCollabServer(options)`、`startJWordCollabServer(options)`；同一服务包支持本地开发、第三方自托管和测试环境启动。
+- [x] Step 6.31：定义 server options：`authHook`、`tenantHook`、`licenseHook`、`historyStorage`、`snapshotStorage`、`rateLimit`、`maxPayloadBytes`、`allowedOrigins`、`logger`；hook 返回值必须可诊断，不能把业务权限逻辑写进 core 或 client。
+- [x] Step 6.32：实现 `/health`、`/version`、`/history`、`/license/status` API，响应包含 `protocolVersion`、`packageVersion`、`featureFlags`、`minimumClientVersion`、`minimumServerVersion` 和可观测 request id。
+- [x] Step 6.33：在服务端强制 license enforcement 和 history 并发边界；client-side license check 只用于 UX 提示，服务端必须在 WebSocket 连接、history API、auto-insert relay 和 storage 写入前校验 entitlement。
+- [x] Step 6.34：提供 self-host 部署最小路径：本地 Node 启动、Dockerfile 或等价脚本、环境变量说明、反向代理 WebSocket 注意事项、health check 和日志字段；部署示例必须使用正式 server 包而不是 demo 源码。
+  - 进展 2026-05-27：`@4xian/jword-collab-server` 已补正式 HTTP server 入口和可嵌入 Node request handler：`createJWordCollabServer()`、`startJWordCollabServer()`、`createJWordCollabRequestHandler()`。server options 已定义 `authHook`、`tenantHook`、`licenseHook`、`historyStorage`、`snapshotStorage`、`rateLimit`、`maxPayloadBytes`、`allowedOrigins`、`logger`；`/health`、`/version`、`/history/versions`、`/license/status` 均返回 request id，`/version` 返回 protocol/package/featureFlags/minimumClientVersion/minimumServerVersion。history 写入走 `@4xian/jword-persistence` storage-backed adapter，并在读取或写入 storage 前先调用服务端 `licenseHook`；未授权时返回 403，测试证明 storage `load/save` 计数为 0。新增 `packages/collab-server/README.md` 与 `packages/collab-server/Dockerfile`，覆盖本地 Node 启动、`JWORD_COLLAB_HOST`、`JWORD_COLLAB_PORT`、`JWORD_COLLAB_ALLOWED_ORIGINS`、反向代理 WebSocket 注意事项、health check 与 `requestId` 日志字段。验证：`pnpm exec vitest run packages/collab-server/test/server.test.ts tests/architecture/gate6-package-exports.test.ts` 先红于缺少 embedded handler 与部署文件，随后转绿；`pnpm exec vitest run packages/collab-server/test/server.test.ts packages/collab/test/public-client.test.ts packages/collab/test/contract.test.ts tests/architecture/gate6-package-exports.test.ts tests/architecture/gate6-commercial-readiness.test.ts packages/license/test/entitlement.test.ts` 通过 6 files / 29 tests；`pnpm --filter @4xian/jword-collab-server typecheck` 和 `pnpm --filter @4xian/jword-collab-server build` 通过。
+  - 续做 2026-05-27：`@4xian/jword-collab-server` 新增 `createJWordCollabHistoryService()`，把 storage-backed history service 和 document 级 `documentLocks` 并发边界移入正式包；正式 HTTP API 兼容浏览器 runtime 既有 `/jword-history/versions` 与 `/jword-history/preview` 路径。`examples/collab/server/hocuspocus-service.ts` 已改成正式包最小启动器：Hocuspocus WebSocket 仍只负责本地 provider demo，history HTTP 服务由 `createJWordCollabServer()` 启动，旧 `hocuspocus-history-service.ts` 只保留名称兼容并 re-export 正式包实现，不再复制服务端 history 逻辑。`tests/architecture/gate6-package-exports.test.ts` 增加约束：demo server 必须 import `@4xian/jword-collab-server`，不得再 import 本地 `hocuspocus-history-api` 或 `hocuspocus-history-service`，正式包必须包含 document 级锁和 `/jword-history/*` 兼容 API。验证：`pnpm exec vitest run packages/collab-server/test/server.test.ts examples/collab/tests/hocuspocus-service.test.ts examples/collab/tests/hocuspocus-history-service.test.ts examples/collab/tests/vite-config.test.ts tests/architecture/gate6-package-exports.test.ts` 通过 5 files / 25 tests；`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm --filter @4xian/jword-example-collab build`、`pnpm --filter @4xian/jword-collab-server typecheck`、`pnpm --filter @4xian/jword-collab-server build` 和 focused `git diff --check` 通过。当前仍未勾选 Step 6.29-6.34：WebSocket 连接和 auto-insert relay 的服务端授权 enforcement 仍未闭环。
+  - 续做 2026-05-27：`@4xian/jword-collab-server` 新增 `createJWordCollabHocuspocusServer()` 正式 WebSocket 服务入口，Hocuspocus `onConnect` / `onAuthenticate` / `beforeSync` 统一在正式包内校验 `licenseHook` 的 `collaboration.server` entitlement；未授权连接在同步前失败，客户端 update 写入前也会被拒绝。`examples/collab/server/hocuspocus-service.ts` 进一步收口为正式 WebSocket server + 正式 history HTTP server 的薄启动器，不再直接 import `@hocuspocus/server`；`packages/collab-server` 新增 `@hocuspocus/server@4.0.0` 运行依赖，架构测试约束 demo server 不再复制 WebSocket hook 逻辑。验证：先写红测 `pnpm exec vitest run packages/collab-server/test/server.test.ts tests/architecture/gate6-package-exports.test.ts`，随后实现转绿；`pnpm exec vitest run packages/collab-server/test/server.test.ts examples/collab/tests/hocuspocus-service.test.ts examples/collab/tests/hocuspocus-history-service.test.ts examples/collab/tests/hocuspocus-provider.test.ts examples/collab/tests/vite-config.test.ts tests/architecture/gate6-package-exports.test.ts` 通过 6 files / 33 tests；`pnpm --filter @4xian/jword-collab-server typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm --filter @4xian/jword-collab-server build`、`pnpm --filter @4xian/jword-example-collab build`、focused `git diff --check` 通过。当前仍未勾选 Step 6.29-6.34：auto-insert relay 的服务端授权 enforcement 仍未闭环。
+  - 完成 2026-05-27：补齐 `/auto-insert/relay` 正式服务端授权入口，relay 先过 `tenantHook`，再用 `licenseHook` 校验 `GATE6_COLLAB_FEATURES.autoInsert`，未授权返回 403 且不回显 chunk 内容；`authHook` 已覆盖受保护 history、license 和 auto-insert 路由，`request-guards.ts` 统一 auth/tenant hook 默认放行与拒绝语义。架构测试约束正式包公开 `createJWordCollabHocuspocusServer()`、包含 `/auto-insert/relay`、WebSocket `onAuthenticate` / `beforeSync` 和 auto insert feature key；demo server 只使用正式 server 包入口。验证：`pnpm exec vitest run packages/collab-server/test/server.test.ts tests/architecture/gate6-package-exports.test.ts` 通过 2 files / 17 tests；`pnpm exec vitest run packages/collab-server/test/server.test.ts examples/collab/tests/hocuspocus-service.test.ts examples/collab/tests/hocuspocus-history-service.test.ts examples/collab/tests/hocuspocus-provider.test.ts examples/collab/tests/vite-config.test.ts tests/architecture/gate6-package-exports.test.ts` 通过 6 files / 37 tests；`pnpm --filter @4xian/jword-collab-server typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm --filter @4xian/jword-collab-server build`、`pnpm --filter @4xian/jword-example-collab build`、targeted ESLint、`node tools/lint/check-package-versions.mjs`、`node tools/lint/check-boundaries.mjs`、`git diff --check` 均通过；`node tools/lint/check-comments.mjs` 仍只失败在前序未触碰的 `packages/collab/src/experimental.ts` 和 `packages/core/src/editor/location-runtime.ts` 文件头注释。
+- [x] Step 6.35：定义 client/server handshake contract，包含 `protocolVersion`、`clientPackageVersion`、`serverPackageVersion`、`featureFlags`、`minimumServerVersion`、`minimumClientVersion`；client 连接前必须先完成 handshake。
+- [x] Step 6.36：实现版本不匹配诊断，server 过旧、client 过旧、protocol 不兼容或 featureFlags 缺失分别返回稳定错误；失败后编辑器仍保留本地单人编辑能力，不进入半协作状态。
+- [x] Step 6.37：建立版本握手 E2E 和 diagnostics export，覆盖版本匹配成功、server 过旧失败、client 过旧失败、feature 缺失失败；client 和 server 导出的版本信息必须一致，便于第三方排障。
+  - 完成 2026-05-27：`@4xian/jword-collab` 公开 `JWORD_COLLAB_CLIENT_PROTOCOL_VERSION`、`JWORD_COLLAB_CLIENT_PACKAGE_VERSION` 和 `JWordCollaborationHandshake`；`connectJWordCollaboration()` 在连接 provider 前读取 self-host server `/version`，握手结果包含 client/server package version、protocol、featureFlags、minimumClientVersion 和 minimumServerVersion。版本失败会返回稳定 diagnostics：`COLLAB_PROTOCOL_MISMATCH`、`COLLAB_SERVER_TOO_OLD`、`COLLAB_CLIENT_TOO_OLD`、`COLLAB_FEATURE_FLAGS_MISSING`，并保持 provider `idle`，不进入半协作状态。架构测试约束 client/server protocol 常量一致。新增 `examples/collab/tests/collab-handshake.e2e.ts`，在真实 Chromium 浏览器中动态导入公开 collab client SDK，覆盖版本匹配成功后 provider 进入 `synced`，以及 featureFlags 缺失时浏览器侧 `connection.diagnostics` 导出 `COLLAB_FEATURE_FLAGS_MISSING` 且 provider 仍为 `idle`。验证：先用 `pnpm exec vitest run packages/collab/test/public-client.test.ts` 观察红灯为 `connection.handshake` 缺失、协议不兼容仍进入 `synced`；实现后 `pnpm exec vitest run packages/collab/test/public-client.test.ts` 通过 1 file / 7 tests，`pnpm exec vitest run packages/collab/test/public-client.test.ts packages/collab-server/test/server.test.ts tests/architecture/gate6-package-exports.test.ts` 通过 3 files / 25 tests，`pnpm exec vitest run packages/collab/test/public-client.test.ts packages/collab/test/contract.test.ts packages/collab-server/test/server.test.ts tests/architecture/gate6-package-exports.test.ts tests/architecture/gate6-commercial-readiness.test.ts packages/license/test/entitlement.test.ts` 通过 6 files / 41 tests；`pnpm exec playwright test examples/collab/tests/collab-handshake.e2e.ts --project=chromium --reporter=line` 通过 2 tests；`pnpm --filter @4xian/jword-collab typecheck`、`pnpm --filter @4xian/jword-collab build`、`pnpm --filter @4xian/jword-example-collab typecheck`、targeted ESLint 和 `git diff --check` 通过。
+- [x] Step 6.38：远端 cursor 在光标附近显示用户名称和输入状态，显示格式为 `用户名称 正在输入`；只显示远端用户，不覆盖本地用户自己的光标 UI。
+- [x] Step 6.39：多用户 cursor 颜色来自初始化 `user.color` 或稳定 fallback；相邻光标、选区和 label 需要稳定排序和轻量错位，避免遮挡当前用户正在输入的位置。
+- [x] Step 6.40：typing activity 必须有节流、过期时间和断连清理；停止输入后自动隐藏 `正在输入`，但可继续显示远端 cursor / selection；presence 事件不进入版本历史、不进入 undo、不产生正文 transaction。
+- [x] Step 6.41：真实浏览器多页面验收至少覆盖 2 个和 5 个用户，检查用户名、颜色、typing label、重叠 cursor、断连清理和屏幕滚动后的定位稳定性。
+  - 完成 2026-05-27：`examples/collab` 新增 `createPresenceDisplayUsers()` 展示模型，按 `clientId` 稳定排序，保留 `user.color`，对同一 `cursorOffset` 生成 0/6/12/18/24px 轻量错位；cursor label 在 `selectionLabel` 未过期时显示 `用户名称 正在输入`，过期后回落到 `用户名称 cursor offset`。内存 runtime 和 Hocuspocus runtime 都透传 `selectionLabel` / `updatedAt`，页面 render 安排 typing 过期重绘，presence 仍只走 awareness/debug 快照，不写正文 transaction、版本历史或 undo。Hocuspocus demo URL client 扩展到 `client-a` 至 `client-e`，provider 模式下 A/B 输入控件按当前页面 client 写入 presence，支持 5 个真实页面同时发布 cursor。`@4xian/jword-collab-server` 包内相对 ESM import 改为 `.js` specifier，使 Node/Playwright 能从构建产物直接加载正式 server 包；collab smoke 测试的本地 Hocuspocus 服务延迟从 dist 动态导入，避免 Playwright 列举测试时预加载 workspace dist。验证：红测 `pnpm exec vitest run examples/collab/tests/vite-config.test.ts --testNamePattern "presence display users"` 先失败于 `createPresenceDisplayUsers is not a function`；实现后通过。真实浏览器 `pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "renders Hocuspocus awareness across browser pages" --reporter=line` 通过 1 test，覆盖 2 用户 typing label、title、selection range、relative position 和过期回落；`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "five browser pages" --reporter=line` 通过 1 test，覆盖 5 页面 client-a 至 client-e、稳定错位、滚动后 transform 稳定和 client-c 断连清理。补充验证：`pnpm exec vitest run examples/collab/tests/vite-config.test.ts examples/collab/tests/hocuspocus-service.test.ts packages/collab-server/test/server.test.ts --reporter=dot` 通过 3 files / 24 tests，`pnpm --filter @4xian/jword-example-collab typecheck`、`pnpm --filter @4xian/jword-collab-server typecheck`、targeted ESLint 和 `git diff --check` 通过。
+- [x] Step 6.42：定义 `startAutoInsertSession()` 公开 API，必须接收 `position` 或 `range`；位置来源可以是 selection snapshot、anchor/range snapshot、findText result 或 resolveLocation result，不能默认读取当前 live caret。
+- [x] Step 6.43：自动插入 session 创建后不得调用 editor focus、不得修改用户当前 selection、不得依赖 DOM caret；用户在插入期间手动点击其它位置并输入时，自动插入仍在指定位置或 range 中推进。
+- [x] Step 6.44：自动插入以虚拟远端 actor 进入协作体系，支持 actor `id`、`name`、`color`、`avatarUrl`，例如 `AI Assistant` 或业务方传入的机器人名称；该 actor 的内容、presence、diagnostics 和 undo scope 必须与真实用户区分。
+- [x] Step 6.45：流式写入支持 progress、abort、error、requestId、chunk metadata、retry 和独立 undo scope；失败时保留已提交内容、返回可诊断状态，不做不可控回滚。
+- [x] Step 6.46：真实浏览器验收覆盖自动插入进行中用户手动点击其它位置继续输入、远端用户同时输入、自动插入取消、位置被删除、版本恢复冲突和独立 undo；重点验证不抢光标、不丢内容、不污染用户 undo。
+  - 完成 2026-05-27：`@4xian/jword-collab` stable client 的 `startAutoInsertSession()` 现在要求显式 `position` 或 `range`；缺失时返回 `failed` session，并记录 `COLLAB_AUTO_INSERTER_POSITION_REQUIRED`，测试断言不会读取 live caret、不会 focus editor、不会修改 selection。public auto-insert session 暴露虚拟 actor `id`、`name`、`color`、`avatarUrl`、`progress`、`write()`、`retry()`、`abort()`；写入和 retry 都带 `requestId`、chunk metadata，并用 `origin: 'auto-inserter'`、`undoScope: 'auto-inserter'` 与真实用户 undo 区分。capable editor 路径通过 core `createInserter()` 和 transaction pipeline 写入，fallback 外部 adapter 只保留受控 auto-inserter origin；core stable 入口补导出 `createRangeRef` 和 `InserterRetryInput`，collab 包 tsconfig 对齐同仓包使用 `packages/*/dist/index.d.ts`，避免把 core/license 源码拉入 collab `rootDir`。`examples/collab/tests/collab-auto-insert-concurrency.e2e.ts` 改为延迟导入正式 dist server，并把 Vite demo 端口迁到 4193 + `--strictPort`，避免测试发现期加载 workspace 包和 4188 Hocuspocus HTTP 端口冲突。验证：先写红测 `pnpm exec vitest run packages/collab/test/public-client.test.ts --testNamePattern "connects through" --reporter=dot`，失败于 `session.retry is not a function`；实现后通过。`pnpm exec vitest run packages/core/test/collaboration/inserter.test.ts packages/collab/test/public-client.test.ts --reporter=dot` 通过 2 files / 17 tests；`pnpm --filter @4xian/jword-collab typecheck`、`pnpm --filter @4xian/jword-collab build`、`pnpm --filter @4xian/jword-core build`、`pnpm --filter @4xian/jword-license build`、focused `git diff --check` 均通过。真实浏览器 `pnpm exec playwright test examples/collab/tests/collab-auto-insert-concurrency.e2e.ts --project=chromium --reporter=line` 通过 6 tests，覆盖指定 anchor/range 下用户继续输入、远端同时输入、删除 anchor、远端删除、断连恢复和独立 undo；`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "blocks Hocuspocus history restore" --reporter=line` 通过 1 test，覆盖 pending offline 编辑下版本恢复冲突不覆盖本地内容。
+- [x] Step 6.47：重写 `examples/collab` 主入口为真实第三方集成方式：基础 editor/UI 初始化后动态 import 高级 client 包，连接正式 self-host server，传入 user/license/room/documentId/serverUrl/features。
+- [x] Step 6.48：demo 和测试不得直接 import `packages/collab/src`、`packages/collab-server/src`、`examples/collab/src/runtime/*`、server 内部 service、Y.Doc store 或 core 内部 store；只能通过公开包入口、公开 facade 和浏览器用户行为完成验收。
+- [x] Step 6.49：建立 import graph 架构测试扫描 examples/tests，禁止底层源码路径、测试 helper 和 demo runtime 代替公开 API；允许保留宿主级 debug hook，但 debug hook 不能成为第三方集成 API。
+  - 完成 2026-05-27：`examples/collab` 主页面新增真实 `#jword-collab-editor` / `#jword-collab-toolbar` / live region / assistive mirror 宿主，`src/main.ts` 先用 `createEditor()` 和 `createJWordUi()` 装配基础 editor/UI，再按 `provider=hocuspocus` 动态加载高级 runtime，并把 `serverUrl`、`documentId`、`user`、`license`、`roomId`、`features` 和 history/offline 参数透传给 runtime；原 A/B textarea 降级为 debug client mirror，保留既有 E2E 兼容但不再是唯一主入口。`examples/collab/vite.config.ts` 已移除高级协作包源码 alias，仅基础 core/docx/ui 保留开发态 alias；浏览器 handshake 测试新增 `browser-handshake-harness.ts`，通过公开 `@4xian/jword-collab` 包名加载 client SDK，不再用 `/@fs...packages/collab/src/index.ts`。E2E Hocuspocus 服务改走 `collab-hocuspocus-service.ts`，延迟导入 `packages/collab-server/dist/index.js` 和 `packages/persistence/dist/index.js`，不再直接依赖 demo server 内部 service。新增 `tests/architecture/gate6-import-graph.test.ts` 扫描 `examples/collab/src` 与浏览器验收测试的 import 和源码路径字符串，禁止私有 runtime、server service、collab/collab-server src 和 core 内部 store 路径；允许宿主级 debug hook 继续存在但不作为第三方 API。验证：红测 `pnpm exec vitest run examples/collab/tests/vite-config.test.ts --testNamePattern "第三方集成方式" --reporter=dot` 先失败于 `main.ts` 未导入基础 core/UI，修复后通过；红测 `pnpm exec vitest run tests/architecture/gate6-import-graph.test.ts --reporter=dot` 先失败于 `collab-handshake.e2e.ts` 的 `packages/collab/src` 字符串路径，改为公开包 harness 后通过。最终验证：`pnpm exec vitest run tests/architecture/gate6-import-graph.test.ts examples/collab/tests/vite-config.test.ts --reporter=dot` 14 tests passed；`pnpm --filter @4xian/jword-example-collab typecheck` 通过；`pnpm exec playwright test examples/collab/tests/collab-handshake.e2e.ts --project=chromium --reporter=line` 2 tests passed；`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "syncs two browser pages through Hocuspocus provider" --reporter=line` 1 test passed；targeted ESLint 和 `git diff --check` 通过。`node tools/lint/check-comments.mjs` 仍失败于前序遗留 `packages/collab/src/experimental.ts` 与 `packages/core/src/editor/location-runtime.ts` 的文件头注释，不是本轮新增。
+- [x] Step 6.50：双页面验收必须是两个浏览器页面、两个 user、同一 room、同一 documentId；主验收不得使用同一页面多个 textarea 实例，也不得只用内存双 Y.Doc 模拟替代真实 provider。
+  - 完成 2026-05-27：新增真实 Chromium 双页面验收 `Gate 6 collab demo accepts two browser pages as separate users in the same room and document`，测试启动正式 dist 的 `@4xian/jword-collab-server` Hocuspocus 服务，打开两个独立 browser page，分别传入 `userId/userName/userColor`，并显式断言两个页面使用同一 `roomId`、同一 `documentId`、不同 `data-jword-collab-user-id`、可见真实 `data-jword-collab-editor` 宿主和 `providerMode: hocuspocus`。主同步证明不再用同一页面 A/B textarea 两实例，写入来自 client-a 页面，client-b 页面通过真实 provider 收到同一文本，并读到 client-a 的远端 typing presence。RED 先失败于页面未暴露 `data-jword-collab-room-id`，随后补 `examples/collab/src/main.ts` 的第三方集成 data 属性、`index.html` 的真实 editor host data 标记，以及 Hocuspocus runtime 对传入 user display name/color 的使用。Browser 插件当前缺少 Node REPL `js` 执行工具，无法按 in-app Browser 技能接管，因此本轮真实浏览器验收使用项目 Playwright Chromium fallback。验证：`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "separate users in the same room and document" --reporter=line` 先红后绿；`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts --project=chromium --grep "separate users in the same room and document|syncs two browser pages through Hocuspocus provider" --reporter=line` 2 passed；`pnpm exec playwright test examples/collab/tests/collab-handshake.e2e.ts --project=chromium --reporter=line` 2 passed；`pnpm exec vitest run tests/architecture/gate6-import-graph.test.ts examples/collab/tests/vite-config.test.ts --reporter=dot` 14 tests passed；`pnpm --filter @4xian/jword-example-collab typecheck`、targeted ESLint 和 focused `git diff --check` 通过。
+- [x] Step 6.51：补第三方集成 README 草稿和 smoke script，脚本从空项目安装基础包、高级包和 server 包，按公开 API 启动协作、自动插入、历史版本和未授权失败演示。
+  - 完成 2026-05-27：新增 `packages/collab/README.md` 和 `examples/collab/README.md`，说明空项目安装、公开 `connectJWordCollaboration()`、`createJWordCollabServer()`、`history.recordVersion()`、`startAutoInsertSession()`、未授权失败和公开 API 边界。新增 `tools/release/check-gate6-third-party-smoke.mjs`：脚本用 `pnpm pack` 从当前 workspace 打包基础包、高级协作包、授权包、persistence 包和 server 包，安装到临时空项目，再运行只 import 公开包名的 smoke 程序；程序启动 self-host server，连接 collab client，记录历史版本，执行自动插入，并验证缺失 license 从 `JWORD_LICENSE_MISSING` 归一为 `COLLAB_LICENSE_MISSING`。验证：红测 `pnpm exec vitest run tests/architecture/gate6-package-exports.test.ts --testNamePattern "third-party integration smoke" --reporter=verbose` 先失败于 README/script 缺失；实现后通过。`node tools/release/check-gate6-third-party-smoke.mjs` 输出 `status: ok`、`installStatus: "installed-from-local-packs"`，并确认 collaboration synced、history recorded、autoInsert written、unauthorized `COLLAB_LICENSE_MISSING`。
+- [x] Step 6.52：建立私有 registry / `npm pack` 检查，高级 client、server、license 包只包含 dist、types、README、license metadata 和必要运行文件，不包含测试私有文件、内部 fixture 或源码路径泄漏。
+  - 完成 2026-05-27：新增 `tools/release/check-gate6-commercial-pack.mjs`，用 `pnpm pack` 审计 `@4xian/jword-collab`、`@4xian/jword-collab-server` 和 `@4xian/jword-license` 的 restricted registry 形态、export map、dist/types、README、`workspace:*` 改写、源码/测试/fixture 泄漏和 tarball 文件清单。`packages/collab`、`packages/collab-server`、`packages/license` 现在均显式保留 `files: ["dist", "README.md"]` 和 `publishConfig.access: "restricted"`；`packages/license/README.md` 记录 feature key 与授权 diagnostics。验证：红测 `pnpm exec vitest run tests/architecture/gate6-package-exports.test.ts --testNamePattern "commercial pack audit" --reporter=verbose` 先失败于脚本缺失；实现后 `pnpm exec vitest run tests/architecture/gate6-package-exports.test.ts --reporter=dot` 为 8 tests passed；`node tools/release/check-gate6-commercial-pack.mjs` 输出 `status: ok`，三个包的 `requiredFilesMissing` 和 `forbiddenFiles` 均为空；`node tools/lint/check-package-versions.mjs`、`pnpm --filter @4xian/jword-collab typecheck`、`pnpm --filter @4xian/jword-collab-server typecheck`、`pnpm --filter @4xian/jword-license typecheck` 通过。
+- [x] Step 6.53：建立 bundle gate，证明 free vanilla 首屏不包含 collab、hocuspocus、license、IndexedDB offline runtime、server client code；高级示例必须按需加载，未启用高级功能时不拉取高级 chunk。
+  - 完成 2026-05-27：新增 `tools/size/check-gate6-collab-bundle.mjs` 和 `tests/architecture/gate6-bundle-gate.test.ts`。红测先以 `pnpm exec vitest run tests/architecture/gate6-bundle-gate.test.ts --reporter=verbose` 失败于脚本缺失；实现后该测试通过。脚本扫描 `examples/vanilla/dist` 首屏 JS/CSS，阻止 `@4xian/jword-collab`、`@4xian/jword-collab-server`、`@4xian/jword-license`、`@4xian/jword-persistence`、`@hocuspocus`、`hocuspocus`、`IndexedDB` / `indexeddb` / `y-indexeddb`、Hocuspocus runtime、IndexedDB offline runtime、server/client public API 和授权/协同诊断 token 进入免费首屏；同时扫描 `examples/collab/dist`，要求 Hocuspocus provider、IndexedDB offline、provider failure diagnostics 和 WebSocket runtime 只出现在 lazy chunk。新鲜验证：`pnpm --filter @4xian/jword-example-vanilla build`、`pnpm --filter @4xian/jword-example-collab build`、`node tools/size/check-gate6-collab-bundle.mjs` 均通过；脚本输出 `status: "ok"`，vanilla 首屏仅包含 `index-*.js` / `index-*.css`，collab 高级 runtime 位于 `hocuspocus-runtime-*.js` 与 `lazy-runtime-*.js`。
+- [x] Step 6.54：扩展 diagnostics registry，覆盖授权、版本、server、network、offline、history、auto-insert、presence、storage、rate limit、payload limit 和 tenant/auth hook 失败。
+  - 完成 2026-05-27：`fixtures/collab/diagnostics-registry.json` 扩展到 56 个 Gate 6 稳定诊断码，覆盖 provider lifecycle、client/server version handshake、server unavailable、presence parse/invalid/unresolved、offline reconnect、history/snapshot/storage、authHook、tenantHook、license、auto-insert、relay payload、server payload limit、rate limit、not found 和 persistence restore/indexeddb/version 失败。registry metadata 新增 `domains`，按 `authorization`、`version`、`server`、`network`、`offline`、`history`、`auto-insert`、`presence`、`storage`、`rate-limit`、`payload-limit`、`tenant-hook`、`auth-hook` 建立商业 readiness 覆盖；`tests/architecture/gate6-diagnostics-registry.test.ts` 同时扫描 collab、collab-server、persistence 与 collab demo runtime 中实际发出的诊断 token，防止运行时代码新增诊断但漏登记。验证：红测 `pnpm exec vitest run tests/architecture/gate6-diagnostics-registry.test.ts --reporter=verbose` 先失败于 registry 仍只有 24 个 code 且缺少 domains；补齐后同命令通过 1 file / 5 tests；相关回归 `pnpm exec vitest run tests/architecture/gate6-diagnostics-registry.test.ts tests/architecture/gate6-commercial-readiness.test.ts tests/architecture/gate6-package-exports.test.ts packages/collab/test/public-client.test.ts packages/collab-server/test/server.test.ts packages/persistence/test/memory-adapter.test.ts --reporter=dot` 通过 6 files / 47 tests。
+- [x] Step 6.55：扩展 benchmark，覆盖 2/5/20 用户、1k/10k updates、离线重连、版本 snapshot、自动插入 1k/10k 字、server history API、license handshake 和版本握手。
+  - 完成 2026-05-27：`benchmarks/gate6-collab-benchmark.mjs` 扩展为 Gate 6 商业 benchmark 矩阵：每个 `gate6-1k` / `gate6-10k` fixture 都输出 `userCountMatrix`，覆盖 2/5/20 用户的 provider dispatch、远端 apply 和 `remoteApplyCount`；保留 update apply、snapshot create/load、version preview、自动插入正文和输入探针、真实 Chromium IndexedDB restore。新增内存 provider 离线重连 replay 探针，输出 `offlineReconnectStatus: "synced"`、`offlineReconnectQueuedUpdates: 1`；新增正式 `createJWordCollabServer()` 临时 self-host server benchmark，计量 `/history/versions` record/list、`/history/preview`、`/license/status` 和通过公开 `connectJWordCollaboration()` 完成的 client/server version handshake。红测 `pnpm exec vitest run tests/architecture/gate6-benchmark.test.ts --reporter=verbose` 先失败于缺少 `userCountMatrix`，实现后通过 1 file / 2 tests。实际 benchmark 在 `pnpm build` 后执行 `node benchmarks/gate6-collab-benchmark.mjs` 通过：`gate6-1k` 远端矩阵 2/5/20 用户 apply 为 1/4/19，update bytes 3046，IndexedDB restore 0.1ms，server history record/list/preview 9.76/1.11/1.05ms，license/version handshake 0.63/0.73ms；`gate6-10k` 远端矩阵 1/4/19，update bytes 23121，IndexedDB restore 0.1ms，server history record/list/preview 2.11/0.62/0.77ms，license/version handshake 0.42/0.4ms。focused 回归 `pnpm exec vitest run tests/architecture/gate6-benchmark.test.ts tests/architecture/gate6-package-exports.test.ts packages/collab-server/test/server.test.ts packages/collab/test/public-client.test.ts --reporter=dot` 通过 4 files / 30 tests；`packages/collab-server/test/server.test.ts` 中授权拒绝用例的 `[onConnect] COLLAB_FEATURE_NOT_ENTITLED` stderr 是该用例预期输出。
+- [x] Step 6.56：把 Gate 6 公开 API 清单、self-host server 部署、授权接入、client/server 版本策略、故障排查、收费能力边界和迁移指南加入 Gate 7 文档站计划。
+  - 完成 2026-05-27：Gate 7 文档站计划已补 Gate 6 公开 API 清单、collab client 集成、self-host server 部署、授权接入、client/server 版本策略、故障排查、收费能力边界、迁移指南和商业支持诊断包范围。红测 `pnpm exec vitest run tests/architecture/gate6-commercial-readiness.test.ts --reporter=verbose` 先失败于 Gate 7 计划缺少 `ConnectJWordCollaborationOptions` 等 Gate 6 公开类型名；补齐后同测转绿。该步骤只冻结文档站实施范围，不提前完成 Gate 7 正文、wrapper、devtools 或 release 工作。
 
 ### 验收
 
-- [ ] 双窗口同时编辑最终一致。
-- [ ] 断网编辑后恢复同步。
-- [ ] 远端光标和选区可见。
-- [ ] AI 自动插入不阻塞本地输入。
-- [ ] 用户 undo 默认不撤销 remote/AI 内容。
-- [ ] 批注 anchor 在远端编辑后稳定。
-- [ ] 历史版本可查看、可恢复、可解释。
+- [x] 双窗口同时编辑最终一致。
+- [x] 断网编辑后恢复同步。
+- [x] 远端光标和选区可见。
+- [x] AI 自动插入不阻塞本地输入。
+- [x] 用户 undo 默认不撤销 remote/AI 内容。
+- [x] AI/程序化写入可配置进入独立 undo scope，且不混入默认用户 undo。
+- [x] 批注 anchor 在远端编辑后稳定。
+- [x] 历史版本可查看、可恢复、可解释。
+- [x] 版本恢复失败时不覆盖当前可写文档。
+- [x] offline cache 不可用时在线协同仍可用并产生 recoverable diagnostic。
+- [x] remote / local / auto-inserter / version-restore origin 在 diagnostics 中可区分。
+- [x] DOCX 导入后的文档在双窗口协同、断网恢复、自动插入和历史恢复场景中表现为普通 JWord 文档；unsupported OOXML 只产生 warning/diagnostic，不作为可编辑协同内容承诺。
+- [x] `packages/collab`、`packages/persistence` 和 provider runtime 不进入 vanilla 首屏 bundle。
+- [x] `examples/collab` 能在真实浏览器完成双窗口协同、断网重连、自动插入、abort、版本预览和版本恢复。
+- [x] `@4xian/jword-collab-server` 可作为正式 self-host 服务包被第三方部署，不要求第三方复制 demo server 代码。
+- [x] client/server 版本不匹配、featureFlags 缺失或 protocol 不兼容时 fail-fast，并给出稳定 diagnostic。
+- [x] 未授权、授权过期、feature 不匹配和 license server 不可用时，高级协作、离线、历史和自动插入均被阻止，且不读取或泄漏文档内容。
+- [x] 远端 cursor 在光标附近显示用户名、颜色和 `正在输入` 状态，多用户重叠时稳定排序且不遮挡本地输入。
+- [x] `startAutoInsertSession()` 只消费显式 position/range，不读取 live caret、不调用 focus、不改变用户 selection；自动插入作为虚拟远端 actor 参与协作。
+- [x] `examples/collab` 只使用公开包 API 和真实编辑器集成，不再以 textarea harness 或 demo runtime 作为主验收入口。
+- [x] 免费基础 bundle、`packages/core` 和 `packages/native` 不包含 collab/server/license 高级功能代码。
+- [x] 付费边界至少有服务端或 worker/license 层强制 enforcement，不能只靠浏览器 client-side 判断。
+  - 完成 2026-05-27：Gate 6 验收项按当前工作树重新复核并补架构护栏。`@4xian/jword-collab-server` 已有正式 `createJWordCollabServer()`、`startJWordCollabServer()`、Dockerfile、README、health/version/history/license/auto-insert relay；`packages/collab/test/public-client.test.ts` 覆盖协议不兼容、server/client 过旧、feature flags 缺失时 fail-fast 且 provider 保持 `idle`；`packages/collab/test/contract.test.ts` 覆盖 missing、expired、feature mismatch 和 license server unavailable 的稳定授权诊断；`packages/collab-server/test/server.test.ts` 覆盖 history 和 auto-insert relay 未授权时在 storage/chunk 内容前被拒绝，WebSocket `onAuthenticate` / `beforeSync` 也在正式服务包内授权；`examples/collab/tests/vite-config.test.ts` 与真实浏览器 smoke 覆盖远端 cursor 用户名、颜色、`正在输入`、稳定排序和重叠错位；`packages/collab/test/public-client.test.ts` 覆盖 `startAutoInsertSession()` 缺少显式 position/range 时不读 live caret、不 focus、不改 selection，并暴露虚拟 actor；`tests/architecture/gate6-import-graph.test.ts`、`tests/architecture/gate6-bundle-gate.test.ts`、`tests/architecture/gate6-commercial-readiness.test.ts` 和 `tests/architecture/gate6-package-exports.test.ts` 分别约束 examples/test 只能走公开 API、免费首屏和基础源码不引入高级包、付费边界不只在浏览器 JS、core 稳定入口只保留中立 sync update / text inserter / anchor/range / transaction hook。验证：`pnpm exec vitest run tests/architecture/gate6-commercial-readiness.test.ts tests/architecture/gate6-package-exports.test.ts tests/architecture/gate6-benchmark.test.ts packages/core/test/index.test.ts packages/core/test/collaboration/editor-update.test.ts packages/collab/test/public-client.test.ts --reporter=verbose`。
+
+当前工作树补充复核（2026-05-27）：`tests/architecture/gate6-file-budget.test.ts` 红灯先暴露 `packages/collab/src/client-sdk.ts` 与 `examples/collab/tests/collab-smoke.e2e.ts` 超过 1000 行；随后将 client 公开类型拆到 `packages/collab/src/client-types.ts`，将诊断 helper 拆到 `packages/collab/src/client-diagnostics.ts`，将 collab smoke URL/debug helper 拆到 `examples/collab/tests/collab-smoke-helpers.ts`。复核行数为 `packages/collab/src/client-sdk.ts` 997、`examples/collab/tests/collab-smoke.e2e.ts` 835。验证：Gate 6 focused suite `packages/collab/test/public-client.test.ts packages/collab/test/contract.test.ts packages/collab-server/test/server.test.ts packages/persistence/test/memory-adapter.test.ts packages/persistence/test/storage-history-adapter.test.ts tests/architecture/gate6-diagnostics-registry.test.ts tests/architecture/gate6-package-exports.test.ts tests/architecture/gate6-commercial-readiness.test.ts tests/architecture/gate6-docx-fixture-integration.test.ts tests/architecture/gate6-file-budget.test.ts` 为 10 files / 65 tests passed；`pnpm --filter @4xian/jword-collab typecheck`、`pnpm --filter @4xian/jword-collab-server typecheck`、`pnpm --filter @4xian/jword-persistence typecheck`、`pnpm --filter @4xian/jword-example-collab typecheck` 均通过；Playwright Chromium collab suite `collab-smoke`、`collab-handshake`、`collab-history-api`、`collab-auto-insert-concurrency`、`collab-docx-provider-history` 为 30 passed。Kimi WebBridge 真实 Chrome 打开 `http://127.0.0.1:4186`，确认状态 `connected`、远端 cursor `title/text` 为 `Alice cursor 8`、模拟断开后 `offline.connected: false`、重连后自动插入同步到两个 client mirror。
+
+当前工作树补充复核（2026-05-27）：补齐 Gate 6 pack 和 import graph 漏洞。`@4xian/jword-persistence` 已纳入 `tests/architecture/gate6-package-exports.test.ts` 与 `tools/release/check-gate6-commercial-pack.mjs`，发布白名单改为 `dist` + `README.md`，补 `publishConfig.access = restricted` 和 README，避免 `src` 随商业协作存储包进入 npm pack。`tests/architecture/gate6-import-graph.test.ts` 现在扫描全部 `examples/collab/src/runtime/*.ts`，Hocuspocus runtime 改为从 `@4xian/jword-core` 根入口消费 `createDocumentProjection()`、shared document bridge 和 `createRangeRef()`；provider history 保留本地 wire-format 根名白名单，不再 import `packages/core/src/model/document-store`。Gate 7 API catalog 同步记录 core 新增的 projection / shared document bridge。验证：`pnpm vitest run tests/architecture/gate6-package-exports.test.ts tests/architecture/gate6-import-graph.test.ts tests/architecture/gate7-public-api-catalog.test.ts` 为 3 files / 15 tests passed；`pnpm vitest run examples/collab/tests/hocuspocus-history.test.ts examples/collab/tests/hocuspocus-server-history.test.ts examples/collab/tests/vite-config.test.ts` 为 3 files / 16 tests passed；`node tools/release/check-gate6-commercial-pack.mjs` 通过且 persistence pack 无 forbidden files。该补充只收口 Gate 6 packaging / import graph 护栏，不代表 Gate 7 文档站、wrapper、plugin 或 release dry-run 已完成。
+
+当前工作树补充复核（2026-05-27）：补齐 Gate 5/Gate 6 发布包 Node ESM 相对导入后缀与 Gate 6 DOCX 协同桥接授权漏洞。`tests/architecture/gate5-commercial-readiness.test.ts` 与 `tests/architecture/gate6-package-exports.test.ts` 已新增发布运行时代码相对 import 必须带 `.js` 后缀的护栏，商业包源码中的相对 import/export/dynamic import 已统一修正；`examples/collab/src/runtime/hocuspocus-runtime.ts` 的 `importDocxForCollabAcceptance()` 现在把同一份 demo entitlement 传给 `importDocx()`，`examples/collab/src/main.ts` 的默认 demo feature 列表补入 `docx.import`，避免 Gate 5 授权检查接入后 DOCX 导入协同验收在真实浏览器中因缺少授权失败。验证：无后缀相对导入扫描已无命中；`pnpm exec vitest run tests/architecture/gate5-commercial-readiness.test.ts tests/architecture/gate6-package-exports.test.ts --reporter=verbose` 为 2 files / 14 tests passed；`pnpm --filter @4xian/jword-docx --filter @4xian/jword-pdf --filter @4xian/jword-collab --filter @4xian/jword-persistence --filter @4xian/jword-collab-server typecheck` 通过；`pnpm build` 通过；`node tools/release/check-gate5-commercial-pack.mjs` 与 `node tools/release/check-gate6-commercial-pack.mjs` 均输出 `status: ok`；`node tools/release/check-gate6-third-party-smoke.mjs` 输出 `status: ok`、`installStatus: "installed-from-local-packs"`，并确认 collaboration synced、history recorded、autoInsert written、unauthorized `COLLAB_LICENSE_MISSING`；`pnpm --filter @4xian/jword-example-collab typecheck` 与 `pnpm --filter @4xian/jword-example-collab build` 通过；`pnpm exec playwright test examples/collab/tests/collab-smoke.e2e.ts examples/collab/tests/collab-handshake.e2e.ts examples/collab/tests/collab-history-api.e2e.ts examples/collab/tests/collab-auto-insert-concurrency.e2e.ts examples/collab/tests/collab-docx-provider-history.e2e.ts --project=chromium --reporter=line` 为 30 passed；Kimi WebBridge 真实 Chrome 打开 `http://127.0.0.1:5173/`，确认页面标题 `JWord Collab Gate 6 Demo`、连接状态 `connected`、debug API 暴露 `importDocxForCollabAcceptance`，点击自动插入后 `insertedCount` 增长且 client A 文本更新。该补充只收口 Gate 5/Gate 6 当前发布和浏览器验收漏洞，不代表 Gate 7 文档站、wrapper、plugin、diagnostics export 或 release dry-run 已完成。
+
+最终完成复核（2026-05-27）：主进程重新核对 Gate 4.5、Gate 5 和 Gate 6 范围内无未完成复选框。补强点为 `tests/architecture/gate6-docx-fixture-integration.test.ts` 改为只从 `@4xian/jword-core`、`@4xian/jword-docx`、`@4xian/jword-persistence` 公开入口导入，`vitest.config.ts` 补齐 DOCX/PDF 公开包 alias，`tests/architecture/gate6-import-graph.test.ts` 增加该集成测试的公开入口护栏；同时将 Gate 4.5 `packages/native/src/validation.ts` 文件头中的英文术语串改为中文注释，满足 comments lint。新鲜验证：Gate 5/Gate 6 import/package/file-budget focused Vitest 为 5 files / 19 tests passed；`pnpm --filter @4xian/jword-core --filter @4xian/jword-docx --filter @4xian/jword-persistence typecheck` 通过；仓库级 `pnpm lint`、`pnpm typecheck`、`pnpm test`（138 files / 681 tests passed）和 `pnpm build` 通过；`pnpm --filter @4xian/jword-example-vanilla build`、`pnpm --filter @4xian/jword-example-docx build`、`pnpm --filter @4xian/jword-example-collab build` 通过；`node tools/size/check-native-bundle.mjs`、`node tools/release/check-native-pack.mjs`、`node benchmarks/gate45-native-benchmark.mjs`、`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/compat/run-gate5-docx-compatibility.mjs`、`node tools/release/check-gate6-commercial-pack.mjs`、`node tools/release/check-gate6-third-party-smoke.mjs`、`node tools/size/check-gate6-collab-bundle.mjs`、`node benchmarks/gate6-collab-benchmark.mjs` 均输出 `status: ok` 或通过；Chromium focused E2E 覆盖 Gate 4.5、Gate 5 和 Gate 6 共 45 passed；Kimi WebBridge 真实 Chrome 打开 `http://127.0.0.1:5173/`，确认页面标题 `JWord Collab Gate 6 Demo`、连接状态 `connected`、debug API 暴露 `importDocxForCollabAcceptance`，点击自动插入后两个 client text 同步增长，停止后 `insertedCount: 56`、`running: false`、offline 为 connected。
+
+九项 remediation 复核（2026-05-28）：针对 2026-05-27 完成声明后的代码审查问题，主进程按 `docs/superpowers/plans/2026-05-27-jword-gate45-gate5-gate6-remediation.md` 重新拆成 6 条互不重叠 lane 并并行修复、验收。已补齐：Gate 4.5 上传文件图片资源持久化、native save 运行中取消；Gate 5 signed license、DOCX inspect/index/worker inspect 读取 ZIP 前授权、PDF table cell text export；Gate 6 public SDK 本地事务发布、server-backed history、pending offline queue、collab-server metadata-first 授权和 default-deny；Gate 5/Gate 6 商业包 pack、dist import 后缀、source map/source content 泄漏拦截和空项目 tarball smoke。新鲜验证：`pnpm --filter @4xian/jword-native test` 为 2 files / 13 tests passed；`pnpm --filter @4xian/jword-license test` 为 1 file / 6 tests passed；`pnpm --filter @4xian/jword-docx test` 为 13 files / 62 tests passed；`pnpm --filter @4xian/jword-pdf test` 为 4 files / 31 tests passed；`pnpm --filter @4xian/jword-collab test` 为 2 files / 19 tests passed；`pnpm --filter @4xian/jword-collab-server test` 为 1 file / 16 tests passed；对应包 typecheck 全部通过；Gate 4.5 Chromium E2E 为 2 passed；Gate 5/Gate 6 focused architecture suite 为 5 files / 28 tests passed；remediation focused Vitest 为 9 files / 61 tests passed；`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/release/check-gate5-third-party-smoke.mjs`、`node tools/release/check-gate6-commercial-pack.mjs`、`node tools/release/check-gate6-third-party-smoke.mjs`、`node tools/size/check-native-bundle.mjs`、`node tools/release/check-native-pack.mjs`、`node benchmarks/gate45-native-benchmark.mjs`、`node tools/size/check-gate6-collab-bundle.mjs`、`node benchmarks/gate6-collab-benchmark.mjs` 均输出 `status: ok` 或通过；仓库级 `pnpm lint`、`pnpm typecheck`、`pnpm test`（138 files / 695 tests passed）和最终 `pnpm build` 通过。本复核不扩大 Gate 7 范围；React/Vue wrapper、plugin、文档站、diagnostics export 和 release dry-run 正文仍按 Gate 7 后续推进。
 
 ### 禁止事项
 
-- [ ] 协同层不绕过 Editor transaction。
-- [ ] 自动插入不使用普通字符 offset。
-- [ ] wrapper 或 provider 不保存第二份编辑状态。
+- [x] 协同层不绕过 Editor transaction。
+- [x] 自动插入不使用普通字符 offset。
+- [x] wrapper 或 provider 不保存第二份编辑状态。
+- [x] 不把 Automerge、Loro、Fluid、自研 OT 作为 Gate 6 主路径替换 Yjs。
+- [x] 不把 DOCX、HTML、Markdown 或 projection JSON 当协同真源。
+- [x] 不把 awareness 写入版本历史。
+- [x] 不把 remote update 或 auto inserter 默认塞进本地用户 undo。
+- [x] 不在 core 引入 WebSocket、IndexedDB、hocuspocus、Liveblocks 或浏览器全局依赖。
+- [x] 不在 Gate 6 中直接修改 DOCX XML、用 DOCX 字符 offset 定位协同/自动插入位置，或把导入前的 OOXML 坐标当成长期 anchor。
+- [x] 不在未验证真实浏览器断网/重连前宣称 offline 已完成。
+- [x] 不把 provider auth、tenant、权限系统做进 JWord core。
+  - 复核 2026-05-26：provider auth/token 只在 collab/demo provider 层；`rg -n "\b(auth|tenant|permission|permissions|token|requiredToken|providerToken)\b" packages/core/src -g "*.ts"` 在 core 中只命中内部共享文档 token 注释/类型，没有 auth、tenant、permission 或 provider token 语义。
+- [x] 不让 demo/test 通过 `packages/*/src`、Y.Doc store、内部 runtime 或 server service 绕过公开 API。
+- [x] 不把生产 server 只藏在 demo 目录；第三方必须能安装正式 server 包并以公开 options 启动。
+- [x] 不把付费边界只放在浏览器 JS；用户拿到 client 包也不能绕过服务端或 worker/license enforcement。
+- [x] 不在 core 稳定 API 中暴露 `collab`、`offline`、`autoInsert` 等高级产品 API 名称；core 只提供中立位置、anchor/range、transaction hook。
+- [x] 不让自动插入读取 live caret、抢 focus 或修改用户手动 selection。
+- [x] 不允许 client/server 版本不匹配时静默继续协作。
+  - 完成 2026-05-27：Gate 6 禁止事项已转成架构测试和 focused runtime 测试。`tests/architecture/gate6-import-graph.test.ts` 扫描 collab 示例和浏览器验收测试，阻止私有源码路径、内部 runtime、server service 与 core 内部 store 进入主验收；`tests/architecture/gate6-package-exports.test.ts` 约束 demo server 只是正式 `@4xian/jword-collab-server` 的薄启动器，并约束 collab client 从 core 消费 `EditorSyncUpdateInput`、`EditorApplyUpdateOptions`、`createTextInserter` 和 `TextInserterRetryInput`；`tests/architecture/gate6-commercial-readiness.test.ts` 扫描 core 稳定入口，禁止 `collab`、`offline`、`autoInsert` 等产品名回流；`packages/collab/test/public-client.test.ts` 覆盖自动插入不读 live caret、不 focus、不改 selection；握手失败路径覆盖 provider 不连接、不进入半协作状态。
 
-## Gate 7 - SDK 稳定化
+## Gate 7 - SDK 稳定化、公开文档与商业交付
 
 ### 目标
 
-交付可集成、可诊断、可维护的 `1.0-stable` SDK。外部项目能选择 vanilla、React、Vue 集成，能按需加载 docx/PDF/collab，能通过插件扩展命令、菜单、装饰层和适配器。
+交付可集成、可诊断、可维护、可销售的 `1.0-stable` SDK。外部项目能选择 vanilla、React、Vue 集成，能使用免费基础编辑和 `.jword` 原生保存/打开，也能在授权后按需接入 DOCX/PDF 高级格式互通、多人协作、离线、历史、自动插入和 self-host server。Gate 7 交付后，JWord 必须有清晰的公开 API 清单、版本兼容策略、授权接入说明、私有包发布检查、真实第三方示例和故障排查材料。
 
 ### 实现方案
 
-先冻结公开 API，再补 wrapper、plugin、theme/i18n、devtools、文档站、bundle size、发布 dry-run。任何公开 API 必须有类型、TSDoc、类型测试、示例和兼容策略。
+先冻结免费/付费包的公开 API 和 edition matrix，再补 wrapper、plugin、theme/i18n、devtools、文档站、bundle size、发布 dry-run 与真实第三方集成验证。任何公开 API 必须有类型、TSDoc、类型测试、示例、diagnostics、兼容策略和对应文档；任何高级能力必须能说明授权边界、client/server 版本要求、未授权失败路径和按需加载证据。
 
-### 当前基线（2026-05-17）
+### 当前基线（2026-05-27）
 
 - [x] `packages/ui` 与 `examples/vanilla` 已形成当前 SDK 宿主基线；后续 wrapper、plugin、文档站都应以这条集成路径为对照，而不是回塞 demo 主文件。
-- [x] 当前 repo 仍只有 `core` / `ui` 两个正式包；`react` / `vue` / `devtools` 及相关 examples 尚未落地，符合“不写无法验证空包”的约束。
-- [ ] 公开 API、TSDoc、类型测试、bundle gate、release dry-run 仍未闭环。
-- [ ] plugin、wrapper、theme / i18n、diagnostics 还没有稳定对外 contract。
+- [x] Gate 4.5 已把 `.jword` 原生保存/打开作为免费基础能力落地，Gate 5 已调整为商业高级格式互通，Gate 6 已调整为商业高级协作、离线、历史和自动插入。
+- [x] 公开 API 清单已覆盖当前已实现 free / paid package、stable / experimental / internal 分级和 feature key 基线；diagnostic code 细化和版本兼容策略仍留在 Step 7.3 / Step 7.22。
+- [ ] `.jword` 原生格式、DOCX/PDF 高级格式、collab client、collab server、license 和第三方集成文档仍未形成可对外发布版本；Gate 6 文档范围已明确必须覆盖 Gate 6 公开 API 清单、self-host server 部署、授权接入、client/server 版本策略、故障排查、收费能力边界和迁移指南。
+- [ ] plugin、wrapper、theme / i18n、diagnostics、devtools 还没有稳定对外 contract。
+- [ ] 私有 registry、`npm pack` 内容审计、示例外部项目安装、未授权失败文档和商业 support 诊断包仍未闭环。
 
 ### 推荐执行顺序
 
-1. 先冻结 Public API、包边界和 example matrix，再开始 wrapper 或 plugin 任何一条支线。
-2. 先做 API 文档与类型测试 `Step 7.1 -> 7.2`，避免后续对外接口边写边漂移。
-3. 再做 Plugin API 与错误隔离 `Step 7.3 -> 7.4`，因为 wrapper、docx、collab 都会复用这些扩展点。
-4. 随后做 wrappers 与 examples `Step 7.5 -> 7.6 -> 7.10`。
-5. 最后收 theme / i18n、devtools、文档站、size-limit、release dry-run 与 Stable E2E `Step 7.7 -> 7.14`。
+1. 先冻结 Public API、edition matrix、feature key、diagnostics 和包边界，再开始 wrapper、plugin 或文档站落地。
+2. 先做 API 清单、TSDoc、类型测试和导出审计 `Step 7.1 -> 7.3`，避免后续对外接口边写边漂移。
+3. 再做基础版 quickstart、`.jword` 保存/打开文档和 Plugin API `Step 7.4 -> 7.6`。
+4. 随后做 wrappers、theme/i18n、devtools、diagnostics export 和 example matrix `Step 7.7 -> 7.12`。
+5. 然后补高级格式互通、协作 client/server、授权和商业边界文档 `Step 7.13 -> 7.17`。
+6. 最后收 size-limit、私有发布 dry-run、外部项目安装验证、迁移指南和 Stable E2E `Step 7.18 -> 7.24`。
 
 ### 迭代任务清单
 
-#### Iteration 0 - 冻结 SDK 对外面向
+#### Iteration 0 - 冻结 SDK 对外面向和商业分级
 
 - [ ] 冻结导出分级：
   - `stable`
   - `experimental`
   - `internal`
+- [ ] 冻结 edition matrix：
+  - free：core、ui、native、基础 persistence contract、基础 diagnostics。
+  - paid format：docx import、docx export、PDF export。
+  - paid collaboration：collab client、collab server、offline、history、auto insert、license。
 - [ ] 冻结 package / example 落点，但不预创建空壳：
+  - `packages/native/src/`
+  - `packages/license/src/`
   - `packages/react/src/`
   - `packages/vue/src/`
   - `packages/devtools/src/`
+  - `packages/collab-server/src/`
   - `examples/react/`
   - `examples/vue/`
   - `examples/collab/`
   - `examples/docx/`
   - `examples/performance/`
-- [ ] 冻结事件 payload、错误码、feature flags 和 diagnostics contract，后续 wrappers / plugins / docs 都只复用这套公开命名。
+- [ ] 冻结事件 payload、错误码、feature flags、license diagnostics、client/server version diagnostics 和 support bundle contract，后续 wrappers / plugins / docs 都只复用这套公开命名。
 
-#### Iteration 1 - Public API / TSDoc / 类型测试（Step 7.1-7.2）
+#### Iteration 1 - Public API / TSDoc / 类型测试（Step 7.1-7.3）
 
-- [ ] 整理 Public API 清单，明确哪些符号可对外承诺，哪些仍留在 `experimental`。
+- [x] 整理 Public API 清单，按 package 和 edition 明确哪些符号可对外承诺，哪些仍留在 `experimental`，哪些必须保持 internal。
+  - 完成 2026-05-27：新增 `docs/sdk/public-api.md`，按 `@4xian/jword-core`、`ui`、`native`、`docx`、`pdf`、`persistence`、`collab`、`collab-server`、`license` 和未实现 wrapper/devtools 包列出 edition、stable、experimental、internal 边界；同时记录只能从 package export map 导入，禁止第三方导入 `packages/*/src/*`、Y.Doc store、provider 内部类型、worker 内部 helper 和 demo runtime。新增 `tests/architecture/gate7-public-api-catalog.test.ts` 作为最小清单护栏。
+- [ ] 建立 API 导出审计，禁止 `src` 内部路径、provider/Yjs 内部类型、worker 内部类型和 demo runtime 进入 public export map。
 - [ ] 为稳定 API 补齐 TSDoc、类型测试和最小示例，确保外部 TypeScript 项目能直接消费。
 - [ ] 确保导出符号、事件 payload、错误码命名稳定，不暴露内部 Yjs 细节。
 
-#### Iteration 2 - Plugin API 与 diagnostics（Step 7.3-7.4 / 7.8-7.9）
+#### Iteration 2 - 基础版文档、Plugin API 与 diagnostics（Step 7.4-7.6 / 7.10-7.11）
 
+- [ ] 建立免费基础版 quickstart：安装 core/ui/native，创建编辑器，保存 `.jword`，重新打开 `.jword`，继续编辑。
 - [ ] 实现 Plugin API：commands、menus、decorations、resource upload、persistence、collab provider、import/export adapter、diagnostics。
 - [ ] 实现插件错误隔离，插件异常触发 error event，不破坏 core 状态。
-- [ ] 实现 Devtools 面板与 diagnostics export，保证 operation、selection/anchor、layout/perf 指标可复查。
+- [ ] 实现 Devtools 面板与 diagnostics export，保证 operation、selection/anchor、layout/perf、package versions、feature flags 和 license status 可复查。
 
-#### Iteration 3 - wrappers 与 example matrix（Step 7.5-7.6 / 7.10）
+#### Iteration 3 - wrappers、theme 和 example matrix（Step 7.7-7.12）
 
 - [ ] 实现 React wrapper，只负责生命周期、props 到 EditorOptions、事件桥接。
 - [ ] 实现 Vue 3 wrapper，只负责生命周期和事件桥接，SSR 阶段输出空壳。
-- [ ] 完善 vanilla / react / vue / collab / docx / performance examples，确保 examples 只做 host 装配与测试钩子。
-
-#### Iteration 4 - theme / i18n / devtools polish（Step 7.7-7.9）
-
 - [ ] 实现主题系统与 i18n，保证 `jw-` BEM 类名与 WCAG AA 对比度约束。
 - [ ] 收口 Devtools 面板的 operation log、layout overlay、selection/anchor inspect、performance counters。
-- [ ] 收口 diagnostics export，保证版本、包信息、feature flags、错误、operation 摘要、layout 指标可直接打包给集成方。
+- [ ] 收口 diagnostics export，保证版本、包信息、feature flags、license 状态、错误、operation 摘要、layout 指标可直接打包给集成方。
+- [ ] 完善 vanilla / react / vue / collab / docx / performance examples，确保 examples 只做 host 装配与测试钩子，不导入底层源码。
 
-#### Iteration 5 - 文档站 / bundle / release / Stable matrix（Step 7.11-7.14）
+#### Iteration 4 - 原生格式与高级格式文档（Step 7.13-7.14）
 
-- [ ] 建立文档站：快速开始、核心概念、API、插件、协同、docx/PDF、迁移指南、故障排查。
-- [ ] 建立 size-limit 和 bundle 分析，保证 docx/PDF/collab/hocuspocus/React/Vue wrapper/大字体不进入默认首屏。
-- [ ] 建立 release dry-run：changeset 草稿、构建产物检查、`npm pack` 检查、示例安装检查；不自动 publish。
-- [ ] 完成 Stable E2E 矩阵：vanilla、React、Vue、collab、docx、PDF、插件错误隔离。
+- [ ] 建立 `.jword` 格式文档：package entries、schema version、manifest、resources、checksums、metadata、migration、warning、错误处理和安全限制。
+- [ ] 建立 Gate 5 高级格式互通文档：DOCX import/export、PDF export、worker progress/cancel、warning schema、未授权错误、feature key、按需加载和与 `.jword` 的边界。
+
+#### Iteration 5 - 协作、服务端与授权文档（Step 7.15-7.17）
+
+- [ ] 建立 Gate 6 collab client 集成文档：初始化 user、room/documentId、remote cursor、typing label、offline、history、auto-insert、diagnostics 和版本握手。
+- [ ] 建立 Gate 6 公开 API 清单：`connectJWordCollaboration()`、`ConnectJWordCollaborationOptions`、`JWordCollaborationConnection`、`JWordCollaborationHandshake`、`JWordCollaborationOfflineState`、`JWordCollaborationHistoryVersion`、`JWordCollaborationAutoInsertSession`、`createMemoryCollabProviderAdapter()` 和 `GATE6_COLLAB_FEATURES` 必须标明 stable / experimental / internal 边界。
+- [ ] 建立 self-host server 文档：部署、env、authHook、tenantHook、licenseHook、storage hook、history API、health/version endpoint、WebSocket 代理、限流和日志字段；`createJWordCollabServer()`、`startJWordCollabServer()`、`CreateJWordCollabServerOptions` 和 `JWordCollabServerState` 必须作为正式 server 包 API 记录。
+- [ ] 建立授权接入与收费能力边界文档：edition matrix、feature key、license token、offline grace、撤销/过期、私有 registry、服务端 enforcement、未授权失败路径和常见错误。
+- [ ] 建立 client/server 版本策略与故障排查文档：记录 `COLLAB_PROTOCOL_MISMATCH`、`COLLAB_SERVER_TOO_OLD`、`COLLAB_CLIENT_TOO_OLD`、`COLLAB_FEATURE_FLAGS_MISSING`、server unavailable、license denied、history storage missing、offline pending/reconnect 和 provider auth failed 的诊断含义、恢复建议和支持收集字段。
+
+#### Iteration 6 - 文档站 / bundle / release / Stable matrix（Step 7.18-7.24）
+
+- [ ] 建立文档站：快速开始、核心概念、API、插件、`.jword`、docx/PDF、协作、server、授权、迁移指南、故障排查、FAQ；Gate 6 页面必须串起 collab client、self-host server、license、diagnostics、收费能力边界和 client/server 版本策略。
+- [ ] 建立 size-limit 和 bundle 分析，保证 docx/PDF/collab/hocuspocus/license/server/React/Vue wrapper/大字体不进入免费默认首屏。
+- [ ] 建立 release dry-run：changeset 草稿、构建产物检查、`npm pack` 检查、私有 registry 安装检查、示例外部项目安装检查；不自动 publish。
+- [ ] 建立迁移指南和兼容策略：minor/patch 兼容规则、deprecation、protocolVersion、native format schema migration、license contract migration、Gate 6 client/server 版本策略和版本窗口。
+- [ ] 完成 Stable E2E 矩阵：vanilla、React、Vue、native save/open、docx/PDF、collab client/server、license failure、插件错误隔离、diagnostics export。
 
 ### 待办步骤
 
-- [ ] Step 7.1：整理 Public API 清单，区分 stable、experimental、internal，不公开未实现 Future API。
-- [ ] Step 7.2：建立 API 文档和类型测试，确保导出符号、事件 payload、错误码可被外部 TypeScript 项目消费。
-- [ ] Step 7.3：实现 Plugin API：commands、menus、decorations、resource upload、persistence、collab provider、import/export adapter、diagnostics。
-- [ ] Step 7.4：实现插件错误隔离，插件异常触发 error event，不破坏 core 状态。
-- [ ] Step 7.5：实现 React wrapper，只负责生命周期、props 到 EditorOptions、事件桥接，不保存编辑状态。
-- [ ] Step 7.6：实现 Vue 3 wrapper，只负责生命周期和事件桥接，SSR 阶段输出空壳。
-- [ ] Step 7.7：实现主题系统和 i18n，确保 UI 类名使用 `jw-` BEM，颜色对比满足 WCAG AA。
-- [ ] Step 7.8：实现 Devtools 面板：operation log、layout overlay、selection/anchor inspect、performance counters。
-- [ ] Step 7.9：实现 diagnostics export，能导出版本、包信息、feature flags、错误、operation 摘要、layout 指标。
-- [ ] Step 7.10：完善 vanilla/react/vue/collab/docx/performance examples。
-- [ ] Step 7.11：建立文档站：快速开始、核心概念、API、插件、协同、docx/PDF、迁移指南、故障排查。
-- [ ] Step 7.12：建立 size-limit 和 bundle 分析，确保首屏包不包含 docx/PDF/collab/hocuspocus/React/Vue wrapper/大字体。
-- [ ] Step 7.13：建立 release dry-run：changeset 草稿、构建产物检查、npm pack 检查、示例安装检查；不自动 publish。
-- [ ] Step 7.14：完成 Stable E2E 矩阵：vanilla、React、Vue、collab、docx、PDF、插件错误隔离。
+- [x] Step 7.1：整理公开 API 清单，按 `@4xian/jword-core`、`ui`、`native`、`docx`、`pdf`、`collab`、`collab-server`、`license`、`persistence`、wrapper 包区分 stable、experimental、internal，不公开未实现 Future API。
+  - 完成 2026-05-27：`docs/sdk/public-api.md` 已记录当前已实现包的 public API、edition matrix、`./worker` / `./experimental` 边界和未实现 wrapper/devtools 包状态；`tests/architecture/gate7-public-api-catalog.test.ts` 约束该清单必须覆盖当前入口关键符号。
+- [ ] Step 7.2：建立 API 导出审计和类型测试，确保外部 TypeScript 项目只能从包入口消费稳定 API，不能 import `src` 内部路径、Yjs/provider 内部类型、worker 内部类型或 demo runtime。
+- [ ] Step 7.3：为稳定 API 补 TSDoc、最小示例和 diagnostics payload 文档，确保导出符号、事件 payload、错误码、feature key 可被外部项目消费。
+- [ ] Step 7.4：建立免费基础版 quickstart，覆盖安装、初始化 editor/UI、基础编辑、保存 `.jword`、打开 `.jword`、继续编辑和基础错误处理。
+- [ ] Step 7.5：实现 Plugin API：commands、menus、decorations、resource upload、persistence、import/export adapter、diagnostics；collab provider 只作为 adapter contract，不泄漏内部 provider。
+- [ ] Step 7.6：实现插件错误隔离，插件异常触发 error event 和 diagnostics，不破坏 core 状态、selection、history 或协作连接。
+- [ ] Step 7.7：实现 React wrapper，只负责生命周期、props 到 EditorOptions、事件桥接，不保存第二份编辑状态。
+- [ ] Step 7.8：实现 Vue 3 wrapper，只负责生命周期和事件桥接，SSR 阶段输出空壳，不访问浏览器全局。
+- [ ] Step 7.9：实现主题系统和 i18n，确保 UI 类名使用 `jw-` BEM，颜色对比满足 WCAG AA，文案可被宿主覆盖。
+- [ ] Step 7.10：实现 Devtools 面板：operation log、layout overlay、selection/anchor inspect、performance counters、package versions、license status。
+- [ ] Step 7.11：实现 diagnostics export，能导出版本、包信息、feature flags、license 状态、错误、operation 摘要、layout 指标、collab/server handshake 摘要。
+- [ ] Step 7.12：完善 vanilla/react/vue/native/docx/collab/performance examples；所有 demo 都只能使用公开 API，模拟真实第三方集成。
+- [ ] Step 7.13：建立 `.jword` 原生格式文档，说明格式结构、schema version、资源打包、checksum、migration、导入/导出 API、warning 和与 DOCX/PDF/协作 history 的边界。
+- [ ] Step 7.14：建立 Gate 5 高级格式互通文档，说明 DOCX import/export、PDF export、worker progress/cancel、warning schema、未授权失败、feature key、按需加载和 fixture 验收。
+- [ ] Step 7.15：建立 Gate 6 collab client 集成文档，说明 user/name/color、remote cursor、typing label、offline、history、auto-insert、position/range API、diagnostics 和版本握手；同时列出 Gate 6 公开 API 清单，包括 `connectJWordCollaboration()`、`ConnectJWordCollaborationOptions`、`JWordCollaborationConnection`、`JWordCollaborationHandshake`、`JWordCollaborationOfflineState`、`JWordCollaborationHistoryVersion`、`JWordCollaborationAutoInsertSession` 和 `GATE6_COLLAB_FEATURES`。
+- [ ] Step 7.16：建立 `@4xian/jword-collab-server` self-host server 部署文档，说明 Node/Docker 启动、auth/tenant/license/storage hook、history API、health/version endpoint、WebSocket 代理和日志字段；同时列出 `createJWordCollabServer()`、`startJWordCollabServer()`、`CreateJWordCollabServerOptions` 和 `JWordCollabServerState`。
+- [ ] Step 7.17：建立授权接入与收费能力边界文档，说明 edition matrix、feature key、license token、签名/撤销/过期、offline grace、服务端 enforcement、私有 registry 和未授权故障排查。
+- [ ] Step 7.18：建立文档站信息架构：快速开始、核心概念、公开 API、插件、`.jword`、docx/PDF、协作、server、授权、迁移指南、故障排查、FAQ。
+- [ ] Step 7.19：建立 size-limit 和 bundle 分析，确保免费首屏包不包含 docx/PDF/collab/hocuspocus/license/server/React/Vue wrapper/大字体，高级包只在显式 import 后进入 chunk。
+- [ ] Step 7.20：建立 release dry-run：changeset 草稿、构建产物检查、`npm pack` 内容审计、私有 registry 安装检查、示例外部项目安装检查；不自动 publish。
+- [ ] Step 7.21：建立外部空项目集成验收，从安装包开始分别接入免费基础版、Gate 5 高级格式包、Gate 6 协作 client/server 和 license，不允许依赖 monorepo alias。
+- [ ] Step 7.22：建立迁移指南和兼容策略，覆盖 semver、deprecation、protocolVersion、native format schema migration、license contract migration、Gate 6 client/server 版本策略和版本窗口。
+- [ ] Step 7.23：建立商业支持诊断包规范，定义客户报障时可导出的版本、feature、license、server、diagnostics、operation 摘要和隐私裁剪规则。
+- [ ] Step 7.24：完成 Stable E2E 矩阵：vanilla、React、Vue、native save/open、docx/PDF、collab client/server、license failure、插件错误隔离、diagnostics export。
 
 ### 验收
 
 - [ ] vanilla/react/vue demo 可运行。
 - [ ] 外部项目可安装并集成。
-- [ ] 首屏 bundle 不包含 docx/PDF/collab。
+- [ ] 首屏 bundle 不包含 docx/PDF/collab/hocuspocus/license/server。
 - [ ] 插件错误被隔离。
 - [ ] 公开 API 有类型、TSDoc 和类型测试。
-- [ ] 文档站能支撑集成方完成基础接入。
+- [ ] 文档站能支撑集成方完成免费基础版、Gate 5 高级格式和 Gate 6 高级协作接入。
+- [ ] `.jword` 原生格式、授权、client/server 版本、未授权失败和收费边界都有对外文档。
+- [ ] 私有 registry / `npm pack` / 外部空项目安装验收通过。
 - [ ] release dry-run 可通过，但不自动发布。
 
 ### 禁止事项
@@ -1682,6 +2626,9 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 - [ ] wrapper 不持有第二份编辑状态。
 - [ ] 不公开未实现 Future API。
 - [ ] 不把 devtools 或重包塞进默认首屏 bundle。
+- [ ] 不把商业授权边界只写在文档或浏览器 client 里，必须有可验证 enforcement。
+- [ ] 不把 examples 写成 monorepo 内部测试入口；所有公开示例都必须像第三方项目一样接包入口。
+- [ ] 不自动 commit、tag、publish 或 npm release。
 
 ## Post-1.0 Backlog
 
@@ -1694,6 +2641,9 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 - [ ] 更深 OOXML roundtrip 兼容。
 - [ ] Vue 2 兼容包。
 - [ ] Chrome Extension devtools。
+- [ ] JWord 托管云协作服务、账单系统、客户控制台和 usage metering。
+- [ ] 企业 SSO、SCIM、组织通讯录、复杂权限流和审计报表。
+- [ ] 高级授权运营能力：在线续费、离线授权包轮换、客户级 feature rollout、license portal。
 - [ ] 自研 OT 研究，不替换 1.0 的 Yjs 主路径。
 
 ## 持续验证矩阵
@@ -1738,18 +2688,27 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 
 - [ ] 10 万字、200 页 fixture 有性能报告。
 - [ ] 表格、图片、批注、查找替换、页眉页脚、修订 v1 可用。
-- [ ] docx T1 import/export 通过 fixture diff。
-- [ ] PDF 基础导出通过截图对比。
+- [x] `.jword` 原生保存/打开 roundtrip 通过真实浏览器和 worker 验收。
+  - 完成 2026-05-27：Gate 4.5 native 公开 API、vanilla lazy worker E2E 和 Kimi WebBridge 真实 Chrome save/open/edit/save smoke 均通过；详见 Gate 4.5 执行记录。
+- [x] Gate 5 商业高级 DOCX T1 import/export 通过 fixture diff。
+  - 完成 2026-05-27：Gate 5 当前工作树复核中 `packages/docx/test/t1-fixtures.test.ts`、`packages/docx/test/t1-roundtrip-fixtures.test.ts`、`packages/docx/test/export-rich-blocks.test.ts`、`packages/docx/test/roundtrip-diff.test.ts` 均包含在 23 files / 130 tests passed 的 focused suite 内；Kimi valid 路径 roundtrip `matches: true` 且 warning 为空。
+- [x] Gate 5 商业高级 PDF 基础导出通过截图对比。
+  - 完成 2026-05-27：Gate 5 当前工作树复核中 `packages/pdf/test/visual-report.test.ts`、`packages/pdf/test/public-api.test.ts`、`packages/pdf/test/worker.test.ts` 均包含在 focused suite 内；Kimi valid 路径 PDF 导出完成，progress 为 `queued -> mapping -> writing -> done`，当前入口继续明确不提供 PDF 导入查看。
+- [x] Gate 5 未授权、过期和 feature 不匹配失败路径通过。
+  - 完成 2026-05-27：商业化执行记录覆盖 `missing`、`expired`、`feature-mismatch`、`server-unavailable`、`valid` 五种模式；当前工作树复核重新验证 missing 和 feature-mismatch 真实浏览器路径，focused suite 覆盖 `tests/architecture/gate5-commercial-readiness.test.ts`。
 - [ ] 保格式粘贴通过安全验收。
 
 ### Stable 完成
 
-- [ ] 协同最终一致性通过。
-- [ ] 离线恢复通过。
-- [ ] 自动插入并发通过。
+- [x] 协同最终一致性通过。
+- [x] 离线恢复通过。
+- [x] 自动插入并发通过。
+- [x] 远端 cursor 用户名、颜色和 `正在输入` 提示通过真实多页面验收。
+- [x] collab client/server 版本握手、未授权失败和 server-side enforcement 通过。
+- [x] `@4xian/jword-collab-server` self-host package 可部署并通过 health/version/history 验收。
 - [ ] React/Vue wrapper 集成通过。
 - [ ] 插件 API 和错误隔离通过。
-- [ ] 文档站和 diagnostics 完成。
+- [ ] 文档站、公开 API 清单、授权文档和 diagnostics 完成。
 
 ## 风险控制与复核点
 
@@ -1761,9 +2720,14 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 - [x] 复核点 C：进入 Alpha 前，确认输入系统、IME、selection、history 没有绕开 transaction pipeline；若绕开，不进入 Alpha。
   - 完成 2026-05-15：`packages/core/test/editor-input.test.ts` 已补充 composition、keyboard、clipboard、pointer selection 的 runtime 证据，确认写入型行为会发出 facade `transaction` 事件并带 `commandName` / `operationKinds` / history metadata，而纯 selection 变化只走 `selectionChange`，不伪装成事务写入。
   - 说明 2026-05-19：此复核只覆盖当前已实现并已验证的输入路径；Windows 中文输入实机证据已在 Step 3.3 按真实浏览器 + 系统 IME 链路补齐。
-- [x] 复核点 D：Gate 5 完成后，确认 OOXML mapping 的 warning、fixture diff、worker cancel/progress 可用；若不可用，不进入 Beta。
+- [x] 复核点 C2：Gate 4.5 完成后，确认 `.jword` 原生格式可保存、打开、迁移、校验资源和继续编辑；若不可用，不进入 Beta。
+  - 完成 2026-05-27：`packages/native` 覆盖保存/打开、schema migration、资源 checksum、缺失资源 warning、hash mismatch error、future schema diagnostic 和取消；vanilla demo 真实 Chrome 验收确认打开后可继续编辑并再次保存。
+- [x] 复核点 D：Gate 5 技术互通完成后，确认 OOXML mapping 的 warning、fixture diff、worker cancel/progress 可用；若不可用，不进入 Beta。
   - 完成 2026-05-25：WPS-only 口径下 Gate 5 已收口；OOXML mapping warning、T1/T2 fixture diff、DOCX/PDF worker progress/cancel、lazy-load、benchmark、PDF visual report 和真实浏览器 demo 路径均有 focused 证据。Open XML validator、Microsoft Word 和 LibreOffice 保留 pending/not-run，不作为当前 Gate 5 阻塞项。
-- [ ] 复核点 E：Gate 6 完成后，确认 origin、undo scope、remote/AI/local 并发语义清晰；若不清晰，不进入 Stable。
+- [x] 复核点 D2：Gate 5 商业化完成后，确认授权、worker/license enforcement、私有 package 检查、未授权失败和第三方高级包示例可用；若不可用，不进入 Beta。
+  - 完成 2026-05-27：`@4xian/jword-license`、DOCX/PDF worker entitlement fail-fast、`tools/release/check-gate5-commercial-pack.mjs`、`examples/docx` 公开高级包集成和 Kimi WebBridge 未授权/feature mismatch 路径已通过当前工作树复核；Gate 7 文档站正文仍按 Gate 7 范围单独落地。
+- [x] 复核点 E：Gate 6 完成后，确认 origin、undo scope、remote/AI/local 并发语义、授权、server package、client/server version handshake 和第三方公开 API 集成清晰；若不清晰，不进入 Stable。
+  - 完成 2026-05-27：当前工作树复核显示 Gate 6 的 origin / undo scope / remote-AI-local 并发语义、授权、server package、client/server version handshake 和第三方公开 API 集成已经有可执行证据。核心证据包括：`packages/core/test/collaboration/editor-update.test.ts` 和 `packages/core/test/collaboration/inserter.test.ts` 约束 `remote-user`、`auto-inserter`、`version-restore` 的 history scope；`examples/collab/tests/collab-auto-insert-concurrency.e2e.ts` 真实浏览器覆盖自动插入期间本地和远端并发、取消、位置删除、恢复冲突和独立 undo；`packages/collab-server/test/server.test.ts` 覆盖 self-host server、history API、WebSocket 授权和 `/auto-insert/relay` server-side enforcement；`packages/collab/test/public-client.test.ts` 覆盖 client/server version handshake 和授权 fail-fast；`tests/architecture/gate6-import-graph.test.ts`、`tests/architecture/gate6-package-exports.test.ts`、`tools/release/check-gate6-third-party-smoke.mjs` 约束第三方公开 API 集成；本轮补充 `tests/architecture/gate6-commercial-readiness.test.ts` 把 Gate 6 验收、禁止事项和复核点 E 变成可回归 checklist。注意：Stable 完成项中的 React/Vue wrapper、插件 API、文档站正文和 release dry-run 仍属 Gate 7，不在本复核点内提前完成。
 
 ## 执行顺序建议
 
@@ -1772,9 +2736,13 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 - [ ] Gate 2 中 layout 和 renderer 可以并行，但 hit-test/rect mapping 必须以同一 LayoutBox 为准。
 - [ ] Gate 3 中 input、toolbar、a11y 可以并行，但所有命令必须调用同一 Editor Facade。
 - [ ] Gate 4 中图片、表格、批注、查找替换可以按模块并行，每个模块都要自带 model/operation/layout/render/UI/test 闭环。
-- [ ] Gate 5 中 docx 和 PDF 可以并行，但二者都必须复用 canonical model/LayoutBox。
-- [ ] Gate 6 中 collab、offline、auto inserter 可以并行，但 origin 和 undo scope 策略必须先定。
-- [ ] Gate 7 中 wrapper、plugin、devtools、docs 可以并行，但 Public API 清单必须先冻结。
+- [x] Gate 4.5 必须在 Gate 5 商业格式互通前完成，基础保存/打开统一由 `.jword` 原生格式承担。
+  - 完成 2026-05-27：`.jword` 原生保存/打开已作为免费基础能力闭环；后续 Gate 5 继续只承担商业高级 DOCX/PDF 互通。
+- [x] Gate 5 中 DOCX 和 PDF 可以并行，但二者都必须复用 canonical model/LayoutBox，并在发布前补齐授权、私有包和第三方集成边界。
+  - 完成 2026-05-27：DOCX 路径经 canonical import/export 与 T1/T2 fixture diff 复核，PDF 路径经 `DocumentLayout/LayoutBox -> PDF` 和 visual report 复核；授权、私有包检查和第三方 `examples/docx` 集成边界已由 Gate 5 当前工作树复核覆盖。
+- [x] Gate 6 中 collab、offline、history、auto inserter 可以并行，但 edition matrix、origin/undo scope、license contract、server package 和 client/server protocol 必须先定。
+  - 完成 2026-05-27：Gate 6 edition matrix、origin/undo scope、license contract、正式 server package、client/server protocol/version handshake 和中立 location API 已按 Iteration 10-18 收口并有 focused tests、真实浏览器和 pack/bundle 证据；Gate 7 wrapper、plugin、devtools、文档站正文和 release dry-run 仍按后续 Gate 单独推进。
+- [ ] Gate 7 中 wrapper、plugin、devtools、docs 可以并行，但 Public API 清单、edition matrix、feature key 和诊断码必须先冻结。
 
 ## 完成定义
 
@@ -1782,7 +2750,9 @@ Gate 5 兼容验收口径调整（2026-05-25）：本轮人工办公套件兼容
 
 - [ ] Gate 0-7 所有验收项完成。
 - [ ] canonical specs 与实现行为一致。
-- [ ] 所有公开 API 有类型、TSDoc、类型测试、示例。
+- [ ] 所有公开 API 有类型、TSDoc、类型测试、示例和集成文档。
+- [ ] 免费基础能力、Gate 5 付费格式能力、Gate 6 付费协作能力的边界清晰，基础包不包含高级包代码。
+- [ ] 所有付费能力都有授权、未授权失败、版本兼容、私有包审计和真实第三方集成验收。
 - [ ] 所有核心风险有 fixture、benchmark、E2E 或 visual evidence。
 - [ ] 旧路线中的单长 canvas、Bun 主工具链、Mammoth 主路径、浏览器打印 PDF 主路径没有回流。
 - [ ] 人工审批后才能 commit、tag、publish 或 npm release。

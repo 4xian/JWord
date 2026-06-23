@@ -17,6 +17,8 @@ const graphAliases = new Map([
 const forbiddenFirstScreenImports = [
   '@4xian/jword-docx',
   '@4xian/jword-pdf',
+  '@4xian/jword-license',
+  '@4xian/jword-native',
   '@4xian/jword-collab',
   '@4xian/jword-react',
   '@4xian/jword-vue',

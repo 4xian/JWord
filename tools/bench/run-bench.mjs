@@ -1,7 +1,7 @@
 /**
  * 职责：统一发现并顺序运行仓库 benchmark 入口。
  * 边界：只编排本地脚本执行和汇总发现数量，不解释各 benchmark 的业务指标。
- * 协作模块：benchmarks/gate2-render-benchmark.mjs 与 benchmarks/gate5-interop-benchmark.mjs。
+ * 协作模块：benchmarks/gate2-render-benchmark.mjs、benchmarks/gate5-interop-benchmark.mjs 与 benchmarks/gate6-collab-benchmark.mjs。
  * 约束：任一 benchmark 失败时立即透传退出码，避免后续输出掩盖失败。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
  */
@@ -12,8 +12,10 @@ import { spawnSync } from 'node:child_process'
 
 const benchmarksRoot = 'benchmarks'
 const benchmarkEntries = [
+  join(benchmarksRoot, 'gate45-native-benchmark.mjs'),
   join(benchmarksRoot, 'gate2-render-benchmark.mjs'),
-  join(benchmarksRoot, 'gate5-interop-benchmark.mjs')
+  join(benchmarksRoot, 'gate5-interop-benchmark.mjs'),
+  join(benchmarksRoot, 'gate6-collab-benchmark.mjs')
 ]
 const start = performance.now()
 

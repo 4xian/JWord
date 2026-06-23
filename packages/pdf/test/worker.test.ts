@@ -14,12 +14,68 @@ import {
   type DocumentLayout,
   layoutDocument
 } from '@4xian/jword-core'
+import { createJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
 import { describe, expect, it } from 'vitest'
 
 import { createCancelPdfWorkerRequest, type PdfWorkerResponse } from '../src/index'
 import { dispatchPdfWorkerRequest } from '../src/worker'
 
 describe('@4xian/jword-pdf worker runtime', () => {
+  it('fails export before mapping layout when license is missing', async () => {
+    const posted: PdfWorkerResponse[] = []
+    const response = await dispatchPdfWorkerRequest(
+      {
+        kind: 'export-layout',
+        requestId: 'pdf-worker-license-missing-1',
+        layout: createEmptyLayout(),
+        options: {
+          requestId: 'pdf-worker-license-missing-1'
+        }
+      },
+      (event) => {
+        posted.push(event)
+      }
+    )
+
+    expect(response).toMatchObject({
+      kind: 'error',
+      error: {
+        code: 'JWORD_LICENSE_MISSING',
+        feature: 'pdf.export',
+        requestId: 'pdf-worker-license-missing-1'
+      }
+    })
+    expect(posted).toEqual([response])
+  })
+
+  it('fails export when license lacks the PDF feature', async () => {
+    const posted: PdfWorkerResponse[] = []
+    const response = await dispatchPdfWorkerRequest(
+      {
+        kind: 'export-layout',
+        requestId: 'pdf-worker-license-mismatch-1',
+        layout: createEmptyLayout(),
+        options: {
+          requestId: 'pdf-worker-license-mismatch-1',
+          license: createWorkerLicense(['docx.import'])
+        }
+      },
+      (event) => {
+        posted.push(event)
+      }
+    )
+
+    expect(response).toMatchObject({
+      kind: 'error',
+      error: {
+        code: 'JWORD_FEATURE_NOT_ENTITLED',
+        feature: 'pdf.export',
+        requestId: 'pdf-worker-license-mismatch-1'
+      }
+    })
+    expect(posted).toEqual([response])
+  })
+
   it('dispatches cancel requests and posts the stable response', async () => {
     const posted: PdfWorkerResponse[] = []
     const response = await dispatchPdfWorkerRequest(
@@ -49,7 +105,8 @@ describe('@4xian/jword-pdf worker runtime', () => {
         requestId: 'pdf-worker-cancel-running-2',
         layout: createEmptyLayout(),
         options: {
-          requestId: 'pdf-worker-cancel-running-2'
+          requestId: 'pdf-worker-cancel-running-2',
+          license: createWorkerLicense(['pdf.export'])
         }
       },
       (event) => {
@@ -92,7 +149,8 @@ describe('@4xian/jword-pdf worker runtime', () => {
         requestId: 'pdf-worker-export-2',
         layout: createEmptyLayout(),
         options: {
-          requestId: 'pdf-worker-export-2'
+          requestId: 'pdf-worker-export-2',
+          license: createWorkerLicense(['pdf.export'])
         }
       },
       (event) => {
@@ -115,6 +173,24 @@ describe('@4xian/jword-pdf worker runtime', () => {
     expect(posted).toEqual([response])
   })
 })
+
+/** 创建 PDF worker 测试使用的有效授权。 */
+function createWorkerLicense(features: readonly string[]): JWordLicenseEntitlement {
+  const entitlement: JWordLicenseSignaturePayload = {
+    customerId: 'customer-pdf-worker',
+    licenseToken: 'token-pdf-worker',
+    features,
+    issuer: 'jword-test-issuer',
+    issuedAt: '2026-05-01T00:00:00Z',
+    expiresAt: '2026-06-01T00:00:00Z',
+    status: 'valid' as const
+  }
+
+  return {
+    ...entitlement,
+    signature: createJWordLicenseSignature(entitlement)
+  }
+}
 
 /** 创建 worker 测试使用的最小空 layout。 */
 function createEmptyLayout(): DocumentLayout {

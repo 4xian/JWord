@@ -5,11 +5,12 @@
  * 约束：开放 XML 校验器、Word、WPS、LibreOffice 缺失时必须保留待验或未运行证据。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
  */
-import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
+
+import { createEvidenceRequests, createEvidenceTemplates, createExportArtifactEvidence, createOpenXmlValidationSummary, writeEvidenceTemplateFiles } from './gate5-docx-compatibility-evidence.mjs'
+import { commandExists, expandCommandTemplateParts, formatCommandEvidence, isAvailableFixture, isOptionalNumberField, isOptionalStringField, isStringField, parseCommandTemplate, printJson, readCommandFailureMessage, readJson, readPositiveIntegerEnv, runCommand, summarizeFixtures } from './gate5-docx-compatibility-utils.mjs'
 
 const registryPath = 'fixtures/docx/registry.json'
 const matrixPath = 'fixtures/docx/compatibility-matrix.json'
@@ -25,22 +26,6 @@ const openXmlValidatorTimeoutMs = readPositiveIntegerEnv('OPENXML_VALIDATOR_TIME
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
 const writeEvidenceTemplates = args.includes('--write-evidence-templates')
-const openXmlRequiredEvidence = [
-  'OpenXmlValidator output or converted diagnostics JSON',
-  'diagnostic severity/code/part/path/message fields',
-  'artifact path and SHA-256 match this run'
-]
-const appRequiredEvidence = [
-  'app version and machine/date',
-  'open result and repair prompt state',
-  'edit/save/reopen result',
-  'main visual difference notes',
-  'artifact path and SHA-256 match this run'
-]
-const missingArtifactRequiredEvidence = [
-  'available source fixture input',
-  'generated export artifact with byteLength and SHA-256'
-]
 
 const evidenceInputDiagnostics = []
 const registry = await readJson(registryPath)
@@ -65,9 +50,10 @@ if (dryRun) {
 
 /** 运行完整 DOCX 兼容矩阵并写入结果 artifact。 */
 async function runCompatibilityMatrix() {
-  const [{ createEditor }, docxRuntime] = await Promise.all([
+  const [{ createEditor }, docxRuntime, licenseRuntime] = await Promise.all([
     import('../../packages/core/dist/index.js'),
-    import('../../packages/docx/dist/index.js')
+    import('../../packages/docx/dist/index.js'),
+    import('../../packages/license/dist/index.js')
   ])
   const fixtureById = new Map(registry.fixtures.map((fixture) => [fixture.id, fixture]))
   const results = []
@@ -83,12 +69,16 @@ async function runCompatibilityMatrix() {
     results.push(await runAvailableFixtureCompatibility({
       createEditor,
       docxRuntime,
+      licenseRuntime,
       fixture,
       target
     }))
   }
 
-  const evidenceTemplates = createEvidenceTemplates(results)
+  const evidenceTemplates = createEvidenceTemplates(results, {
+    manualResultsPath,
+    openXmlValidationResultsPath
+  })
   const resultDocument = {
     schemaVersion: 1,
     gate: 'gate5',
@@ -105,7 +95,7 @@ async function runCompatibilityMatrix() {
   await mkdir(dirname(outputPath), { recursive: true })
   await writeFile(outputPath, `${JSON.stringify(resultDocument, null, 2)}\n`)
   if (writeEvidenceTemplates) {
-    await writeEvidenceTemplateFiles(evidenceTemplates)
+    await writeEvidenceTemplateFiles(evidenceTemplates, evidenceTemplateOutputDirectory)
   }
   printJson({
     status: 'ok',
@@ -120,7 +110,8 @@ async function runCompatibilityMatrix() {
 async function runAvailableFixtureCompatibility(input) {
   const sourceBytes = await readFile(input.fixture.input.path)
   const importResult = await input.docxRuntime.importDocx(sourceBytes, {
-    requestId: `${input.fixture.id}-compat-import`
+    requestId: `${input.fixture.id}-compat-import`,
+    license: createGate5CompatibilityLicense(input.licenseRuntime, ['docx.import'])
   })
   const document = input.docxRuntime.convertDocxImportDocumentToCoreDocument(importResult.document)
   const editor = input.createEditor()
@@ -130,7 +121,8 @@ async function runAvailableFixtureCompatibility(input) {
       document
     })
     const exportResult = await input.docxRuntime.exportDocx(projection, {
-      requestId: `${input.fixture.id}-compat-export`
+      requestId: `${input.fixture.id}-compat-export`,
+      license: createGate5CompatibilityLicense(input.licenseRuntime, ['docx.export'])
     })
 
     const artifactBytes = Buffer.from(exportResult.bytes)
@@ -148,6 +140,7 @@ async function runAvailableFixtureCompatibility(input) {
       fixtureId: input.fixture.id,
       exportArtifact: input.target.exportArtifact,
       requestId: `${input.fixture.id}-compat-report`,
+      license: createGate5CompatibilityLicense(input.licenseRuntime, ['docx.import', 'docx.export']),
       ...(externalOpenXmlValidation?.kind === 'validation'
         ? { openXmlValidation: externalOpenXmlValidation.validation }
         : {}),
@@ -173,230 +166,22 @@ async function runAvailableFixtureCompatibility(input) {
   }
 }
 
-/** 创建导出 artifact 的可复查大小和哈希证据。 */
-function createExportArtifactEvidence(path, bytes) {
-  return {
-    path,
-    byteLength: bytes.byteLength,
-    sha256: createHash('sha256').update(bytes).digest('hex')
-  }
-}
-
-/** 从当前结果派生仍缺的真实兼容证据请求。 */
-function createEvidenceRequests(results) {
-  return results.flatMap((result) => [
-    ...createOpenXmlEvidenceRequests(result),
-    ...createAppEvidenceRequests(result)
-  ])
-}
-
-/** 创建可复制到外部证据 JSON 的 artifact 绑定模板。 */
-function createEvidenceTemplates(results) {
-  return {
-    manualCompatibilityResults: {
-      path: manualResultsPath,
-      schemaVersion: 1,
-      scope: 'docx-office-manual-compatibility-results',
-      results: results.flatMap(createManualCompatibilityEvidenceTemplates)
-    },
-    openXmlValidationResults: {
-      path: openXmlValidationResultsPath,
-      schemaVersion: 1,
-      scope: 'docx-openxml-validation-results',
-      results: results.flatMap(createOpenXmlValidationEvidenceTemplates)
-    }
-  }
-}
-
-/** 写出可复制填写的外部证据模板文件。 */
-async function writeEvidenceTemplateFiles(evidenceTemplates) {
-  await mkdir(evidenceTemplateOutputDirectory, { recursive: true })
-  await Promise.all([
-    writeEvidenceTemplateFile(
-      join(evidenceTemplateOutputDirectory, 'manual-compatibility-results.template.json'),
-      evidenceTemplates.manualCompatibilityResults
-    ),
-    writeEvidenceTemplateFile(
-      join(evidenceTemplateOutputDirectory, 'openxml-validation-results.template.json'),
-      evidenceTemplates.openXmlValidationResults
-    ),
-    writeEvidenceTemplateReadme(evidenceTemplates)
-  ])
-}
-
-/** 写出单个证据模板文件，不携带内部目标路径字段。 */
-async function writeEvidenceTemplateFile(path, template) {
-  await writeFile(path, `${JSON.stringify({
-    schemaVersion: template.schemaVersion,
-    scope: template.scope,
-    results: template.results
-  }, null, 2)}\n`)
-}
-
-/** 写出人工补证说明，避免把模板文件误当作真实通过证据。 */
-async function writeEvidenceTemplateReadme(evidenceTemplates) {
-  await writeFile(join(evidenceTemplateOutputDirectory, 'README.md'), [
-    '# Gate 5 DOCX compatibility evidence templates',
-    '',
-    '这些文件只用于复制填写。模板文件不是通过证据，runner 默认不会把本目录下的 `.template.json` 当作真实证据读取。',
-    '',
-    '补 Word/WPS/LibreOffice 人工证据时：',
-    '',
-    '1. 从 `manual-compatibility-results.template.json` 复制对应结果行。',
-    `2. 写入 \`${evidenceTemplates.manualCompatibilityResults.path}\` 的 \`results\` 数组。`,
-    '3. 保留并核对 `exportArtifact`、`artifactByteLength`、`artifactSha256`。',
-    '4. 把 `result`、`editable`、`repairPrompt`、`mainVisualDifference`、`blockingIssue`、`evidence` 改成人工打开、编辑、保存、重开后的真实观察。',
-    '',
-    '补 Open XML validator 证据时：',
-    '',
-    '1. 从 `openxml-validation-results.template.json` 复制对应结果行。',
-    `2. 写入 \`${evidenceTemplates.openXmlValidationResults.path}\` 的 \`results\` 数组。`,
-    '3. 保留并核对 `exportArtifact`、`artifactByteLength`、`artifactSha256`。',
-    '4. 把 `evidence` 改成 validator 版本、命令、机器和日期，把 `diagnostics` 改成转换后的真实诊断数组。',
-    '',
-    '如果 artifact 任一绑定字段缺失或不匹配，runner 会把外部结论降级为 pending，并在 evidenceRequests 中标记缺失或 stale 状态。',
-    ''
-  ].join('\n'))
-}
-
-/** 为仍待闭环的办公套件检查创建人工证据模板。 */
-function createManualCompatibilityEvidenceTemplates(result) {
-  if (result.exportArtifactEvidence === undefined) {
-    return []
-  }
-
-  return readResultAppResults(result)
-    .filter((appResult) => !isAppResultComplete(appResult))
-    .map((appResult) => ({
-      fixtureId: result.fixtureId,
-      app: appResult.app,
-      ...createArtifactEvidenceFields(result.exportArtifactEvidence),
-      result: 'pending',
-      editable: 'pending',
-      repairPrompt: 'pending',
-      mainVisualDifference: 'pending',
-      blockingIssue: 'TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.',
-      evidence: 'TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes.'
-    }))
-}
-
-/** 为仍待闭环的 Open XML validator 检查创建外部诊断模板。 */
-function createOpenXmlValidationEvidenceTemplates(result) {
-  const openXmlValidation = readResultOpenXmlValidation(result)
-
-  if (result.exportArtifactEvidence === undefined || openXmlValidation?.result === 'pass') {
-    return []
-  }
-
-  return [
-    {
-      fixtureId: result.fixtureId,
-      ...createArtifactEvidenceFields(result.exportArtifactEvidence),
-      evidence: 'TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.',
-      diagnostics: []
-    }
-  ]
-}
-
-/** 把内部 artifact 证据字段映射成外部证据 schema 字段。 */
-function createArtifactEvidenceFields(exportArtifactEvidence) {
-  return {
-    exportArtifact: exportArtifactEvidence.path,
-    artifactByteLength: exportArtifactEvidence.byteLength,
-    artifactSha256: exportArtifactEvidence.sha256
-  }
-}
-
-/** 为未通过的 Open XML validator 目标创建证据请求。 */
-function createOpenXmlEvidenceRequests(result) {
-  const openXmlValidation = readResultOpenXmlValidation(result)
-
-  if (openXmlValidation?.result === 'pass') {
-    return []
-  }
-
-  return [
-    createEvidenceRequest(
-      result,
-      'Open XML validator',
-      openXmlValidation?.result ?? 'pending',
-      openXmlRequiredEvidence,
-      openXmlValidation?.blockingIssue
-    )
-  ]
-}
-
-/** 为未闭环的办公套件目标创建证据请求。 */
-function createAppEvidenceRequests(result) {
-  return readResultAppResults(result)
-    .filter((appResult) => !isAppResultComplete(appResult))
-    .map((appResult) => createEvidenceRequest(
-      result,
-      appResult.app,
-      appResult.result,
-      appRequiredEvidence,
-      appResult.blockingIssue
-    ))
-}
-
-/** 读取结果中的 Open XML validator 检查。 */
-function readResultOpenXmlValidation(result) {
-  return result.status === 'reported'
-    ? result.report.automatedChecks.find((check) => check.kind === 'open-xml-validator')
-    : result.openXmlValidation
-}
-
-/** 读取结果中的办公套件检查。 */
-function readResultAppResults(result) {
-  return result.status === 'reported'
-    ? result.report.appResults
-    : result.appResults ?? []
-}
-
-/** 判断办公套件人工证据是否已经闭环。 */
-function isAppResultComplete(appResult) {
-  return appResult.result === 'pass' &&
-    appResult.editable === 'pass' &&
-    appResult.repairPrompt === 'none' &&
-    appResult.mainVisualDifference === 'none' &&
-    appResult.blockingIssue.length === 0
-}
-
-/** 创建单个证据请求并绑定导出 artifact 证据。 */
-function createEvidenceRequest(result, target, status, requiredEvidence, blockingIssue) {
-  if (result.exportArtifactEvidence === undefined) {
-    return {
-      fixtureId: result.fixtureId,
-      target,
-      status: 'blocked-by-missing-artifact',
-      exportArtifact: result.exportArtifact,
-      requiredEvidence: [
-        ...missingArtifactRequiredEvidence,
-        ...requiredEvidence.filter((item) => item !== 'artifact path and SHA-256 match this run')
-      ]
-    }
+/** 创建兼容 runner 使用的本地商业授权。 */
+function createGate5CompatibilityLicense(licenseRuntime, features) {
+  const entitlement = {
+    customerId: 'customer-gate5-compatibility-runner',
+    licenseToken: 'token-gate5-compatibility-runner',
+    features,
+    issuer: 'jword-test-issuer',
+    issuedAt: '2026-05-01T00:00:00Z',
+    expiresAt: '2026-06-01T00:00:00Z',
+    status: 'valid'
   }
 
   return {
-    fixtureId: result.fixtureId,
-    target,
-    status: readEvidenceRequestStatus(status, blockingIssue),
-    exportArtifact: result.exportArtifact,
-    artifactByteLength: result.exportArtifactEvidence.byteLength,
-    artifactSha256: result.exportArtifactEvidence.sha256,
-    requiredEvidence
+    ...entitlement,
+    signature: licenseRuntime.createJWordLicenseSignature(entitlement)
   }
-}
-
-/** 把 stale 外部证据显式暴露为证据请求状态。 */
-function readEvidenceRequestStatus(status, blockingIssue) {
-  if (blockingIssue?.includes('evidence artifact does not match current export artifact.') === true) {
-    return 'stale-artifact-evidence'
-  }
-
-  return blockingIssue?.includes('does not declare current export artifact binding.') === true
-    ? 'missing-artifact-binding'
-    : status
 }
 
 /** 为缺少输入 fixture 的目标创建 pending 结果。 */
@@ -437,36 +222,6 @@ function createSkippedAppResults(fixtureId) {
   ]
 }
 
-/** 把外部 validator 诊断压缩为矩阵目标结果。 */
-function createOpenXmlValidationSummary(validation) {
-  const firstBlockingDiagnostic = validation.diagnostics.find((diagnostic) => diagnostic.severity === 'error')
-
-  return {
-    result: readOpenXmlValidationSummaryResult(validation.diagnostics),
-    evidence: validation.evidence,
-    diagnosticCount: validation.diagnostics.length,
-    ...(firstBlockingDiagnostic === undefined
-      ? {}
-      : { blockingIssue: formatOpenXmlValidationDiagnostic(firstBlockingDiagnostic) }),
-    ...(validation.diagnostics.length === 0 ? {} : { diagnostics: validation.diagnostics })
-  }
-}
-
-/** 读取 Open XML validator 诊断汇总状态。 */
-function readOpenXmlValidationSummaryResult(diagnostics) {
-  if (diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
-    return 'fail'
-  }
-
-  return diagnostics.some((diagnostic) => diagnostic.severity === 'warning') ? 'warn' : 'pass'
-}
-
-/** 格式化第一条阻断级 validator 诊断。 */
-function formatOpenXmlValidationDiagnostic(diagnostic) {
-  const location = [diagnostic.part, diagnostic.path].filter((value) => value !== undefined).join(' ')
-
-  return location.length === 0 ? diagnostic.message : `${location}: ${diagnostic.message}`
-}
 
 /** 运行 Open XML validator；缺工具时返回 null，由报告保持 pending。 */
 function runOpenXmlValidation(artifactPath) {
@@ -1013,44 +768,6 @@ function normalizeOpenXmlValidationDiagnostic(diagnostic) {
 }
 
 /** 判断未知值是否包含指定字符串字段。 */
-function isStringField(value, field) {
-  return typeof value === 'object' &&
-    value !== null &&
-    typeof value[field] === 'string'
-}
-
-/** 判断未知值是否缺少字段或包含指定字符串字段。 */
-function isOptionalStringField(value, field) {
-  return typeof value === 'object' &&
-    value !== null &&
-    (value[field] === undefined || typeof value[field] === 'string')
-}
-
-/** 判断未知值是否缺少字段或包含指定数字字段。 */
-function isOptionalNumberField(value, field) {
-  return typeof value === 'object' &&
-    value !== null &&
-    (value[field] === undefined || typeof value[field] === 'number')
-}
-
-/** 汇总 registry 中真实可运行 fixture 数量。 */
-function summarizeFixtures(fixtures) {
-  const available = fixtures.filter(isAvailableFixture).length
-
-  return {
-    total: fixtures.length,
-    available,
-    missing: fixtures.length - available
-  }
-}
-
-/** 判断 fixture 是否已有真实输入文件。 */
-function isAvailableFixture(fixture) {
-  return fixture !== undefined &&
-    fixture.input?.state === 'available' &&
-    typeof fixture.input.path === 'string' &&
-    existsSync(fixture.input.path)
-}
 
 /** 读取当前本机可选外部工具状态。 */
 function createToolAvailability() {
@@ -1128,18 +845,6 @@ function findMacApplicationTool(name, paths) {
   }
 }
 
-/** 判断命令是否存在于 PATH。 */
-function commandExists(command) {
-  return spawnSync('sh', ['-lc', `command -v ${quoteShell(command)}`], {
-    stdio: 'ignore'
-  }).status === 0
-}
-
-/** 为固定候选命令生成 shell 查询参数。 */
-function quoteShell(value) {
-  return `'${value.replaceAll("'", "'\\''")}'`
-}
-
 /** 运行显式配置的 Open XML validator 命令。 */
 function runConfiguredValidatorCommand(command, artifactPath) {
   let parts
@@ -1166,145 +871,4 @@ function runConfiguredValidatorCommand(command, artifactPath) {
   }
 
   return runCommand(executable, commandParts.slice(1), { timeoutMs: openXmlValidatorTimeoutMs })
-}
-
-/** 把 validator 命令模板展开为最终 argv。 */
-function expandCommandTemplateParts(parts, artifactPath) {
-  const hasArtifactPlaceholder = parts.some((part) => part.includes('{artifact}'))
-  const expandedParts = parts.map((part) => part.replaceAll('{artifact}', artifactPath))
-
-  return hasArtifactPlaceholder ? expandedParts : [...expandedParts, artifactPath]
-}
-
-/** 解析显式命令模板，支持常见 shell 引号和空白分隔。 */
-function parseCommandTemplate(command) {
-  const parts = []
-  let current = ''
-  let quote = null
-  let hasToken = false
-
-  for (let index = 0; index < command.length; index += 1) {
-    const character = command[index]
-
-    if (quote !== null) {
-      if (character === quote) {
-        quote = null
-        continue
-      }
-
-      if (quote === '"' && character === '\\') {
-        const escaped = command[index + 1]
-
-        if (escaped !== undefined) {
-          current += escaped
-          index += 1
-          hasToken = true
-          continue
-        }
-      }
-
-      current += character
-      hasToken = true
-      continue
-    }
-
-    if (/\s/u.test(character)) {
-      if (hasToken) {
-        parts.push(current)
-        current = ''
-        hasToken = false
-      }
-      continue
-    }
-
-    if (character === '\'' || character === '"') {
-      quote = character
-      hasToken = true
-      continue
-    }
-
-    if (character === '\\') {
-      const escaped = command[index + 1]
-
-      if (escaped !== undefined) {
-        current += escaped
-        index += 1
-        hasToken = true
-        continue
-      }
-    }
-
-    current += character
-    hasToken = true
-  }
-
-  if (quote !== null) {
-    throw new Error('OPENXML_VALIDATOR_COMMAND has unmatched quotes.')
-  }
-
-  if (hasToken) {
-    parts.push(current)
-  }
-
-  return parts
-}
-
-/** 运行外部命令并捕获 stdout/stderr。 */
-function runCommand(command, commandArgs, options = {}) {
-  const result = spawnSync(command, commandArgs, {
-    encoding: 'utf8',
-    ...(options.timeoutMs === undefined ? {} : { timeout: options.timeoutMs })
-  })
-
-  return {
-    status: result.status ?? 1,
-    stdout: result.stdout ?? '',
-    stderr: readCommandErrorOutput(result, options.timeoutMs)
-  }
-}
-
-/** 读取外部命令错误输出，超时时返回稳定诊断。 */
-function readCommandErrorOutput(result, timeoutMs) {
-  if (result.error?.code === 'ETIMEDOUT') {
-    return `Open XML validator command timed out after ${timeoutMs}ms.`
-  }
-
-  return result.stderr ?? ''
-}
-
-/** 格式化外部命令 evidence。 */
-function formatCommandEvidence(command, result) {
-  const output = [result.stdout.trim(), result.stderr.trim()].filter((part) => part.length > 0).join('\n')
-
-  return output.length === 0 ? command : `${command}: ${output}`
-}
-
-/** 读取外部命令失败原因。 */
-function readCommandFailureMessage(result) {
-  const message = [result.stderr.trim(), result.stdout.trim()].filter((part) => part.length > 0).join('\n')
-
-  return message.length === 0 ? `Command exited with ${result.status}.` : message
-}
-
-/** 读取 JSON 文件。 */
-async function readJson(path) {
-  return JSON.parse(await readFile(path, 'utf8'))
-}
-
-/** 读取正整数环境变量，缺失或无效时使用默认值。 */
-function readPositiveIntegerEnv(name, defaultValue) {
-  const value = process.env[name]
-
-  if (value === undefined || value.trim().length === 0) {
-    return defaultValue
-  }
-
-  const parsed = Number.parseInt(value, 10)
-
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue
-}
-
-/** 输出格式化 JSON。 */
-function printJson(value) {
-  console.log(JSON.stringify(value, null, 2))
 }

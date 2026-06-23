@@ -13,16 +13,13 @@ import {
   createPageConfig,
   layoutDocument
 } from '@4xian/jword-core'
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
-import { readFileSync } from 'node:fs'
 import { inflateSync } from 'node:zlib'
 import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 
 import {
   createPdfVisualReport,
-  exportPdfFromLayout,
+  exportPdfFromLayout as exportPdfFromLayoutPublic,
   handlePdfWorkerRequest,
   readPdfImageAsset
 } from '../src/index'
@@ -44,6 +41,26 @@ import {
   createPdfProgressResponse,
   createPdfTransferables
 } from '../src/index'
+import {
+  ONE_PIXEL_JPEG_DATA_URL,
+  ONE_PIXEL_PNG_DATA_URL,
+  createPdfPublicApiLicense,
+  readChineseFontFixture,
+  readFixtureBytes,
+  readTestFontBytes,
+  type PdfChineseFontFixture
+} from './public-api-fixtures'
+
+/** 以有效授权调用 PDF export，保持渲染测试聚焦于 PDF 输出行为。 */
+function exportPdfFromLayout(
+  layout: Parameters<typeof exportPdfFromLayoutPublic>[0],
+  options: ExportPdfOptions = {}
+) {
+  return exportPdfFromLayoutPublic(layout, {
+    ...options,
+    license: createPdfPublicApiLicense(['pdf.export'])
+  })
+}
 
 describe('@4xian/jword-pdf public API', () => {
   it('exports the layout to PDF entry point', () => {
@@ -129,6 +146,20 @@ describe('@4xian/jword-pdf public API', () => {
     expect(rawPdf).toContain('/Subtype /Image')
     expect(streams.some((stream) => stream.includes(' Do'))).toBe(true)
     expect(streams.some(hasPdfStrokeOperation)).toBe(true)
+  })
+
+  it('exports table cell text fragments from layout', async () => {
+    const result = await exportPdfFromLayout(createTableImageLayout(), {
+      images: [{
+        kind: 'dataUrl',
+        id: 'image-pdf-inline-1',
+        dataUrl: ONE_PIXEL_PNG_DATA_URL
+      }]
+    })
+    const streams = readInflatedPdfStreams(result.bytes)
+
+    expect(streams.some((stream) => stream.includes('<4131> Tj'))).toBe(true)
+    expect(streams.some((stream) => stream.includes('<4231> Tj'))).toBe(true)
   })
 
   it('exports JPEG inline images from layout', async () => {
@@ -438,7 +469,8 @@ describe('@4xian/jword-pdf public API', () => {
       requestId: 'pdf-worker-export-1',
       layout: createEmptyLayout(),
       options: {
-        requestId: 'pdf-worker-export-1'
+        requestId: 'pdf-worker-export-1',
+        license: createPdfPublicApiLicense(['pdf.export'])
       }
     })
     const cancelResponse = await handlePdfWorkerRequest(createCancelPdfWorkerRequest('pdf-worker-cancel-1'))
@@ -498,65 +530,6 @@ describe('@4xian/jword-pdf public API', () => {
     expect(createPdfTransferables(new Uint8Array(buffer))).toEqual([buffer])
   })
 })
-
-const ONE_PIXEL_PNG_DATA_URL =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lYgWtwAAAABJRU5ErkJggg=='
-
-const ONE_PIXEL_JPEG_DATA_URL =
-  'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k='
-
-const requireFromTest = createRequire(import.meta.url)
-
-interface PdfChineseFontFixture {
-  readonly font: {
-    readonly family: string
-    readonly path: string
-  }
-  readonly document: {
-    readonly id: string
-    readonly sectionId: string
-    readonly paragraphId: string
-    readonly runId: string
-    readonly text: string
-  }
-  readonly pageConfig: {
-    readonly widthTwips: number
-    readonly heightTwips: number
-    readonly marginTwips: {
-      readonly top: number
-      readonly right: number
-      readonly bottom: number
-      readonly left: number
-    }
-  }
-  readonly expectation: {
-    readonly pdfJsText: string
-  }
-}
-
-/** 读取随 pdfjs-dist 发布的 LiberationSans 字体，作为稳定的自定义字体 fixture。 */
-function readTestFontBytes(): ArrayBuffer {
-  const pdfJsPackagePath = requireFromTest.resolve('pdfjs-dist/package.json')
-  const fontPath = join(dirname(pdfJsPackagePath), 'standard_fonts', 'LiberationSans-Regular.ttf')
-  const bytes = readFileSync(fontPath)
-
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-}
-
-/** 读取 Gate 5 PDF 中文字体输入 fixture。 */
-function readChineseFontFixture(): PdfChineseFontFixture {
-  const fixturePath = join(process.cwd(), 'fixtures/pdf/inputs/pdf-chinese-font.json')
-
-  return JSON.parse(readFileSync(fixturePath, 'utf8')) as PdfChineseFontFixture
-}
-
-/** 读取仓库内 fixture 二进制。 */
-function readFixtureBytes(path: string): ArrayBuffer {
-  const fontPath = join(process.cwd(), path)
-  const bytes = readFileSync(fontPath)
-
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-}
 
 /** 创建最小空 layout，测试只验证 PDF 包入口契约，不依赖实际分页内容。 */
 function createEmptyLayout(): Parameters<typeof exportPdfFromLayout>[0] {

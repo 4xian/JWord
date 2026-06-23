@@ -12,11 +12,13 @@ import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 
 import { diffDocxRoundtrip } from '../src/index'
+import { createDocxPublicApiLicense } from './public-api-fixtures'
 
 describe('@4xian/jword-docx roundtrip diff', () => {
   it('imports, writes, exports, reimports and compares T1 DOCX structure', async () => {
     const result = await diffDocxRoundtrip(await createRoundtripDocxPackage(), {
-      requestId: 'docx-roundtrip-diff-1'
+      requestId: 'docx-roundtrip-diff-1',
+      license: createDocxPublicApiLicense(['docx.import', 'docx.export'])
     })
 
     expect(result.matches).toBe(true)
@@ -78,7 +80,8 @@ describe('@4xian/jword-docx roundtrip diff', () => {
 
   it('keeps T2 warnings visible while allowing T1 roundtrip diff to pass', async () => {
     const result = await diffDocxRoundtrip(await createT2WarningDocxPackage(), {
-      requestId: 'docx-roundtrip-t2-warning-1'
+      requestId: 'docx-roundtrip-t2-warning-1',
+      license: createDocxPublicApiLicense(['docx.import', 'docx.export'])
     })
 
     expect(result.matches).toBe(true)

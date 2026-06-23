@@ -12,14 +12,17 @@ import type { DocumentProjection } from '@4xian/jword-core'
 import { describe, expect, it } from 'vitest'
 
 import { exportDocx, importDocx } from '../src/index'
+import { createDocxPublicApiLicense } from './public-api-fixtures'
 
 describe('@4xian/jword-docx rich block export', () => {
   it('exports T1 lists, tables and inline images for roundtrip import', async () => {
     const exportResult = await exportDocx(createRichBlocksProjection(), {
-      requestId: 'docx-export-rich-blocks-1'
+      requestId: 'docx-export-rich-blocks-1',
+      license: createDocxPublicApiLicense(['docx.export'])
     })
     const importResult = await importDocx(exportResult.bytes, {
-      requestId: 'docx-import-rich-blocks-1'
+      requestId: 'docx-import-rich-blocks-1',
+      license: createDocxPublicApiLicense(['docx.import'])
     })
 
     expect(exportResult.warnings).toEqual([])

@@ -64,7 +64,8 @@ interface ToolbarControllerAssistive {
   readonly textMirror: TextMirrorController | null
 }
 
-interface CreateToolbarControllerOptions extends CreateJWordUiOptions {
+interface CreateToolbarControllerOptions extends Omit<CreateJWordUiOptions, 'toolbarHost'> {
+  readonly toolbarHost: HTMLElement
   readonly assistive: ToolbarControllerAssistive
   readonly insertActions?: {
     readonly openComment?: () => void
@@ -108,10 +109,10 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
   if (toolbarHidden) {
     options.toolbarHost.hidden = true
   }
-  const mediaHost = options.media === undefined || toolbarHidden
+  const mediaHost = toolbarHidden
     ? null
     : createToolbarExtensionHost(dom.bar, 'media')
-  const tableHost = options.table === undefined || toolbarHidden
+  const tableHost = toolbarHidden
     ? null
     : createToolbarExtensionHost(dom.bar, 'table')
   const linkHost = options.link === undefined || toolbarHidden

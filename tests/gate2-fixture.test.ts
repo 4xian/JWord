@@ -8,7 +8,7 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 2.14 与 Step 2.15。
  */
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
@@ -391,6 +391,10 @@ console.log(JSON.stringify({
 
 function ensureBuiltCore(): Promise<void> {
   builtCorePromise ??= Promise.resolve().then(() => {
+    if (existsSync(join(process.cwd(), 'packages', 'core', 'dist', 'index.js'))) {
+      return
+    }
+
     const childEnv = {
       ...process.env,
       NODE_OPTIONS: '',

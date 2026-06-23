@@ -6,9 +6,15 @@
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
  */
 import type { Editor, EditorOptions } from './types'
-import { JWordEditorPointerRuntime } from './pointer-runtime'
+import { JWordEditorCollaborationRuntime } from './collaboration-runtime'
+import type { EditorInternalRuntimeOptions } from './state'
 
-class JWordEditor extends JWordEditorPointerRuntime implements Editor {}
+export class JWordEditor extends JWordEditorCollaborationRuntime implements Editor {
+  /** 创建 Editor runtime，可由内部协同入口绑定共享文档。 */
+  constructor(options?: EditorOptions, internalOptions?: EditorInternalRuntimeOptions) {
+    super(options, internalOptions)
+  }
+}
 
 export function createEditor(options?: EditorOptions): Editor {
   return new JWordEditor(options)
@@ -17,6 +23,7 @@ export function createEditor(options?: EditorOptions): Editor {
 export type {
   Editor,
   EditorCommandOptions,
+  EditorSyncUpdateInput,
   EditorDocumentInput,
   EditorDocumentModelInput,
   EditorEvent,
@@ -24,11 +31,25 @@ export type {
   EditorFixture,
   EditorHitTestPoint,
   EditorOptions,
+  EditorApplyUpdateOptions,
   EditorRichTextFragment,
   EditorRichTextParagraph,
   EditorRichTextRun,
   EditorTextAnchorInput,
   EditorUser,
   EditorUserInput,
+  HistoryScope,
   InitialFocusPosition
 } from './types'
+export type {
+  EditorAnchorSnapshot,
+  EditorLocationQuery,
+  EditorLocationTarget,
+  EditorRangeSnapshot,
+  EditorRangeSnapshotInput,
+  EditorResolvedLocation,
+  EditorScrollToLocationOptions,
+  EditorSelectionSnapshot,
+  EditorTextLocation,
+  EditorTextQueryResult
+} from './location-types'

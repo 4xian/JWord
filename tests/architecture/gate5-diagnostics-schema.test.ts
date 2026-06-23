@@ -15,6 +15,7 @@ import {
   createPageConfig,
   layoutDocument
 } from '@4xian/jword-core'
+import { createJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
 import JSZip from 'jszip'
 import {
   DOCX_ERROR_CODE_METADATA,
@@ -41,6 +42,11 @@ describe('Gate 5 diagnostics schema', () => {
     const sourceCodes = readDiagnosticCodes('DOCX', [
       'packages/docx/src/index.ts',
       'packages/docx/src/export.ts',
+      'packages/docx/src/import.ts',
+      'packages/docx/src/import-readers.ts',
+      'packages/docx/src/import-sections.ts',
+      'packages/docx/src/messages.ts',
+      'packages/docx/src/package.ts',
       'packages/docx/src/worker.ts'
     ])
     const registryCodes = readRegistryCodes(DOCX_WARNING_CODE_METADATA, DOCX_ERROR_CODE_METADATA)
@@ -85,9 +91,12 @@ describe('Gate 5 diagnostics schema', () => {
   })
 
   it('keeps runtime warning fields aligned with public diagnostic metadata', async () => {
-    const docxResult = await importDocx(await createDiagnosticDocxPackage())
+    const docxResult = await importDocx(await createDiagnosticDocxPackage(), {
+      license: createGate5DiagnosticsLicense(['docx.import'])
+    })
     const pdfWarnings: PdfWarning[] = []
     const pdfResult = await exportPdfFromLayout(createDiagnosticPdfLayout(), {
+      license: createGate5DiagnosticsLicense(['pdf.export']),
       fonts: [{
         family: 'BrokenFont',
         source: {
@@ -130,7 +139,8 @@ describe('Gate 5 diagnostics schema', () => {
       signal: pdfController.signal
     }))
     const pdfMissingFont = await captureRejected<PdfError>(() => exportPdfFromLayout(createChineseDiagnosticPdfLayout(), {
-      requestId: 'pdf-diagnostic-font-missing'
+      requestId: 'pdf-diagnostic-font-missing',
+      license: createGate5DiagnosticsLicense(['pdf.export'])
     }))
 
     expect(Object.keys(DOCX_ERROR_CODE_METADATA)).toContain(docxCancelled.code)
@@ -138,6 +148,24 @@ describe('Gate 5 diagnostics schema', () => {
     expect(Object.keys(PDF_ERROR_CODE_METADATA)).toContain(pdfMissingFont.code)
   })
 })
+
+/** 创建 Gate 5 diagnostics 运行时测试使用的有效授权。 */
+function createGate5DiagnosticsLicense(features: readonly string[]): JWordLicenseEntitlement {
+  const entitlement: JWordLicenseSignaturePayload = {
+    customerId: 'customer-gate5-diagnostics',
+    licenseToken: 'token-gate5-diagnostics',
+    features,
+    issuer: 'jword-test-issuer',
+    issuedAt: '2026-05-01T00:00:00Z',
+    expiresAt: '2026-06-01T00:00:00Z',
+    status: 'valid'
+  }
+
+  return {
+    ...entitlement,
+    signature: createJWordLicenseSignature(entitlement)
+  }
+}
 
 interface Gate5DiagnosticCodeMetadata {
   readonly severity?: string

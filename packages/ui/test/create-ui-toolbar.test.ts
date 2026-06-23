@@ -14,6 +14,51 @@ import { createJWordUi } from '../src/create-ui'
 import type { JWordMediaOptions, JWordTableOptions } from '../src/types'
 
 describe('createJWordUi toolbar config', () => {
+  test('未传 toolbarHost 时会在已挂载 editorHost 内自动创建默认 toolbar 宿主', () => {
+    const editorHost = document.createElement('div')
+    const editor = createEditor({ initialText: 'toolbar auto host' })
+
+    document.body.append(editorHost)
+
+    try {
+      editor.mount(editorHost)
+      const editorShell = editorHost.querySelector<HTMLElement>('[data-jword-editor]')
+
+      expect(editorShell).not.toBeNull()
+
+      const ui = createJWordUi({
+        editor,
+        editorHost
+      })
+
+      const toolbarHost = editorHost.querySelector<HTMLElement>('[data-jword-toolbar-host="true"]')
+      const mediaTrigger = toolbarHost?.querySelector<HTMLButtonElement>('[data-jword-media-trigger="true"]') ?? null
+      const tableTrigger = toolbarHost?.querySelector<HTMLButtonElement>('[data-jword-table-insert-trigger="true"]') ?? null
+
+      expect(toolbarHost).not.toBeNull()
+      expect(toolbarHost?.nextElementSibling).toBe(editorShell)
+      expect(toolbarHost?.querySelector('[data-jword-tool-id="document.findReplace"]')).not.toBeNull()
+      expect(mediaTrigger).not.toBeNull()
+      expect(mediaTrigger?.disabled).toBe(true)
+      expect(tableTrigger).not.toBeNull()
+      expect(tableTrigger?.disabled).toBe(false)
+      expect(ui.elements.mediaPanel).not.toBeNull()
+      expect(ui.elements.tablePanel).not.toBeNull()
+      expect(editorHost.style.display).toBe('flex')
+      expect(editorShell?.style.flex).toBe('1 1 auto')
+      expect(editorShell?.style.height).toBe('auto')
+
+      ui.destroy()
+
+      expect(editorHost.querySelector('[data-jword-toolbar-host="true"]')).toBeNull()
+      expect(editorHost.style.display).toBe('')
+      expect(editorShell?.style.height).toBe('100%')
+    } finally {
+      editor.destroy()
+      editorHost.remove()
+    }
+  })
+
   test('toolbar false 会隐藏整条 toolbar 且不暴露可用工具', () => {
     const editorHost = document.createElement('div')
     const toolbarHost = document.createElement('div')

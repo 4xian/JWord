@@ -40,6 +40,7 @@ interface CreateMediaControllerOptions {
   readonly editor: Editor
   readonly host: HTMLElement
   readonly media: JWordMediaOptions
+  readonly disabled?: boolean
   readonly readonly?: JWordReadonlyMode
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
@@ -60,6 +61,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   const liveRegion = options.assistive.liveRegion
   const signalController = new AbortController()
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
+  const disabledMode = options.disabled === true
   let items: MediaPanelItemState[] = []
   let menuOpen = false
   let urlDialogOpen = false
@@ -88,11 +90,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   /** 用当前内存状态刷新 toolbar 图片入口。 */
   function refresh(): void {
     renderMediaPanel(dom, {
-      menuOpen: readonlyMode ? false : menuOpen,
-      urlDialogOpen: readonlyMode ? false : urlDialogOpen,
+      menuOpen: readonlyMode || disabledMode ? false : menuOpen,
+      urlDialogOpen: readonlyMode || disabledMode ? false : urlDialogOpen,
       urlValue: urlDraft,
       urlError,
-      busy: busy || readonlyMode
+      busy: busy || readonlyMode || disabledMode
     })
   }
 
@@ -244,6 +246,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
       resetMediaFileInput(dom)
       return
     }
+    if (disabledMode) {
+      announce('图片上传适配器未配置。')
+      resetMediaFileInput(dom)
+      return
+    }
 
     const pendingItem = createPendingMediaPanelItem({
       source: {
@@ -263,6 +270,10 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   function submitCurrentUrl(): void {
     if (readonlyMode) {
       announce('当前为只读模式。')
+      return
+    }
+    if (disabledMode) {
+      announce('图片上传适配器未配置。')
       return
     }
 
@@ -318,6 +329,10 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
         announce('当前为只读模式。')
         return
       }
+      if (disabledMode) {
+        announce('图片上传适配器未配置。')
+        return
+      }
 
       if (busy) {
         return
@@ -331,6 +346,10 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
         announce('当前为只读模式。')
         return
       }
+      if (disabledMode) {
+        announce('图片上传适配器未配置。')
+        return
+      }
 
       if (busy) {
         return
@@ -342,6 +361,10 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
     dom.urlActionButton.addEventListener('click', () => {
       if (readonlyMode) {
         announce('当前为只读模式。')
+        return
+      }
+      if (disabledMode) {
+        announce('图片上传适配器未配置。')
         return
       }
 

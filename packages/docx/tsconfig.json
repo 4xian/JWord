@@ -2,7 +2,7 @@
   "compilerOptions": {
     "baseUrl": "../..",
     "declaration": true,
-    "declarationMap": true,
+    "declarationMap": false,
     "emitDeclarationOnly": false,
     "exactOptionalPropertyTypes": true,
     "ignoreDeprecations": "6.0",
@@ -18,6 +18,9 @@
     "paths": {
       "@4xian/jword-core": [
         "packages/core/dist/index.d.ts"
+      ],
+      "@4xian/jword-license": [
+        "packages/license/dist/index.d.ts"
       ]
     },
     "rootDir": "src",

@@ -24,21 +24,58 @@ export type {
 export type {
   Editor,
   EditorCommandOptions,
+  EditorSyncUpdateInput,
   EditorDocumentInput,
   EditorEvent,
   EditorEventListener,
   EditorFixture,
   EditorHitTestPoint,
+  EditorAnchorSnapshot,
+  EditorLocationQuery,
+  EditorLocationTarget,
   EditorOptions,
+  EditorRangeSnapshot,
+  EditorRangeSnapshotInput,
+  EditorResolvedLocation,
+  EditorScrollToLocationOptions,
+  EditorApplyUpdateOptions,
   EditorRichTextFragment,
   EditorRichTextParagraph,
   EditorRichTextRun,
+  EditorSelectionSnapshot,
   EditorTextAnchorInput,
+  EditorTextLocation,
+  EditorTextQueryResult,
   EditorUser,
   EditorUserInput,
+  HistoryScope,
   InitialFocusPosition
 } from './editor/runtime'
 export { createEditor } from './editor/runtime'
+export { createTextInserter } from './collaboration/inserter'
+export type {
+  TextInserter,
+  TextInserterError,
+  TextInserterErrorCode,
+  TextInserterErrorEvent,
+  TextInserterFlushPolicy,
+  TextInserterMode,
+  TextInserterOptions,
+  TextInserterProgressEvent,
+  TextInserterProgressPhase,
+  TextInserterRetryInput,
+  TextInserterUndoScope
+} from './collaboration/inserter'
+export {
+  createEditorSharedDocument,
+  createEditorWithSharedDocument,
+  readEditorSharedDocument,
+  refreshEditorSharedDocument
+} from './editor/collaboration-document'
+export type {
+  EditorSharedDocument,
+  EditorSharedDocumentRefreshInput
+} from './editor/collaboration-document'
 export { JWordError } from './shared/errors'
 export type { JWordErrorCode, JWordErrorDetails } from './shared/errors'
 export {
@@ -188,7 +225,9 @@ export {
   twipsToCssPx
 } from './layout/page-config'
 export type { PageConfig, PageConfigInput, PageMargins, PageOrientation, PagePreset } from './layout/page-config'
+export { createRangeRef } from './model/position'
 export type { AnchorRef, RangeRef } from './model/position'
+export { createDocumentProjection } from './model/projection'
 export type { DocumentProjection } from './model/projection'
 export type {
   AbortSignalLike,
@@ -218,6 +257,8 @@ export type {
   TextPosition,
   TextRange,
   TransactionEvent,
+  TransactionDiagnostic,
+  TransactionDiagnosticSource,
   TransactionMetadata,
   TransactionPipelineOptions,
   TransactionResult

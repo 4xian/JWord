@@ -30,6 +30,7 @@ describe('docx demo host contract', () => {
     expect(packageJson.dependencies).toMatchObject({
       '@4xian/jword-core': 'workspace:*',
       '@4xian/jword-ui': 'workspace:*',
+      '@4xian/jword-license': 'workspace:*',
       '@4xian/jword-docx': 'workspace:*',
       '@4xian/jword-pdf': 'workspace:*'
     })
@@ -45,6 +46,10 @@ describe('docx demo host contract', () => {
       {
         find: '@4xian/jword-docx',
         replacement: resolve(process.cwd(), 'packages/docx/src/index.ts')
+      },
+      {
+        find: '@4xian/jword-license',
+        replacement: resolve(process.cwd(), 'packages/license/src/index.ts')
       },
       {
         find: '@4xian/jword-pdf',
@@ -94,6 +99,20 @@ describe('docx demo host contract', () => {
     expect(source).toContain("import('@4xian/jword-pdf')")
   })
 
+  it('第三方集成模式只通过公开高级包 API 传入授权和能力，不读取内部源码', () => {
+    const source = readWorkspaceText('examples/docx/src/main.ts')
+
+    expect(source).toContain('createDocxDemoIntegrationRuntime')
+    expect(source).toContain('license: readDemoLicense()')
+    expect(source).toContain("feature: 'docx.import'")
+    expect(source).toContain("feature: 'docx.export'")
+    expect(source).toContain("feature: 'pdf.export'")
+    expect(source).not.toContain("from '../../packages/docx/src")
+    expect(source).not.toContain("from '../../packages/pdf/src")
+    expect(source).not.toContain("from '@4xian/jword-docx/worker'")
+    expect(source).not.toContain("from '@4xian/jword-pdf/worker'")
+  })
+
   it('启用官方目录入口，支撑 Heading 导入后的 toolbar 和 outline 验收', () => {
     const source = readWorkspaceText('examples/docx/src/main.ts')
 
@@ -116,6 +135,17 @@ describe('docx demo host contract', () => {
 
     expect(source).toContain('syncEditorPageConfigFromDocument(document)')
     expect(source).toContain('editor.setPageConfig')
+  })
+
+  it('提交 focused Playwright E2E 覆盖高级格式 valid 和授权失败路径', () => {
+    const source = readWorkspaceText('examples/docx/tests/gate5-docx-demo.e2e.ts')
+
+    expect(source).toContain("test('Gate 5 DOCX demo imports exports and keeps editor editable with a valid license'")
+    expect(source).toContain("test('Gate 5 DOCX demo reports stable license diagnostics without changing editor state'")
+    expect(source).toContain('?license=valid')
+    expect(source).toContain('?license=missing')
+    expect(source).toContain('?license=feature-mismatch')
+    expect(source).toContain('exportPdf()')
   })
 })
 

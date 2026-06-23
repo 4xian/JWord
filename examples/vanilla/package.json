@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@4xian/jword-core": "workspace:*",
+    "@4xian/jword-native": "workspace:*",
     "@4xian/jword-ui": "workspace:*"
   },
   "devDependencies": {

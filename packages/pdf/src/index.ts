@@ -8,17 +8,35 @@
 /// <reference path="./fontkit.d.ts" />
 
 import type { DocumentLayout, PageBox, TextFragment } from '@4xian/jword-core'
+import {
+  assertJWordFeatureEntitled
+} from '@4xian/jword-license'
 import type { PDFDocument as PdfLibDocument, PDFFont, PDFImage, PDFPage, RGB } from 'pdf-lib'
 import type {
-  PdfDiagnosticSeverity,
-  PdfErrorCode,
-  PdfWarningCode
-} from './diagnostics'
+  PdfErrorCode
+} from './diagnostics.js'
+import type {
+  CancelPdfWorkerRequest,
+  ExportPdfOptions,
+  ExportPdfResult,
+  PdfDataUrlImageInput,
+  PdfError,
+  PdfExportImageInput,
+  PdfFontSource,
+  PdfImageAsset,
+  PdfPageGeometry,
+  PdfProgressEvent,
+  PdfProgressStage,
+  PdfTransferable,
+  PdfWarning,
+  PdfWorkerRequest,
+  PdfWorkerResponse
+} from './types.js'
 
 export {
   PDF_ERROR_CODE_METADATA,
   PDF_WARNING_CODE_METADATA
-} from './diagnostics'
+} from './diagnostics.js'
 export {
   createPdfVisualReport,
   type PdfBoxCountDelta,
@@ -34,163 +52,38 @@ export {
   type PdfVisualReport,
   type PdfVisualReportOptions,
   type PdfVisualReportStatus
-} from './visual-report'
+} from './visual-report.js'
 export type {
   PdfDiagnosticCodeMetadata,
   PdfDiagnosticSeverity,
   PdfErrorCode,
   PdfWarningCode
-} from './diagnostics'
-
-export type PdfProgressStage =
-  | 'queued'
-  | 'font-loading'
-  | 'reading'
-  | 'mapping'
-  | 'writing'
-  | 'validating'
-  | 'done'
-  | 'cancelled'
-
-export type PdfWarningSeverity = PdfDiagnosticSeverity
-
-export type PdfFontSource =
-  | { readonly kind: 'url', readonly url: string }
-  | { readonly kind: 'file', readonly file: File }
-  | { readonly kind: 'arrayBuffer', readonly data: ArrayBuffer }
-
-export interface PdfFontConfig {
-  readonly family: string
-  readonly source: PdfFontSource
-  readonly weight?: number
-  readonly style?: 'normal' | 'italic'
-  readonly fallback?: boolean
-}
-
-export interface PdfProgressEvent {
-  readonly stage: PdfProgressStage
-  readonly loaded?: number
-  readonly total?: number
-  readonly requestId?: string
-}
-
-export interface PdfWarning {
-  readonly code: PdfWarningCode
-  readonly severity: PdfWarningSeverity
-  readonly path?: string
-  readonly message: string
-  readonly fontFamily?: string
-  readonly fallback?: string
-  readonly recoverable: boolean
-}
-
-export interface PdfError {
-  readonly code: PdfErrorCode
-  readonly message: string
-  readonly requestId?: string
-  readonly cancelled?: boolean
-  readonly fontFamily?: string
-  readonly recoverable?: boolean
-}
-
-export interface ExportPdfOptions {
-  readonly requestId?: string
-  readonly signal?: AbortSignal
-  readonly fonts?: readonly PdfFontConfig[]
-  readonly images?: readonly PdfExportImageInput[]
-  readonly onProgress?: (event: PdfProgressEvent) => void
-  readonly onWarning?: (warning: PdfWarning) => void
-  readonly onError?: (error: PdfError) => void
-}
-
-export interface ExportPdfResult {
-  readonly bytes: ArrayBuffer
-  readonly warnings: readonly PdfWarning[]
-  readonly progress: readonly PdfProgressEvent[]
-  readonly pageGeometry: readonly PdfPageGeometry[]
-}
-
-export interface PdfPageGeometry {
-  readonly pageIndex: number
-  readonly pageSizePoints: PdfSizePoints
-  readonly marginPoints: PdfMarginPoints
-  readonly contentRectPoints: PdfRectPoints
-}
-
-export interface PdfSizePoints {
-  readonly width: number
-  readonly height: number
-}
-
-export interface PdfMarginPoints {
-  readonly top: number
-  readonly right: number
-  readonly bottom: number
-  readonly left: number
-}
-
-export interface PdfRectPoints {
-  readonly x: number
-  readonly y: number
-  readonly width: number
-  readonly height: number
-}
-
-export type PdfWorkerRequest = ExportPdfWorkerRequest | CancelPdfWorkerRequest
-
-export interface ExportPdfWorkerRequest {
-  readonly kind: 'export-layout'
-  readonly requestId?: string
-  readonly layout: DocumentLayout
-  readonly options: ExportPdfOptions
-}
-
-export type PdfWorkerResponse =
-  | { readonly kind: 'result', readonly result: ExportPdfResult }
-  | { readonly kind: 'progress', readonly progress: PdfProgressEvent }
-  | { readonly kind: 'warning', readonly warning: PdfWarning }
-  | { readonly kind: 'error', readonly error: PdfError }
-
-export type PdfTransferable = ArrayBuffer | MessagePort
-
-export interface CancelPdfWorkerRequest {
-  readonly kind: 'cancel'
-  readonly requestId: string
-}
-
-export type PdfExportImageInput =
-  | PdfDataUrlImageInput
-  | PdfArrayBufferImageInput
-  | PdfBlobImageInput
-
-export interface PdfDataUrlImageInput {
-  readonly kind: 'dataUrl'
-  readonly id: string
-  readonly dataUrl: string
-  readonly alt?: string
-}
-
-export interface PdfArrayBufferImageInput {
-  readonly kind: 'arrayBuffer'
-  readonly id: string
-  readonly data: ArrayBuffer | ArrayBufferView
-  readonly mimeType: string
-  readonly alt?: string
-}
-
-export interface PdfBlobImageInput {
-  readonly kind: 'blob'
-  readonly id: string
-  readonly blob: Blob
-  readonly alt?: string
-}
-
-export interface PdfImageAsset {
-  readonly id: string
-  readonly mimeType: string
-  readonly bytes: Uint8Array
-  readonly alt?: string
-}
+} from './diagnostics.js'
+export type {
+  CancelPdfWorkerRequest,
+  ExportPdfOptions,
+  ExportPdfResult,
+  ExportPdfWorkerRequest,
+  PdfArrayBufferImageInput,
+  PdfBlobImageInput,
+  PdfDataUrlImageInput,
+  PdfError,
+  PdfExportImageInput,
+  PdfFontConfig,
+  PdfFontSource,
+  PdfImageAsset,
+  PdfMarginPoints,
+  PdfPageGeometry,
+  PdfProgressEvent,
+  PdfProgressStage,
+  PdfRectPoints,
+  PdfSizePoints,
+  PdfTransferable,
+  PdfWarning,
+  PdfWarningSeverity,
+  PdfWorkerRequest,
+  PdfWorkerResponse
+} from './types.js'
 
 type PdfRgbFactory = (red: number, green: number, blue: number) => RGB
 type PdfDocumentFontkit = Parameters<PdfLibDocument['registerFontkit']>[0]
@@ -311,6 +204,7 @@ export async function handlePdfWorkerRequest(
 
   try {
     const requestId = request.options.requestId ?? request.requestId
+    assertJWordFeatureEntitled(request.options.license, 'pdf.export')
     const result = await exportPdfFromLayout(request.layout, {
       ...request.options,
       ...(requestId === undefined ? {} : { requestId }),
@@ -332,6 +226,7 @@ export async function exportPdfFromLayout(
   options: ExportPdfOptions = {}
 ): Promise<ExportPdfResult> {
   assertPdfExportNotCancelled(options)
+  assertJWordFeatureEntitled(options.license, 'pdf.export')
 
   const progress: PdfProgressEvent[] = []
   const warnings: PdfWarning[] = []
@@ -480,6 +375,7 @@ async function renderPdfPage(
 
   await renderPdfInlineImages(pdfDocument, pdfPage, page, imageAssets)
   renderPdfTables(pdfPage, page, createRgb)
+  renderPdfTableText(pdfPage, fontRegistry, page, createRgb)
 
   for (const line of page.lines) {
     for (const fragment of line.fragments) {
@@ -557,6 +453,28 @@ function renderPdfTables(pdfPage: PDFPage, page: PageBox, createRgb: PdfRgbFacto
     }
 
     renderPdfTableBorders(pdfPage, page, block, createRgb)
+  }
+}
+
+/** 渲染表格单元格中的文本 fragment。 */
+function renderPdfTableText(
+  pdfPage: PDFPage,
+  fontRegistry: PdfFontRegistry,
+  page: PageBox,
+  createRgb: PdfRgbFactory
+): void {
+  for (const table of page.blocks) {
+    if (table.kind !== 'table') {
+      continue
+    }
+
+    for (const row of table.rows) {
+      for (const cell of row.cells) {
+        for (const fragment of cell.fragments) {
+          renderPdfTextFragment(pdfPage, fontRegistry, page, fragment, createRgb)
+        }
+      }
+    }
   }
 }
 
@@ -1047,7 +965,9 @@ function readPdfWorkerError(error: unknown, requestId: string | undefined): PdfE
       code: error.code,
       message: error.message,
       ...(resolvedRequestId === undefined ? {} : { requestId: resolvedRequestId }),
-      ...(error.cancelled === undefined ? {} : { cancelled: error.cancelled })
+      ...(error.cancelled === undefined ? {} : { cancelled: error.cancelled }),
+      ...(error.feature === undefined ? {} : { feature: error.feature }),
+      ...(error.customerId === undefined ? {} : { customerId: error.customerId })
     }
   }
 

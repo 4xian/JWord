@@ -10,6 +10,7 @@ pnpm --filter @4xian/jword-benchmarks bench
 
 Current benchmark:
 
+- `gate45-native-benchmark.mjs` measures `.jword` save/load/validate over synthetic native fixtures.
 - `smoke-benchmark.mjs` reads `fixtures/plain-text/long-placeholder.txt`.
 - It reports fixture size and text metrics as JSON.
 - It does not claim layout, render, input, docx, PDF, or collab performance.

@@ -393,26 +393,26 @@ export interface JWordLinkOptions {
 
 /** Gate 4 页眉页脚和页码基础 UI 配置。 */
 export interface JWordHeaderFooterOptions {
-  /** 页眉页脚面板挂载宿主。 */
-  readonly host: HTMLElement
+  /** 页眉页脚面板挂载宿主；为空时挂到 SDK 默认 toolbar 面板宿主。 */
+  readonly host?: HTMLElement
 }
 
 /** Gate 4 基础目录面板配置。 */
 export interface JWordHeadingOutlineOptions {
-  /** 目录面板挂载宿主。 */
-  readonly host: HTMLElement
+  /** 目录面板挂载宿主；为空时挂到 SDK 默认 editor shell 宿主。 */
+  readonly host?: HTMLElement
 }
 
 /** Gate 4 查找替换基础 UI 配置。 */
 export interface JWordFindReplaceOptions {
-  /** 查找替换面板挂载宿主。 */
-  readonly host: HTMLElement
+  /** 查找替换面板挂载宿主；为空时挂到 SDK 默认 toolbar 面板宿主。 */
+  readonly host?: HTMLElement
 }
 
 /** Gate 4 修订 metadata 面板配置。 */
 export interface JWordRevisionsOptions {
-  /** 修订面板挂载宿主。 */
-  readonly host: HTMLElement
+  /** 修订面板挂载宿主；为空时挂到 SDK 默认 toolbar 面板宿主。 */
+  readonly host?: HTMLElement
 }
 
 /** 全局只读模式配置。 */
@@ -432,8 +432,8 @@ export type JWordReadonlyMode = JWordReadonlyOptions | boolean | undefined
 export interface CreateJWordUiOptions {
   /** 已创建并可供 UI 调用的 core editor facade。 */
   readonly editor: Editor
-  /** toolbar 挂载宿主。 */
-  readonly toolbarHost: HTMLElement
+  /** toolbar 挂载宿主；为空时 SDK 会在已挂载的 editorHost 内创建默认宿主。 */
+  readonly toolbarHost?: HTMLElement
   /** 已挂载 editor 的宿主；传入后可复用 Gate 3 的大文档 blocked summary 规则。 */
   readonly editorHost?: HTMLElement
   /** live region 宿主；为空时只关闭播报，不阻止 toolbar 工作。 */
@@ -444,9 +444,9 @@ export interface CreateJWordUiOptions {
   readonly toolbar?: false | JWordToolbarOptions
   /** SDK 级用户上下文。 */
   readonly user?: JWordUserOptions
-  /** Gate 4 第一版图片 panel。 */
+  /** Gate 4 第一版图片 panel；为空时保留禁用的基础图片入口。 */
   readonly media?: JWordMediaOptions
-  /** Gate 4 Iteration 2 表格工具。 */
+  /** Gate 4 Iteration 2 表格工具；为空时使用默认 core 表格命令适配器。 */
   readonly table?: JWordTableOptions
   /** Gate 4 批注侧栏；传 `true` 时启用 SDK 默认右侧 rail。 */
   readonly comments?: true | JWordCommentsOptions
@@ -477,7 +477,9 @@ export interface JWordUiTextMirrorController {
 }
 
 /** controller 与 assistive 层的内部协作参数。 */
-export interface CreateToolbarControllerOptions extends CreateJWordUiOptions {
+export interface CreateToolbarControllerOptions extends Omit<CreateJWordUiOptions, 'toolbarHost'> {
+  /** toolbar 挂载宿主。 */
+  readonly toolbarHost: HTMLElement
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
     readonly textMirror: JWordUiTextMirrorController | null

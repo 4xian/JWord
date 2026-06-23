@@ -45,8 +45,6 @@ interface DemoMediaSupport {
 /** 创建 vanilla demo 的 Gate 4 媒体支持。 */
 export function createDemoMediaSupport(): DemoMediaSupport {
   const uploadLog: DemoMediaUploadLogEntry[] = []
-  const ownedBlobUrls = new Set<string>()
-  const ownedResourceBlobUrls = new Map<string, string>()
   const commands = createCoreMediaCommandAdapter()
 
   /** 组装 demo 级 media options。 */
@@ -56,11 +54,11 @@ export function createDemoMediaSupport(): DemoMediaSupport {
     adapter: {
       async upload(request: JWordMediaUploadRequest, options?: JWordMediaUploadOptions) {
         return {
-          resource: await uploadDemoResource(request, options, uploadLog, ownedBlobUrls, ownedResourceBlobUrls)
+          resource: await uploadDemoResource(request, options, uploadLog)
         }
       },
       async delete(resource: JWordMediaResource) {
-        releaseOwnedResourceUrl(resource, ownedBlobUrls, ownedResourceBlobUrls)
+        void resource
       }
     },
     commands,
@@ -84,12 +82,7 @@ export function createDemoMediaSupport(): DemoMediaSupport {
     media,
     hooks,
     destroy() {
-      for (const blobUrl of ownedBlobUrls) {
-        URL.revokeObjectURL(blobUrl)
-      }
-
-      ownedBlobUrls.clear()
-      ownedResourceBlobUrls.clear()
+      return
     }
   }
 }
@@ -112,14 +105,12 @@ function buildScenarioUrl(scenario: DemoMediaScenario): string {
 async function uploadDemoResource(
   request: JWordMediaUploadRequest,
   options: JWordMediaUploadOptions | undefined,
-  uploadLog: DemoMediaUploadLogEntry[],
-  ownedBlobUrls: Set<string>,
-  ownedResourceBlobUrls: Map<string, string>
+  uploadLog: DemoMediaUploadLogEntry[]
 ): Promise<JWordMediaResource> {
   await emitUploadProgress(options)
 
   if (request.source.kind === 'file') {
-    const source = createBlobMediaSource(request.source.file, ownedBlobUrls)
+    const source = await createFileDataUrlMediaSource(request.source.file)
     const sizeMetadata = await loadIntrinsicSizeMetadata(source.url)
     const resource = createDemoResource(
       request,
@@ -128,7 +119,6 @@ async function uploadDemoResource(
       sizeMetadata
     )
 
-    ownedResourceBlobUrls.set(resource.id, source.url)
     uploadLog.push(createUploadLogEntry(request, 'success'))
 
     return resource
@@ -194,15 +184,11 @@ function createUploadLogEntry(
   }
 }
 
-/** 创建文件上传成功后的 blob source。 */
-function createBlobMediaSource(file: JWordMediaUploadFile, ownedBlobUrls: Set<string>): JWordMediaSource {
-  const blobUrl = URL.createObjectURL(file as unknown as Blob)
-
-  ownedBlobUrls.add(blobUrl)
-
+/** 创建文件上传成功后的可持久化 dataUrl source。 */
+async function createFileDataUrlMediaSource(file: JWordMediaUploadFile): Promise<JWordMediaSource> {
   return {
-    kind: 'blobUrl',
-    url: blobUrl
+    kind: 'dataUrl',
+    url: await readFileAsDataUrl(file)
   }
 }
 
@@ -248,23 +234,6 @@ function createDemoResource(
     status: 'success',
     metadata
   }
-}
-
-/** 释放由 demo adapter 创建的 blob URL。 */
-function releaseOwnedResourceUrl(
-  resource: JWordMediaResource,
-  ownedBlobUrls: Set<string>,
-  ownedResourceBlobUrls: Map<string, string>
-): void {
-  const blobUrl = ownedResourceBlobUrls.get(resource.id)
-
-  if (blobUrl === undefined) {
-    return
-  }
-
-  URL.revokeObjectURL(blobUrl)
-  ownedResourceBlobUrls.delete(resource.id)
-  ownedBlobUrls.delete(blobUrl)
 }
 
 /** 从 URL 查询参数读取当前 demo 场景。 */
@@ -351,4 +320,16 @@ function loadImageIntrinsicSize(url: string): Promise<Readonly<{
     }
     image.src = url
   })
+}
+
+/** 把上传文件转换成 canonical snapshot 可持久化的 dataUrl。 */
+async function readFileAsDataUrl(file: JWordMediaUploadFile): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  let binary = ''
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+
+  return `data:${file.type || 'application/octet-stream'};base64,${window.btoa(binary)}`
 }

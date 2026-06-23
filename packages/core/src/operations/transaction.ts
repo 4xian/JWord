@@ -427,7 +427,42 @@ export interface Command {
  */
 export interface TransactionMetadata {
   readonly origin: string
+  readonly historyOrigin?: unknown
   readonly label?: string
+  readonly requestId?: string
+  readonly roomId?: string
+  readonly clientId?: string
+  readonly authorId?: string
+  readonly source?: TransactionDiagnosticSource
+  readonly snapshotId?: string
+  readonly versionId?: string
+  readonly recoverable?: boolean
+}
+
+/** Gate 6 事务诊断来源。 */
+export type TransactionDiagnosticSource =
+  | 'local'
+  | 'remote'
+  | 'system-recovery'
+  | 'version-restore'
+  | 'auto-inserter'
+
+/** 事务完成后对外可见的稳定诊断字段。 */
+export interface TransactionDiagnostic {
+  readonly commandName: string
+  readonly origin: string
+  readonly operationKinds: readonly OperationKind[]
+  readonly updateByteLength: number
+  readonly source: TransactionDiagnosticSource
+  readonly local: boolean
+  readonly remote: boolean
+  readonly requestId?: string
+  readonly roomId?: string
+  readonly clientId?: string
+  readonly authorId?: string
+  readonly snapshotId?: string
+  readonly versionId?: string
+  readonly recoverable?: boolean
 }
 
 /**
@@ -441,6 +476,7 @@ export interface TransactionResult {
   readonly operationKinds: readonly OperationKind[]
   readonly projection: DocumentProjection
   readonly dirty: boolean
+  readonly diagnostic: TransactionDiagnostic
 }
 
 /**
@@ -452,6 +488,7 @@ export interface TransactionEvent {
   readonly operationKinds: readonly OperationKind[]
   readonly projection: DocumentProjection
   readonly dirty: boolean
+  readonly diagnostic: TransactionDiagnostic
 }
 
 /**
@@ -467,6 +504,11 @@ export type TransactionListener = (event: TransactionEvent) => void
  */
 export type TransactionMutation = () => void
 
+/** 远端或恢复通道应用 Yjs update 的输入元数据。 */
+export interface TransactionUpdateMetadata extends TransactionMetadata {
+  readonly origin: 'remote-user' | 'system-recovery' | 'version-restore' | 'auto-inserter'
+}
+
 /**
  * 事务管线上下文。
  */
@@ -474,6 +516,7 @@ export interface TransactionPipeline {
   readonly doc: Y.Doc
   subscribe(listener: TransactionListener): () => void
   run(command: Command, metadata: TransactionMetadata): TransactionResult
+  applyUpdate(update: Uint8Array, metadata: TransactionUpdateMetadata): TransactionResult
   runMutation(
     commandName: string,
     metadata: TransactionMetadata,
@@ -524,11 +567,13 @@ export function createTransactionPipeline(
       const operations = [...command.operations]
       const operationKinds = operations.map((operation) => operation.kind)
       const metadataSnapshot = { ...metadata }
+      const stateBefore = Y.encodeStateVector(doc)
 
       doc.transact(() => {
         adapter.applyAll(operations)
-      }, metadataSnapshot.origin)
+      }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
 
+      const updateByteLength = readUpdateByteLength(doc, stateBefore)
       const result = {
         commandName: command.name,
         origin: metadataSnapshot.origin,
@@ -536,7 +581,32 @@ export function createTransactionPipeline(
         operations,
         operationKinds,
         projection: createDocumentProjection(doc),
-        dirty: operations.length > 0
+        dirty: operations.length > 0,
+        diagnostic: createTransactionDiagnostic(command.name, operationKinds, metadataSnapshot, updateByteLength)
+      }
+
+      notifyListeners(listeners, result)
+
+      return result
+    },
+    applyUpdate(update, metadata) {
+      validateTransactionName('applySyncUpdate', metadata)
+
+      const metadataSnapshot = { ...metadata }
+      const stateBefore = Y.encodeStateVector(doc)
+
+      Y.applyUpdate(doc, update, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+
+      const updateByteLength = readUpdateByteLength(doc, stateBefore)
+      const result = {
+        commandName: 'applySyncUpdate',
+        origin: metadataSnapshot.origin,
+        metadata: metadataSnapshot,
+        operations: [],
+        operationKinds: [],
+        projection: createDocumentProjection(doc),
+        dirty: updateByteLength > 0,
+        diagnostic: createTransactionDiagnostic('applySyncUpdate', [], metadataSnapshot, updateByteLength)
       }
 
       notifyListeners(listeners, result)
@@ -547,11 +617,13 @@ export function createTransactionPipeline(
       validateTransactionName(commandName, metadata)
 
       const metadataSnapshot = { ...metadata }
+      const stateBefore = Y.encodeStateVector(doc)
 
       doc.transact(() => {
         mutation()
-      }, metadataSnapshot.origin)
+      }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
 
+      const updateByteLength = readUpdateByteLength(doc, stateBefore)
       const result = {
         commandName,
         origin: metadataSnapshot.origin,
@@ -559,7 +631,8 @@ export function createTransactionPipeline(
         operations: [],
         operationKinds: [],
         projection: createDocumentProjection(doc),
-        dirty: true
+        dirty: true,
+        diagnostic: createTransactionDiagnostic(commandName, [], metadataSnapshot, updateByteLength)
       }
 
       notifyListeners(listeners, result)
@@ -567,6 +640,77 @@ export function createTransactionPipeline(
       return result
     }
   }
+}
+
+function readUpdateByteLength(doc: Y.Doc, stateBefore: Uint8Array): number {
+  const stateAfter = Y.encodeStateVector(doc)
+
+  if (areUint8ArraysEqual(stateBefore, stateAfter)) {
+    return 0
+  }
+
+  return Y.encodeStateAsUpdate(doc, stateBefore).byteLength
+}
+
+function areUint8ArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) {
+    return false
+  }
+
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function createTransactionDiagnostic(
+  commandName: string,
+  operationKinds: readonly OperationKind[],
+  metadata: TransactionMetadata,
+  updateByteLength: number
+): TransactionDiagnostic {
+  const source = resolveTransactionDiagnosticSource(metadata)
+
+  return {
+    commandName,
+    origin: metadata.origin,
+    operationKinds,
+    updateByteLength,
+    source,
+    local: source === 'local',
+    remote: source === 'remote',
+    ...(metadata.requestId === undefined ? {} : { requestId: metadata.requestId }),
+    ...(metadata.roomId === undefined ? {} : { roomId: metadata.roomId }),
+    ...(metadata.clientId === undefined ? {} : { clientId: metadata.clientId }),
+    ...(metadata.authorId === undefined ? {} : { authorId: metadata.authorId }),
+    ...(metadata.snapshotId === undefined ? {} : { snapshotId: metadata.snapshotId }),
+    ...(metadata.versionId === undefined ? {} : { versionId: metadata.versionId }),
+    ...(metadata.recoverable === undefined ? {} : { recoverable: metadata.recoverable })
+  }
+}
+
+function resolveTransactionDiagnosticSource(metadata: TransactionMetadata): TransactionDiagnosticSource {
+  if (metadata.source !== undefined) {
+    return metadata.source
+  }
+
+  if (metadata.origin === 'remote-user') {
+    return 'remote'
+  }
+  if (metadata.origin === 'system-recovery') {
+    return 'system-recovery'
+  }
+  if (metadata.origin === 'version-restore') {
+    return 'version-restore'
+  }
+  if (metadata.origin === 'auto-inserter') {
+    return 'auto-inserter'
+  }
+
+  return 'local'
 }
 
 function validateTransactionInput(command: Command, metadata: TransactionMetadata): void {
@@ -600,7 +744,8 @@ function notifyListeners(
     origin: result.origin,
     operationKinds: result.operationKinds,
     projection: result.projection,
-    dirty: result.dirty
+    dirty: result.dirty,
+    diagnostic: result.diagnostic
   }
 
   for (const listener of listeners) {

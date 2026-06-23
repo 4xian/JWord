@@ -15,6 +15,7 @@ import { createJWordUi } from '@4xian/jword-ui'
 
 import { createDemoControls, loadInitialDemoText } from './demo-controls'
 import { createDemoMediaSupport } from './demo-media'
+import { createNativeDemoPersistence } from './demo-native'
 import { createDemoTableSupport } from './demo-table'
 import type { JWordDemoRevisionInput } from './vite-env'
 import '@4xian/jword-ui/styles.css'
@@ -115,6 +116,13 @@ const demoControls = createDemoControls({
     jwordUi.refresh()
   }
 })
+const nativePersistence = createNativeDemoPersistence({
+  editor,
+  host: demoControlsHost,
+  refreshUi: () => {
+    jwordUi.refresh()
+  }
+})
 
 window.__jwordDemo = Object.freeze({
   readonly: readonlyMode,
@@ -128,6 +136,7 @@ window.__jwordDemo = Object.freeze({
   comments: {
     readThreadCount: () => editor.getProjection().document.comments?.length ?? 0
   },
+  native: nativePersistence,
   link: {
     /** 为只读浏览器回归预置一段链接文本。 */
     seedFirstRunLink(target: string) {
@@ -216,6 +225,7 @@ window.addEventListener(
   'beforeunload',
   () => {
     // demoControls.destroy()
+    nativePersistence.destroy()
     demoMedia.destroy()
     demoTable.destroy()
     jwordUi.destroy()

@@ -18,9 +18,11 @@
     }
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
+  "publishConfig": {
+    "access": "restricted"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run --root ../.. packages/pdf/test",
@@ -28,6 +30,7 @@
   },
   "dependencies": {
     "@4xian/jword-core": "workspace:*",
+    "@4xian/jword-license": "workspace:*",
     "fontkit": "2.0.4",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "4.10.38"

@@ -43,6 +43,12 @@ export interface JWordDemoRevisionInput {
   readonly summary: string
 }
 
+export interface JWordDemoNativeWarning {
+  readonly code?: string
+  readonly message?: string
+  readonly path?: string
+}
+
 declare global {
   interface Window {
     __jwordDemo?: Readonly<{
@@ -76,6 +82,13 @@ declare global {
       }
       readonly comments: {
         readThreadCount(): number
+      }
+      readonly native: {
+        save(): Promise<Blob | null>
+        openSelectedFile(): Promise<boolean>
+        readStatus(): string
+        readWarnings(): readonly JWordDemoNativeWarning[]
+        readLastSavedByteLength(): number | null
       }
       readonly link: {
         seedFirstRunLink(target: string): boolean

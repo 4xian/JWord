@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>JWord Collab Gate 6 Demo</title>
+  </head>
+  <body>
+    <main id="jword-collab-app" class="jw-collab-demo" data-jword-collab-demo>
+      <section class="jw-collab-demo__workspace" aria-label="JWord collaboration smoke workspace">
+        <section class="jw-collab-demo__topbar" aria-label="Collaboration smoke controls">
+          <div class="jw-collab-demo__status-group">
+            <span class="jw-collab-demo__label">连接状态</span>
+            <strong id="jword-collab-status" class="jw-collab-demo__status" data-jword-collab-status>
+              mounting
+            </strong>
+          </div>
+          <button id="jword-collab-disconnect" class="jw-collab-demo__button" type="button">
+            模拟断开
+          </button>
+          <button id="jword-collab-reconnect" class="jw-collab-demo__button" type="button">
+            模拟重连
+          </button>
+          <button id="jword-collab-auto-start" class="jw-collab-demo__button jw-collab-demo__button--primary" type="button">
+            自动插入
+          </button>
+          <button id="jword-collab-auto-abort" class="jw-collab-demo__button" type="button">
+            停止插入
+          </button>
+        </section>
+        <section class="jw-collab-demo__editor-shell" aria-label="JWord collaboration editor">
+          <div id="jword-collab-editor" class="jw-collab-demo__editor" data-jword-collab-editor></div>
+          <div id="jword-collab-live-region" class="jw-collab-demo__live-region" aria-live="polite"></div>
+          <div id="jword-collab-assistive-mirror" class="jw-collab-demo__assistive-mirror"></div>
+        </section>
+        <section class="jw-collab-demo__panels" aria-label="Collaboration debug panels">
+          <article class="jw-collab-demo__panel">
+            <h2 class="jw-collab-demo__title">Awareness</h2>
+            <div id="jword-collab-remote-presence" class="jw-collab-demo__presence"></div>
+            <pre id="jword-collab-awareness" class="jw-collab-demo__pre"></pre>
+          </article>
+          <article class="jw-collab-demo__panel">
+            <h2 class="jw-collab-demo__title">Offline</h2>
+            <pre id="jword-collab-offline" class="jw-collab-demo__pre"></pre>
+          </article>
+          <article class="jw-collab-demo__panel">
+            <h2 class="jw-collab-demo__title">Version History</h2>
+            <div class="jw-collab-demo__history-controls">
+              <select id="jword-collab-history-select" class="jw-collab-demo__select" aria-label="选择历史版本"></select>
+              <button id="jword-collab-history-preview" class="jw-collab-demo__button" type="button">
+                预览
+              </button>
+              <button id="jword-collab-history-restore" class="jw-collab-demo__button" type="button">
+                恢复
+              </button>
+            </div>
+            <output id="jword-collab-history-preview-text" class="jw-collab-demo__preview" aria-live="polite"></output>
+            <pre id="jword-collab-history" class="jw-collab-demo__pre"></pre>
+          </article>
+          <article class="jw-collab-demo__panel">
+            <h2 class="jw-collab-demo__title">Auto Insert</h2>
+            <pre id="jword-collab-auto" class="jw-collab-demo__pre"></pre>
+          </article>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

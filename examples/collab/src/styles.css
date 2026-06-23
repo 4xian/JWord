@@ -1,0 +1,250 @@
+/**
+ * 职责：定义 Gate 6 collab smoke demo 的最小页面样式。
+ * 边界：只服务 examples/collab，不覆盖 core 或 UI package 样式。
+ * 协作：index.html 中的 data-jword-collab-demo 页面结构。
+ * 约束：只使用 flex 与 margin 控制布局，不使用 grid 或 gap。
+ * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ */
+
+:root {
+  color: #17202a;
+  background: #f4f7f9;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button {
+  font: inherit;
+}
+
+.jw-collab-demo {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.jw-collab-demo__workspace {
+  display: flex;
+  flex-direction: column;
+  max-width: 1180px;
+  min-height: calc(100vh - 48px);
+  margin: 0 auto;
+}
+
+.jw-collab-demo__topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 26px rgb(28 47 74 / 6%);
+}
+
+.jw-collab-demo__topbar > * {
+  flex: 0 0 auto;
+  margin-top: 8px;
+}
+
+.jw-collab-demo__topbar > * + * {
+  margin-left: 8px;
+}
+
+.jw-collab-demo__status-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 128px;
+}
+
+.jw-collab-demo__label {
+  margin-bottom: 4px;
+  color: #425163;
+  font-size: 12px;
+}
+
+.jw-collab-demo__status {
+  color: #17324d;
+  font-size: 16px;
+}
+
+.jw-collab-demo__button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #d0d8e2;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #243140;
+  cursor: pointer;
+}
+
+.jw-collab-demo__button:hover:enabled {
+  border-color: #9fb0c6;
+  background: #f6f9fc;
+}
+
+.jw-collab-demo__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.jw-collab-demo__button--primary {
+  border-color: #286fd6;
+  background: #286fd6;
+  color: #f8fbff;
+}
+
+.jw-collab-demo__editor-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.jw-collab-demo__editor {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 280px;
+  overflow: hidden;
+}
+
+.jw-collab-demo__live-region,
+.jw-collab-demo__assistive-mirror {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.jw-collab-demo__title {
+  margin: 0 0 8px;
+  color: #243140;
+  font-size: 14px;
+}
+
+.jw-collab-demo__panels {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  margin-left: -12px;
+}
+
+.jw-collab-demo__panel {
+  flex: 1 1 240px;
+  min-width: 240px;
+  min-height: 190px;
+  margin-left: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.jw-collab-demo__pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  color: #344457;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.jw-collab-demo__presence {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.jw-collab-demo__presence-item {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.jw-collab-demo__presence-cursor,
+.jw-collab-demo__presence-selection {
+  min-height: 24px;
+  margin-right: 8px;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.jw-collab-demo__presence-cursor {
+  border-left: 3px solid;
+  background: #ffffff;
+  color: #243140;
+}
+
+.jw-collab-demo__presence-selection {
+  color: #ffffff;
+}
+
+.jw-collab-demo__history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  margin-left: -8px;
+}
+
+.jw-collab-demo__history-controls > * {
+  margin-left: 8px;
+  margin-bottom: 8px;
+}
+
+.jw-collab-demo__select {
+  min-height: 34px;
+  min-width: 160px;
+  border: 1px solid #d0d8e2;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #243140;
+}
+
+.jw-collab-demo__preview {
+  display: block;
+  min-height: 40px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid #d0d8e2;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #243140;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 760px) {
+  .jw-collab-demo {
+    padding: 12px;
+  }
+
+  .jw-collab-demo__workspace {
+    min-height: calc(100vh - 24px);
+  }
+
+  .jw-collab-demo__panel {
+    flex-basis: 100%;
+  }
+}

@@ -61,6 +61,15 @@ interface CreateTableControllerOptions {
   }
 }
 
+/** 读取 editor.mount 创建的内部定位宿主。 */
+function resolveEditorShell(editorHost: HTMLElement): HTMLElement {
+  if (editorHost.matches('[data-jword-editor]')) {
+    return editorHost
+  }
+
+  return editorHost.querySelector<HTMLElement>('[data-jword-editor]') ?? editorHost
+}
+
 interface TableControllerHandle {
   readonly elements: JWordTablePanelElements
   refresh(): void
@@ -92,8 +101,9 @@ export function createTableController(options: CreateTableControllerOptions): Ta
   const liveRegion = options.assistive.liveRegion
   const signalController = new AbortController()
   const hiddenTextarea = requireHiddenTextarea(options.editorHost)
+  const overlayHost = resolveEditorShell(options.editorHost)
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
-  const contextMenu = createTableContextMenu(options.editorHost)
+  const contextMenu = createTableContextMenu(overlayHost)
   const resizeHandlesLayer = createResizeHandlesLayer(options.editorHost)
   const resizePreview = createResizePreviewLine(options.editorHost)
   let insertRows = 2
@@ -579,7 +589,7 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     helperAnchorsVisible = true
     quickToolsVisible = false
     contextMenuTarget = hit.target
-    const hostRect = options.editorHost.getBoundingClientRect()
+    const hostRect = overlayHost.getBoundingClientRect()
     contextMenu.root.hidden = false
     contextMenu.root.style.left = `${event.clientX - hostRect.left}px`
     contextMenu.root.style.top = `${event.clientY - hostRect.top}px`

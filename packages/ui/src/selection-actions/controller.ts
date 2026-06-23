@@ -37,9 +37,10 @@ export function createSelectionActionsController(
   const editorHost = options.editorHost
   const colorFormat = options.colorFormat
   const insertActions = options.insertActions
-  const dom = createSelectionActionsDom(editorHost)
   const hiddenTextarea = requireHiddenTextarea(editorHost)
   const canvasContainer = requireCanvasContainer(editorHost)
+  const overlayHost = resolveEditorShell(editorHost)
+  const dom = createSelectionActionsDom(overlayHost)
   const signalController = new AbortController()
   const liveRegion = options.assistive.liveRegion
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
@@ -126,7 +127,7 @@ export function createSelectionActionsController(
 
     renderSelectionActionsDom(dom, buildSelectionActionsViewState({
       editor,
-      editorHost,
+      editorHost: overlayHost,
       interactiveFocus,
       dismissedSelectionKey,
       contextSelection: stableContextSelection.selection,
@@ -1030,6 +1031,15 @@ function requireCanvasContainer(editorHost: HTMLElement): HTMLElement {
   }
 
   return container
+}
+
+/** 读取 editor.mount 创建的内部定位宿主。 */
+function resolveEditorShell(editorHost: HTMLElement): HTMLElement {
+  if (editorHost.matches('[data-jword-editor]')) {
+    return editorHost
+  }
+
+  return editorHost.querySelector<HTMLElement>('[data-jword-editor]') ?? editorHost
 }
 
 /** 创建可被 facade runtime 识别的最小 clipboardData 对象。 */

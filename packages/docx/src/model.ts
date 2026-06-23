@@ -28,7 +28,7 @@ import type {
   DocxImportRun,
   DocxImportTable,
   DocxImportTableCell
-} from './index'
+} from './index.js'
 
 /** 把 DOCX import 中间模型转换为 core editor 可加载的文档模型。 */
 export function convertDocxImportDocumentToCoreDocument(document: DocxImportDocument): Document {

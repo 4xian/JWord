@@ -9,8 +9,8 @@
 import type {
   DocxBinaryInput,
   ImportDocxOptions
-} from './index'
-import type { DocxRoundtripDiffResult } from './roundtrip'
+} from './index.js'
+import type { DocxRoundtripDiffResult } from './roundtrip.js'
 
 export type DocxCompatibilityResult = 'pass' | 'warn' | 'fail' | 'blocked' | 'pending'
 
@@ -87,8 +87,8 @@ export async function createDocxCompatibilityReport(
   options: CreateDocxCompatibilityReportOptions
 ): Promise<DocxCompatibilityReport> {
   const [{ inspectDocxPackage }, { diffDocxRoundtrip }] = await Promise.all([
-    import('./index'),
-    import('./roundtrip')
+    import('./index.js'),
+    import('./roundtrip.js')
   ])
   const packageGraph = await inspectDocxPackage(input, options)
   const roundtrip = await diffDocxRoundtrip(input, options)

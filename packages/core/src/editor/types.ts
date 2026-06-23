@@ -8,15 +8,18 @@
 import type { CanvasLike, createCanvasPool } from '../canvas/pool'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
 import type { Document, ModelProperties, ParagraphList } from '../model/types'
-import type { HistoryOperationResult } from '../operations/history'
+import type { HistoryOperationResult, HistoryScope } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
 import type { DocumentLayout, LayoutBox, LayoutOptions, LayoutRect } from '../layout/runtime'
 import type { AnchorRef, RangeRef, TextRangeRecord } from '../model/position'
 import type { DocumentProjection } from '../model/projection'
 import type { SelectionState } from '../model/selection'
-import type { Command, TextPosition, TextRange, TransactionEvent, TransactionResult } from '../operations/transaction'
+import type { Command, TextPosition, TextRange, TransactionEvent, TransactionMetadata, TransactionResult, TransactionUpdateMetadata } from '../operations/transaction'
 import type { Resource, ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
 import type { CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
+import type { EditorAnchorSnapshot, EditorLocationQuery, EditorLocationTarget, EditorRangeSnapshot, EditorRangeSnapshotInput, EditorResolvedLocation, EditorScrollToLocationOptions, EditorSelectionSnapshot, EditorTextQueryResult } from './location-types'
+
+export type { HistoryScope } from '../operations/history'
 
 export type InitialFocusPosition = 'start' | 'end'
 
@@ -180,6 +183,27 @@ export interface EditorCommandOptions {
   readonly origin?: string
   /** 事务标签，会进入 transaction metadata。 */
   readonly label?: string
+  /** Gate 6 协同、自动插入或恢复请求 ID。 */
+  readonly requestId?: string
+  /** Gate 6 协同 room ID。 */
+  readonly roomId?: string
+  /** Gate 6 协同 client ID。 */
+  readonly clientId?: string
+  /** Gate 6 作者 ID。 */
+  readonly authorId?: string
+  /** Gate 6 snapshot ID。 */
+  readonly snapshotId?: string
+  /** Gate 6 version ID。 */
+  readonly versionId?: string
+  /** 当前诊断是否可恢复。 */
+  readonly recoverable?: boolean
+  /**
+   * 命令要进入的独立历史作用域。
+   *
+   * @remarks
+   * 未提供时只按 origin 进入默认用户 undo；remote 和 auto-inserter 默认不进入用户 undo。
+   */
+  readonly historyScope?: HistoryScope
   /**
    * 命令成功后要落到 facade runtime 的选择区。
    *
@@ -187,6 +211,18 @@ export interface EditorCommandOptions {
    * 该值不写入文档模型，只进入 history restore metadata。
    */
   readonly selectionAfter?: SelectionState | null
+}
+
+/** 编码当前 Y.Doc update 时使用的可选输入。 */
+export interface EditorSyncUpdateInput {
+  /** 可选 state vector；用于生成相对调用方状态的增量 update。 */
+  readonly stateVector?: Uint8Array
+}
+
+/** 受控应用远端或恢复 update 时使用的公开选项。 */
+export interface EditorApplyUpdateOptions extends Omit<TransactionUpdateMetadata, 'origin'> {
+  /** 受控 update origin，只允许 Gate 6 三类非本地来源。 */
+  readonly origin: TransactionUpdateMetadata['origin']
 }
 
 /**
@@ -319,6 +355,54 @@ export interface Editor {
    * ```
    */
   createTextAnchor(input: EditorTextAnchorInput): AnchorRef
+
+  /**
+   * 创建公开 anchor 快照。
+   *
+   * @param input 目标 section、block、run 和 grapheme 边界。
+   * @returns JSON 兼容 anchor 快照。
+   */
+  createAnchorSnapshot(input: EditorTextAnchorInput): EditorAnchorSnapshot
+
+  /**
+   * 创建公开 range 快照。
+   *
+   * @param input 范围起点和焦点。
+   * @returns JSON 兼容 range 快照。
+   */
+  createRangeSnapshot(input: EditorRangeSnapshotInput): EditorRangeSnapshot
+
+  /**
+   * 读取当前选择区的公开快照。
+   *
+   * @returns 当前 selection 快照；没有选择区时返回 null。
+   */
+  readSelectionSnapshot(): EditorSelectionSnapshot | null
+
+  /**
+   * 按文本、块、标题、批注或 range 快照查询中立文本位置。
+   *
+   * @param query 查询输入。
+   * @returns JSON 兼容位置结果列表。
+   */
+  findTextLocations(query: EditorLocationQuery): readonly EditorTextQueryResult[]
+
+  /**
+   * 把公开 location 输入解析成当前文档中的稳定纯数据位置。
+   *
+   * @param input 公开文本位置、anchor 快照、range 快照、selection 快照或 query 结果。
+   * @returns 解析后的 JSON 兼容位置；无法解析时返回 null。
+   */
+  resolveLocation(input: EditorLocationTarget): EditorResolvedLocation | null
+
+  /**
+   * 把公开 location 滚动到已挂载编辑器视口。
+   *
+   * @param input 公开文本位置、anchor 快照、range 快照、selection 快照或 query 结果。
+   * @param options 可选滚动行为。
+   * @returns 是否成功滚动到目标位置。
+   */
+  scrollToLocation(input: EditorLocationTarget, options?: EditorScrollToLocationOptions): boolean
 
   /**
    * 把运行时 AnchorRef 解析成可序列化文本位置。
@@ -605,6 +689,27 @@ export interface Editor {
   executeCommand(command: Command, options?: EditorCommandOptions): TransactionResult
 
   /**
+   * 编码当前 Y.Doc 的二进制更新。
+   *
+   * @param input 可选状态向量。
+   * @returns Yjs 二进制更新；调用方可传给协同提供方、更新日志或另一个编辑器。
+   * @remarks
+   * 无副作用，不暴露 Y.Doc、store、client clock 或内部结构。
+   */
+  encodeSyncUpdate(input?: EditorSyncUpdateInput): Uint8Array
+
+  /**
+   * 受控应用远端、系统恢复或版本恢复更新。
+   *
+   * @param update Yjs 二进制更新。
+   * @param options 来源与 Gate 6 诊断字段。
+   * @returns 事务管线结果。
+   * @remarks
+   * 副作用：经同一 Y.Doc 真源刷新投影、布局和渲染；协同提供方不应直接操作 DOM 或布局缓存。
+   */
+  applySyncUpdate(update: Uint8Array, options: EditorApplyUpdateOptions): TransactionResult
+
+  /**
    * 粘贴已清洗的结构化富文本片段。
    *
    * @param fragment UI 或宿主已经完成 HTML 清洗后的结构化片段。
@@ -621,7 +726,7 @@ export interface Editor {
    * @remarks
    * 副作用：通过 Y.UndoManager 回滚 Y.Doc；远端或自动插入 origin 默认不进入用户 undo 栈。
    */
-  undo(): HistoryOperationResult
+  undo(scope?: HistoryScope): HistoryOperationResult
 
   /**
    * 重做最近一次撤销的本地用户历史操作。
@@ -630,21 +735,21 @@ export interface Editor {
    * @remarks
    * 副作用：通过 Y.UndoManager 恢复 Y.Doc。
    */
-  redo(): HistoryOperationResult
+  redo(scope?: HistoryScope): HistoryOperationResult
 
   /**
    * 判断当前是否存在可撤销的用户历史项。
    *
    * @returns 是否可撤销。
    */
-  canUndo(): boolean
+  canUndo(scope?: HistoryScope): boolean
 
   /**
    * 判断当前是否存在可重做的用户历史项。
    *
    * @returns 是否可重做。
    */
-  canRedo(): boolean
+  canRedo(scope?: HistoryScope): boolean
 
   /**
    * 监听 facade 事件。

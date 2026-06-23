@@ -11,6 +11,7 @@
   "dependencies": {
     "@4xian/jword-core": "workspace:*",
     "@4xian/jword-docx": "workspace:*",
+    "@4xian/jword-license": "workspace:*",
     "@4xian/jword-pdf": "workspace:*",
     "@4xian/jword-ui": "workspace:*"
   },

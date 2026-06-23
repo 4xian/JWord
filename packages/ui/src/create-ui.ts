@@ -1,7 +1,7 @@
 /**
  * 职责：提供 @4xian/jword-ui 的单入口装配函数。
  * 边界：只组装 toolbar controller、media panel 与 assistive 子模块，不实现 demo 场景逻辑。
- * 协作模块：index 公开此入口，宿主把 editor/toolbarHost/assistive host 传给这里。
+ * 协作模块：index 公开此入口，宿主把 editor 和可选 toolbar/assistive host 传给这里。
  * 性能/安全约束：入口保持轻量，无顶层 DOM 副作用，重复调用由宿主自行管理生命周期。
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md#5-4xianjword-ui-的目标公开面。
  */
@@ -45,22 +45,31 @@ import { createHeadingOutlineController } from './heading/controller'
 import { createLinkController } from './link/controller'
 import type { JWordLinkDraft, LinkControllerHandle } from './link/types'
 import { createMediaController } from './media/controller'
+import { createCoreMediaCommandAdapter } from './media/core-command-adapter'
 import { createImageSelectionController } from './media/image-selection-controller'
 import { createPasteController } from './paste/controller'
 import { createJWordInteractionGuard } from './readonly/interaction-guard'
 import type { JWordInteractionGuard } from './readonly/interaction-guard'
 import { createRevisionController } from './revisions/controller'
 import { createSelectionActionsController } from './selection-actions/controller'
+import { createCoreTableCommandAdapter } from './table/core-command-adapter'
 import { createTableController } from './table/controller'
 import { createToolbarController } from './toolbar/controller'
 import type {
   CreateJWordUiOptions,
   JWordCommentsOptions,
+  JWordMediaOptions,
   JWordReadonlyOptions,
+  JWordTableOptions,
   JWordToolbarControlElement,
   JWordToolbarToolId,
   JWordUiInstance
 } from './types'
+
+interface ResolvedToolbarMount {
+  readonly host: HTMLElement
+  cleanup(): void
+}
 
 interface ResolvedCommentsMount {
   readonly host: HTMLElement
@@ -89,8 +98,62 @@ interface LinkRunTarget {
   readonly draft: JWordLinkDraft
 }
 
+/** 解析 toolbar 挂载点，未显式传入时自动放进已挂载的 editor 容器。 */
+function resolveToolbarMount(options: CreateJWordUiOptions): ResolvedToolbarMount {
+  if (options.toolbarHost !== undefined) {
+    return {
+      host: options.toolbarHost,
+      cleanup(): void {}
+    }
+  }
+
+  if (options.editorHost === undefined) {
+    throw new Error('createJWordUi 需要 toolbarHost，或先挂载 editorHost 后交给 SDK 自动创建。')
+  }
+
+  const editorHost = options.editorHost
+  const editorShell = resolveEditorShell(editorHost)
+
+  if (editorShell === null) {
+    throw new Error('createJWordUi 自动创建 toolbarHost 需要已挂载的 editor。')
+  }
+
+  const ownerDocument = editorHost.ownerDocument
+  const host = ownerDocument.createElement('div')
+  const previousEditorDisplay = editorHost.style.display
+  const previousEditorFlexDirection = editorHost.style.flexDirection
+  const previousShellFlex = editorShell.style.flex
+  const previousShellHeight = editorShell.style.height
+  const previousShellMinHeight = editorShell.style.minHeight
+
+  host.setAttribute('data-jword-toolbar-host', 'true')
+  host.style.flex = '0 0 auto'
+  host.style.width = '100%'
+  host.style.marginBottom = '8px'
+  editorHost.style.display = 'flex'
+  editorHost.style.flexDirection = 'column'
+  editorShell.style.flex = '1 1 auto'
+  editorShell.style.height = 'auto'
+  editorShell.style.minHeight = '0'
+  editorHost.insertBefore(host, editorShell)
+
+  return {
+    host,
+    cleanup(): void {
+      host.remove()
+      editorHost.style.display = previousEditorDisplay
+      editorHost.style.flexDirection = previousEditorFlexDirection
+      editorShell.style.flex = previousShellFlex
+      editorShell.style.height = previousShellHeight
+      editorShell.style.minHeight = previousShellMinHeight
+    }
+  }
+}
+
 /** 创建并挂载最小 JWord 官方 UI。 */
 export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
+  const toolbarMount = resolveToolbarMount(options)
+  const toolbarHost = toolbarMount.host
   const liveRegion = createLiveRegion({
     host: options.liveRegionHost ?? null
   })
@@ -124,6 +187,9 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   const toolbarEntryAvailable = options.toolbar !== false
   const readonlyEditingBlocked = readonlyOptions.enabled === true
   const readonlyNavigationAllowed = readonlyOptions.allowNavigation !== false
+  const resolvedMedia = resolveMediaOptions(options.media)
+  const mediaDisabled = options.media === undefined
+  const resolvedTable = resolveTableOptions(options.table)
 
   /** 从当前选区打开批注草稿。 */
   function openCommentFromSelection(selection: SelectionState | null = options.editor.getSelection()): void {
@@ -238,6 +304,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
 
   const toolbar = createToolbarController({
     ...options,
+    toolbarHost,
     assistive: {
       liveRegion,
       textMirror
@@ -278,32 +345,33 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   })
   const mountedEditorHost = options.editorHost
   const interactionGuard = createJWordInteractionGuard({
-    editorHost: mountedEditorHost ?? options.toolbarHost,
-    toolbarHost: options.toolbarHost,
+    editorHost: mountedEditorHost ?? toolbarHost,
+    toolbarHost,
     controls: toolbar.elements.controls,
     readonly: readonlyOptions,
     assistive: {
       liveRegion
     }
   })
-  const media = options.media === undefined || toolbar.mediaHost === null
+  const media = toolbar.mediaHost === null
     ? null
     : createMediaController({
       editor: options.editor,
       host: toolbar.mediaHost,
-      media: options.media,
+      media: resolvedMedia,
+      disabled: mediaDisabled,
       readonly: options.readonly,
       assistive: {
         liveRegion
       }
     })
-  const table = options.table === undefined || toolbar.tableHost === null
+  const table = toolbar.tableHost === null
     ? null
     : createTableController({
       editor: options.editor,
       toolbarHost: toolbar.tableHost,
-      editorHost: options.editorHost ?? options.toolbarHost,
-      table: options.table,
+      editorHost: options.editorHost ?? toolbarHost,
+      table: resolvedTable,
       readonly: options.readonly,
       assistive: {
         liveRegion
@@ -312,7 +380,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   const link = options.link === undefined
     ? null
     : createLinkController({
-      host: options.link.host ?? options.editorHost ?? toolbar.linkHost ?? options.toolbarHost,
+      host: options.link.host ?? options.editorHost ?? toolbar.linkHost ?? toolbarHost,
       viewportHost: options.editorHost,
       readonly: options.readonly,
       policy: options.link.policy,
@@ -373,7 +441,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     && toolbarEntryAvailable
     && !readonlyEditingBlocked
   const headingOutlineMount = shouldCreateHeadingOutline
-    ? resolveHeadingOutlineMount(options.headingOutline, editorHost, options.toolbarHost)
+    ? resolveHeadingOutlineMount(options.headingOutline, editorHost, toolbarHost)
     : null
   const linkOverlay = link === null || editorHost === undefined
     ? null
@@ -387,7 +455,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     ? null
     : createHeaderFooterController({
       editor: options.editor,
-      host: toolbar.panelHost ?? options.headerFooter.host,
+      host: toolbar.panelHost ?? options.headerFooter.host ?? toolbarHost,
       readonly: options.readonly,
       announce(message): void {
         liveRegion.announce(message)
@@ -430,7 +498,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     ? null
     : createFindReplaceController({
       editor: options.editor,
-      host: toolbar.panelHost ?? options.findReplace.host,
+      host: toolbar.panelHost ?? options.findReplace.host ?? toolbarHost,
       readonly: options.readonly,
       ...(options.editorHost === undefined ? {} : { editorHost: options.editorHost }),
       scrollToRange(range): void {
@@ -451,7 +519,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     ? null
     : createRevisionController({
       editor: options.editor,
-      host: toolbar.panelHost ?? options.revisions.host,
+      host: toolbar.panelHost ?? options.revisions.host ?? toolbarHost,
       announce(message): void {
         liveRegion.announce(message)
       }
@@ -575,7 +643,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       editor: options.editor,
       editorHost: options.editorHost,
       readonly: options.readonly,
-      commands: options.media?.commands
+      commands: resolvedMedia.commands
     })
   const paste = mountedEditorHost === undefined
     ? null
@@ -659,8 +727,45 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       media?.destroy()
       interactionGuard.destroy()
       toolbar.destroy()
+      toolbarMount.cleanup()
     }
   }
+}
+
+/** 解析图片工具配置；宿主未提供上传适配器时保留禁用入口。 */
+function resolveMediaOptions(media: JWordMediaOptions | undefined): JWordMediaOptions {
+  if (media !== undefined) {
+    return media
+  }
+
+  return Object.freeze({
+    title: '图片',
+    description: '图片工具需要宿主提供上传适配器；未配置时入口保持禁用。',
+    adapter: {
+      /** 未配置上传适配器时兜底阻断上传。 */
+      async upload() {
+        throw new Error('图片上传适配器未配置。')
+      },
+      /** 未配置上传适配器时删除动作无外部资源可清理。 */
+      async delete() {
+        return
+      }
+    },
+    commands: createCoreMediaCommandAdapter()
+  } satisfies JWordMediaOptions)
+}
+
+/** 解析表格工具配置；默认使用 core 表格命令适配器。 */
+function resolveTableOptions(table: JWordTableOptions | undefined): JWordTableOptions {
+  if (table !== undefined) {
+    return table
+  }
+
+  return Object.freeze({
+    title: '表格',
+    description: '默认表格工具使用 core 表格命令适配器。',
+    commands: createCoreTableCommandAdapter()
+  } satisfies JWordTableOptions)
 }
 
 /** 解析目录挂载点，默认放到已挂载的 jw-editor 内。 */
@@ -677,29 +782,30 @@ function resolveHeadingOutlineMount(
     ? null
     : resolveEditorShell(editorHost)
 
+  const host = options.host ?? toolbarHost
+
   if (editorShell === null) {
     return {
-      host: options.host,
+      host,
       cleanup(): void {}
     }
   }
 
-  if (options.host === toolbarHost) {
-    const host = editorShell.ownerDocument.createElement('div')
+  if (host === toolbarHost) {
+    const defaultHost = editorShell.ownerDocument.createElement('div')
 
-    host.className = 'jw-heading-outline-host'
-    host.setAttribute('data-jword-heading-outline-host', 'true')
-    editorShell.append(host)
+    defaultHost.className = 'jw-heading-outline-host'
+    defaultHost.setAttribute('data-jword-heading-outline-host', 'true')
+    editorShell.append(defaultHost)
 
     return {
-      host,
+      host: defaultHost,
       cleanup(): void {
-        host.remove()
+        defaultHost.remove()
       }
     }
   }
 
-  const host = options.host
   const previousParent = host.parentNode
   const previousNextSibling = host.nextSibling
 

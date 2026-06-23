@@ -26,16 +26,14 @@ import {
   buildSetTextColorCommand,
   buildSetUnderlineCommand
 } from '../operations/command-builders'
-import { createCanvasPool } from '../canvas/pool'
 import { createDocumentProjection } from '../model/projection'
-import { createMountedCanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 import { countGraphemes } from '../shared/grapheme'
 import { createJWordError } from '../shared/errors'
 import { createSelectionFormattingState } from '../model/formatting-state'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
 import type { Block, ParagraphList, Run } from '../model/types'
-import { DEFAULT_HISTORY_ORIGIN } from '../operations/history'
-import type { HistoryOperationResult } from '../operations/history'
+import { DEFAULT_HISTORY_ORIGIN, readHistoryScopeTransactionOrigin } from '../operations/history'
+import type { HistoryOperationResult, HistoryScope } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
 import { getCaretRect as getLayoutCaretRect, getSelectionRects as getLayoutSelectionRects, hitTestDocumentLayout, layoutDocument } from '../layout/runtime'
 import type { DocumentLayout, LayoutDirtyRange, LayoutRect } from '../layout/runtime'
@@ -47,14 +45,12 @@ import type { SelectionState } from '../model/selection'
 import { collectSelectionTargets } from '../model/selection-targets'
 import type { Command, TextPosition, TransactionMetadata, TransactionResult } from '../operations/transaction'
 import { DOCUMENT_CREATE_ORIGIN, DOCUMENT_MODEL_LOAD_ORIGIN, FIXTURE_LOAD_ORIGIN } from './constants'
-import { createCanvasElement } from './rendering'
-import { createHiddenTextareaElement, createLiveRegionElement, createTextMirrorElement, focusHiddenTextarea } from './dom'
 import { findRunText, locateCommentThreadRange, readCurrentDocumentId, replaceStoreDocument, replaceStoreDocumentModel, restoreTextRangeRecord } from './document'
 import { JWordEditorState } from './state'
 import { resolveCommandDirtyRange } from './rendering'
-import type { Editor, EditorCommandOptions, EditorDocumentInput, EditorDocumentModelInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
+import type { EditorCommandOptions, EditorDocumentInput, EditorDocumentModelInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
 
-export abstract class JWordEditorFacadeRuntime extends JWordEditorState implements Editor {
+export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
   /** 粘贴已清洗的富文本片段，具体 command 生成由输入运行时实现。 */
   abstract pasteRichTextFragment(fragment: EditorRichTextFragment): boolean
 
@@ -501,8 +497,10 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     this.assertActive()
 
     const origin = options.origin ?? DEFAULT_HISTORY_ORIGIN
-    const metadata = createTransactionMetadata(origin, options.label)
-    const shouldTrackHistory = this.history.trackedOrigins.has(origin) && command.operations.length > 0
+    const metadata = createTransactionMetadata(origin, options)
+    const historyScope = options.historyScope
+    const shouldTrackHistory = (historyScope !== undefined || this.history.trackedOrigins.has(origin)) &&
+      command.operations.length > 0
     const selectionBefore = this.currentSelection
     const hasSelectionAfter = 'selectionAfter' in options
     const selectionAfter = hasSelectionAfter ? options.selectionAfter ?? null : this.currentSelection
@@ -521,7 +519,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
         ...(options.label === undefined ? {} : { description: options.label }),
         selectionBefore: createSelectionRestoreSnapshot(selectionBefore),
         selectionAfter: createSelectionRestoreSnapshot(selectionAfter)
-      })
+      }, historyScope)
     }
 
     try {
@@ -551,17 +549,17 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
       }
 
       if (shouldTrackHistory) {
-        this.history.discardNextTransactionMetadata()
+        this.history.discardNextTransactionMetadata(historyScope)
       }
 
       throw error
     }
   }
 
-  undo(): HistoryOperationResult {
+  undo(scope?: HistoryScope): HistoryOperationResult {
     this.assertActive()
 
-    const result = this.history.undo()
+    const result = this.history.undo(scope)
 
     if (result.stackItem !== null) {
       this.currentProjection = createDocumentProjection(this.store)
@@ -588,10 +586,10 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     return result
   }
 
-  redo(): HistoryOperationResult {
+  redo(scope?: HistoryScope): HistoryOperationResult {
     this.assertActive()
 
-    const result = this.history.redo()
+    const result = this.history.redo(scope)
 
     if (result.stackItem !== null) {
       this.currentProjection = createDocumentProjection(this.store)
@@ -618,16 +616,16 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     return result
   }
 
-  canUndo(): boolean {
+  canUndo(scope?: HistoryScope): boolean {
     this.assertActive()
 
-    return this.history.canUndo()
+    return this.history.canUndo(scope)
   }
 
-  canRedo(): boolean {
+  canRedo(scope?: HistoryScope): boolean {
     this.assertActive()
 
-    return this.history.canRedo()
+    return this.history.canRedo(scope)
   }
 
   subscribe(listener: EditorEventListener): () => void {
@@ -637,239 +635,6 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     return () => {
       this.listeners.delete(listener)
     }
-  }
-
-  focus(): void {
-    this.assertActive()
-
-    const mountedDom = this.mountedDom
-
-    if (mountedDom === undefined) {
-      return
-    }
-
-    focusHiddenTextarea(mountedDom)
-    this.updateInputFocusState(true)
-
-    if (this.currentSelection !== null) {
-      return
-    }
-
-    const anchor = this.initialFocusPosition === 'start'
-      ? this.resolveInitialStartFocusAnchor()
-      : this.resolveInitialEndFocusAnchor()
-
-    if (anchor === undefined) {
-      return
-    }
-
-    this.commitSelection(createSelectionState(anchor, anchor), {
-      source: 'api'
-    })
-  }
-
-  blur(): void {
-    this.assertActive()
-
-    const mountedDom = this.mountedDom
-
-    if (mountedDom === undefined) {
-      return
-    }
-
-    mountedDom.hiddenTextarea.blur()
-    this.updateInputFocusState(false)
-  }
-
-  mount(host: HTMLElement): void {
-    this.assertActive()
-
-    if (this.mountedDom !== undefined) {
-      throw createJWordError('EDITOR_ALREADY_MOUNTED', 'JWord editor is already mounted.')
-    }
-
-    const ownerDocument = host.ownerDocument
-    const shell = ownerDocument.createElement('div')
-    shell.className = 'jw-editor'
-    shell.setAttribute('data-jword-editor', '')
-    shell.setAttribute('role', 'application')
-    shell.setAttribute('aria-label', this.label)
-
-    const canvasContainer = ownerDocument.createElement('div')
-    canvasContainer.className = 'jw-editor__canvas-container'
-    canvasContainer.setAttribute('data-jword-canvas-container', '')
-    const hiddenTextarea = createHiddenTextareaElement(ownerDocument)
-    const liveRegion = createLiveRegionElement(ownerDocument)
-    const textMirror = createTextMirrorElement(ownerDocument)
-    shell.style.width = '100%'
-    shell.style.height = '100%'
-    shell.style.position = 'relative'
-    canvasContainer.style.width = '100%'
-    canvasContainer.style.height = '100%'
-    canvasContainer.style.overflow = 'auto'
-    canvasContainer.style.position = 'relative'
-    canvasContainer.style.cursor = 'text'
-
-    const handleScroll = () => {
-      this.renderMountedLayout('viewport')
-    }
-    const handleInput = (event: Event) => {
-      this.handleRuntimeInput(event)
-    }
-    const handleBeforeInput = (event: Event) => {
-      this.handleRuntimeBeforeInput(event)
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      this.handleRuntimeKeyDown(event)
-    }
-    const handleCopy = (event: Event) => {
-      this.handleRuntimeCopy(event)
-    }
-    const handleCut = (event: Event) => {
-      this.handleRuntimeCut(event)
-    }
-    const handlePaste = (event: Event) => {
-      this.handleRuntimePaste(event)
-    }
-    const handlePointerDown = (event: MouseEvent) => {
-      this.handleRuntimePointerDown(event)
-    }
-    const handlePointerMove = (event: MouseEvent) => {
-      this.handleRuntimePointerMove(event)
-    }
-    const handlePointerUp = (event: MouseEvent) => {
-      this.handleRuntimePointerUp(event)
-    }
-    const handleDoubleClick = (event: MouseEvent) => {
-      this.handleRuntimeDoubleClick(event)
-    }
-    const handleCompositionStart = (event: Event) => {
-      this.handleRuntimeCompositionStart(event)
-    }
-    const handleCompositionUpdate = (event: Event) => {
-      this.handleRuntimeCompositionUpdate(event)
-    }
-    const handleCompositionEnd = (event: Event) => {
-      this.handleRuntimeCompositionEnd(event)
-    }
-    const handleFocus = () => {
-      this.updateInputFocusState(true)
-    }
-    const handleBlur = () => {
-      this.updateInputFocusState(false)
-    }
-
-    canvasContainer.addEventListener('scroll', handleScroll)
-    canvasContainer.addEventListener('mousedown', handlePointerDown)
-    canvasContainer.addEventListener('mousemove', handlePointerMove)
-    canvasContainer.addEventListener('mouseup', handlePointerUp)
-    canvasContainer.addEventListener('dblclick', handleDoubleClick)
-    hiddenTextarea.addEventListener('beforeinput', handleBeforeInput)
-    hiddenTextarea.addEventListener('input', handleInput)
-    hiddenTextarea.addEventListener('keydown', handleKeyDown)
-    hiddenTextarea.addEventListener('copy', handleCopy)
-    hiddenTextarea.addEventListener('cut', handleCut)
-    hiddenTextarea.addEventListener('paste', handlePaste)
-    hiddenTextarea.addEventListener('compositionstart', handleCompositionStart)
-    hiddenTextarea.addEventListener('compositionupdate', handleCompositionUpdate)
-    hiddenTextarea.addEventListener('compositionend', handleCompositionEnd)
-    hiddenTextarea.addEventListener('focus', handleFocus)
-    hiddenTextarea.addEventListener('blur', handleBlur)
-    shell.append(canvasContainer, hiddenTextarea, liveRegion, textMirror)
-    host.append(shell)
-
-    this.mountedDom = {
-      shell,
-      canvasContainer,
-      hiddenTextarea,
-      liveRegion,
-      textMirror,
-      handleScroll,
-      handleInput,
-      handleBeforeInput,
-      handleKeyDown,
-      handleCopy,
-      handleCut,
-      handlePaste,
-      handlePointerDown,
-      handlePointerMove,
-      handlePointerUp,
-      handleDoubleClick,
-      handleCompositionStart,
-      handleCompositionUpdate,
-      handleCompositionEnd,
-      pool: createCanvasPool({
-        createCanvas: () => createCanvasElement(ownerDocument)
-      }),
-      pageWrappers: new Map(),
-      baseCanvases: new Map(),
-      imageResourceResolver: createMountedCanvasImageResourceResolver({
-        ownerDocument,
-        onInvalidate: () => {
-          if (this.isDestroyed || this.mountedDom === undefined) {
-            return
-          }
-
-          this.renderMountedLayout('resource')
-        }
-      }),
-      inputState: {
-        isComposing: false,
-        compositionText: '',
-        pendingPlainInputText: ''
-      },
-      pointerState: {
-        anchor: null,
-        pageMetrics: null,
-        paintedPageIndexes: []
-      },
-      canvases: new Map(),
-      deferredRender: undefined,
-      deferredTextMirrorSyncId: undefined
-    }
-    this.renderMountedLayout('mount')
-  }
-
-  destroy(): void {
-    if (this.isDestroyed) {
-      return
-    }
-
-    if (this.mountedDom !== undefined) {
-      this.cancelDeferredDocumentRender()
-      this.cancelDeferredRender()
-      this.cancelDeferredPointerSelectionWork()
-      this.cancelDeferredTextMirrorSync()
-      this.stopCaretBlink()
-      this.mountedDom.canvasContainer.removeEventListener('scroll', this.mountedDom.handleScroll)
-      this.mountedDom.canvasContainer.removeEventListener('mousedown', this.mountedDom.handlePointerDown)
-      this.mountedDom.canvasContainer.removeEventListener('mousemove', this.mountedDom.handlePointerMove)
-      this.mountedDom.canvasContainer.removeEventListener('mouseup', this.mountedDom.handlePointerUp)
-      this.mountedDom.canvasContainer.removeEventListener('dblclick', this.mountedDom.handleDoubleClick)
-      this.mountedDom.hiddenTextarea.removeEventListener('beforeinput', this.mountedDom.handleBeforeInput)
-      this.mountedDom.hiddenTextarea.removeEventListener('input', this.mountedDom.handleInput)
-      this.mountedDom.hiddenTextarea.removeEventListener('keydown', this.mountedDom.handleKeyDown)
-      this.mountedDom.hiddenTextarea.removeEventListener('copy', this.mountedDom.handleCopy)
-      this.mountedDom.hiddenTextarea.removeEventListener('cut', this.mountedDom.handleCut)
-      this.mountedDom.hiddenTextarea.removeEventListener('paste', this.mountedDom.handlePaste)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionstart', this.mountedDom.handleCompositionStart)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionupdate', this.mountedDom.handleCompositionUpdate)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionend', this.mountedDom.handleCompositionEnd)
-      this.mountedDom.imageResourceResolver?.dispose()
-
-      for (const canvas of this.mountedDom.canvases.values()) {
-        this.mountedDom.pool.release(canvas)
-      }
-
-      this.mountedDom.shell.remove()
-    }
-
-    this.mountedDom = undefined
-    this.history.clear()
-    this.unsubscribePipeline()
-    this.emit({ kind: 'destroyed' })
-    this.listeners.clear()
-    this.isDestroyed = true
   }
 
   protected replaceDocument(
@@ -1183,24 +948,21 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
   protected abstract readTransientLayoutThroughPage(pageIndex: number): DocumentLayout
   protected abstract readTransientLayoutForPosition(position: TextPosition): DocumentLayout
   protected abstract readTransientLayoutForRange(range: Readonly<{ anchor: TextPosition, focus: TextPosition }>): DocumentLayout
-  protected abstract handleRuntimeInput(event: Event): void
-  protected abstract handleRuntimeBeforeInput(event: Event): void
-  protected abstract handleRuntimeCompositionStart(event: Event): void
-  protected abstract handleRuntimeCompositionUpdate(event: Event): void
-  protected abstract handleRuntimeCompositionEnd(event: Event): void
-  protected abstract handleRuntimeKeyDown(event: KeyboardEvent): void
-  protected abstract handleRuntimeCopy(event: Event): void
-  protected abstract handleRuntimeCut(event: Event): void
-  protected abstract handleRuntimePaste(event: Event): void
-  protected abstract handleRuntimePointerDown(event: MouseEvent): void
-  protected abstract handleRuntimePointerMove(event: MouseEvent): void
-  protected abstract handleRuntimePointerUp(event: MouseEvent): void
-  protected abstract handleRuntimeDoubleClick(event: MouseEvent): void
-  protected abstract cancelDeferredRender(): void
-  protected abstract cancelDeferredTextMirrorSync(): void
-  protected abstract stopCaretBlink(): void
 }
 
-function createTransactionMetadata(origin: string, label: string | undefined): TransactionMetadata {
-  return label === undefined ? { origin } : { origin, label }
+function createTransactionMetadata(origin: string, options: EditorCommandOptions): TransactionMetadata {
+  return {
+    origin,
+    ...(options.historyScope === undefined ? {} : {
+      historyOrigin: readHistoryScopeTransactionOrigin(options.historyScope)
+    }),
+    ...(options.label === undefined ? {} : { label: options.label }),
+    ...(options.requestId === undefined ? {} : { requestId: options.requestId }),
+    ...(options.roomId === undefined ? {} : { roomId: options.roomId }),
+    ...(options.clientId === undefined ? {} : { clientId: options.clientId }),
+    ...(options.authorId === undefined ? {} : { authorId: options.authorId }),
+    ...(options.snapshotId === undefined ? {} : { snapshotId: options.snapshotId }),
+    ...(options.versionId === undefined ? {} : { versionId: options.versionId }),
+    ...(options.recoverable === undefined ? {} : { recoverable: options.recoverable })
+  }
 }

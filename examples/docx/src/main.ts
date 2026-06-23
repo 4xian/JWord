@@ -6,9 +6,24 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-25---建立-examplesdocx-手动验收入口。
  */
 import { createEditor } from '@4xian/jword-core'
-import type { Document, DocumentProjection } from '@4xian/jword-core'
-import type { DocxBinaryInput, DocxWarning } from '@4xian/jword-docx'
-import type { PdfWarning } from '@4xian/jword-pdf'
+import type { Document, DocumentLayout, DocumentProjection } from '@4xian/jword-core'
+import type {
+  DocxBinaryInput,
+  DocxImportDocument,
+  DocxRoundtripDiffResult,
+  DocxWarning,
+  ExportDocxResult,
+  ImportDocxResult
+} from '@4xian/jword-docx'
+import {
+  assertJWordFeatureEntitled,
+  createJWordLicenseSignature,
+  isJWordLicenseDiagnosticCode,
+  type JWordLicenseEntitlement,
+  type JWordLicenseFeatureKey,
+  type JWordLicenseSignaturePayload
+} from '@4xian/jword-license'
+import type { ExportPdfResult, PdfProgressEvent, PdfWarning } from '@4xian/jword-pdf'
 import { createJWordUi } from '@4xian/jword-ui'
 import {
   createDocxDemoTaskController,
@@ -20,6 +35,30 @@ import './styles.css'
 
 type DocxRuntime = typeof import('@4xian/jword-docx')
 type PdfRuntime = typeof import('@4xian/jword-pdf')
+
+interface DocxDemoIntegrationRuntime {
+  assertFeature(feature: JWordLicenseFeatureKey): void
+  importDocx(input: DocxBinaryInput, options: DocxDemoTaskRuntimeOptions): Promise<ImportDocxResult>
+  exportDocx(document: DocumentProjection, options: DocxDemoTaskRuntimeOptions): Promise<ExportDocxResult>
+  exportPdf(layout: DocumentLayout, options: DocxDemoPdfTaskRuntimeOptions): Promise<ExportPdfResult>
+  diffDocxRoundtrip(bytes: ArrayBuffer, options: DocxDemoTaskRuntimeOptions): Promise<DocxRoundtripDiffResult>
+  convertDocxImportDocumentToCoreDocument(document: DocxImportDocument): Promise<Document>
+}
+
+interface DocxDemoIntegrationOptions {
+  readonly license: JWordLicenseEntitlement | null
+}
+
+interface DocxDemoTaskRuntimeOptions {
+  readonly feature: JWordLicenseFeatureKey
+  readonly requestId: string
+  readonly signal?: AbortSignal
+}
+
+interface DocxDemoPdfTaskRuntimeOptions extends DocxDemoTaskRuntimeOptions {
+  readonly onProgress?: (event: PdfProgressEvent) => void
+  readonly onWarning?: (warning: PdfWarning) => void
+}
 
 const editorHost = requireElement<HTMLElement>('#jword-editor', 'DOCX demo requires #jword-editor.')
 const toolbarHost = requireElement<HTMLElement>('#jword-toolbar', 'DOCX demo requires #jword-toolbar.')
@@ -56,6 +95,15 @@ let currentDocxUrl: string | null = null
 let currentPdfUrl: string | null = null
 let docxRuntimePromise: Promise<DocxRuntime> | null = null
 let pdfRuntimePromise: Promise<PdfRuntime> | null = null
+const builtInFixtureLicense = createSignedDocxDemoLicense({
+  customerId: 'customer-docx-demo-fixture',
+  licenseToken: 'token-docx-demo-fixture',
+  features: ['docx.export'],
+  issuer: 'jword-test-issuer',
+  issuedAt: '2026-05-01T00:00:00Z',
+  expiresAt: '2026-06-01T00:00:00Z',
+  status: 'valid'
+})
 
 editor.mount(editorHost)
 
@@ -138,16 +186,16 @@ window.addEventListener('beforeunload', () => {
 /** 从选择的文件或内置 fixture 导入 DOCX。 */
 async function runDocxImport(): Promise<void> {
   await runTask('import', '正在导入 DOCX...', async (session) => {
+    const integration = createDocxDemoIntegrationRuntime({ license: readDemoLicense() })
+
+    integration.assertFeature('docx.import')
     const input = await readSelectedDocxInput()
-    const {
-      convertDocxImportDocumentToCoreDocument,
-      importDocx
-    } = await loadDocxRuntime()
-    const result = await importDocx(input, {
+    const result = await integration.importDocx(input, {
+      feature: 'docx.import',
       requestId: session.requestId,
       signal: session.signal
     })
-    const document = convertDocxImportDocumentToCoreDocument(result.document)
+    const document = await integration.convertDocxImportDocumentToCoreDocument(result.document)
 
     if (!session.canCommit()) {
       return
@@ -165,8 +213,9 @@ async function runDocxImport(): Promise<void> {
 /** 从当前 editor projection 导出 DOCX 并刷新 roundtrip diff。 */
 async function runDocxExport(): Promise<ArrayBuffer> {
   return runTask('export-docx', '正在导出 DOCX...', async (session) => {
-    const { exportDocx } = await loadDocxRuntime()
-    const result = await exportDocx(editor.getProjection(), {
+    const integration = createDocxDemoIntegrationRuntime({ license: readDemoLicense() })
+    const result = await integration.exportDocx(editor.getProjection(), {
+      feature: 'docx.export',
       requestId: session.requestId,
       signal: session.signal
     })
@@ -193,10 +242,11 @@ async function runDocxExport(): Promise<ArrayBuffer> {
 /** 从当前 editor layout 导出 PDF 并生成下载入口。 */
 async function runPdfExport(): Promise<ArrayBuffer> {
   return runTask('export-pdf', '正在导出 PDF...', async (session) => {
-    const { exportPdfFromLayout } = await loadPdfRuntime()
+    const integration = createDocxDemoIntegrationRuntime({ license: readDemoLicense() })
     const warnings: PdfWarning[] = []
     const progress: string[] = []
-    const result = await exportPdfFromLayout(editor.getLayout(), {
+    const result = await integration.exportPdf(editor.getLayout(), {
+      feature: 'pdf.export',
       requestId: session.requestId,
       signal: session.signal,
       onWarning(warning) {
@@ -257,13 +307,14 @@ function syncEditorPageConfigFromDocument(document: Document): void {
 /** 生成内置 DOCX fixture bytes，不在仓库落二进制占位文件。 */
 async function createBuiltInDocxFixture(): Promise<ArrayBuffer> {
   const fixtureEditor = createEditor()
-  const { exportDocx } = await loadDocxRuntime()
+  const integration = createDocxDemoIntegrationRuntime({ license: builtInFixtureLicense })
 
   try {
     const projection = fixtureEditor.loadDocumentModel({
       document: createBuiltInCoreDocument()
     })
-    const result = await exportDocx(projection, {
+    const result = await integration.exportDocx(projection, {
+      feature: 'docx.export',
       requestId: 'examples-docx-built-in-fixture'
     })
 
@@ -391,8 +442,9 @@ function createTableCellParagraph(id: string, text: string): Document['sections'
 
 /** 更新 DOCX roundtrip diff 面板。 */
 async function updateRoundtrip(bytes: ArrayBuffer, session: DocxDemoTaskSession): Promise<void> {
-  const { diffDocxRoundtrip } = await loadDocxRuntime()
-  const diff = await diffDocxRoundtrip(bytes, {
+  const integration = createDocxDemoIntegrationRuntime({ license: readDemoLicense() })
+  const diff = await integration.diffDocxRoundtrip(bytes, {
+    feature: 'docx.export',
     requestId: `${session.requestId}-roundtrip`,
     signal: session.signal
   })
@@ -479,7 +531,7 @@ async function runDemoButtonTask(task: () => Promise<unknown>): Promise<void> {
   try {
     await task()
   } catch (error) {
-    if (isKnownCancelledTaskError(error)) {
+    if (isKnownCancelledTaskError(error) || isKnownLicenseDiagnosticError(error)) {
       return
     }
 
@@ -500,6 +552,15 @@ function isKnownCancelledTaskError(error: unknown): boolean {
   return error.name === 'AbortError' ||
     (error as { readonly code?: unknown }).code === 'PDF_EXPORT_CANCELLED' ||
     (error as { readonly code?: unknown }).code === 'DOCX_WORKER_CANCELLED'
+}
+
+/** 判断异常是否是授权诊断，避免 demo 触发未处理异常。 */
+function isKnownLicenseDiagnosticError(error: unknown): boolean {
+  if (!isObjectRecord(error)) {
+    return false
+  }
+
+  return typeof error.code === 'string' && isJWordLicenseDiagnosticCode(error.code)
 }
 
 /** 写入状态文字。 */
@@ -526,11 +587,146 @@ function createPre(text: string): HTMLPreElement {
 
 /** 读取错误消息。 */
 function readErrorMessage(error: unknown): string {
+  if (isObjectRecord(error) && typeof error.code === 'string' && typeof error.message === 'string') {
+    if (error.message.startsWith(`${error.code}:`)) {
+      return error.message
+    }
+
+    return `${error.code}: ${error.message}`
+  }
+
   if (error instanceof Error) {
     return error.message
   }
 
   return String(error)
+}
+
+/** 创建第三方集成形态的高级格式 runtime。 */
+function createDocxDemoIntegrationRuntime(
+  options: DocxDemoIntegrationOptions
+): DocxDemoIntegrationRuntime {
+  return {
+    assertFeature(feature) {
+      assertJWordFeatureEntitled(options.license, feature)
+    },
+    async importDocx(input, taskOptions) {
+      assertJWordFeatureEntitled(options.license, taskOptions.feature)
+
+      const { importDocx } = await loadDocxRuntime()
+
+      return importDocx(input, {
+        requestId: taskOptions.requestId,
+        ...(taskOptions.signal === undefined ? {} : { signal: taskOptions.signal }),
+        license: options.license
+      })
+    },
+    async exportDocx(document, taskOptions) {
+      assertJWordFeatureEntitled(options.license, taskOptions.feature)
+
+      const { exportDocx } = await loadDocxRuntime()
+
+      return exportDocx(document, {
+        requestId: taskOptions.requestId,
+        ...(taskOptions.signal === undefined ? {} : { signal: taskOptions.signal }),
+        license: options.license
+      })
+    },
+    async exportPdf(layout, taskOptions) {
+      assertJWordFeatureEntitled(options.license, taskOptions.feature)
+
+      const { exportPdfFromLayout } = await loadPdfRuntime()
+
+      return exportPdfFromLayout(layout, {
+        requestId: taskOptions.requestId,
+        ...(taskOptions.signal === undefined ? {} : { signal: taskOptions.signal }),
+        license: options.license,
+        ...(taskOptions.onProgress === undefined ? {} : { onProgress: taskOptions.onProgress }),
+        ...(taskOptions.onWarning === undefined ? {} : { onWarning: taskOptions.onWarning })
+      })
+    },
+    async diffDocxRoundtrip(bytes, taskOptions) {
+      assertJWordFeatureEntitled(options.license, taskOptions.feature)
+
+      const { diffDocxRoundtrip } = await loadDocxRuntime()
+
+      return diffDocxRoundtrip(bytes, {
+        requestId: taskOptions.requestId,
+        ...(taskOptions.signal === undefined ? {} : { signal: taskOptions.signal }),
+        license: options.license
+      })
+    },
+    async convertDocxImportDocumentToCoreDocument(document) {
+      const { convertDocxImportDocumentToCoreDocument } = await loadDocxRuntime()
+
+      return convertDocxImportDocumentToCoreDocument(document)
+    }
+  }
+}
+
+/** 读取 demo 查询参数里的授权状态。 */
+function readDemoLicense(): JWordLicenseEntitlement | null {
+  const mode = new URLSearchParams(window.location.search).get('license') ?? 'valid'
+
+  if (mode === 'missing') {
+    return null
+  }
+
+  if (mode === 'expired') {
+    return createSignedDocxDemoLicense({
+      customerId: 'customer-docx-demo',
+      licenseToken: 'token-docx-demo',
+      features: ['docx.import', 'docx.export', 'pdf.export'],
+      issuer: 'jword-test-issuer',
+      issuedAt: '2026-05-01T00:00:00Z',
+      expiresAt: '2026-05-01T00:00:00Z',
+      status: 'valid'
+    })
+  }
+
+  if (mode === 'feature-mismatch') {
+    return createSignedDocxDemoLicense({
+      customerId: 'customer-docx-demo',
+      licenseToken: 'token-docx-demo',
+      features: ['docx.import'],
+      issuer: 'jword-test-issuer',
+      issuedAt: '2026-05-01T00:00:00Z',
+      expiresAt: '2026-06-01T00:00:00Z',
+      status: 'valid'
+    })
+  }
+
+  if (mode === 'server-unavailable') {
+    return createSignedDocxDemoLicense({
+      customerId: 'customer-docx-demo',
+      licenseToken: 'token-docx-demo',
+      features: ['docx.import', 'docx.export', 'pdf.export'],
+      issuer: 'jword-test-issuer',
+      issuedAt: '2026-05-01T00:00:00Z',
+      expiresAt: '2026-06-01T00:00:00Z',
+      status: 'server-unavailable'
+    })
+  }
+
+  return createSignedDocxDemoLicense({
+    customerId: 'customer-docx-demo',
+    licenseToken: 'token-docx-demo',
+    features: ['docx.import', 'docx.export', 'pdf.export'],
+    issuer: 'jword-test-issuer',
+    issuedAt: '2026-05-01T00:00:00Z',
+    expiresAt: '2026-06-01T00:00:00Z',
+    status: 'valid'
+  })
+}
+
+/** 为 DOCX demo 创建带确定性签名的本地测试授权。 */
+function createSignedDocxDemoLicense(
+  entitlement: JWordLicenseSignaturePayload
+): JWordLicenseEntitlement {
+  return {
+    ...entitlement,
+    signature: createJWordLicenseSignature(entitlement)
+  }
 }
 
 /** 按需加载 DOCX runtime，避免进入示例入口首个静态 chunk。 */
@@ -569,4 +765,9 @@ function requireElement<T extends HTMLElement>(selector: string, message: string
   }
 
   return element
+}
+
+/** 判断未知值是否是对象记录。 */
+function isObjectRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null
 }

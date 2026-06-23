@@ -135,7 +135,16 @@ export function syncRunResourceIds(run: RunRecord, inlines: readonly Run['inline
 /** 从 model paragraph 创建 Y.Doc paragraph 记录。 */
 function createParagraphRecordFromModel(paragraph: Paragraph): BlockRecord {
   const record = new Y.Map<BlockRecordValue>() as BlockRecord
-  const properties = createPropertyMap(paragraph.properties ?? {})
+  const properties = createPropertyMap({
+    ...(paragraph.properties ?? {}),
+    ...(paragraph.styleId === undefined ? {} : { styleId: paragraph.styleId }),
+    ...(paragraph.list === undefined
+      ? {}
+      : {
+          listNumberingId: paragraph.list.numberingId,
+          listLevel: paragraph.list.level
+        })
+  })
   const runs = new Y.Array<RunRecord>()
 
   record.set(DOCUMENT_STORE_FIELDS.block.kind, 'paragraph')

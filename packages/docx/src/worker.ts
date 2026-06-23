@@ -7,6 +7,11 @@
  */
 
 import {
+  assertJWordFeatureEntitled,
+  isJWordLicenseDiagnosticCode,
+  type JWordLicenseFeatureKey
+} from '@4xian/jword-license'
+import {
   createDocxErrorEvent,
   createDocxTransferables,
   exportDocx,
@@ -17,7 +22,7 @@ import {
   type DocxTransferable,
   type DocxWorkerEvent,
   type DocxWorkerRequest
-} from './index'
+} from './index.js'
 
 export type DocxWorkerPostEvent = (
   event: DocxWorkerEvent,
@@ -98,6 +103,7 @@ async function handleDocxWorkerRequest(
 
   try {
     if (request.type === 'export') {
+      assertDocxWorkerFeature(request, 'docx.export')
       const result = await exportDocx(request.document, {
         ...request.options,
         requestId: request.options?.requestId ?? request.requestId,
@@ -112,6 +118,7 @@ async function handleDocxWorkerRequest(
     }
 
     if (request.type === 'inspect') {
+      assertDocxWorkerFeature(request, 'docx.import')
       const result = await inspectDocxPackage(request.input, {
         ...request.options,
         requestId: request.options?.requestId ?? request.requestId,
@@ -125,6 +132,7 @@ async function handleDocxWorkerRequest(
       }
     }
 
+    assertDocxWorkerFeature(request, 'docx.import')
     const result = await importDocx(request.input, {
       ...request.options,
       requestId: request.options?.requestId ?? request.requestId,
@@ -139,6 +147,14 @@ async function handleDocxWorkerRequest(
   } catch (error) {
     return createDocxErrorEvent(request.requestId, readDocxWorkerError(error, request.requestId))
   }
+}
+
+/** 在读取或输出用户文档内容前校验 DOCX worker 高级 feature。 */
+function assertDocxWorkerFeature(
+  request: DocxWorkerRequest,
+  feature: JWordLicenseFeatureKey
+): void {
+  assertJWordFeatureEntitled(request.type === 'cancel' ? undefined : request.options?.license, feature)
 }
 
 /** 创建 worker cancel 消息对应的稳定事件。 */
@@ -196,7 +212,9 @@ function readDocxWorkerError(error: unknown, requestId: string): DocxError {
       name: error.name,
       code: error.code,
       message: error.message,
-      requestId: error.requestId ?? requestId
+      requestId: error.requestId ?? requestId,
+      ...(error.feature === undefined ? {} : { feature: error.feature }),
+      ...(error.customerId === undefined ? {} : { customerId: error.customerId })
     }
   }
 
@@ -210,16 +228,22 @@ function readDocxWorkerError(error: unknown, requestId: string): DocxError {
 
 /** 判断异常是否已经符合 DOCX worker 错误结构。 */
 function isDocxWorkerError(error: unknown): error is Error & {
-  readonly name: 'DocxUnsupportedError' | 'DocxPackageError'
+  readonly name: 'DocxUnsupportedError' | 'DocxPackageError' | 'JWordLicenseError'
   readonly code: DocxError['code']
   readonly requestId?: string
+  readonly feature?: JWordLicenseFeatureKey
+  readonly customerId?: string
 } {
   const code = (error as { readonly code?: unknown }).code
 
   return error instanceof Error &&
-    (error.name === 'DocxUnsupportedError' || error.name === 'DocxPackageError') &&
+    (
+      error.name === 'DocxUnsupportedError' ||
+      error.name === 'DocxPackageError' ||
+      error.name === 'JWordLicenseError'
+    ) &&
     typeof code === 'string' &&
-    isDocxErrorCode(code)
+    (isDocxErrorCode(code) || isJWordLicenseDiagnosticCode(code))
 }
 
 /** 在真实 worker 环境注册 message 监听。 */

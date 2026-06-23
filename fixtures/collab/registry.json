@@ -1,0 +1,487 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "id": "remote-local-same-paragraph",
+      "input": {
+        "kind": "plain-document",
+        "source": "paragraph:协同段落"
+      },
+      "operations": [
+        {
+          "actor": "remote",
+          "origin": "remote:user-b",
+          "action": "insertText paragraph-1 offset 2 text 远端"
+        },
+        {
+          "actor": "local",
+          "origin": "local:user-a",
+          "action": "insertText paragraph-1 offset 2 text 本地"
+        }
+      ],
+      "originSequence": [
+        "remote:user-b",
+        "local:user-a"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "远端",
+          "本地"
+        ],
+        "invariants": [
+          "same-paragraph-converges",
+          "operations-enter-transaction-pipeline"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [
+          "local:user-a"
+        ],
+        "preservesOrigins": [
+          "remote:user-b"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    },
+    {
+      "id": "ai-local-anchor",
+      "input": {
+        "kind": "plain-document",
+        "source": "paragraph:AI锚点"
+      },
+      "operations": [
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "createAnchoredInsertion paragraph-1 anchor run-1:2 text 建议"
+        },
+        {
+          "actor": "local",
+          "origin": "local:user-a",
+          "action": "insertText paragraph-1 offset 1 text 手写"
+        },
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "commitAnchoredInsertion anchor ai-1"
+        }
+      ],
+      "originSequence": [
+        "ai:auto-inserter",
+        "local:user-a",
+        "ai:auto-inserter"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "手写",
+          "建议"
+        ],
+        "invariants": [
+          "ai-anchor-rebases-through-local-edit",
+          "local-input-not-blocked"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [
+          "local:user-a"
+        ],
+        "preservesOrigins": [
+          "ai:auto-inserter"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_AUTO_INSERTER_ANCHOR_REBASED",
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    },
+    {
+      "id": "ai-local-range-replace",
+      "input": {
+        "kind": "plain-document",
+        "source": "paragraph:target tail"
+      },
+      "operations": [
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "replaceRange paragraph-1 range 0..6 text 协同"
+        },
+        {
+          "actor": "local",
+          "origin": "local:user-a",
+          "action": "appendText paragraph-1 text  local"
+        },
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "commitAnchoredInsertion anchor ai-1 text 版本离线回放"
+        }
+      ],
+      "originSequence": [
+        "ai:auto-inserter",
+        "local:user-a",
+        "ai:auto-inserter"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "协同版本离线回放",
+          "tail",
+          "local"
+        ],
+        "invariants": [
+          "ai-range-replace-preserves-local-suffix",
+          "stream-order-preserved-after-range-replace",
+          "user-undo-preserves-ai"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [
+          "local:user-a"
+        ],
+        "preservesOrigins": [
+          "ai:auto-inserter"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_AUTO_INSERTER_ANCHOR_REBASED",
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    },
+    {
+      "id": "ai-local-anchor-unresolved",
+      "input": {
+        "kind": "plain-document",
+        "source": "paragraph:anchor"
+      },
+      "operations": [
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "createAnchoredInsertion paragraph-1 anchor run-1:6 text 协同"
+        },
+        {
+          "actor": "local",
+          "origin": "local:user-a",
+          "action": "deleteRange paragraph-1 range 0..8"
+        },
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "flushAnchoredInsertion anchor ai-1 text 版本"
+        }
+      ],
+      "originSequence": [
+        "ai:auto-inserter",
+        "local:user-a",
+        "ai:auto-inserter"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "anchor-deleted"
+        ],
+        "invariants": [
+          "ai-anchor-unresolved-stops-stream",
+          "deleted-anchor-text-not-restored"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [
+          "local:user-a"
+        ],
+        "preservesOrigins": [
+          "ai:auto-inserter"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_AUTO_INSERTER_ANCHOR_UNRESOLVED",
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    },
+    {
+      "id": "ai-remote-same-paragraph",
+      "input": {
+        "kind": "plain-document",
+        "source": "paragraph:remote-base"
+      },
+      "operations": [
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "createAnchoredInsertion paragraph-1 anchor end text 协同"
+        },
+        {
+          "actor": "remote",
+          "origin": "remote:user-b",
+          "action": "appendText paragraph-1 text remote-user"
+        },
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "commitAnchoredInsertion anchor ai-1 text 版本离线回放"
+        }
+      ],
+      "originSequence": [
+        "ai:auto-inserter",
+        "remote:user-b",
+        "ai:auto-inserter"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "remote-base",
+          "remote-user",
+          "协同版本离线回放"
+        ],
+        "invariants": [
+          "ai-and-remote-same-paragraph-converge",
+          "remote-input-not-duplicated",
+          "ai-stream-not-duplicated"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [],
+        "preservesOrigins": [
+          "remote:user-b",
+          "ai:auto-inserter"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_AUTO_INSERTER_ANCHOR_REBASED",
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    },
+    {
+      "id": "ai-remote-adjacent-delete",
+      "input": {
+        "kind": "plain-document",
+        "source": "paragraph:keep tail"
+      },
+      "operations": [
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "createAnchoredInsertion paragraph-1 anchor end text 协同"
+        },
+        {
+          "actor": "remote",
+          "origin": "remote:user-b",
+          "action": "deleteRange paragraph-1 range 4..9"
+        },
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "commitAnchoredInsertion anchor ai-1 text 版本离线回放"
+        }
+      ],
+      "originSequence": [
+        "ai:auto-inserter",
+        "remote:user-b",
+        "ai:auto-inserter"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "keep",
+          "协同版本离线回放"
+        ],
+        "invariants": [
+          "remote-adjacent-delete-converges",
+          "deleted-text-not-resurrected",
+          "ai-stream-not-duplicated"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [],
+        "preservesOrigins": [
+          "remote:user-b",
+          "ai:auto-inserter"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_AUTO_INSERTER_ANCHOR_REBASED",
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    },
+    {
+      "id": "ai-remote-provider-reconnect",
+      "input": {
+        "kind": "plain-document",
+        "source": "paragraph:reconnect"
+      },
+      "operations": [
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "createAnchoredInsertion paragraph-1 anchor end text 协同"
+        },
+        {
+          "actor": "local",
+          "origin": "local:offline-client-a",
+          "action": "disconnectProviderAndQueuePendingAiFlush"
+        },
+        {
+          "actor": "ai",
+          "origin": "ai:auto-inserter",
+          "action": "flushWhileDisconnected anchor ai-1 text 版本离线回放"
+        },
+        {
+          "actor": "remote",
+          "origin": "remote:provider",
+          "action": "reconnectProviderAndSyncPendingUpdates"
+        }
+      ],
+      "originSequence": [
+        "ai:auto-inserter",
+        "local:offline-client-a",
+        "ai:auto-inserter",
+        "remote:provider"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "reconnect",
+          "协同版本离线回放"
+        ],
+        "invariants": [
+          "ai-stream-queues-while-provider-disconnected",
+          "provider-reconnect-syncs-ai-updates",
+          "remote-page-converges-after-reconnect"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [
+          "local:offline-client-a"
+        ],
+        "preservesOrigins": [
+          "remote:provider",
+          "ai:auto-inserter"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "OFFLINE_LOCAL_UPDATE_QUEUED",
+          "OFFLINE_RECONNECT_STARTED",
+          "OFFLINE_RECONNECT_SYNCED",
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    },
+    {
+      "id": "docx-import-t1-collab",
+      "input": {
+        "kind": "docx-import",
+        "source": "fixtures/docx/inputs/docx-t1-paragraphs.docx"
+      },
+      "operations": [
+        {
+          "actor": "local",
+          "origin": "local:user-a",
+          "action": "loadImportedProjection docx-t1-paragraphs"
+        },
+        {
+          "actor": "remote",
+          "origin": "remote:user-b",
+          "action": "insertText first-body-paragraph offset 0 text 协同"
+        }
+      ],
+      "originSequence": [
+        "local:user-a",
+        "remote:user-b"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "协同"
+        ],
+        "invariants": [
+          "docx-t1-projection-preserved",
+          "remote-update-after-import-converges",
+          "docx-import-enters-history-update-log",
+          "docx-import-supports-auto-insert-anchor",
+          "docx-import-exercises-offline-restore-diagnostic"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [
+          "local:user-a"
+        ],
+        "preservesOrigins": [
+          "remote:user-b"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    },
+    {
+      "id": "docx-import-t2-warning",
+      "input": {
+        "kind": "docx-import",
+        "source": "fixtures/docx/inputs/docx-t2-floating-object-warning.docx"
+      },
+      "operations": [
+        {
+          "actor": "local",
+          "origin": "local:user-a",
+          "action": "loadImportedProjection docx-t2-floating-object-warning"
+        },
+        {
+          "actor": "remote",
+          "origin": "remote:user-b",
+          "action": "updateAwareness selection paragraph-1"
+        }
+      ],
+      "originSequence": [
+        "local:user-a",
+        "remote:user-b"
+      ],
+      "projectionSummary": {
+        "expectedTextIncludes": [
+          "comment-placeholder"
+        ],
+        "invariants": [
+          "unsupported-docx-feature-emits-diagnostic",
+          "awareness-does-not-mutate-document",
+          "docx-import-enters-history-update-log",
+          "docx-import-supports-auto-insert-anchor",
+          "docx-import-exercises-offline-restore-diagnostic"
+        ]
+      },
+      "undoExpectation": {
+        "scope": "local-user",
+        "revertsOrigins": [
+          "local:user-a"
+        ],
+        "preservesOrigins": [
+          "remote:user-b"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_AWARENESS_STALE",
+          "COLLAB_SNAPSHOT_STALE"
+        ]
+      }
+    }
+  ]
+}

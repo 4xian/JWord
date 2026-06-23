@@ -40,6 +40,21 @@
           <button type="button" class="jw-demo__demo-button" data-jword-open-readonly-example="true">
             打开只读示例
           </button>
+          <button type="button" class="jw-demo__demo-button" data-jword-native-save="true">
+            保存 .jword
+          </button>
+          <button type="button" class="jw-demo__demo-button" data-jword-native-open-button="true">
+            打开 .jword
+          </button>
+          <input
+            type="file"
+            class="jw-demo__native-file"
+            data-jword-native-file="true"
+            accept=".jword,application/vnd.jword"
+            aria-label="选择 .jword 文件"
+          />
+          <span class="jw-demo__native-status" data-jword-native-status="true" aria-live="polite"></span>
+          <span class="jw-demo__native-warnings" data-jword-native-warnings="true" aria-live="polite"></span>
         </section>
         <section class="jw-demo__editor-shell" aria-label="JWord editor area">
           <div id="jword-editor" class="jw-demo__editor-host" aria-label="JWord editor canvas host"></div>

@@ -12,7 +12,7 @@ import {
   type PdfTransferable,
   type PdfWorkerRequest,
   type PdfWorkerResponse
-} from './index'
+} from './index.js'
 
 export type PdfWorkerPostResponse = (
   response: PdfWorkerResponse,
