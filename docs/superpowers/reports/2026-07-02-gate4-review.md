@@ -190,12 +190,16 @@ Gate 4 在架构层面交付质量 **优秀**。所有块级对象（图片、�
 | 审查项 | 结论 | 说明 |
 |--------|------|------|
 | DOMPurify 使用 | **通过** | 正确调用 `DOMPurify(window).sanitize(html, config)` |
-| XSS 防护 | **通过（优秀）** | `FORBID_TAGS` 包含 `script`、`iframe`、`object`、`embed`、`img`、`svg`；`FORBID_ATTR` 包含 `onclick`、`onerror`、`onload`；不允许 `data-*` 属性；CSS 值拒绝 `url()` |
+| XSS 防护 | **通过（依据已订正）** | `FORBID_TAGS` 包含 `script`、`iframe`、`object`、`embed`、`img`、`svg`；`FORBID_ATTR` 包含 `onclick`、`onerror`、`onload`；不允许 `data-*` 属性；真实安全依据是清洗后只提取结构化文本与白名单格式，HTML/CSS 不回插 |
 | Transaction Pipeline | **通过** | `editor.pasteRichTextFragment(fragment)` 走标准事务管线 |
 | 格式保留 | **通过** | 保留粗体、斜体、下划线、删除线、颜色、背景色、字体、字号、对齐、列表结构 |
 | 允许/阻止的元素 | 合理 | 允许：`b, br, div, em, i, li, ol, p, s, span, strike, strong, u, ul`；阻止：`script, style, iframe, object, embed, img, svg, math` 及所有其他标签 |
 
-**发现的问题**：无严重问题。XSS 防护实现到位。
+**发现的问题**：无严重 XSS 漏洞，但首轮结论理由不准确。
+
+1. **（R2 订正）首轮关于 CSS `url()` 被过滤的表述无代码依据**：复核 `packages/ui/src/paste/sanitizer.ts:39-60`，实际配置为 `ALLOWED_ATTR: ['class', 'style']`（**允许 style 属性通过**），`FORBID_ATTR: ['onclick', 'onerror', 'onload', 'style-src']`——其中 `'style-src'` 并不是任何 HTML 属性名，是无效配置，代码中**没有任何显式拒绝 CSS `url()` 的逻辑**。因此把粘贴 XSS 结论建立在 CSS 过滤上找不到实现支撑。
+2. **（R2 复审补充）XSS 防护的真实机制是"只提取结构化文本"而非 CSS 过滤**：`collectRichTextRuns`（`sanitizer.ts:106-133`）只从清洗后的 DOM 读取 `textContent` 与经 `mergeInlineStyle` 解析出的 bold/color 等格式，转成 core 富文本 run 交给 `editor.pasteRichTextFragment`；清洗后的 HTML/CSS 字符串**永远不会被原样插回文档**，core 消费的是结构化 run 而非 HTML。因此即便 `style` 属性含 `url()`/`expression()`，也不会被浏览器当 CSS 执行——XSS 防护结论仍成立，但依据应更正为"输出侧只承载结构化文本 + 白名单格式属性"，而不是"CSS 值拒绝 url()"。建议同时删除无效的 `'style-src'` FORBID_ATTR 项，避免误导后续维护者以为已做 CSS 净化。
+3. **（R3 子代理复审补充）link/table paste 仍未闭环**：Gate 4 Step 4.15 计划要求简单表格、链接 allowlist 与 jsdom 覆盖链接/表格；当前 `packages/ui/src/paste/sanitizer.ts` 的 allowlist 没有 `a/table/tr/td/th`，`ALLOWED_ATTR` 没有 `href`，`BLOCK_SELECTOR` 也只有 `p, div, li`；`RichTextFragment` 只有 paragraphs/runs，测试未覆盖 link/table paste。实际粘贴会丢 href 与表格结构，不能宣称 DOMPurify 粘贴完整实施。
 
 ---
 
@@ -258,7 +262,7 @@ Gate 4 在架构层面交付质量 **优秀**。所有块级对象（图片、�
 | 表格内文本编辑与 undo/redo 正确 | **通过** | 单元格文本编辑通过 transaction pipeline，undo/redo 由 Y.UndoManager 自动覆盖 |
 | 图片上传成功可替换资源，失败可恢复 | **通过** | 上传、替换、错误恢复和 retryToken 完备 |
 | 批注 anchor 在文本编辑后仍定位正确 | **通过** | Y.RelativePosition 实现，编辑不漂移 |
-| 粘贴 HTML 不产生 XSS | **通过** | DOMPurify + 严格 allowlist，CSS `url()` 也被拒绝 |
+| 粘贴 HTML 不产生 XSS | **部分通过** | DOMPurify + 结构化 fragment 输出可防 XSS；但 link/table paste 未闭环，且不能把安全依据写成 CSS 层显式过滤 |
 
 | 禁止条件（来自规范） | 状态 | 说明 |
 |---------------------|------|------|
@@ -289,13 +293,34 @@ Gate 4 在架构层面交付质量 **优秀**。所有块级对象（图片、�
 | **低** | 页眉页脚 | 无首页/奇偶页差异 |
 | **低** | 只读 | 不支持运行时切换 |
 
+### R2 复审补充与订正
+
+| 严重度 | 模块 | 问题 | 状态 |
+|--------|------|------|------|
+| **低（R2 复审补充）** | 修订 | `buildAddRevisionMetadataCommand`（`packages/core/src/operations/revision-command-builders.ts:39,49,63-64`）的 `rangeSnapshot` 保存了**完整选区**，但 `revisionId` 只写入 `collectSelectionTargets(...).runs[0]`。多 run 选区的修订：定位（依赖 rangeSnapshot）完整、但 run 级 `revisionId` 标记只落在首个 run，若可见化依赖 run 级标记则只有首 run 显示。这是首轮"低：只标记首个 run"发现的更精确根因，确认属实，严重度维持低（定位不受影响）。 | 属实 |
+| **信息（R2 订正）** | 保格式粘贴 | 首轮关于 CSS `url()` 被过滤的表述无代码依据；XSS 防护实际靠"输出侧只承载结构化文本"实现，详见 2.9 订正条目。 | 订正 |
+
+**已核实的首轮 BUG/高级发现（R2 结论）**：
+
+
+### R3 子代理复审补充与订正（2026-07-02）
+
+- **新增 P2**：DOMPurify 粘贴缺 link/table 闭环。计划要求 link allowlist 与简单表格粘贴，当前 sanitizer allowlist 与 fragment 类型均不支持，测试也未覆盖。修复时应复用 core link allowlist，表格转 core table commands；若不做完整实现，应输出稳定 warning 并更新计划口径。
+- **订正**：目录“无自动刷新”应降级为 standalone controller 使用说明。官方 `createJWordUi` 已在 transaction 事件中调用 `headingOutline?.refresh()`，手动 `refresh()` 也会调用；裸 controller 不自带订阅，但官方装配路径已自动刷新。
+- **订正**：Gate 4 并非没有 Playwright e2e；已有 `gate4-media/table/comments-link/header-footer/structure-find/revisions/paste-mobile/readonly/selection-actions/perf/visual` 等 Gate 4 e2e/perf/visual 文件。测试缺口应收窄到未覆盖能力和 flaky/baseline 问题。
+- **订正**：验收表中把安全依据写成 CSS 层显式过滤是错误口径；真实依据是 sanitizer 结果只被转换为结构化文本/格式 fragment，HTML/CSS 不回插 DOM。
+
+- **浮动工具栏格式按钮始终隐藏（BUG）— 属实**：`packages/ui/src/selection-actions/dom.ts:172-178` `syncLinkActionVisibility` 无条件 `dom.formatControls.bold/italic/underline/strike.hidden = true`，且 `dom.ts:26` 初始化也整体隐藏 `floatingToolbar`。
+- **表格无跨页拆分（高）— 属实**（TableBox 属单一 pageIndex）。
+- **查找替换无 Ctrl+F/Ctrl+H（高）— 属实**。
+
 ---
 
 ## 五、架构亮点
 
 1. **Transaction Pipeline 一致性**：所有 Gate 4 模块的写入操作（图片、表格、批注、链接、页眉页脚、修订）均严格通过 `editor.executeCommand()` -> `TransactionPipeline.run()` -> `ydoc.transact(origin)` 路径，无旁路
 2. **Y.RelativePosition 锚点**：批注系统使用 Yjs 原生的相对位置机制，是 CRDT 环境下位置稳定性的最佳实践
-3. **安全纵深**：图片 URL、链接协议、粘贴 HTML 均有多层安全校验，DOMPurify 配置严格
+3. **安全纵深**：图片 URL、链接协议、粘贴 HTML 均有多层安全校验；粘贴路径的真实 XSS 防护来自结构化输出，不是完整 CSS sanitizer
 4. **Operation 可序列化**：所有操作的输入和输出均为 JSON 兼容纯数据，支持 fixture 回放和远端传输
 5. **core/UI 分离**：core 包无 DOM 依赖，UI 包纯 DOM 操作无框架绑定，边界清晰
 
@@ -330,4 +355,4 @@ Gate 4 在架构层面交付质量 **优秀**。所有块级对象（图片、�
 
 Gate 4 相关测试文件共 36 个，涵盖 core operations（5 个）、core layout（2 个）、core 其他（2 个）、UI controllers/state/dom（27 个）。核心操作均有 command builder 和 operation adapter 层面的测试。UI 测试覆盖 controller 逻辑、DOM 输出和集成流程。
 
-**测试缺口**：无端到端 Playwright 测试覆盖 Gate 4 新功能的浏览器交互（如图片拖拽、表格点击编辑、批注侧栏交互）。建议在 Gate 7 稳定化阶段补充。
+**测试覆盖订正（R3 子代理复审）**：Gate 4 已有 Playwright 覆盖。`examples/vanilla/tests` 已存在 `gate4-media/table/comments-link/header-footer/structure-find/revisions/paste-mobile/readonly/selection-actions/perf/visual` 等 Gate 4 e2e/perf/visual 文件。真实缺口应收窄为 link/table paste、表格跨页拆分、多单元格选择、部分视觉 baseline 与跨浏览器稳定性，而不是 Gate 4 全无浏览器覆盖。

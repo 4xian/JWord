@@ -4,6 +4,8 @@
 **审查范围**：Gate 2（分页 Layout 与 Canvas Render）、Gate 3（输入与基础编辑）
 **审查人**：AI Code Reviewer
 
+> **R2 复审说明（2026-07-02 第二轮独立复审）**：本轮对第一轮全部 阻断/P0/严重 发现逐条到源码核实（结论见文末「R2 复审：已有发现核实结论」），并补充遗漏问题、订正过时行号。新增条目以「（R2 复审补充）」标注，订正条目以「（R2 订正）」标注，均按原严重度体系就地插入对应章节。核实结论：第一轮全部 2 个 P0 与 8 个 P1 均**属实**，无夸大或误报。
+
 ---
 
 ## 目录
@@ -129,7 +131,41 @@
 - **描述**：非列表段落出现时 `delete cursor.listCounters` 重置所有计数器。Word 通常会跨非列表段落继续编号。
 - **修复建议**：按 `numberingId` 维护独立计数器，非列表段落不清除。
 
+### G2-20 [P2 中等] 分页跨页时段落 spacingBefore 未在新页重置（R2 复审补充）
+
+- **文件**：`packages/core/src/layout/paragraph-flow.ts`
+- **行号**：202-209（`applyParagraphSpacingBefore`）、238-242（`ensureLineFits` 跨页分支）
+- **描述**：`ensureLineFits` 在 `cursor.y + nextHeight` 超出内容区时调用 `startNewPage` + `startParagraph` 开新页，但段前距 `applyParagraphSpacingBefore` 在段落起始时已把 `spacingBeforeTwips` 累加进上一页的 `cursor.y`。段落一旦在段前距之后被断到新页，新页顶部不会再重新计算段前距语义，导致跨页续排的段落在新页顶端缺少应有的间距处理逻辑一致性（Word 的行为是页首段落忽略段前距）。当前实现既未在页首忽略段前距，也未在续排页补偿，属于分页与段落间距的边界处理缺口。
+- **修复建议**：在 `startNewPage` 后对续排段落显式定义段前距策略（页首忽略或续排补偿），并补充跨页 fixture 覆盖。
+- **预估工作量**：0.5 天
+
+### G2-21 [P3 轻微] `moveSelectionVertically` 与 `moveSelectionToLineBoundary` 共用的精确浮点匹配也影响本页布局查询（R2 复审补充，与 G3-13 同源）
+
+- **文件**：`packages/core/src/editor/text-editing-runtime.ts`
+- **行号**：1472-1476（`moveSelectionToLineBoundary` 中 `candidate.y === caretRect.y && candidate.height === caretRect.height`）
+- **描述**：第一轮 G3-13 只指出 `moveSelectionVertically`（1426-1429）用精确浮点相等定位当前行；实际 Home/End 的 `moveSelectionToLineBoundary` 也用完全相同的 `=== ` 相等匹配（1472-1476）。修复 G3-13 时必须同时覆盖此处，否则 Home/End 在浮点抖动下同样会定位失败。
+- **修复建议**：抽出统一的「按容差匹配当前行」辅助函数，两处共用。
+- **预估工作量**：并入 G3-13 修复，无额外成本
+
 ---
+
+### G2-23 [P2 中等] 表格单元格布局丢弃非 text inline（R3 子代理复审补充）
+
+**文件**：`packages/core/src/layout/engine.ts`
+**证据**：`layoutTableCellTextFragments()` 遇到 `inline.kind !== 'text'` 直接 `continue`。
+
+**问题**：表格单元格内的 line/page break、inline image 等不会进入 `TextFragment` / `InlineBox`，layout、render、hit-test、selection rect 都丢失这些内容。既有 G2-02 只覆盖大表格跨页，不覆盖单元格内部 inline 语义。
+
+**建议**：至少支持 `breakType: 'line'` 作为单元格内换行；对 page break 明确禁止或定义语义；inline image 复用正文 `InlineObjectBox` 布局或生成可命中的占位。
+
+### G2-24 [P2 中等] 正文 inline object 不参与换行/分页适配（R3 子代理复审补充）
+
+**文件**：`packages/core/src/layout/engine.ts`、`packages/core/src/layout/paragraph-flow.ts`
+**证据**：正文 text measured segment 才进入 `ensureLineFits()`；非 text inline 直接 `appendNonTextInlineBox()`；`appendNonTextInlineBox()` 只推进 `cursor.x`，未做宽高适配；换行条件只看 `line.fragments.length`，不看 `line.inlines.length`。
+
+**问题**：超宽/超高 inline image 可能横向溢出行、纵向溢出页；如果行内只有 image，后续文本也可能因 `fragments.length === 0` 不触发换行。
+
+**建议**：非文本 inline 先计算 geometry，再进入与 text 相同的 line/page fit 流程；换行条件同时考虑 `line.fragments.length > 0 || line.inlines.length > 0`；补超宽图片、页尾图片 fixture。
 
 ## Gate 2：Canvas 渲染器
 
@@ -171,6 +207,16 @@
 
 ### G2-18 [P4 建议] `iteratePageTextFragments` 每页执行两次
 
+
+### G2-25 [P2 中等] 表格操作 dirty page 定位查不到 tableId（R3 子代理复审补充）
+
+**文件**：`packages/core/src/editor/rendering.ts`、`packages/core/src/layout/engine.ts`
+**证据**：`insertTableRow/deleteTableRow/setTableCellText/...` 用 `findBlockPageIndexes(layout, operation.tableId)`；但 `findBlockPageIndexes()` 只查 paragraph 与 line fragments/inlines，不查 `page.blocks` 里的 `TableBox.tableId`。
+
+**问题**：表格编辑命令可能重排/重绘错误页面；当 selection 不在目标表格页或表格 offscreen 时，真实表格页可能不被优先刷新。
+
+**建议**：`findBlockPageIndexes()` 增加 `page.blocks.some(block.kind === 'table' && block.tableId === blockId)`；同时考虑 `TableCellBox.blockIds`，让单元格段落变更也能命中表格页。
+
 - **文件**：`packages/core/src/canvas/renderer.ts`
 - **行号**：83, 87
 - **描述**：generator 为 `renderTextBackgrounds` 和 `renderTextFragments` 各执行一次。可缓存为数组避免双重迭代。
@@ -187,6 +233,14 @@
 - **描述**：`filter` 遍历所有页面判断可见性。对于 100+ 页的文档，二分查找首个可见页面会更高效（O(log n) vs O(n)）。
 - **修复建议**：在大文档场景下使用二分查找优化。
 
+### G2-22 [P4 建议] `expandWithBuffer` 对每个可见页做线性 `indexOf` 查找（R2 复审补充，与 G2-19 同源）
+
+- **文件**：`packages/core/src/canvas/viewport-virtualizer.ts`
+- **行号**：84-88（`pageIndexes.indexOf(visiblePageIndex)` 位于 `for (const visiblePageIndex of ...)` 循环内）
+- **描述**：除了 G2-19 指出的 `computeViewportPages` 里 `filter` 全量扫描，`expandWithBuffer` 还在遍历可见页时对每个可见页调用 `pageIndexes.indexOf`（O(n) 线性查找），整体是 O(可见页数 × 总页数)。可见页通常连续，页索引本身即数组下标，无需线性反查。
+- **修复建议**：`pageIndex` 与数组 position 若一一对应可直接用下标；否则预建一次 `Map<pageIndex, position>`。
+- **预估工作量**：0.25 天
+
 ---
 
 ## Gate 3：输入系统
@@ -198,6 +252,7 @@
 - **描述**：箭头键处理（ArrowLeft/Right/Up/Down）从未检查 `event.shiftKey`。按住 Shift 时不会扩展选区，而是与不按 Shift 行为相同（移动光标并折叠选区）。这是文本编辑器最基本的功能之一。
 - **影响**：用户无法通过键盘选中文本，只能依赖鼠标拖拽。
 - **修复建议**：在 `moveSelectionHorizontally`/`moveSelectionVertically`/`moveSelectionToLineBoundary` 中增加 `extending` 参数。当 `shiftKey` 为 true 时，保持 anchor 不变，只移动 focus。
+- **R2 复审补充：计划基线声明偏差**。规划文档 `docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md:230` 的 Step 3.4 声称 keyboard handler「覆盖输入、删除、回车、方向键、快捷键、撤销重做」并已勾选 `[x]`，`:262` 验收项「输入、删除、回车、方向键、选择、复制粘贴可用」亦勾选。但源码证明 Shift+方向键选区扩展完全缺失，方向键仅实现了折叠光标移动。因此该 P0 不仅是功能缺陷，也意味着 Step 3.4 的完成勾选与实际实现不符，建议在修复的同时回写计划状态。
 
 ### G3-02 [P0 阻断] Enter 键在有选区时无效
 
@@ -205,6 +260,7 @@
 - **行号**：1330
 - **描述**：`splitParagraphFromRuntime` 在选区非折叠时直接 `return`。用户选中文本后按 Enter，期望先删除选区内容再分段，但实际什么也不发生。
 - **修复建议**：在 `splitParagraphFromRuntime` 中，若选区非折叠，先调用 `deleteSelectedTextFromRuntime()` 删除选中内容，再执行分段。
+- **R2 复审补充：受影响路径不止键盘 Enter**。`splitParagraphFromRuntime` 有两个调用入口，两者在有选区时都会静默失败：（1）`input-runtime.ts:213-217` 的 keydown Enter；（2）`input-runtime.ts:129-136` 的 `handleRuntimeBeforeInput`，浏览器原生 `insertParagraph`/`insertLineBreak`（含部分 IME/软键盘换行）也走此路径。此外 `Ctrl+A` 全选（`input-runtime.ts:176-182`）后按 Enter 是最常见触发场景。修复应放在 `splitParagraphFromRuntime` 内部，一次覆盖全部入口。
 
 ### G3-03 [P1 严重] `mouseup` 注册在 canvas 容器而非 document
 
@@ -299,6 +355,16 @@
 
 ---
 
+### G3-33 [P1 严重] 跨 section / 跨容器选区删除、剪切、粘贴替换会失败（R3 子代理复审补充）
+
+**文件**：`packages/core/src/editor/text-editing-runtime.ts`、`packages/core/src/operations/operation-adapter.ts`
+
+**证据**：`buildDeleteSelectionPlan()` 为所有 selected target 的 `deleteRange.anchor/focus.sectionId` 写入 `range.start.sectionId`；跨段删除又无条件生成连续 `mergeBlock`。而 `operation-adapter.ts` 中 `deleteRange` 会按 `position.sectionId` 定位 section，`mergeBlock` 只支持同一容器相邻段落。
+
+**问题**：跨 section 选区执行 Delete/Backspace/Cut/粘贴替换时，后续 section 的 run 会被错误地按起始 section 查找；跨 section/container merge 则可能抛 `OPERATION_MERGE_BLOCK_NOT_ADJACENT`。这属于用户可感知的编辑正确性问题，应高于普通 P2。
+
+**建议**：`SelectedRunTarget` 或 delete plan 携带真实 section/container；deleteRange 使用 target 所属 section；merge 只在同一容器内执行，跨 section 明确语义（保留 section break、删除空 section，或返回稳定 unsupported error）。
+
 ## Gate 3：剪贴板
 
 ### G3-15 [P3 轻微] 粘贴 HTML 中 `<br>` 转为空格而非换行
@@ -332,6 +398,7 @@
 - **行号**：1276-1278, 1330-1342, 1500-1502
 - **描述**：`collectCommentThreadIds`、`allocateGeneratedCommentThreadId`、`findCommentThread` 三个函数已定义但从未调用。
 - **修复建议**：删除死代码。
+- **R2 订正**：`collectCommentThreadIds` 与 `findCommentThread` 是**同名多副本**，需精确限定为「`command-builders.ts` 内的副本是死代码」。`comment-command-builders.ts` 中的同名函数被大量调用（`findCommentThread` 有 7 处调用者，`collectCommentThreadIds` 被 `buildAddCommentThreadCommand` 调用）。因此删除范围仅限 `command-builders.ts:1276-1278` 与 `command-builders.ts:1500-1502` 两处副本，不得误删 `comment-command-builders.ts` 的实现。`allocateGeneratedCommentThreadId`（1330-1342）确为纯死代码。
 
 ### G3-19 [P3 轻微] 模块级可变计数器影响测试确定性
 
@@ -398,6 +465,8 @@
 
 ### G3-27 [P2 中等] 按钮/选择器/颜色控件事件监听未通过 AbortController 清理
 
+> **R3 范围补充**：该问题还应覆盖 tooltip 事件监听。`wrapWithTooltip()` 注册 `mouseover/focusin/mouseout/focusout/mousedown/click`，但返回值没有 destroy 被 `createToolbarDom()` 收集，`destroyToolbarDom()` 只执行 control 自身 destroy 后 `replaceChildren()`。建议 `wrapWithTooltip()` 返回 `destroy()` 或接收 `AbortSignal`，并纳入 `destroyParts`。
+
 - **文件**：`packages/ui/src/toolbar/controller.ts`
 - **行号**：1298-1334
 - **描述**：`bindButton`、`bindSelect`、`bindColorClick`、`bindColorInput` 直接添加事件监听，未传 `signal`。`destroy()` 调用 `signalController.abort()` 只能清理 `editorHost` 和 `document` 级别的监听器。按钮/选择器的监听器依赖 DOM 节点移除后由 GC 回收。
@@ -411,6 +480,15 @@
 - **修复建议**：改为禁用所有工具，仅对导航类工具使用显式允许列表。
 
 ### G3-29 [P3 轻微] `syncToolbarLinkInsertAvailability` 绕过工具栏渲染周期
+
+
+### G3-34 [P3 轻微] Toolbar DOM/Tooltip 使用全局 document，不使用宿主 ownerDocument（R3 子代理复审补充）
+
+**文件**：`packages/ui/src/toolbar/dom.ts`、`packages/ui/src/toolbar/tooltip.ts`
+
+**问题**：`createToolbarDom(host, ...)` 接收宿主元素，但创建 toolbar 和控件时多处使用全局 `document.createElement()`；tooltip 也使用全局 document。iframe、多 document、嵌入式 SDK 或跨 window 测试环境中，节点可能创建到错误 document。
+
+**建议**：`createToolbarDom()` 内统一 `const ownerDocument = host.ownerDocument` 并传给 helper；`wrapWithTooltip()` 使用 `control.ownerDocument`，跨 window 判断用 `ownerDocument.defaultView?.Node/Element`。
 
 - **文件**：`packages/ui/src/create-ui.ts`
 - **行号**：1707-1722
@@ -427,6 +505,7 @@
 - **行号**：63
 - **描述**：`destroy()` 设置 `destroyed = true` 但不清除 `host.textContent`。最后一条公告文本残留在 DOM 中，如果宿主元素继续存在，辅助技术可能重复读取过时内容。
 - **修复建议**：在 `destroy()` 中添加 `host.textContent = ''`。
+- **R2 订正**：当前 `live-region.ts` 是**外部宿主绑定版**，宿主经 `options.host` 传入且可能为 `null`。`destroy`（62-64 行）确实只置 `destroyed = true`、不清文本，结论与行号（63）均属实。修复应写为 `if (options.host !== null) options.host.textContent = ''`，不能假设 host 一定存在。
 
 ### G3-31 [P2 中等] 所有公告使用相同的 `aria-live="polite"` 优先级
 
@@ -434,6 +513,7 @@
 - **行号**：32
 - **描述**：错误类公告（如 "BLOCKED: 当前为只读模式"）应使用 `aria-live="assertive"` 以确保立即朗读。当前所有公告使用 `polite`，错误提示可能被延迟或跳过。
 - **修复建议**：`announce` 方法增加 `priority` 参数，错误公告使用 `assertive`。
+- **R2 订正**：当前源码中 `aria-live="polite"` 硬编码在 `configureLiveRegionHost` 的第 **83** 行（并同时设 `role="status"`），`announce` 无 priority 分支在第 **36-50** 行；报告原标注的「行 32」在当前 checkout 不指向该逻辑。结论仍属实，行号更正为 83（属性设置）/36-50（announce）。此外该实现的宿主 `options.host` 可能为 `null`，priority 改造需同时处理 host 为 null 的分支。
 
 ### G3-32 [P3 轻微] 文本镜像使用已弃用的 `clip` CSS 属性
 
@@ -531,14 +611,16 @@
 
 ### 统计
 
-| 严重程度 | 数量 |
-|----------|------|
-| P0 阻断 | 2 |
-| P1 严重 | 8 |
-| P2 中等 | 20 |
-| P3 轻微 | 15 |
-| P4 建议 | 2 |
-| **总计** | **47** |
+| 严重程度 | 数量（R1） | R2 新增 | 合计 |
+|----------|------|------|------|
+| P0 阻断 | 2 | 0 | 2 |
+| P1 严重 | 8 | 0 | 8 |
+| P2 中等 | 20 | 1（G2-20） | 21 |
+| P3 轻微 | 15 | 1（G2-21） | 16 |
+| P4 建议 | 2 | 1（G2-22） | 3 |
+| **总计** | **47** | **3** | **50** |
+
+> R2 另有 4 处订正（G3-18 死代码范围、G3-31 行号、G3-30 修复写法、G3-13/G2-21 同源扩展），不改变严重度计数。第一轮全部 P0/P1 核实属实。
 
 ### P0 问题清单（必须立即修复）
 
@@ -570,3 +652,73 @@
 - 键盘交互功能不完整（选区扩展、逐词移动、PageUp/Down）
 - 可访问性实现不完整（ARIA 角色、键盘导航、公告优先级）
 - 部分跨文件代码重复（utility 函数、hit-test 函数）
+
+---
+
+## R2 复审：已有发现核实结论
+
+对第一轮全部 阻断/P0/严重 发现逐条到源码核实，结论如下（均**属实**）。
+
+| 编号 | 严重度 | 核实结论 | 证据 file:line |
+|------|--------|----------|----------------|
+| G3-01 | P0 | 属实。ArrowLeft/Right/Up/Down、Home/End 分支均不读 `event.shiftKey` | `input-runtime.ts:219-254` |
+| G3-02 | P0 | 属实。选区非折叠直接 return；beforeinput 换行路径同样受影响 | `text-editing-runtime.ts:1330`、`input-runtime.ts:129-136` |
+| G2-01 | P1 | 属实。只处理 right/center，justify 落入 offset=0 等同左对齐 | `paragraph-flow.ts:490-492` |
+| G2-02 | P1 | 属实。仅整表放不下时开一次新页，无行级分页 | `engine.ts:564-567` |
+| G2-13 | P1 | 属实。`CanvasPool` 接口无 dispose/clear，`available` 缓存无法释放 | `pool.ts:35-73` |
+| G3-03 | P1 | 属实。`mouseup` 注册在 `canvasContainer` 非 document | `mount-facade-runtime.ts:193`、销毁对称在 276 |
+| G3-04 | P1 | 属实。`handleFocus`/`handleBlur` 未存入 mountedDom，destroy 未移除 | `mount-facade-runtime.ts:183-205`、销毁 273-286 |
+| G3-05 | P1 | 属实。catch 块无日志/无 rethrow，仅写 liveRegion | `input-runtime.ts:418-423` |
+| G3-23 | P1 | 属实。仅设 aria-label，无 `role="toolbar"` | `toolbar/dom.ts:49` |
+| G3-20 | P1 | 属实。`collectSelectionTargets(...).runs[0]` 仅取首个 run | `revision-command-builders.ts:39` |
+
+无「不属实/夸大」条目。另抽查的 P2/P3（G2-03/05/06/07/09/12、G2-14/15/16、G3-09/10/13/14/15/16/17/21/22/26/27/30/31/32、GX-02/04/05）亦全部在源码中定位属实，仅 G3-18/G3-30/G3-31 需按上文订正范围或行号。
+
+---
+
+## R2 复审：新增问题列表（结构化）
+
+| 严重度 | 编号 | 标题 | file:line | 一句话描述 | 修复方案 | 工作量 |
+|--------|------|------|-----------|------------|----------|--------|
+| P2 | G2-20 | 跨页续排段落段前距策略缺失 | `paragraph-flow.ts:202-209,238-242` | 段落被断到新页时段前距语义未定义，页首既不忽略也不补偿 | `startNewPage` 后显式定义续排段前距策略 + 跨页 fixture | 0.5 天 |
+| P3 | G2-21 | Home/End 定位当前行同样用精确浮点相等（与 G3-13 同源） | `text-editing-runtime.ts:1472-1476` | `moveSelectionToLineBoundary` 精确 `===` 匹配，浮点抖动会失败 | 与 G3-13 共用容差匹配辅助函数 | 并入 G3-13 |
+| P4 | G2-22 | `expandWithBuffer` 每可见页线性 indexOf（与 G2-19 同源） | `viewport-virtualizer.ts:84-88` | 循环内 O(n) 反查页索引，整体 O(可见页×总页) | 用数组下标或预建 Map | 0.25 天 |
+
+---
+
+## R2 复审：订正/撤销的已有结论
+
+1. **G3-18（订正，非撤销）**：`collectCommentThreadIds`/`findCommentThread` 有同名多副本，死代码范围仅限 `command-builders.ts:1276-1278` 与 `:1500-1502`；`comment-command-builders.ts` 的同名实现被大量调用，删除时不得误删。`allocateGeneratedCommentThreadId` 确为死代码。
+2. **G3-31（行号订正）**：`aria-live="polite"` 硬编码在第 83 行（`configureLiveRegionHost`），`announce` 无 priority 分支在 36-50 行；原「行 32」不准确。
+3. **G3-30（修复写法订正）**：live-region 为外部宿主绑定版，`options.host` 可能为 null，清文本需判空。
+4. **G3-13（范围扩展）**：修复须同时覆盖 `moveSelectionToLineBoundary`（见新增 G2-21）。
+
+---
+
+## R2 复审：建议加入修复计划的条目
+
+按建议 Phase 排序（依赖关系已标注）。
+
+**Phase A — Alpha 阻断（必须最先修，P0）**
+
+- **G3-01 Shift+方向键选区扩展**：为水平/垂直/行首尾移动增加 `extending` 参数，shiftKey 时保持 anchor 只移 focus。验证：新增 Vitest 覆盖 Shift+Left/Right/Up/Down/Home/End 的 anchor 稳定性 + 三浏览器 E2E 键盘选区。依赖：无。同时回写计划 Step 3.4 状态。
+- **G3-02 Enter 带选区**：在 `splitParagraphFromRuntime` 内部对非折叠选区先删后分段，一次覆盖 keydown 与 beforeinput 两个入口。验证：Vitest「选区 + Enter → 内容删除并分段」+ Ctrl+A→Enter E2E。依赖：可复用现有 `deleteSelectedTextFromRuntime`。
+
+**Phase B — 严重功能/内存（P1）**
+
+- **G3-03 mouseup 注册到 document** + **G3-04 focus/blur 清理**：同属 `mount-facade-runtime` 事件生命周期，建议同一改动一并修，把 mouseup 移到 document 且 focus/blur 存入 mountedDom 并在 destroy 移除。验证：destroy 后监听器计数归零的单测 + 拖拽移出编辑器释放的 E2E。依赖：无。
+- **G2-13 CanvasPool dispose**：新增 `dispose()` 清空 available/active 并把尺寸置 0，在 `mount-facade-runtime` destroy 中调用。验证：pool 单测断言 dispose 后 canvas 宽高为 0。依赖：无。可顺带修 G2-14 双重释放防护。
+- **G3-05 输入错误不再静默**：catch 中加 `console.error` 并通过 editor event 暴露。验证：注入抛错 handler 的单测断言事件被发出。依赖：无。
+- **G3-23 role="toolbar"** + **G3-20 修订多 run**：两者独立，可与 A11y 批次或修订批次并行。
+
+**Phase C — 布局正确性（P1/P2，可与 Gate 4 并行）**
+
+- **G2-01 Justify**、**G2-02 表格跨页**、**G2-03 widow/orphan**、**G2-20 跨页段前距**：均属排版语义，建议合并为一个「分页正确性」批次，共享跨页 fixture 与视觉基线。依赖：G2-02 与 G2-20 都改 `ensureLineFits`/`startNewPage` 路径，需同批以免冲突。
+
+**Phase D — 性能热路径（服务 Step 3.13 的 P95<50ms）**
+
+- **G2-05 O(n²) advance**、**GX-01 投影全量重建**、**GX-02 字体兼容全量探测**、**GX-03 byteLength 开销**：直接影响输入热路径 P95，建议在 Alpha 性能收口前处理。依赖：GX-02 可先做（改为哈希缓存，改动局部）。
+
+**Phase E — A11y 与轻量清理（P2/P3）**
+
+- G3-24~G3-27、G3-30~G3-32、G3-13/G2-21、死代码 G2-10/G2-16/G3-18、G2-22 等，可批量清理，无相互依赖。

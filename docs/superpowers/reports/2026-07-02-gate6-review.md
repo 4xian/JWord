@@ -8,7 +8,7 @@
 
 ## 一、总体评价
 
-Gate 6 的实现质量整体较高，架构分层清晰、职责边界明确。Provider Adapter 模式成功隔离了 Hocuspocus 内部类型；授权校验在连接建立前完成；自动插入器不侵入用户光标和 undo 栈；version handshake 设计健壮。以下按审查维度逐一列出发现。
+Gate 6 的实现质量整体较高，架构分层清晰、职责边界明确。Provider Adapter 模式成功隔离了 Hocuspocus 内部类型；客户端授权校验在显式连接前完成；自动插入器不侵入用户光标和 undo 栈；version handshake 设计健壮。但 R3 复审确认正式 Hocuspocus WebSocket 服务端仍缺 tenant/authHook 隔离，不能把“授权前置”外推为服务端房间级权限已完整闭环。以下按审查维度逐一列出发现。
 
 **严重程度分级**：CRITICAL（必须修复）、HIGH（强烈建议修复）、MEDIUM（建议改进）、LOW（可选优化）、INFO（信息备注）
 
@@ -91,6 +91,9 @@ Gate 6 的实现质量整体较高，架构分层清晰、职责边界明确。P
 
 ### 2.2 packages/collab — Hocuspocus Adapter
 
+
+> **R3 子代理复审补充（服务端安全，HIGH）**：`packages/collab-server/src/hocuspocus-server.ts` 的正式 WebSocket 服务选项只有 `requiredToken`、`rejectUpdates`、`licenseHook`；连接路径仅校验 `documentName.startsWith(roomPrefix)` 与 license。HTTP history/relay 有 tenant hook，但 WebSocket 同步路径没有 `tenantHook` / `authHook`，也没有把 documentName 解析为 tenantId/documentId/roomId 后做隔离。共享 token 或宽松 licenseHook 下会退化成“只要 room 前缀合法即可尝试进入房间”。建议 `CreateJWordCollabHocuspocusServerOptions` 增加 auth/tenant hook 或 documentName parser，并在 onConnect/onAuthenticate/beforeSync 中传入 tenantId/documentId/roomId/userId/token 拒绝跨 tenant update。
+
 **[HIGH] Provider 在构造时即调用 `attach()` 和 autoConnect**
 
 `hocuspocus-adapter.ts:112` 在构造完成后立即调用 `provider.attach()`，而 `HocuspocusProviderWebsocket` 的 `autoConnect` 默认为 `true`（第 58 行）。这意味着在 adapter 创建后、用户调用 `connect()` 之前，底层 WebSocket 可能已经开始连接。
@@ -113,6 +116,13 @@ Gate 6 的实现质量整体较高，架构分层清晰、职责边界明确。P
 ### 2.3 packages/collab — Client History & Offline
 
 #### 2.3.1 History 降级策略
+
+
+**[HIGH] R3 子代理复审补充：public client `restoreVersion()` 不能保证真正回退到旧版本**
+
+`packages/collab/src/client-history.ts:122-157` 在拿到旧版本 preview update 后直接调用 `editor.applySyncUpdate(preview.update, { origin: 'version-restore' })`；core 的 `applySyncUpdate()` 最终进入 Yjs `applyUpdate` 合并语义。Yjs update 合并不会自动删除当前文档里该版本之后新增的 struct，因此从 v2 应用 v1 update 通常不能让 v2 新增内容消失，无法保证“恢复到 v1”。
+
+**建议**：新增受控 “replace from version update” 路径：用隔离 `Y.Doc` 应用 preview update，再通过 core transaction/受控替换逻辑覆盖当前 canonical document，并带 `version-restore` origin；补测试：record v1、record v2、restore v1 后断言 v2 文本消失。
 
 **结论：设计合理**
 
@@ -155,6 +165,13 @@ Gate 6 的实现质量整体较高，架构分层清晰、职责边界明确。P
 
 #### 2.4.1 HTTP 路由和安全
 
+
+**[MEDIUM] R3 子代理复审补充：`rateLimit` 公开选项未实现**
+
+`packages/collab-server/src/index.ts` 公开了 `CreateJWordCollabServerOptions.rateLimit`，但 `rg -n "rateLimit" packages/collab-server/src packages/collab-server/test tests/architecture/gate6-*` 仅命中类型声明，请求处理路径没有任何限流逻辑。history record/preview、license status、auto-insert relay 只依赖 payload size，不能限制高频请求或 relay 滥用。
+
+**建议**：实现最小内存滑窗限流，按 IP/auth user/documentId 分桶，超限返回 429 与稳定 diagnostic；若暂不实现，应从公开 API 移除该选项，避免误导集成方。
+
 **结论：设计良好**
 
 - CORS 处理正确：`writeJson` 统一设置 `access-control-allow-origin`、`access-control-allow-headers`、`access-control-allow-methods`。
@@ -173,6 +190,13 @@ Gate 6 的实现质量整体较高，架构分层清晰、职责边界明确。P
 
 #### 2.4.2 History Service — 并发安全
 
+
+**[MEDIUM] R3 子代理复审补充：history list 授权 metadata 与 record/preview 不一致**
+
+`packages/collab/src/client-history.ts` 对 history list 会发送 `x-jword-entitlement`，但 `packages/collab-server/src/history-routes.ts` 的 `handleListHistoryVersions()` 只读 query 中的 `documentId/tenantId`，调用 license hook 时未传 entitlement。record/preview 路径则会从 URL/header 读取 metadata。严格 licenseHook 下 list 会不可用；宽松 hook 下又容易退化为 documentId-only 授权，造成版本元数据枚举风险。
+
+**建议**：GET list 也统一走 `readLicenseMetadata()`，读取 header/query entitlement 并传入 licenseHook；补无 entitlement 被拒、有 entitlement 可 list 的测试。
+
 **结论：设计正确**
 
 `StorageBackedJWordCollabHistoryService`（`history-service.ts:64-143`）使用 `runWithDocumentLock` 实现同一文档的 promise 链式串行。
@@ -189,6 +213,13 @@ Gate 6 的实现质量整体较高，架构分层清晰、职责边界明确。P
 `runWithDocumentLock` 中 `task(this.createAdapter())`（第 136 行）每次调用都创建新的 `StoragePersistenceAdapter`。虽然 adapter 本身是轻量的（只包装 storage 引用），但在高频调用场景中会产生额外 GC 压力。
 
 #### 2.4.3 Auto-Insert Relay
+
+
+**[MEDIUM] R3 子代理复审补充：record/preview/relay 只校验 body.documentId，不校验 body.tenantId 与授权 metadata 一致**
+
+history record/preview 与 auto-insert relay 先用 URL/header metadata 做 tenant/license 校验，但请求体 schema 也允许 `tenantId`，当前只交叉校验 `documentId`。虽然 body tenantId 目前未直接参与写入，仍会造成审计语义不一致，并给后续扩展留下跨 tenant 混淆风险。
+
+**建议**：若 body 带 `tenantId`，必须与 metadata tenantId 完全一致；否则返回稳定 `JWORD_COLLAB_*_METADATA_MISMATCH` diagnostic。
 
 **结论：设计安全**
 
@@ -354,13 +385,16 @@ Auto inserter 通过 `executeCommand` 执行 `autoInsert` / `autoInsertReplace` 
 
 无。
 
-### HIGH（3 项）
+### HIGH（首轮 3 项 + R2 新增 1 项 + R3 新增 2 项）
 
 1. **Base64 栈溢出风险**：`client-history.ts:478` 使用 `String.fromCodePoint(...update)` 展开运算符，大文档（>100KB）会栈溢出。
 2. **IndexedDB update 监听性能**：每次 Yjs update 都编码完整文档状态，连续编辑时 O(N) 操作频繁触发。
 3. **Hocuspocus adapter autoConnect 竞态**：构造时 autoConnect 默认 true 且立即 attach，可能在用户调用 connect() 前已开始连接。
+4. **（R2 复审补充）用户 id/name 缺失被降级为非阻断 warning**：`client-sdk.ts:690-698` 用 `COLLAB_AWARENESS_STALE`（warning）代替阻断性初始化错误，缺失身份仍继续连接。详见 5b.2。
+5. **（R3 子代理复审补充）`restoreVersion()` 不能保证真正回退旧版本**：public client 直接 apply 旧版本 Yjs update，合并语义不会自动删除目标版本之后新增的 struct。
+6. **（R3 子代理复审补充）Hocuspocus WebSocket 正式服务缺 tenant/authHook 隔离**：服务端只校验 roomPrefix/license，未解析 tenantId/documentId/userId 后做房间级授权。
 
-### MEDIUM（6 项）
+### MEDIUM（首轮 6 项 + R3 新增 3 项，其中版本比较项经 R2 提升安全含义）
 
 1. 模块级 `memoryCollabRooms` 无全局清理入口。
 2. Awareness 校验函数在 index.ts 和 hocuspocus-adapter.ts 中重复（约 200 行）。
@@ -368,6 +402,9 @@ Auto inserter 通过 `executeCommand` 执行 `autoInsert` / `autoInsertReplace` 
 4. Auth hook 和 license hook 的默认行为不一致（auth 默认放行、license 默认拒绝）。
 5. History service document lock 无队列深度限制。
 6. IndexedDB load 中 `restoredDoc` 未显式 destroy。
+7. **（R3 子代理复审补充）`rateLimit` 公开选项未实现**。
+8. **（R3 子代理复审补充）history list 授权 metadata 与 record/preview 不一致**。
+9. **（R3 子代理复审补充）record/preview/relay 未校验 body.tenantId 与授权 metadata 一致**。
 
 ### LOW（3 项）
 
@@ -382,8 +419,43 @@ Auto inserter 通过 `executeCommand` 执行 `autoInsert` / `autoInsertReplace` 
 1. **[HIGH] 修复 Base64 编码栈溢出** — 改用循环拼接或 Buffer 方案，避免大文档场景崩溃。
 2. **[HIGH] 节流 IndexedDB update 监听** — 使用 debounce 或仅在特定事件时更新 byteLength。
 3. **[HIGH] 修复 Hocuspocus autoConnect 竞态** — 强制 autoConnect=false 或延迟 attach。
-4. **[MEDIUM] 消除 awareness 校验函数重复** — 提取到共享内部模块。
-5. **[MEDIUM] 添加 restoredDoc.destroy()** — 防止 Y.Doc 内存泄漏。
+4. **[HIGH] 修复 `restoreVersion()` 回退语义** — 通过隔离 Y.Doc + core 受控替换当前 canonical document。
+5. **[HIGH] Hocuspocus WebSocket 服务端补 tenant/authHook 隔离** — 连接和同步前完成房间级授权。
+6. **[MEDIUM] 消除 awareness 校验函数重复** — 提取到共享内部模块。
+7. **[MEDIUM] 添加 restoredDoc.destroy()** — 防止 Y.Doc 内存泄漏。
+
+---
+
+## 五之二、R2 独立复审补充（2026-07-02）
+
+第二轮独立复审对本报告全部 HIGH 发现逐条到源码核实，并新增若干被首轮遗漏的问题。以下所有条目均带 file:line 证据，且与已有条目严格去重。
+
+### 5b.1 已有 HIGH/严重发现核实结论
+
+| 首轮发现 | 证据 | 复审结论 |
+|---|---|---|
+| Base64 栈溢出 `client-history.ts:478` | `btoa(String.fromCodePoint(...update))` 确在 `packages/collab/src/client-history.ts:478` | **属实**。补充：同仓 `packages/persistence/src/storage-history-adapter.ts:744-749` 已用正确的循环 `String.fromCharCode(byte)` 分块实现，`packages/collab-server/src/http-utils.ts:117-118` 用 `Buffer.from(bytes).toString('base64')`，说明这是 client-history 一处孤立疏漏，可直接复用同仓正确实现。首轮给出的修复代码（循环 + `fromCharCode`）方向正确。 |
+| IndexedDB update 全量编码 `indexeddb-adapter.ts:103-105` | `packages/persistence/src/indexeddb-adapter.ts:103-106` 每次 `update` 事件 `Y.encodeStateAsUpdate(this.document)` | **属实**。补充：`whenSynced`（:110）、`storeUpdate`（:126）也各有一次全量编码，节流方案需一并覆盖。 |
+| Hocuspocus autoConnect 竞态 `hocuspocus-adapter.ts` | `packages/collab/src/hocuspocus-adapter.ts:57` `autoConnect: options.autoConnect ?? true`，`:112` 构造末尾 `provider.attach()` | **属实**。 |
+
+### 5b.2 新增问题（Gate 6 代码）
+
+**[HIGH]（R2 复审补充）连接初始化用户 id/name 缺失被降级为非阻断 warning，且复用了语义错配的诊断码**
+`packages/collab/src/client-sdk.ts:690-698`：当 `options.user.id` 或 `options.user.name` 为空时，`validateConnectionOptions` 只推入 `COLLAB_AWARENESS_STALE`（severity `warning`，`recoverable: true`），而非阻断连接的 error。对比同函数 :681-687 对 serverUrl/documentId/roomId 缺失用的是 `COLLAB_PROVIDER_UNAVAILABLE`。后果：user.id/name 是 presence、awareness、auto-inserter actor id（:668 `${localUser.id}:auto-inserter`）、license 诊断 authorId 的基础，缺失时不应静默继续连接。且把「初始化参数缺失」标成「awareness 过期」诊断码，会误导第三方排障。建议：user.id/name 缺失应返回独立的、阻断性的初始化错误码（如 `COLLAB_USER_IDENTITY_REQUIRED`，error 级），并纳入 diagnostics registry。预估工作量：0.5 天。
+
+**[MEDIUM→安全含义]（R2 复审补充）版本握手 `compareVersions` 预发布标识失效可导致最低版本门禁被绕过**
+首轮 2.1.5 已记为 MEDIUM「不支持预发布排序，建议加注释」，但**未点明其发生在安全边界上**：`packages/collab/src/client-sdk.ts:799` 用 `compareVersions(handshake.clientPackageVersion, handshake.minimumClientVersion)` 做客户端最低版本强制；`readVersionParts`（:883-889）对 `1.0.0-beta` 的 `0-beta` 段 `Number.parseInt` 得 `0`，使 `1.0.0-beta` 与 `1.0.0` 判定相等（返回 0），本应被 `< 0` 拒绝的过旧/预发布 client 会通过握手。同理影响 :791 的 `COLLAB_SERVER_TOO_OLD` 判定。建议：握手比较引入最小 semver（含 prerelease 语义）而非仅数字段拆分；修复优先级应从「注释说明」提升为「实现修正」。预估工作量：0.5 天。
+
+**[LOW]（R2 复审补充）Hocuspocus adapter `sendUpdate` 写入 Y.Doc 使用的 fallback origin 不在 core origin matrix 内**
+`packages/collab/src/hocuspocus-adapter.ts:197` `Y.applyUpdate(options.document, update, metadata.origin ?? 'local')`。core 冻结的 origin matrix 是 `local-user` / `remote-user` / `auto-inserter` / `version-restore` / `system-recovery`（`packages/core/src/operations/transaction.ts:509`、`history.ts:17`），此处 fallback 的 `'local'` 是不在矩阵内的裸字符串。虽然目前 metadata.origin 一般有值、且此 origin 不进 user undo（未在 trackedOrigins 中），但一旦 metadata.origin 缺省，写入将带一个 diagnostics 无法归类的 origin，破坏 origin 可诊断性约束。建议 fallback 用 `'local-user'` 并断言 origin 属于已冻结矩阵。预估工作量：0.25 天。
+
+### 5b.3 对首轮结论的订正
+
+**（R2 订正）2.1.2「模块级 `memoryCollabRooms` 无全局清理入口」的泄漏描述过重**
+`packages/collab/src/index.ts:562-568`：`unregisterMemoryAdapter` 每次都会 `room.awarenessStates.delete(state.clientId)` 再判断 `adapters.size === 0 && awarenessStates.size === 0`。正常 destroy 路径下本 adapter 的 awareness 会被清除，因此单 adapter 场景 room 能正常回收；仅当**同 room 其他 adapter 遗留了未清理的 awarenessStates**时 room 才不删。该问题真实但影响面仅限内存 demo/测试，且不是「room 永不清理」。定级 MEDIUM 偏高，建议下调为 LOW，或按测试辅助 `resetMemoryCollabRooms()` 处理即可（与首轮建议一致）。
+
+**（R2 订正）3.2「History service document lock 无队列深度限制」的「无限队列」措辞需精确化**
+`packages/collab-server/src/history-service.ts:120-142`：`finally` 中 `releaseCurrentLock()` 总会执行，`documentLocks.get(documentId) === queued` 仅在**没有新请求接管**时删除 Map 条目；有新请求时条目被新 `queued` 覆盖并由新请求接管，不会产生「永不释放的 Map 泄漏」。真实风险是**同一文档高频写入时 promise 链无背压**（内存中挂起的 task 链持续增长），而非条目泄漏。首轮「队列会无限增长而不释放」应订正为「promise 链缺少背压/深度限制」，Map 条目本身会随最后一个请求结束而清理。定级 MEDIUM 合理，建议保留。
 
 ---
 

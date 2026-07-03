@@ -3,6 +3,7 @@
 > 审查日期：2026-07-02
 > 审查范围：`docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md`（2758 行，Gate 0-7）
 > 对照文档：`docs/superpowers/specs/2026-05-11-jword-canonical/` 01-07 全部规范文件
+> R2 复审 2026-07-02：第二轮独立复审在原报告基础上补充 2.7-2.10、3.11-3.17，并对 3.6/3.7/3.8 补充订正；所有新增条目已与原报告去重，标注「（R2 复审补充）」或「（R2 订正）」。
 
 ---
 
@@ -111,9 +112,9 @@
 
 **优先级**：P1
 
-### 2.5 Gate 7 计划细节严重不足
+### 2.5 Gate 7 详细设计与可复制验收不足
 
-**问题描述**：对比 Gate 0-6 每个都有详细的迭代任务清单、执行记录、验收标准和禁止事项，Gate 7 在规范文件中只有 14 行概述（Plugin API、React/Vue wrapper、主题、i18n、Devtools、文档站、错误诊断导出、size-limit），在实施计划中也没有展开具体步骤。作为交付 `1.0-stable` 的最后一个 Gate，缺乏详细计划意味着：
+**问题描述（R3 订正）**：Gate 7 不是空方案；当前计划已在 Gate 7 小节展开目标、基线、执行顺序、Iteration、Step 7.1-7.24 与验收。但对比 Gate 0-6 已落地的执行记录和代码证据，Gate 7 仍停留在任务清单层：Plugin API、React/Vue wrapper、主题、i18n、Devtools、文档站、错误诊断导出、size-limit 等缺少可执行设计、产物路径、验收命令和 release/no-alias 第三方消费证据。作为交付 `1.0-stable` 的最后一个 Gate，风险在于：
 - 公开 API 面清理和类型导出的工作量被低估。
 - Plugin API 的设计（command 扩展、menu 扩展、装饰层扩展）需要大量架构设计。
 - React/Vue wrapper 需要处理 SSR、Suspense、严格模式等框架特有问题。
@@ -143,6 +144,55 @@
 - 将执行记录和验证日志拆到独立的 `execution-log/` 目录，按 Gate 和日期组织。
 - 计划文档只保留：目标、待办步骤（含完成状态）、验收标准、禁止事项、当前基线摘要。
 - 每个 Gate 完成后，将详细过程归档并在计划文档中只留简要总结。
+
+**优先级**：P1
+
+### 2.7 计划状态标记失真，复选框已不可作为进度真源（R2 复审补充）
+
+**问题描述**：计划文档的 checkbox 状态存在多处自相矛盾与长期失更：
+- Gate 3 验收区「上标、下标可用」「行距、段前段后、首行缩进、悬挂缩进可用」「有序/无序/基础多级列表与 Heading 1-3 可用」三项仍为未勾选（计划约 265-267 行），而对应 Step 3.14-3.16 已于 2026-05-18 标记完成并附浏览器实测记录（249-256 行），同一能力两处状态互斥。
+- 0.4 目标包结构中 `core`、`ui`、`docx`、`pdf`、`collab`、`collab-server`、`license`、`persistence` 均未勾选（57-66 行），但这些包全部早已落地并通过各 Gate 验收；0.3 全局硬约束中「所有状态变更必须走同一 transaction pipeline」（45 行）等已被 Gate 1 验收与复核点 C 证实的条目也未勾选。
+- 「禁止事项」的 checkbox 语义各 Gate 不一致：Gate 0/2/4/4.5/5/6 的禁止事项全部勾选（语义为"已核实遵守"），Gate 1/3/7 的全部未勾选，同一语义两种写法，读者无法区分"未核实"与"未遵守"。
+- 「执行顺序建议」前四项（Gate 0-4 相关）未勾选，但对应 Gate 早已完成。
+
+**影响范围**：计划文档是项目声明的唯一实施真源，checkbox 失真后，人和 agent 都无法据其判断实际进度，后续实施（尤其 Gate 7 以计划为输入）存在误判风险。
+
+**修改建议**：
+- 做一次全量状态审计，统一修正所有 checkbox。
+- 在文档头部定义 checkbox 语义规范：待办步骤=实现完成、验收=达标证据存在、禁止事项=已核实未违反。
+- 将「状态审计」纳入每个 Gate 收口 checklist，防止再次漂移。
+
+**优先级**：P1
+
+### 2.8 Beta 里程碑欠账无排期，与 1.2 的 Alpha 欠账同构（R2 复审补充）
+
+**问题描述**：持续验证矩阵「Beta 完成」区仍有两项未完成且无排期：「10 万字、200 页 fixture 有性能报告」与「保格式粘贴通过安全验收」（约 2689、2699 行）。其中后者与 Gate 4 验收「粘贴 HTML 不产生 XSS」已勾选（663 行）形成口径落差——计划未说明 Beta 级"安全验收"相对 Gate 4 XSS 冒烟的增量标准（specs 06 安全清单中的 SVG payload、data URL 图片、`mso-*` 样式、docx 外链等场景）。与 1.2 的 Alpha 性能欠账同构：里程碑对外宣称已达成（0.2 节 `0.5-beta` 对应 Gate 均声明收口），而完成区状态漂移，无 owner、无达标定义、无排期。
+
+**修改建议**：
+- 建立统一的「里程碑欠账清单」（Alpha：输入 P95/INP；Beta：10 万字性能报告、粘贴安全验收），逐项给出达标定义、验证方式与排期。
+- 粘贴安全验收明确引用 specs 06 清单，落为可回归的安全测试套件而非一次性人工验证。
+
+**优先级**：P1
+
+### 2.9 WPS-only 兼容口径与商业承诺错位（R2 复审补充）
+
+**问题描述**：Gate 5 兼容验收口径于 2026-05-25 调整为 WPS-only（约 851 行），Microsoft Word、LibreOffice、Open XML validator 全部降级为 pending/not-run，且 Gate 7 与 post-1.0 backlog 均未安排补验排期。作为商业 DOCX 互通 SDK，企业客户的主流打开端是 Microsoft Word；导出的 DOCX 仅在 WPS 验证过而对外承诺「商业格式互通」，存在客户侧打开失败/触发修复提示的兼容事故与商誉风险。1.0 完成定义中也不包含任何 Word 兼容要求。
+
+**修改建议**：
+- 在 Gate 7 前（或作为独立补验迭代）排期 Microsoft Word 桌面版 + Open XML validator 的 T1/T2 导出矩阵验证；validator 校验可自动化、优先纳入 CI。
+- 在能力边界文档与商业口径中明确「当前仅验证 WPS」，未验证目标不得写成已支持。
+
+**优先级**：P1
+
+### 2.10 CI 门禁疑似从未真实运行，属纸面配置（R2 复审补充）
+
+**问题描述**：`.github/workflows/ci.yml` 单 job 依次执行 lint/typecheck/test/build/e2e/visual/bench/size，但全流程没有任何 `playwright install`（含 `--with-deps`）步骤；根 `package.json` 的 `test:e2e` 直接调用 `playwright test` 跑三浏览器。GitHub 全新 runner 上没有浏览器二进制，E2E/visual 步骤必然失败——即该 CI 要么从未被真实触发，要么从未跑通，Step 0.12「创建 CI 验证配置」实际为纸面完成。另外 `test:e2e` 中的 `--pass-with-no-tests` 会在测试文件缺失/被移动时静默通过，弱化门禁；collab E2E 依赖本地 collab server 的启动策略在 CI 环境的可行性也未验证。
+
+**修改建议**：
+- 补 `pnpm exec playwright install --with-deps` 步骤，并真实跑通一次完整 CI 作为验收。
+- 评估三浏览器 E2E 拆分 job/矩阵并缓存浏览器二进制，控制单次 CI 时长。
+- 审视 `--pass-with-no-tests` 的必要性，至少对已知测试目录做存在性断言。
+- 在计划中记录 CI 门禁的必跑矩阵、耗时预算与 flaky 处理策略。
 
 **优先级**：P1
 
@@ -235,6 +285,7 @@
 - Gate 7 前对 Gate 4-6 功能补充 Firefox/WebKit 回归。
 - 建立 10 万字 + 200 页的 benchmark fixture。
 - 增加安全 fuzzing 测试，覆盖恶意 OOXML、恶意粘贴内容。
+- （R2 复审补充）性能验收目前只有 `perf-chromium` 单浏览器口径，Firefox/WebKit 没有任何性能护栏；WebKit 的 canvas/字体测量性能特征与 Chromium 差异较大，建议至少为 WebKit 建立冒烟级性能基线。
 
 **优先级**：P2
 
@@ -259,6 +310,7 @@
 | 数学公式编辑 | 明确不做 |
 | 字数统计 | 未提及 |
 | 大纲视图/草稿视图 | 未提及 |
+| PDF/A 归档、tagged PDF（政企采购与无障碍常见硬性要求，R2 复审补充） | 未提及 |
 
 **修改建议**：
 - 不需要全部实现，但应在计划中建立明确的能力路线图，标明每个能力的优先级和预计阶段。
@@ -270,6 +322,8 @@
 ### 3.8 TypeScript 6 的实际风险未评估
 
 **问题描述**：计划选择了 TypeScript 6.0.3 作为语言版本。TypeScript 6 是一个较新的大版本（如果存在），主要编辑器和工具链的兼容性需要确认。生态中大量库的类型声明可能不兼容 TS 6 的新特性或 breaking changes。
+
+（R2 订正）当前仓库全链路 `pnpm typecheck` / `pnpm build` 已在 TypeScript 6 下通过，「如果存在」的表述不成立。实际风险应收窄为三点：外部消费方项目用旧版 TS 消费本 SDK 的 `.d.ts` 产物的向下兼容性、第三方 `@types` 生态滞后，以及 TS 6 早期小版本的编译器回归；建议在 Gate 7 类型测试中加入「以 TS 5.x 消费 dist 类型声明」的兼容用例。
 
 **修改建议**：
 - 确认 TypeScript 6 的具体 breaking changes 对 Yjs、DOMPurify、JSZip、pdf-lib、fontkit、hocuspocus 等依赖的影响。
@@ -307,7 +361,87 @@
 
 **优先级**：P3
 
+### 3.11 协同权限粒度缺失（R2 复审补充）
+
+**问题描述**：计划中协同鉴权只有 auth hook / tenant hook 与编辑器全局 `readonly`，没有 viewer / commenter / editor 的角色模型，也没有服务端强制只读的设计——客户端 `readonly` 是纯 UI 约束，改包后即可绕过，服务端 `beforeSync` 层面没有按用户拒绝写入 update 的契约。查看者/评论者/编辑者分级是企业协作的基础需求。
+
+**修改建议**：
+- 在 `collab-server` 的 auth hook contract 中定义 per-user 权限（read / comment / write），服务端拒绝越权 update 并返回稳定 diagnostic。
+- 在 Gate 7 文档中写明当前权限模型边界，避免集成方误以为 readonly 具备安全语义。
+
+**优先级**：P2
+
+### 3.12 Worker 不可用环境的降级策略缺失（R2 复审补充）
+
+**问题描述**：docx / pdf / native 的导入导出全部依赖 module worker。在严格 CSP（限制 `worker-src` / `blob:`）、受限 WebView 或老旧浏览器环境下，这些能力将整体不可用，而计划未定义能力检测、同线程降级或明确的「不支持环境」口径。企业内网严格 CSP 相当常见。
+
+**修改建议**：
+- 提供环境能力检测 API 与稳定 diagnostic（如 `WORKER_UNAVAILABLE`），失败时给出可操作的错误而非静默挂起。
+- 评估同线程 fallback 的可行性与代价；若决定不支持，在文档中明确声明环境要求（CSP 指令清单）。
+
+**优先级**：P2
+
+### 3.13 对外浏览器支持矩阵未定义（R2 复审补充）
+
+**问题描述**：测试矩阵（Chromium/Firefox/WebKit 最新版）不等于支持承诺。作为商业 SDK，缺少对外的最低浏览器版本口径（Safari ≥ 多少、Chrome/Edge ≥ 多少、移动端浏览器支持到只读预览还是编辑），也没有与构建目标（esbuild/rollup target、语法降级）联动的约束。
+
+**修改建议**：Gate 7 冻结 browserslist 式支持矩阵，写入公开文档，并让构建 target、E2E 矩阵与该承诺对齐。
+
+**优先级**：P2
+
+### 3.14 内存回归门禁缺失（R2 复审补充）
+
+**问题描述**：持续验证矩阵有 bench 与 bundle size，但没有内存维度的验收项：mount/destroy 循环的泄漏检测、长时编辑的 heap 增长曲线、canvas 池尺寸上限。各 Gate 代码审查已实证存在泄漏簇（canvas 池无 dispose、focus/blur 监听器未解绑、UI 控件监听未清理），计划层面缺少能拦住这类回归的门禁。
+
+**修改建议**：在验证矩阵新增内存回归项：Playwright + CDP heap 采样（或 `performance.memory` 冒烟阈值），覆盖「创建-编辑-销毁 ×N 次」与「50 页滚动 10 分钟」两个场景。
+
+**优先级**：P2
+
+### 3.15 风险复核点体系不完整（R2 复审补充）
+
+**问题描述**：风险控制与复核点覆盖了 A(Gate 1)、B(Gate 2)、C(Alpha 前)、C2(Gate 4.5)、D/D2(Gate 5)、E(Gate 6)，但缺两个关键节点：Gate 4 完成后没有「块级模型是否足以承载 DOCX T1/T2 映射与协同锚点」的复核点（Gate 5 实际撞上的 core 结构化导入入口缺口正源于此）；Gate 7 前没有「公开 API 面冻结」复核点。
+
+**修改建议**：补复核点 F：Gate 7 Iteration 0 完成后，一次性冻结 edition matrix、导出面、事件 payload 与 diagnostics 命名，之后的文档站、类型测试、wrapper 只消费冻结面，防止对外接口边写边漂移。
+
+**优先级**：P2
+
+### 3.16 版本历史与 Yjs GC 的交互缺少设计结论（R2 复审补充）
+
+**问题描述**：若版本预览/恢复依赖 `Y.Snapshot`，则整个文档生命周期必须 `gc = false`，长文档的 tombstone 会持续膨胀——这是 Yjs 的已知深坑。当前「update log + 隔离 Y.Doc 重放」路线可以避开该问题，但计划没有把这一点写成明确的技术决策约束，也未定义 update log 的截断/归档与 snapshot 密度策略，后续维护者可能在不知情的情况下引入 `Y.Snapshot` 依赖。
+
+**修改建议**：将「版本历史禁止依赖 Y.Snapshot + gc=false 路线」写为明确技术决策；补 update log 增长治理设计（compaction 周期、条目上限、冷数据归档）。
+
+**优先级**：P3
+
+### 3.17 移动端能力边界的长期口径未定（R2 复审补充）
+
+**问题描述**：Gate 4 曾有移动分页预览，2026-05-25 删除了独立移动只读模式、统一走全局 `readonly`；计划中移动端从此只剩「预览可读」，1.0 之后移动端编辑是否做、触摸选区/虚拟键盘 IME 这类硬问题归到哪个阶段，均无口径。商业客户评估 SDK 时移动端支持是高频问题。
+
+**修改建议**：在 post-1.0 backlog 中明确移动端路线（只读预览长期支持 / 移动编辑评估项），并在 Gate 7 文档中写明当前边界。
+
+**优先级**：P3
+
 ---
+
+### 3.18 发布形态与示例验证仍以源码 alias 为主（R3 子代理复审补充）
+
+**问题描述**：所有可发布包当前仍为 `private: true`，而 Gate 5/6 commercial pack 脚本更多证明 tarball 可生成/安装，并不证明 registry publish readiness。与此同时 `examples/vanilla`、`examples/docx`、`examples/collab` 的 Vite 配置和相关测试固化源码 alias，demo dev/build 绕过 package manifest、exports、dist、pack 后安装形态，会隐藏 export map、CSS 产物、files 白名单、workspace 协议清洗等真实发布问题。
+
+**影响范围**：Gate 7 若直接以现有 examples 作为第三方集成证据，会把 monorepo 源码开发路径误当作外部 SDK 消费路径；`private: true` 与 “publish/release readiness” 口径也不一致。
+
+**修改建议**：Gate 7 先明确分发策略：如果发布到 registry，可发布包移除 `private: true` 并配置 `publishConfig`，root 保持 private；如果只交付 tarball，则文档改称 tarball distribution readiness。保留 dev alias，但新增 release/no-alias 模式：从本地 tarball 或 dist package entry 安装运行；Stable E2E 和 external empty project smoke 必须覆盖 no-alias。
+
+### 3.19 Public API catalog 与 worker/internal 边界不一致（R3 子代理复审补充）
+
+**问题描述**：`docs/sdk/public-api.md` 一方面声明禁止公开 worker 内部 helper，另一方面把 `createPdfProgressResponse()`、`createPdfErrorResponse()`、`createCancelPdfWorkerRequest()`、`createPdfTransferables()`、`readPdfImageAsset()`、`handlePdfWorkerRequest()` 等 PDF worker helper 列为 stable root API。`@4xian/jword-core` 的 package `files` 白名单还包含 `src`，与禁止第三方 deep import `packages/*/src/*` 的长期口径冲突。
+
+**修改建议**：Gate 7 Step 7.1/7.2 增加 stable API 降噪：root 只保留应用集成 API；worker helper 移至 `./worker`、`./experimental` 或 internal；类型测试断言 catalog 不含 worker-local helper。core `files` 默认收敛到 `dist` + README/LICENSE；若坚持 source distribution，需明确文档口径并增加 pack 审计和 deep-import 禁止测试。
+
+### 3.20 观测、错误边界与 telemetry 未进入可执行修复计划（R3 子代理复审补充）
+
+**问题描述**：Gate 7 方案和差距表提到错误追踪、诊断导出、遥测，但修复计划 Phase 6 未把 telemetry/error boundary 落成可执行任务。企业级 SDK 需要统一 contract：插件异常隔离、wrapper error boundary、diagnostics export、可选 telemetry、隐私裁剪、默认关闭与宿主 opt-in。
+
+**修改建议**：新增 Gate 7 observability 子任务：默认关闭 telemetry；宿主显式 opt-in；事件 schema 与隐私裁剪；插件抛错不破坏编辑器；diagnostics export 不含正文内容。验收包含插件抛错、wrapper error boundary、diagnostics export 内容审计。
 
 ## 四、架构设计评价
 
@@ -361,3 +495,5 @@ Gate 0-3 建立基础 -> Gate 4 企业结构 -> Gate 4.5 原生保存 -> Gate 5 
 | A11y | C | 基础方案已设计；实质验收几乎没有 |
 
 **总体评价**：规划文档在架构设计、技术决策和 Gate 划分上体现了较高的专业水平，特别是 Y.Doc 真源、Transaction Pipeline、Canvas 分页渲染和商业化边界的设计经过了充分思考。主要风险集中在：（1）Alpha 性能目标长期未达标；（2）核心文件过大影响可维护性；（3）A11y 验收形同虚设；（4）Gate 7 计划严重不足。建议在推进 Gate 7 之前，先安排一轮专项治理迭代，解决性能、文件拆分和 A11y 三个关键问题。
+
+**R2 复审补充结论（2026-07-02）**：第二轮复审确认原报告的三个 Critical 判断全部属实（超大文件行数逐一核实无误），并新增四个 P1 级计划问题：（1）计划 checkbox 状态失真，已不可作为进度真源（2.7）；（2）Beta 里程碑欠账（10 万字性能报告、粘贴安全验收）与 Alpha 同构、无排期（2.8）；（3）WPS-only 兼容口径与「商业格式互通」的对外承诺错位，Word/validator 补验无排期（2.9）；（4）CI 缺少 Playwright 浏览器安装步骤，E2E/visual 门禁在真实 runner 上必然失败，属纸面配置（2.10）。建议把 2.7/2.10 作为治理迭代的第一批任务——两者工作量小、但直接决定「计划可信」与「门禁真实」这两个工程底座。

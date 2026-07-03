@@ -282,6 +282,62 @@ Phase 5: 文档站 + Bundle + Release
 
 ---
 
+## 六之二、R2 独立复审补充（2026-07-02）
+
+第二轮独立复审对本报告的可验证声明（bundle 数字、UI export map、publishConfig、公开 API 清单基线）逐条到源码/产物核实，并补充遗漏的方案缺口。Gate 7 尚未实施，问题定位以计划文档行号或现状文件 file:line 为证据。
+
+### 6b.1 对首轮结论的核实与订正
+
+**（R2 订正）2.6 bundle size 具体数字与门禁现状**
+首轮称「core dist 已达 494KB，首屏 581KB」，来源是转述。实测当前工作树产物：
+- `packages/core/dist/index.js` = **523433 字节（约 511KB）**，非 494KB。
+- `examples/vanilla/dist/assets/index-CiZ-Re2o.js` = **573859 字节（约 560KB）**，非 581KB（且首轮未计 css）。
+- 现行门禁 `tools/size/check-size.mjs:34-35`：`coreEntryByteLimit = 260000`、`demoFirstScreenByteLimit = 330000`。
+
+关键结论（比首轮「预算过时需更新」更严重）：core dist 523KB **已超**门禁 260KB 近一倍，首屏 574KB 也远超 330KB。这意味着按当前产物 `pnpm size` 门禁**处于破线状态**（或 dist 是与 Gate 2 预算不同步的过时产物，产物 mtime 为 5月26/28）。Gate 7 Step 7.19 不应只是「更新预算值」，而应先查清 core 体积翻倍的根因（是真实增长还是过时产物），再决定是调预算还是拆包/裁剪。数字请以实测 511KB / 560KB 为准。
+
+**（R2 核实：属实）5.2 UI 包 styles export map 指向源码**
+`packages/ui/package.json:17` `"./styles.css": "./src/styles/toolbar.css"` 确指向 `src`。补充首轮未点明的一层：该包 `files` 数组（:21）显式包含 `src/styles` 才能让此 export 在 publish 后可用——这等于为了 css 把源码目录打进发布包，既是 export map 错误也是发布形态问题。修正时应把样式产物纳入 `dist` 并让 export 指向 `dist`，同时从 `files` 移除 `src/styles`。
+
+**（R2 核实：属实）2.7 / 5.x core、native、ui 缺 `publishConfig.access`**
+三个包 package.json 均无 `publishConfig`。相较之下 Gate 6 商业包（collab/collab-server/license/persistence）已按 remediation 补 `publishConfig.access: "restricted"`。免费包应显式声明 `access: "public"`，避免发布时默认行为不确定。
+
+**（R2 核实：基本属实）2.1 Plugin 基础设施缺失**
+现状核对确认 core 侧无命令中间件链、无生命周期钩子注册、无 decorations 层、`HistoryScope` 等类型是封闭联合。首轮「需对 core 结构性修改、Step 7.5 工作量被低估」的判断成立。补充证据：Editor facade 采用多层 abstract class 继承（`packages/core/src/editor/state.ts` 起的 `JWordEditorState` → `...PointerRuntime` → `...CollaborationRuntime` → `facade-runtime` 链），首轮 6.2「11 层继承链」量级判断方向正确，插入扩展点确需按 composition 而非继承注入。
+
+### 6b.2 新增方案缺口（Gate 7 方案）
+
+
+**[HIGH] 发布形态仍未闭环：可发布包 `private: true` 与 examples 源码 alias 会掩盖真实消费问题（R3 子代理复审补充）**
+
+- `packages/core/ui/native/docx/pdf/collab/collab-server/license/persistence/package.json` 均仍为 `private: true`；若目标是 registry 发布，这会直接阻止 `npm publish`。
+- `tools/release/check-gate5-commercial-pack.mjs` 与 `check-gate6-commercial-pack.mjs` 能证明 pack/tarball 形态部分可用，但不能证明 private registry 发布 readiness。
+- `examples/vanilla`、`examples/docx`、`examples/collab` Vite 配置和测试固化源码 alias，不能代表第三方项目从 dist/exports/tarball 消费。
+
+**建议**：Gate 7 明确 registry publish vs tarball distribution；新增 no-alias external project smoke，从本地 pack 安装所有公开包并跑 typecheck/build/browser smoke。若保留 `private: true`，报告和文档应避免称 “publish readiness”。
+
+**[MEDIUM] Public API catalog 将 PDF worker helper 列为 stable root API，且 core pack 包含 src（R3 子代理复审补充）**
+
+`docs/sdk/public-api.md` 禁止公开 worker 内部 helper，但后文把多个 PDF worker helper 列入 stable；`packages/core/package.json` 的 `files` 包含 `src`，与禁止 deep import 的对外口径冲突。建议 Gate 7 冻结 API 时把 worker-local helper 移到 `./worker`、`./experimental` 或 internal，并让 pack 审计覆盖 core/ui 等免费基础包源码泄漏。
+
+**[MEDIUM] Observability/error boundary/telemetry 需从差距表提升为 Phase 6 可执行任务（R3 子代理复审补充）**
+
+错误边界、插件异常隔离、diagnostics export、可选 telemetry 与隐私裁剪不能只停留在竞品差距表。建议新增 Gate 7 observability 子任务，并用插件抛错、wrapper error boundary、diagnostics export 不含正文内容作为验收。
+
+**[HIGH]（R2 复审补充）方案未提 diagnostics registry 已达 56 码，Step 7.11/7.23 的 diagnostics export 与错误码参考应以其为单一真源**
+计划 Step 7.11、7.23 与首轮 2.5「错误代码完整参考」都要求导出/文档化诊断码，但均未引用已存在的 `fixtures/collab/diagnostics-registry.json`（Gate 6 已扩到 56 个稳定码，见计划 2420-2421 行 Step 6.54）。若 Gate 7 另起一套错误码文档而不以该 registry 为生成源，会与 Gate 6 运行时实际发出的码漂移。建议：Step 7.3/7.11/7.23 明确「错误码参考从 diagnostics-registry.json 生成」，并把 core / docx / pdf / native 的诊断码也纳入同一 registry 体系。计划行号：2589（Step 7.3）、2597（Step 7.11）、2609（Step 7.23）。预估工作量：1 天（建立生成管线）。
+
+**[MEDIUM]（R2 复审补充）Iteration 0 冻结清单遗漏 `@4xian/jword-persistence` 的对外分级**
+计划 2525-2536 行 Iteration 0「冻结 package/example 落点」列了 native/license/react/vue/devtools/collab-server，但**未列 `packages/persistence`**；而 remediation（计划 2455 行）已把 persistence 纳入 pack 审计和 public-api 清单。Gate 7 edition matrix（2521-2524 行）虽提到「基础 persistence contract」属 free，但未在冻结落点中明确 persistence 的 stable/experimental/internal 边界。建议：Iteration 0 补入 persistence 的导出分级与 edition 归属，避免 free 基础契约与 paid offline/history 能力在同包内边界不清。计划行号：2525-2536。预估工作量：0.5 天。
+
+**[MEDIUM]（R2 复审补充）Step 7.19 size-limit 迁移与 Gate 6 已有的自研 bundle gate 存在职责重叠，未说明整合关系**
+Gate 6 已落地 `tools/size/check-gate6-collab-bundle.mjs` + `tests/architecture/gate6-bundle-gate.test.ts`（计划 2418-2419 行 Step 6.53），Gate 2 有 `tools/size/check-size.mjs`。Step 7.19 计划迁移到 `size-limit`（首轮 2.6 建议）却未说明：迁移后这两套自研脚本是废弃、并存还是被 size-limit 覆盖。若并存会出现多套预算真源。建议：Step 7.19 明确 size 门禁的单一工具与预算真源，并声明现有自研脚本的去留。计划行号：2605（Step 7.19）。预估工作量：0.5 天。
+
+**[LOW]（R2 复审补充）执行顺序：diagnostics/错误码冻结应前置到 Iteration 0/1，而非留到 Iteration 2 的 Step 7.11**
+计划 Iteration 0（2537 行）要求「冻结事件 payload、错误码、feature flags、license diagnostics…后续 wrappers/plugins/docs 只复用这套命名」，但 diagnostics export 的实现在 Step 7.11（Iteration 2）。首轮四、实施优先级建议已把类型测试/错误码参考前置到 Phase 1，方向一致；本条补充点是：Iteration 0 的「冻结」必须产出可被测试护栏引用的错误码清单文件，否则 7.5 Plugin API 的 error event 命名会先于错误码冻结落地。建议在 Iteration 0 交付「错误码清单 + 护栏测试」，Step 7.11 只做 export 实现。计划行号：2537、2597。预估工作量：并入 6b.2 第一条。
+
+---
+
 ## 七、结论
 
 Gate 7 规划方案的结构和目标设定合理，但在 Plugin API、Wrappers、Theme/i18n 和 Devtools 四个核心交付物上缺少具体的技术方案设计。其中 Plugin API 是最大的风险点，需要对 core 包进行结构性修改，这部分工作量被严重低估。
