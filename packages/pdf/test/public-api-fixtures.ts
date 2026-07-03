@@ -62,7 +62,7 @@ export function createPdfPublicApiLicense(features: readonly string[]): JWordLic
     issuer: 'jword-pdf-public-api-test',
     issuedAt: '2026-05-01T00:00:00Z',
     features,
-    expiresAt: '2026-06-01T00:00:00Z',
+    expiresAt: '2099-06-01T00:00:00Z',
     status: 'valid' as const
   }
 

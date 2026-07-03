@@ -67,10 +67,10 @@ export async function createCollabHocuspocusServiceForTest(
     createJWordCollabHocuspocusServer,
     createJWordCollabHistoryService,
     createJWordCollabServer
-  } = await import('../../../packages/collab-server/dist/index.js')
+  } = await import('@4xian/jword-collab-server')
   const {
     createVolatileHistoryStorage
-  } = await import('../../../packages/persistence/dist/index.js')
+  } = await import('@4xian/jword-persistence')
   const address = options.address ?? '127.0.0.1'
   const roomPrefix = options.roomPrefix ?? 'jword-collab'
   const historyStorage = options.historyStorage ?? createVolatileHistoryStorage()

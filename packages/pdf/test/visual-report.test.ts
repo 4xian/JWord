@@ -44,7 +44,7 @@ function createVisualReportLicense(): JWordLicenseEntitlement {
     issuer: 'jword-pdf-visual-test',
     issuedAt: '2026-05-01T00:00:00Z',
     features: ['pdf.export'],
-    expiresAt: '2026-06-01T00:00:00Z',
+    expiresAt: '2099-06-01T00:00:00Z',
     status: 'valid' as const
   }
 

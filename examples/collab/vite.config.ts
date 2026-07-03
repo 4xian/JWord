@@ -15,28 +15,12 @@ export function createCollabDemoViteConfig() {
     resolve: {
       alias: [
         {
-          find: '@4xian/jword-collab/experimental',
-          replacement: fileURLToPath(new URL('../../packages/collab/src/experimental.ts', import.meta.url))
-        },
-        {
-          find: '@4xian/jword-collab',
-          replacement: fileURLToPath(new URL('../../packages/collab/src/index.ts', import.meta.url))
-        },
-        {
           find: '@4xian/jword-core',
           replacement: fileURLToPath(new URL('../../packages/core/src/index.ts', import.meta.url))
         },
         {
           find: '@4xian/jword-docx',
           replacement: fileURLToPath(new URL('../../packages/docx/src/index.ts', import.meta.url))
-        },
-        {
-          find: '@4xian/jword-license',
-          replacement: fileURLToPath(new URL('../../packages/license/src/index.ts', import.meta.url))
-        },
-        {
-          find: '@4xian/jword-persistence',
-          replacement: fileURLToPath(new URL('../../packages/persistence/src/index.ts', import.meta.url))
         },
         {
           find: '@4xian/jword-ui/styles.css',

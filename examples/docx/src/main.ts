@@ -101,7 +101,7 @@ const builtInFixtureLicense = createSignedDocxDemoLicense({
   features: ['docx.export'],
   issuer: 'jword-test-issuer',
   issuedAt: '2026-05-01T00:00:00Z',
-  expiresAt: '2026-06-01T00:00:00Z',
+  expiresAt: '2099-06-01T00:00:00Z',
   status: 'valid'
 })
 
@@ -691,7 +691,7 @@ function readDemoLicense(): JWordLicenseEntitlement | null {
       features: ['docx.import'],
       issuer: 'jword-test-issuer',
       issuedAt: '2026-05-01T00:00:00Z',
-      expiresAt: '2026-06-01T00:00:00Z',
+      expiresAt: '2099-06-01T00:00:00Z',
       status: 'valid'
     })
   }
@@ -703,7 +703,7 @@ function readDemoLicense(): JWordLicenseEntitlement | null {
       features: ['docx.import', 'docx.export', 'pdf.export'],
       issuer: 'jword-test-issuer',
       issuedAt: '2026-05-01T00:00:00Z',
-      expiresAt: '2026-06-01T00:00:00Z',
+      expiresAt: '2099-06-01T00:00:00Z',
       status: 'server-unavailable'
     })
   }
@@ -714,7 +714,7 @@ function readDemoLicense(): JWordLicenseEntitlement | null {
     features: ['docx.import', 'docx.export', 'pdf.export'],
     issuer: 'jword-test-issuer',
     issuedAt: '2026-05-01T00:00:00Z',
-    expiresAt: '2026-06-01T00:00:00Z',
+    expiresAt: '2099-06-01T00:00:00Z',
     status: 'valid'
   })
 }

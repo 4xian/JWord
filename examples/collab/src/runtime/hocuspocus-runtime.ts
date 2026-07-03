@@ -5,10 +5,7 @@
  * 约束：所有协同正文来自同一个 Y.Doc；未实现能力用显式 no-op 状态暴露，不伪装离线或历史闭环完成。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.2。
  */
-import {
-  connectJWordCollaboration,
-  GATE6_COLLAB_FEATURES
-} from '@4xian/jword-collab'
+import { connectJWordCollaboration } from '@4xian/jword-collab'
 import { createHocuspocusCollabProviderAdapter } from '@4xian/jword-collab/experimental'
 import type {
   JWordAwarenessRangeSnapshot,
@@ -23,12 +20,7 @@ import {
   refreshEditorSharedDocument
 } from '@4xian/jword-core'
 import type { DocumentProjection, Editor, EditorSharedDocument } from '@4xian/jword-core'
-import type {
-  JWordCollaborationUser,
-  JWordCollaborationConnection,
-  JWordLicenseEntitlement,
-  JWordLicenseFeatureKey
-} from '@4xian/jword-collab'
+import type { JWordCollaborationConnection } from '@4xian/jword-collab'
 import * as Y from 'yjs'
 
 import {
@@ -62,9 +54,24 @@ import {
   readExternalTransactionSource
 } from './hocuspocus-transaction-origin'
 import { buildReconnectConflictText } from './hocuspocus-reconnect-merge'
+import {
+  createHocuspocusClientSnapshots,
+  createHocuspocusCurrentUser,
+  createHocuspocusOfflineStateSnapshot,
+  defaultDocumentId,
+  demoAutoInsertIntervalMs,
+  providerAutoInsertTokens,
+  readHocuspocusClientColor,
+  readHocuspocusClientName,
+  readSdkCollaborationFeatures,
+  reconnectFailureTimeoutMs,
+  shouldDeferAutoInsertForTransaction,
+  type HocuspocusDemoClientId,
+  type HocuspocusDemoRuntimeOptions,
+  type MutableProviderState
+} from './hocuspocus-runtime-helpers'
 import type {
   AwarenessStateSnapshot,
-  CollabClientSnapshot,
   CollabDemoRuntime,
   CollabRuntimeListener,
   CollabStateSnapshot,
@@ -75,77 +82,7 @@ import type {
   VersionPreviewSnapshot
 } from '../runtime'
 
-export interface HocuspocusDemoRuntimeOptions {
-  readonly webSocketUrl: string
-  readonly roomId: string
-  readonly clientId: HocuspocusDemoClientId
-  readonly documentId?: string
-  readonly offline?: 'none' | 'indexeddb'
-  readonly token?: string
-  readonly historyApiUrl?: string
-  readonly serverUrl?: string
-  readonly editor: Editor
-  readonly sharedDocument: EditorSharedDocument
-  readonly user?: JWordCollaborationUser
-  readonly license?: JWordLicenseEntitlement | null
-  readonly features?: readonly JWordLicenseFeatureKey[]
-}
-
-export type HocuspocusDemoClientId = 'client-a' | 'client-b' | 'client-c' | 'client-d' | 'client-e'
-
-interface MutableProviderState {
-  status: string
-  connected: boolean
-  revision: number
-  queuedOperations: number
-  offlineLastEvent: string | null
-  reconnectBaselineText: string | null
-  offlineBaseText: string | null
-  pendingLocalText: string | null
-  offlineDiagnostics: OfflineDiagnosticSnapshot[]
-}
-
-const defaultDocumentId = 'jword-collab-browser-doc'
-const clientNames: Readonly<Record<string, string>> = {
-  'client-a': 'Client A',
-  'client-b': 'Client B',
-  'client-c': 'Client C',
-  'client-d': 'Client D',
-  'client-e': 'Client E'
-}
-const clientColors: Readonly<Record<string, string>> = {
-  'client-a': '#286fd6',
-  'client-b': '#0f8f6a',
-  'client-c': '#a33b8f',
-  'client-d': '#c47a1b',
-  'client-e': '#5f6f2a'
-}
-const reconnectFailureTimeoutMs = 3000
-const demoAutoInsertIntervalMs = 1000
-const providerAutoInsertTokens = ['协同', '版本', '离线', '回放']
-
-/** 解析当前页面传入的第三方协作用户，缺省时回退到 demo client 身份。 */
-function createHocuspocusCurrentUser(options: HocuspocusDemoRuntimeOptions): JWordCollaborationUser {
-  const fallbackName = clientNames[options.clientId] ?? options.clientId
-  const fallbackColor = clientColors[options.clientId] ?? '#286fd6'
-
-  return {
-    id: options.user?.id ?? options.clientId,
-    name: options.user?.name ?? fallbackName,
-    color: options.user?.color ?? fallbackColor,
-    ...(options.user?.avatarUrl === undefined ? {} : { avatarUrl: options.user.avatarUrl })
-  }
-}
-
-/** 读取当前页面 client 对应的协作用户名。 */
-function readHocuspocusClientName(_clientId: string, currentUser: JWordCollaborationUser): string {
-  return currentUser.name
-}
-
-/** 读取当前页面 client 对应的协作用户颜色。 */
-function readHocuspocusClientColor(clientId: string, currentUser: JWordCollaborationUser): string {
-  return currentUser.color ?? clientColors[clientId] ?? '#286fd6'
-}
+export type { HocuspocusDemoClientId, HocuspocusDemoRuntimeOptions } from './hocuspocus-runtime-helpers'
 
 /** 创建真实 Hocuspocus 浏览器 runtime。 */
 export function createHocuspocusDemoRuntime(
@@ -268,16 +205,6 @@ export function createHocuspocusDemoRuntime(
     })
   }
 
-  /** 只把协作 server 会声明的 Gate 6 feature 传给协作 SDK 握手。 */
-  function readSdkCollaborationFeatures(
-    features: readonly JWordLicenseFeatureKey[] | undefined
-  ): readonly JWordLicenseFeatureKey[] {
-    const requestedFeatures = features ?? Object.values(GATE6_COLLAB_FEATURES)
-    const collaborationFeatures = Object.values(GATE6_COLLAB_FEATURES)
-
-    return requestedFeatures.filter((feature) => collaborationFeatures.includes(feature as typeof collaborationFeatures[number]))
-  }
-
   /** 将公开 SDK connection 状态归并到 demo debug 面板。 */
   function applySdkConnectionState(): void {
     if (connection === null) {
@@ -395,45 +322,11 @@ export function createHocuspocusDemoRuntime(
     return snapshot
   }
 
-  /** 判断事务是否代表用户正文输入，auto/history 自身事务不触发 AI flush 延迟。 */
-  function shouldDeferAutoInsertForTransaction(transaction: Y.Transaction): boolean {
-    if (transaction.origin === 'local-user') {
-      return true
-    }
-
-    if (transaction.local) {
-      return false
-    }
-
-    return transaction.origin !== 'auto-inserter' &&
-      transaction.origin !== 'jword-history-index'
-  }
-
-  /** 读取两个浏览器 client 的可见状态。 */
-  function readClientSnapshots(): readonly CollabClientSnapshot[] {
-    const currentText = readEditorText()
-
-    return [
-      {
-        id: 'client-a',
-        name: 'Client A',
-        text: currentText,
-        revision: providerState.revision
-      },
-      {
-        id: 'client-b',
-        name: 'Client B',
-        text: currentText,
-        revision: providerState.revision
-      }
-    ]
-  }
-
   /** 读取协同文档状态快照。 */
   function readCollabState(): CollabStateSnapshot {
     return {
       providerMode: 'hocuspocus',
-      clients: readClientSnapshots(),
+      clients: createHocuspocusClientSnapshots(readEditorText(), providerState.revision),
       autoInsert: autoInsertController.readSnapshot()
     }
   }
@@ -467,28 +360,15 @@ export function createHocuspocusDemoRuntime(
   function readOfflineState(): OfflineStateSnapshot {
     if (offlineAdapter !== undefined) {
       const offlineState = offlineAdapter.readState()
-      const diagnostics = [
-        ...providerState.offlineDiagnostics,
-        ...offlineState.diagnostics.map(mapPersistenceDiagnostic)
-      ]
 
-      return {
-        connected: providerState.connected,
-        queuedOperations: providerState.queuedOperations,
-        lastEvent: providerState.offlineLastEvent ??
-          (offlineState.status === 'synced' ? 'indexeddb-synced' : `indexeddb-${offlineState.status}`),
-        databaseName: offlineState.databaseName,
-        updateByteLength: offlineState.updateByteLength,
-        diagnostics
-      }
+      return createHocuspocusOfflineStateSnapshot({
+        providerState,
+        offlineState,
+        offlineDiagnostics: offlineState.diagnostics.map(mapPersistenceDiagnostic)
+      })
     }
 
-    return {
-      connected: providerState.connected,
-      queuedOperations: providerState.queuedOperations,
-      lastEvent: providerState.offlineLastEvent ?? providerState.status,
-      diagnostics: [...providerState.offlineDiagnostics]
-    }
+    return createHocuspocusOfflineStateSnapshot({ providerState })
   }
 
   /** 读取真实 provider 模式下跟随 Y.Doc 同步的版本历史索引。 */

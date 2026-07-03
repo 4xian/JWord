@@ -3,7 +3,7 @@
  * 边界：只覆盖 Hocuspocus provider 下双页 editor 输入与自动插入，不扩展历史、DOCX 或离线矩阵。
  * 协作：examples/collab/src/main.ts、Hocuspocus 本地服务和 Playwright chromium 项目。
  * 约束：测试只通过真实 editor 输入层和 debug API 观察状态，不使用 textarea harness 作为主编辑入口。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 third-party integration demo。
+ * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md 第六阶段第三方集成演示。
  */
 import { expect, test, type Page } from '@playwright/test'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -142,31 +142,17 @@ function createHocuspocusDemoUrl(
 
 /** 通过 JWord editor 的真实隐藏输入层模拟用户在可见编辑器输入。 */
 async function typeIntoVisibleEditor(page: Page, text: string): Promise<void> {
-  await page.evaluate(() => window.__jwordCollabDemo?.focusEditor())
+  await page.evaluate(() => window.__jwordCollabDemo?.focusEditor?.())
   await page.locator('[data-jword-collab-editor] [data-jword-hidden-textarea]').focus()
   await page.keyboard.type(text)
 }
 
 /** 读取可见 JWord editor 的无障碍文本镜像。 */
 async function readVisibleEditorText(page: Page): Promise<string> {
-  return page.locator('[data-jword-collab-editor] [data-jword-text-mirror]').textContent() ?? ''
+  return (await page.locator('[data-jword-collab-editor] [data-jword-text-mirror]').textContent()) ?? ''
 }
 
 /** 读取协作 runtime 的第一 client 文本。 */
 async function readFirstClientText(page: Page): Promise<string | null> {
   return page.evaluate(() => window.__jwordCollabDemo?.readCollabState().clients[0]?.text ?? null)
-}
-
-declare global {
-  interface Window {
-    __jwordCollabDemo?: {
-      readonly readCollabState: () => {
-        readonly clients: readonly {
-          readonly text: string
-        }[]
-      }
-      readonly startAutoInsert: () => void
-      readonly focusEditor: () => void
-    }
-  }
 }

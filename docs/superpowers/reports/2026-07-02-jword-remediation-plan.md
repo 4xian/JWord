@@ -22,6 +22,8 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 后续执行建议：每个任务领取时补 `Owner/Lane`（core、ui、docx/pdf、collab、release/docs）、产物路径与精确验收命令；Phase 6 发布类任务必须额外标明是否需要 external no-alias project smoke 和 Kimi/真实浏览器验收。
 
+执行补充（2026-07-03）：大工作量（L/XL）任务的子步骤拆解、设计类任务的方案定稿与产品/商业默认决策（D1-D9）统一收录在 `2026-07-03-remediation-execution-supplement.md`。凡该补充文档任务映射表收录的任务，以补充文档为准执行；其余任务按本文档条目执行。
+
 约束提醒：所有修复必须遵守架构不变式——Y.Doc 唯一真源、所有变更走 Transaction Pipeline、core 包禁止导入 UI/docx/pdf/collab/框架、Layout 只读 Projection、Renderer 只消费 LayoutBox。修复不得为绕过 `tests/architecture/` 门禁而放宽测试。
 
 ---
@@ -43,7 +45,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
   - 修复方案：Enter 处理分支在 `selection.isCollapsed === false` 时，先构造 `deleteRange` 再 `splitBlock`，两个 operation 放入同一 command/同一 `ydoc.transact`，保证 undo 一步回滚。
   - 验证：单测：选中跨 run/跨段文本按 Enter，断言删除+分段一次事务完成、undo 一步恢复；e2e 补一条选中后回车用例。
   - 工作量：S-M。依赖：若选区跨 run，需 G1-02（deleteRange 跨 run 支持）先行或同批完成。
-  - R3 追加同批处理：跨 section / 跨容器 selection delete/cut/paste replace 失败（`text-editing-runtime.ts` delete plan 复用起始 sectionId，`mergeBlock` 只支持同容器相邻段落）。应让 selected target 携带真实 section/container，跨 section merge 明确语义或返回稳定 unsupported error。
+  - R3 追加同批处理：跨 section / 跨容器 selection delete/cut/paste replace 失败（`text-editing-runtime.ts` delete plan 复用起始 sectionId，`mergeBlock` 只支持同容器相邻段落）。应让 selected target 携带真实 section/container，跨 section merge 明确语义或返回稳定 unsupported error。（已决策 D9：1.0 返回稳定 unsupported 错误，跨节合并留 post-1.0；见补充文档）
 
 - [ ] **[G4-BUG] 修复浮动工具栏格式按钮始终隐藏**
   - 文件：`packages/ui/src/selection-actions/dom.ts`（`syncLinkActionVisibility()`）
@@ -93,6 +95,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
   - 修复方案：将 deleteRange adapter 从"仅同 run"扩展为三段式：首 run 尾部截断、中间 run/块整体删除、末 run 头部截断；跨块时对首尾块执行 mergeBlock 语义；全程单一 `ydoc.transact`。
   - 验证：fixture 覆盖同 run / 跨 run / 跨段 / 跨表格单元格边界（应拒绝并给稳定错误码）四类；undo 一步恢复。
   - 工作量：M-L。依赖：无；G3-02 依赖本项。
+  - 拆解：见 `2026-07-03-remediation-execution-supplement.md` §3.1（含 D9 跨 section 语义决策）。
 
 - [ ] **[G1-03] 修复跨块选区方向恒为 forward**
   - 文件：`packages/core/src/editor/selection.ts:120-140`
@@ -122,6 +125,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
   - 修复方案：分页时表格高度超出当前页剩余空间则按行拆分：整行为最小拆分单元，当前页放不下首行时整表下移；拆分处生成延续 TableBox（可选重复表头行，作为后续增强）。禁止修改状态，仅在 layout 输出层拆分。
   - 验证：布局单测：20 行高表格跨 2 页，断言两页各有 TableBox 且行不截断；e2e 视觉样张。
   - 工作量：L。依赖：无（Gate 4 高风险项同源，一并解决）。（R2 提示：与 G2-20 同改 `ensureLineFits`/`startNewPage`，必须同批实施避免冲突。）
+  - 拆解：见补充文档 §3.2。
 
 - [ ] **[G2-20] 跨页续排段前距策略（R2 复审补充）**
   - 文件：`packages/core/src/layout/paragraph-flow.ts:202-209、238-242`
@@ -150,6 +154,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
   - 修复方案：`renderPdfTextFragment` 消费完整 `ResolvedFontStyle`：bold/italic 选择对应字体变体（嵌入字体需支持按变体注册，标准字体映射 Helvetica-Bold 等）；underline/strike 在文本基线相对位置 `drawLine`；背景色先 `drawRectangle`；上下标调整 y 偏移与字号比例。
   - 验证：pdf 单测断言页面内容流包含线条与矩形操作；`tools/compat` 视觉报告样张对比。
   - 工作量：L。依赖：无。
+  - 拆解：见补充文档 §3.3（四个子批）。
 
 - [ ] **[P-2] 修复 Latin-1 文本被误判需嵌入字体**
   - 文件：`packages/pdf/src/index.ts:757-827`
@@ -200,7 +205,8 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
   - 文件：`packages/collab-server/src/hocuspocus-server.ts`
   - 修复方案：解析 documentName 为 tenantId/documentId/roomId，onConnect/onAuthenticate/beforeSync 中调用宿主 auth/tenant hook，拒绝跨 tenant update。
   - 验证：跨 tenant/documentName 连接被拒，合法用户可进入对应 room。
-  - 工作量：M。依赖：计划审查 3.11 权限粒度设计。
+  - 工作量：M。依赖：计划审查 3.11 权限粒度设计（设计已定稿）。
+  - 拆解：见补充文档 §3.5（documentName 约定、read/write 两级权限、默认拒绝）。
 
 - [ ] **[G6-R2-1] 用户身份缺失改为阻断性错误（R2 复审补充）**
   - 文件：`packages/collab/src/client-sdk.ts:690-698`
@@ -223,6 +229,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
   - 修复方案：license token 改为非对称签名（推荐 Ed25519：签发端私钥签名，SDK 内置公钥验签，Web Crypto 的 `crypto.subtle.verify` + Node `node:crypto` 双实现，保持 license 包零第三方依赖）；保留旧格式解析仅用于开发 fixture 且显式标记 `insecure`；`tests/architecture/gate5-commercial-readiness.test.ts` 增加"禁止 FNV 签名进入发布路径"检查项。
   - 验证：单测：篡改 payload 任一字段验签失败；伪造 issuer 无法通过；离线 grace 语义不回归。
   - 工作量：M-L。依赖：无，但必须在任何商业发布/对外试用之前完成。
+  - 设计定稿与拆解：见补充文档 D1 / §3.4（Ed25519、密钥管理、迁移策略已定）。
 
 **Phase 1 里程碑**：P1 全部关闭后，编辑器达到"日常可用、导入导出可信、协作不崩溃、产物干净"状态，可对内 dogfooding。
 
@@ -256,7 +263,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 - [ ] **[G3-09/10] 剪贴板健壮性**：`readClipboardData` 判空；`normalizePlainText` 过滤控制字符（保留 \n\t）。工作量：S。
 - [ ] **[G3-16] 事务监听器异常隔离**：逐个 try/catch，异常转 error 事件，不阻断后续监听器。工作量：S。
 - [ ] **[G2-03] 执行 widow/orphan 控制**：分页时应用已定义未执行的孤行寡行规则。工作量：M。
-- [ ] **[G2-04] 字体度量改为真实测量**：用 OffscreenCanvas/`measureText` 按字体实测并缓存（core 无顶层 DOM 访问约束下通过注入的 measurer 接口实现，保持包边界）；G2-06 缓存加 LRU 上限一并处理。工作量：L。
+- [ ] **[G2-04] 字体度量改为真实测量**：用 OffscreenCanvas/`measureText` 按字体实测并缓存（core 无顶层 DOM 访问约束下通过注入的 measurer 接口实现，保持包边界）；G2-06 缓存加 LRU 上限一并处理。工作量：L。拆解：见补充文档 §3.6（必须两阶段执行，阶段二切换真实测量前有人工检查点）。
 - [ ] **[G2-15] 选区绘制层级修正**：选区矩形绘制移到文本背景之后、文本之前（对齐 3.7 层级顺序）。工作量：S。
 - [ ] **[G3-23/24/25/26/30/31] 工具栏与 a11y 系列**：`role="toolbar"` + roving tabindex 键盘导航、下拉 ARIA listbox/option、tooltip `aria-describedby`、aria-live destroy 清理、公告分级（错误用 assertive）。工作量：M-L（可拆多 PR）。
 - [ ] **[G3-27] UI 事件监听统一 AbortController 清理**。工作量：S。
@@ -270,9 +277,9 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 - [ ] **[G4-高2] 查找替换快捷键**：keyboard handler 注册 Ctrl/Cmd+F、Ctrl/Cmd+H 打开面板（可被宿主配置禁用）。工作量：S。
 - [ ] **[G4-中] 只读模式允许选择复制**：只读拦截改为只拦编辑类命令与输入，保留 mousedown 选择与复制。工作量：S。
 - [ ] **[G4-中] 查找替换大小写不敏感 + 跨 run 搜索**：搜索在段落聚合文本上执行（记录 run 边界映射回原位置），选项加 `caseSensitive`。工作量：M。
-- [ ] **[G4-中] 修订接受/拒绝流程**：新增 `acceptRevision`/`rejectRevision` command + operation（接受=清除标记保留内容或执行删除；拒绝=反向），UI 修订面板加按钮。工作量：L。
+- [ ] **[G4-中] 修订接受/拒绝流程**：新增 `acceptRevision`/`rejectRevision` command + operation（接受=清除标记保留内容或执行删除；拒绝=反向），UI 修订面板加按钮。工作量：L。拆解：见补充文档 §3.8（决策 D4：可后置，不阻塞里程碑 B；依赖 G3-20 先行）。
 - [ ] **[G4-中] 批注区域 Canvas 高亮**：renderer 在批注 anchor 覆盖范围绘制底色（层级在选区之下）。工作量：M。
-- [ ] **[G4-中] 页眉页脚富文本编辑**：页眉页脚区进入编辑态时复用主编辑管线（限制块类型）。工作量：L（可放 post-1.0，先确认产品优先级）。
+- [ ] **[G4-中] 页眉页脚富文本编辑**：页眉页脚区进入编辑态时复用主编辑管线（限制块类型）。工作量：L。已决策（补充文档 D3）：移入 post-1.0，本轮不实施。
 
 ### 3C. Gate 4.5 / 5（native、DOCX、PDF）
 
@@ -282,7 +289,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 - [ ] **[gate45 P2] XML 解析器补全**：`xml.ts` 解码数值字符引用（`&#xNN;`/`&#NN;`）、支持 CDATA 段、namespaceUri 继承祖先声明。工作量：M。
 - [ ] **[gate45 P2] 导出 schema 合规 + validator 证据**：`<w:u w:val="single"/>`、`<w:shd w:val="clear" w:fill>`；接入 OpenXML validator 到 `tools/compat` 把 pending 证据变为真实结果。工作量：M。
 - [ ] **[gate45 P2] 其余导入健壮性**：负页边距支持（pgMar 改用带符号读取）、`normalizePartPath` 对多余 `..` 告警、图片导出不支持 MIME 发 warning 不静默跳过。工作量：S-M。
-- [ ] **[P2#3/4] PDF 字体子集化 + fallback 链**：`embedFont(bytes, { subset: true })` 默认开启（暴露选项）；覆盖检查支持多字体组合（按字符逐字体匹配，任一覆盖即通过，渲染时按 run 切换字体）。工作量：L。
+- [ ] **[P2#3/4] PDF 字体子集化 + fallback 链**：`embedFont(bytes, { subset: true })` 默认开启（暴露选项）；覆盖检查支持多字体组合（按字符逐字体匹配，任一覆盖即通过，渲染时按 run 切换字体）。工作量：L。拆解：见补充文档 §3.7（全量字体不入库，走下载脚本 + CI 缓存）。
 - [ ] **[X-1] 示例与 e2e 打通 Worker 路径**：`examples/docx` 增加真实 `new Worker` 调用路径（保留主线程直调作对照），e2e 断言 worker 消息协议 progress/cancel 端到端可用，闭环"互通在 Worker 中执行"不变式。工作量：M。
 - [ ] **[计划审查 2.9] Microsoft Word 桌面版 T1/T2 导出矩阵补验（R2 复审补充）**：当前兼容口径为 WPS-only，与「商业格式互通」对外承诺错位；与上方 OpenXML validator 证据项配套，补 Word 真实打开/编辑/保存/重开的 T1/T2 矩阵记录，validator 部分自动化纳入 CI；未验证目标在能力文档中明示。工作量：M（人工矩阵）+ S（validator 自动化）。依赖：validator 接入先行。
 
@@ -304,7 +311,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ## Phase 4 - 性能与内存优化
 
-- [ ] **[计划审查 1.2] 输入热路径 P95 < 50ms 达标专项**（Gate 3 遗留验收项）：先用 benchmark 定位瓶颈（投影重建 GX-01、布局字体检查 GX-02、`readUpdateByteLength` GX-03 是已知候选），再按测量结果修复；目标以 `benchmarks/` 固化回归基线。工作量：XL。依赖：Phase 1 完成（避免测量被泄漏干扰）。
+- [ ] **[计划审查 1.2] 输入热路径 P95 < 50ms 达标专项**（Gate 3 遗留验收项）：先用 benchmark 定位瓶颈（投影重建 GX-01、布局字体检查 GX-02、`readUpdateByteLength` GX-03 是已知候选），再按测量结果修复；目标以 `benchmarks/` 固化回归基线。工作量：XL。依赖：Phase 1 完成（避免测量被泄漏干扰）。拆解：见补充文档 §3.9（先测量后优化，收益 <5% 的项记录后跳过）。
 - [ ] **[GX-01] 投影增量更新**：从"每事务全树重建"改为按 dirty 块增量重建投影节点。工作量：L。
 - [ ] **[G2-05] 段落 advance 计算去 O(n²)**：逐字符累加改为前缀和/单遍累计。工作量：S-M。
 - [ ] **[G2-06] 字体度量缓存 LRU 上限**（与 G2-04 合并实施）。工作量：S。
@@ -320,7 +327,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ## Phase 5 - P3 改进与技术债清理
 
-- [ ] **超大文件拆分执行**（按 Phase 2 登记的清单）：`create-ui.ts`、`command-builders.ts` 等按功能域拆分，公开导出面不变，拆完收紧行数预算豁免。工作量：L-XL（分批）。
+- [ ] **超大文件拆分执行**（按 Phase 2 登记的清单）：`create-ui.ts`、`command-builders.ts` 等按功能域拆分，公开导出面不变，拆完收紧行数预算豁免。工作量：L-XL（分批）。目标结构：见补充文档 §3.10（一次只拆一个文件，禁止夹带逻辑变更）。
 - [ ] **死代码清理**：`resolveImageInlineSize`（G2-10）、`renderRectBorder`（G2-16）、`createPendingAppResults`（gate45 P3）、命令构建器死代码（G3-18）。工作量：S。
 - [ ] **重复实现收敛**：docx `readStringProperty` 等 helper（export-utils/roundtrip 双份）、PDF `twipsToPdfPoints` 与颜色解析双份、超链接 core/UI 双 allowlist 统一为 core 单一来源。工作量：M。
 - [ ] **架构纯度项**：双重 opaque ID branding 统一（G1-04）、模块级序号计数器改实例级（G1-05/G3-19）、`AnchorRefState` 可变契约文档化或改不可变（G1-06/GX-06）、`mergeBlock` 约束文档化（G1-17）。工作量：M。
@@ -333,22 +340,22 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ## Phase 6 - Gate 7 前置准备（在 Gate 7 启动前完成）
 
-- [ ] **[gate7 2.1] Plugin 扩展点前置改造（最大风险项，提前动工）**：在 core 中落地扩展点骨架——command 注册拦截、decoration 层（layout/render 挂钩）、生命周期钩子、快捷键注册、工具栏扩展注册；先内部使用（把现有 UI 菜单/工具栏迁移为首个消费者验证 API 形状），Gate 7 再冻结对外。工作量：XL（估 7-10 人周，建议与 Phase 3-5 并行排期）。
-- [ ] **[gate7 R3] 发布/no-alias 消费闭环**：明确 registry publish vs tarball distribution；若 registry 发布，移除可发布包 `private: true` 并配置 publishConfig；新增 external empty project smoke，从本地 pack 安装公开包，不使用 examples 源码 alias，跑 typecheck/build/浏览器 smoke。Owner/Lane：release/docs。产物路径：各 `packages/*/package.json`、`tools/release/*no-alias*` 或 `tools/release/check-gate7-third-party-smoke.mjs`、外部临时 fixture 文档。验收命令：`pnpm build`、`node tools/release/check-native-pack.mjs`、`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/release/check-gate6-commercial-pack.mjs`、新增 no-alias smoke 命令；涉及 UI 时补真实浏览器/Kimi smoke。工作量：M。
+- [ ] **[gate7 2.1] Plugin 扩展点前置改造（最大风险项，提前动工）**：在 core 中落地扩展点骨架——command 注册拦截、decoration 层（layout/render 挂钩）、生命周期钩子、快捷键注册、工具栏扩展注册；先内部使用（把现有 UI 菜单/工具栏迁移为首个消费者验证 API 形状），Gate 7 再冻结对外。工作量：XL（估 7-10 人周，建议与 Phase 3-5 并行排期）。里程碑拆解：见补充文档 §3.11（M1 设计冻结与 M5 内部消费者后设人工检查点）。
+- [ ] **[gate7 R3] 发布/no-alias 消费闭环**：明确 registry publish vs tarball distribution；若 registry 发布，移除可发布包 `private: true` 并配置 publishConfig；新增 external empty project smoke，从本地 pack 安装公开包，不使用 examples 源码 alias，跑 typecheck/build/浏览器 smoke。Owner/Lane：release/docs。产物路径：各 `packages/*/package.json`、`tools/release/*no-alias*` 或 `tools/release/check-gate7-third-party-smoke.mjs`、外部临时 fixture 文档。验收命令：`pnpm build`、`node tools/release/check-native-pack.mjs`、`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/release/check-gate6-commercial-pack.mjs`、新增 no-alias smoke 命令；涉及 UI 时补真实浏览器/Kimi smoke。工作量：M。决策与拆解：见补充文档 D2 / §3.13（tarball 冒烟先行，私有 registry 为目标形态）。
 - [ ] **[gate7 R3] Public API / pack 边界降噪**：PDF worker helper 移出 stable root API；`@4xian/jword-core` 等基础包 pack 白名单收敛到 dist/README/LICENSE 或明确 source distribution 口径；pack 审计覆盖 core/ui/native/docx/pdf/collab/license/persistence 全包。Owner/Lane：release/api。产物路径：`docs/sdk/public-api.md`、`packages/*/package.json`、`tests/architecture/*public-api*`、pack 审计脚本。验收命令：`pnpm typecheck`、`pnpm test -- tests/architecture`、全包 `npm pack --dry-run` 审计脚本。工作量：M。
 - [ ] **[gate7 R3] Observability/error boundary/telemetry 子任务**：默认关闭 telemetry，宿主 opt-in；定义事件 schema 与隐私裁剪；插件异常隔离、wrapper error boundary、diagnostics export 不含正文内容。Owner/Lane：sdk/runtime/docs。产物路径：diagnostics/telemetry contract 文档、wrapper error boundary 设计、相关 tests。验收命令：插件抛错单测、wrapper error boundary 测试、diagnostics export 内容审计（断言不含正文内容），必要时补浏览器 smoke。工作量：M。
 - [ ] **[gate7 2.6] bundle size 预算校准**：G0-04 修复后重测各包体积，把过时预算（core 260KB/首屏 330KB vs 实际 494KB/581KB）更新为"当前实测 + 收紧路线图"，`pnpm size` 门禁按新预算执行。依赖：G0-04。工作量：S。（R2 订正数字：实测 core dist 为 523,433 字节 ≈ 511KB、vanilla 首屏 index chunk 为 573,859 字节 ≈ 560KB 且未计 CSS，均已破 `check-size.mjs:34-35` 的 260KB/330KB 门禁线；校准前先查 core 体积翻倍根因——真实增长还是过时产物（当前 dist mtime 为 5 月 26/28）。）
 - [ ] **[gate7 2.7] 发布配置修复**：`packages/ui` 的 `"./styles.css"` export 从 `src/styles/toolbar.css` 改指 dist 产物（构建复制）；core/native/ui 补 `publishConfig.access`；`npm pack --dry-run` 内容审计脚本入 `tools/release/`。工作量：S-M。（R2 补充证据：`packages/ui/package.json:17` export 指向 `src/styles/toolbar.css`，`:21` 的 `files` 含 `src/styles`，发布会把源码目录带出。）
 - [ ] **[gate7 2.2/2.3/2.4] 补齐 wrapper / theme / devtools 详细设计文档**：React wrapper 明确 ref 暴露、受控/非受控、StrictMode 双挂载兼容；Vue 明确 provide/inject 与 SSR 空壳；theme 明确 CSS 变量 + 暗色模式；devtools 明确面板与 diagnostics export 架构。产出设计文档供 Gate 7 直接执行。工作量：M。
 - [ ] **[计划审查 2.4] a11y 系统性验收补课**：Gate 4-6 新功能（表格、批注、查找替换、协作光标）补 a11y 验收清单与自动化检查（axe-core 集成到 e2e）。工作量：M-L。
-- [ ] **[计划审查 2.1] 协同输入 rebase 方案评估**：对 textarea value diff rebase 路径补充协同并发下的压力测试；若确认脆弱，设计以 Y.RelativePosition 为基准的输入定位替代方案（先出设计文档再改）。工作量：M（评估）。
+- [ ] **[计划审查 2.1] 协同输入 rebase 方案评估**：对 textarea value diff rebase 路径补充协同并发下的压力测试；若确认脆弱，设计以 Y.RelativePosition 为基准的输入定位替代方案（先出设计文档再改）。工作量：M（评估）。评估方法定稿：见补充文档 §3.12 与决策 D7（一致率 <100% 即切替代方案）。
 - [ ] **[gate7 R2] 错误码单一真源生成管线（R2 复审补充，HIGH）**：以 `fixtures/collab/diagnostics-registry.json`（现 56 码）为唯一真源，把 core/docx/pdf/native 错误码并入同一 registry；Step 7.3/7.11/7.23 的错误码文档与 diagnostics export 一律从 registry 生成，防止运行时码与文档漂移；「错误码清单 + 护栏测试」在 Gate 7 Iteration 0 冻结，Step 7.11 只做 export 实现。工作量：M。依赖：无；G6-R2-1 新增码依赖本项落点。
 - [ ] **[gate7 R2] Gate 7 计划修订两小项（R2 复审补充）**：① Iteration 0 冻结落点补 `@4xian/jword-persistence` 的导出分级（stable/experimental/internal）与 edition 归属；② Step 7.19 明确 size-limit 与既有 `check-size.mjs`、`check-gate6-collab-bundle.mjs` 三套体积工具的去留，收敛为单一工具与预算真源。工作量：S。
 - [ ] **[计划审查 3.11] 协同权限粒度设计（R2 复审补充）**：collab-server auth hook contract 定义 per-user read/comment/write 权限，服务端在 `beforeSync` 层拒绝越权 update 并返回稳定 diagnostic；文档明确当前客户端 readonly 不具备安全语义。工作量：M（设计与实现分两步）。
-- [ ] **[计划审查 3.12] Worker 能力检测与降级口径（R2 复审补充）**：为 docx/pdf/native 提供环境能力检测 API 与 `WORKER_UNAVAILABLE` 类稳定诊断；文档声明 CSP 环境要求（`worker-src`/`blob:` 指令清单）；评估同线程 fallback 或明确不支持。工作量：S-M。
-- [ ] **[计划审查 3.13] 对外浏览器支持矩阵冻结（R2 复审补充）**：Gate 7 冻结 browserslist 式最低版本承诺（含移动端只读预览范围），构建 target 与 E2E 矩阵与该承诺对齐。工作量：S。
+- [ ] **[计划审查 3.12] Worker 能力检测与降级口径（R2 复审补充）**：为 docx/pdf/native 提供环境能力检测 API 与 `WORKER_UNAVAILABLE` 类稳定诊断；文档声明 CSP 环境要求（`worker-src`/`blob:` 指令清单）；评估同线程 fallback 或明确不支持。工作量：S-M。已决策（补充文档 D5）：不做同线程 fallback。
+- [ ] **[计划审查 3.13] 对外浏览器支持矩阵冻结（R2 复审补充）**：Gate 7 冻结 browserslist 式最低版本承诺（含移动端只读预览范围），构建 target 与 E2E 矩阵与该承诺对齐。工作量：S。建议默认值：见补充文档 D6（写入对外文档前需人工确认终值）。
 - [ ] **[计划审查 3.15] 补风险复核点 F（R2 复审补充）**：Gate 7 Iteration 0 完成后一次性冻结 edition matrix、导出面、事件 payload、diagnostics 命名，之后文档站/类型测试/wrapper 只消费冻结面。工作量：S。
-- [ ] **[计划审查 3.16] 版本历史与 Yjs GC 技术决策落档（R2 复审补充）**：将「版本历史禁止依赖 Y.Snapshot + gc=false 路线」写为明确技术决策；补 update log 增长治理（compaction 周期、条目上限、冷数据归档）。工作量：S。
+- [ ] **[计划审查 3.16] 版本历史与 Yjs GC 技术决策落档（R2 复审补充）**：将「版本历史禁止依赖 Y.Snapshot + gc=false 路线」写为明确技术决策；补 update log 增长治理（compaction 周期、条目上限、冷数据归档）。工作量：S。治理默认参数已定：见补充文档 D8。
 
 ---
 

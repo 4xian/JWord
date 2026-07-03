@@ -186,6 +186,7 @@ function createHarness(): Harness {
   editor.mount(editorHost)
   const ui = createJWordUi({
     editor,
+    editorHost,
     toolbarHost,
     liveRegionHost,
     headerFooter: {

@@ -28,7 +28,9 @@ jobs:
           run_install: false
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps
 
       - name: Lint
         run: pnpm lint

@@ -15,7 +15,7 @@ import { createPresenceDisplayUsers, sortAwarenessUsers } from '../src/runtime'
 import type { AwarenessUserSnapshot } from '../src/runtime'
 
 describe('collab demo host contract', () => {
-  it('提供独立 examples/collab package 和 Vite source alias', async () => {
+  it('提供独立 examples/collab package，并只给基础包保留 Vite source alias', async () => {
     const packageJson = readWorkspaceJson('examples/collab/package.json') as {
       readonly name?: string
       readonly scripts?: Readonly<Record<string, string>>
@@ -33,19 +33,15 @@ describe('collab demo host contract', () => {
     })
     expect(packageJson.dependencies).toMatchObject({
       '@hocuspocus/server': '4.0.0',
+      '@4xian/jword-collab': 'workspace:*',
+      '@4xian/jword-collab-server': 'workspace:*',
       '@4xian/jword-core': 'workspace:*',
       '@4xian/jword-docx': 'workspace:*',
+      '@4xian/jword-license': 'workspace:*',
+      '@4xian/jword-persistence': 'workspace:*',
       '@4xian/jword-ui': 'workspace:*'
     })
     expect(aliasList).toEqual(expect.arrayContaining([
-      {
-        find: '@4xian/jword-collab',
-        replacement: resolve(process.cwd(), 'packages/collab/src/index.ts')
-      },
-      {
-        find: '@4xian/jword-collab/experimental',
-        replacement: resolve(process.cwd(), 'packages/collab/src/experimental.ts')
-      },
       {
         find: '@4xian/jword-core',
         replacement: resolve(process.cwd(), 'packages/core/src/index.ts')
@@ -55,18 +51,19 @@ describe('collab demo host contract', () => {
         replacement: resolve(process.cwd(), 'packages/docx/src/index.ts')
       },
       {
-        find: '@4xian/jword-license',
-        replacement: resolve(process.cwd(), 'packages/license/src/index.ts')
-      },
-      {
-        find: '@4xian/jword-persistence',
-        replacement: resolve(process.cwd(), 'packages/persistence/src/index.ts')
-      },
-      {
         find: '@4xian/jword-ui',
         replacement: resolve(process.cwd(), 'packages/ui/src/index.ts')
       }
     ]))
+    for (const packageName of [
+      '@4xian/jword-collab',
+      '@4xian/jword-collab/experimental',
+      '@4xian/jword-collab-server',
+      '@4xian/jword-license',
+      '@4xian/jword-persistence'
+    ]) {
+      expect(aliasList.some((alias) => alias.find === packageName)).toBe(false)
+    }
   })
 
   it('HTML 入口包含 collab demo 关键面板', () => {
@@ -162,9 +159,10 @@ describe('collab demo host contract', () => {
 
   it('自动插入 demo 在调用 provider controller 时配置一秒一段的节奏', () => {
     const source = readWorkspaceText('examples/collab/src/runtime/hocuspocus-runtime.ts')
+    const helperSource = readWorkspaceText('examples/collab/src/runtime/hocuspocus-runtime-helpers.ts')
     const memorySource = readWorkspaceText('examples/collab/src/runtime.ts')
 
-    expect(source).toContain('const demoAutoInsertIntervalMs = 1000')
+    expect(helperSource).toContain('const demoAutoInsertIntervalMs = 1000')
     expect(source).toContain('userEditIdleDelayMs: demoAutoInsertIntervalMs')
     expect(source).toContain('autoInsertPollTimer = setInterval')
     expect(source).toContain('autoInsertController.flushNext()')

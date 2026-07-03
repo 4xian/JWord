@@ -82,14 +82,14 @@ describe('@4xian/jword-collab contract', () => {
       customerId: 'customer-gate6',
       licenseToken: 'token-gate6',
       features: [GATE6_COLLAB_FEATURES.multiplayer],
-      expiresAt: '2026-06-01T00:00:00Z',
+      expiresAt: '2099-06-01T00:00:00Z',
       status: 'valid'
     }), GATE6_COLLAB_FEATURES.autoInsert)
     const serverUnavailable = createJWordCollabFeatureGate(createGate6TestLicense({
       customerId: 'customer-gate6',
       licenseToken: 'token-gate6',
       features: [GATE6_COLLAB_FEATURES.history],
-      expiresAt: '2026-06-01T00:00:00Z',
+      expiresAt: '2099-06-01T00:00:00Z',
       status: 'server-unavailable'
     }), GATE6_COLLAB_FEATURES.history)
 

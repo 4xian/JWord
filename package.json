@@ -14,6 +14,7 @@
     "lint:fix": "eslint . --fix && node tools/lint/check-package-versions.mjs && node tools/lint/check-boundaries.mjs && pnpm lint:comments",
     "lint:comments": "node tools/lint/check-comments.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "pnpm build",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test --project=perf-chromium --pass-with-no-tests",
     "test:visual": "node tools/visual/run-visual.mjs",

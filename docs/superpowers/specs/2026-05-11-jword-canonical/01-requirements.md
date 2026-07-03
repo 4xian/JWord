@@ -36,14 +36,6 @@ JWord 必须提供：
 - 适配包：React、Vue 3；Vue 2 可作为兼容包延后。
 - 示例：vanilla、React、Vue、collab、docx、performance。
 
-JWord 不负责：
-
-- 账号、组织、权限模型、鉴权 UI。
-- 文档列表、文件夹、回收站、审批流。
-- 服务端生产级部署、运维、审计、日志平台。
-- 宏系统、邮件合并、复杂公式编辑器。
-- Excel/PPT 编辑能力。
-
 ## 1.3 功能需求
 
 ### 基础编辑
