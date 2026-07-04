@@ -20,12 +20,13 @@ import {
   convertDocxImportDocumentToCoreDocument,
   importDocx
 } from '@4xian/jword-docx'
-import { createJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
+import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
 import {
   createMemoryPersistenceAdapter,
   createUnavailableIndexedDbOfflineAdapter
 } from '@4xian/jword-persistence'
 import { describe, expect, it } from 'vitest'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../fixtures/license/insecure-test-only-keys'
 
 describe('Gate 6 DOCX imported fixture integration', () => {
   it('loads the T1 imported DOCX fixture into the same Y.Doc path for collab, history and auto insert', async () => {
@@ -209,7 +210,7 @@ function createGate6DocxFixtureLicense(): JWordLicenseEntitlement {
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

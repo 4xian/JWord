@@ -86,6 +86,7 @@ export function renderSelectionActionsDom(dom: SelectionActionsDom, state: Selec
   setToggleState(dom.formatControls.italic, state.formatEnabled, state.italicPressed)
   setToggleState(dom.formatControls.underline, state.formatEnabled, state.underlinePressed)
   setToggleState(dom.formatControls.strike, state.formatEnabled, state.strikePressed)
+  syncFormatActionVisibility(dom)
   syncLinkActionVisibility(dom, state)
   dom.formatControls.textColor.disabled = !state.formatEnabled
   dom.formatControls.backgroundColor.disabled = !state.formatEnabled
@@ -172,12 +173,6 @@ function createFormatButton(
 function syncLinkActionVisibility(dom: SelectionActionsDom, state: SelectionActionsViewState): void {
   const hasActiveLink = state.activeLinkUrl !== null
 
-  dom.formatControls.bold.hidden = true
-  dom.formatControls.italic.hidden = true
-  dom.formatControls.underline.hidden = true
-  dom.formatControls.strike.hidden = true
-  dom.formatControls.textColor.parentElement?.toggleAttribute('hidden', true)
-  dom.formatControls.backgroundColor.parentElement?.toggleAttribute('hidden', true)
   setActionVisibility(dom.formatControls.insertLink, !hasActiveLink)
   setActionVisibility(dom.formatControls.openLink, hasActiveLink)
   setActionVisibility(dom.formatControls.editLink, hasActiveLink)
@@ -194,6 +189,16 @@ function syncLinkActionVisibility(dom: SelectionActionsDom, state: SelectionActi
   dom.contextControls.openLink.disabled = !state.contextHasLink
   dom.contextControls.editLink.disabled = !state.contextHasLink
   dom.contextControls.removeLink.disabled = !state.contextHasLink
+}
+
+/** 浮动工具栏可见时格式动作保持可见，链接动作由独立逻辑控制。 */
+function syncFormatActionVisibility(dom: SelectionActionsDom): void {
+  setActionVisibility(dom.formatControls.bold, true)
+  setActionVisibility(dom.formatControls.italic, true)
+  setActionVisibility(dom.formatControls.underline, true)
+  setActionVisibility(dom.formatControls.strike, true)
+  dom.formatControls.textColor.parentElement?.toggleAttribute('hidden', false)
+  dom.formatControls.backgroundColor.parentElement?.toggleAttribute('hidden', false)
 }
 
 /** 同步动作按钮的真实可见性，避免 CSS display 覆盖 hidden 属性。 */

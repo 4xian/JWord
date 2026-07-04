@@ -10,10 +10,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DocumentProjection } from '@4xian/jword-core'
-import { createJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
+import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
 
 import { createCancelDocxRequest, exportDocx, type DocxWorkerEvent } from '../src/index'
 import { dispatchDocxWorkerRequest } from '../src/worker'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 describe('@4xian/jword-docx worker runtime', () => {
   it('fails import before reading invalid bytes when license is missing', async () => {
@@ -291,7 +292,7 @@ function createWorkerLicense(features: readonly string[]): JWordLicenseEntitleme
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

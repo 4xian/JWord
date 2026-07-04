@@ -551,6 +551,49 @@ describe('Editor input runtime', () => {
     }
   })
 
+  it('replaces the current selection with a paragraph break in one undoable command', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'abcdef' })
+    const transactions = captureTransactions(editor)
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+      const focus = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 4
+      })
+
+      editor.setSelection(createSelectionState(anchor, focus))
+      dispatchKey(textarea, 'Enter')
+
+      expect(readParagraphTexts(editor)).toEqual(['a', 'ef'])
+      expect(transactions).toEqual([{
+        commandName: 'splitParagraph',
+        origin: 'local-user',
+        operationKinds: ['deleteRange', 'splitBlock'],
+        dirty: true
+      }])
+
+      const undoResult = editor.undo()
+
+      expect(undoResult.metadata?.commandName).toBe('splitParagraph')
+      expect(readParagraphTexts(editor)).toEqual(['abcdef'])
+      expectSelectionIndexes(editor, editor.getSelection(), [1, 4])
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('keeps an empty paragraph visible and caret-resolvable after pressing Enter at paragraph end', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: 'ab' })
@@ -949,6 +992,39 @@ describe('Editor input runtime', () => {
     }
   })
 
+  it('extends keyboard selection with Shift and keeps the original anchor', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'abcdef' })
+
+    try {
+      editor.mount(host)
+
+      const textarea = getHiddenTextarea(host)
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 2
+      })
+
+      editor.setSelection(createSelectionState(anchor, anchor))
+      dispatchKey(textarea, 'ArrowRight', { shiftKey: true })
+      dispatchKey(textarea, 'ArrowRight', { shiftKey: true })
+      expectSelectionIndexes(editor, editor.getSelection(), [2, 4])
+      expect(editor.getSelection()?.direction).toBe('forward')
+
+      dispatchKey(textarea, 'ArrowLeft', { shiftKey: true })
+      expectSelectionIndexes(editor, editor.getSelection(), [2, 3])
+
+      dispatchKey(textarea, 'ArrowLeft', { shiftKey: true })
+      dispatchKey(textarea, 'ArrowLeft', { shiftKey: true })
+      expectSelectionIndexes(editor, editor.getSelection(), [2, 1])
+      expect(editor.getSelection()?.direction).toBe('backward')
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('supports Home End ArrowUp and ArrowDown with layout-aware caret navigation', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: 'A'.repeat(400) })
@@ -1008,6 +1084,70 @@ describe('Editor input runtime', () => {
       expect(downPosition.graphemeIndex).toBe(
         findClosestLineGraphemeIndex(nextLine, middleFragment.x + middleFragment.width)
       )
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('extends layout-aware keyboard selection with Shift Home End ArrowUp and ArrowDown', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'A'.repeat(400) })
+
+    try {
+      editor.mount(host)
+
+      const layout = editor.getLayout()
+      const paragraphLines = layout.pages.flatMap((page) =>
+        page.lines.filter((line) => line.paragraphId === 'paragraph-1' && line.fragments.length > 0)
+      )
+
+      expect(paragraphLines.length).toBeGreaterThanOrEqual(3)
+
+      const middleLine = paragraphLines[1]!
+      const previousLine = paragraphLines[0]!
+      const nextLine = paragraphLines[2]!
+      const middleIndex = Math.max(1, Math.floor(middleLine.fragments.length / 2))
+      const middleFragment = middleLine.fragments[middleIndex]!
+      const focusAnchor = editor.createTextAnchor({
+        sectionId: middleFragment.end.sectionId,
+        blockId: middleFragment.end.blockId,
+        runId: middleFragment.end.runId,
+        graphemeIndex: middleFragment.end.graphemeIndex
+      })
+      const focusIndex = middleFragment.end.graphemeIndex
+      const textarea = textareaFrom(host)
+
+      editor.setSelection(createSelectionState(focusAnchor, focusAnchor))
+      dispatchKey(textarea, 'Home', { shiftKey: true })
+      expectSelectionIndexes(editor, editor.getSelection(), [
+        focusIndex,
+        middleLine.fragments[0]!.start.graphemeIndex
+      ])
+
+      dispatchKey(textarea, 'End', { shiftKey: true })
+      expectSelectionIndexes(editor, editor.getSelection(), [
+        focusIndex,
+        middleLine.fragments[middleLine.fragments.length - 1]!.end.graphemeIndex
+      ])
+
+      editor.setSelection(createSelectionState(focusAnchor, focusAnchor))
+      dispatchKey(textarea, 'ArrowUp', { shiftKey: true })
+      expectSelectionIndexes(editor, editor.getSelection(), [
+        focusIndex,
+        findClosestLineGraphemeIndex(previousLine, middleFragment.x + middleFragment.width)
+      ])
+
+      dispatchKey(textarea, 'ArrowDown', { shiftKey: true })
+      expectSelectionIndexes(editor, editor.getSelection(), [
+        focusIndex,
+        findClosestLineGraphemeIndex(middleLine, middleFragment.x + middleFragment.width)
+      ])
+
+      dispatchKey(textarea, 'ArrowDown', { shiftKey: true })
+      expectSelectionIndexes(editor, editor.getSelection(), [
+        focusIndex,
+        findClosestLineGraphemeIndex(nextLine, middleFragment.x + middleFragment.width)
+      ])
     } finally {
       editor.destroy()
     }
@@ -1141,6 +1281,7 @@ describe('Editor input runtime', () => {
     const snapshots: Array<readonly [number, number]> = []
 
     try {
+      document.body.append(host)
       editor.subscribe((event) => {
         if (event.kind !== 'selectionChange' || event.selection === null) {
           return
@@ -1181,6 +1322,7 @@ describe('Editor input runtime', () => {
       expect(page.style.cursor).toBe('text')
     } finally {
       editor.destroy()
+      host.remove()
     }
   })
 
@@ -1191,6 +1333,7 @@ describe('Editor input runtime', () => {
     const transactions = captureTransactions(editor)
 
     try {
+      document.body.append(host)
       editor.subscribe((event) => {
         if (event.kind !== 'selectionChange' || event.selection === null) {
           return
@@ -1259,6 +1402,7 @@ describe('Editor input runtime', () => {
       expect(readParagraphTexts(editor)).toEqual(['ho world'])
     } finally {
       editor.destroy()
+      host.remove()
     }
   })
 

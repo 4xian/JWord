@@ -74,6 +74,21 @@ describe('Gate 5 commercial readiness', () => {
     ])
   })
 
+  it('blocks the legacy FNV helper from the public license signing path', () => {
+    const source = readFileSync('packages/license/src/index.ts', 'utf8')
+    const issueScript = readFileSync('tools/license/issue-license.mjs', 'utf8')
+
+    expect(existsSync('tools/license/issue-license.mjs')).toBe(true)
+    expect(source).toContain("const JWORD_LICENSE_TOKEN_VERSION = 'JWL1'")
+    expect(source).toContain('verifyEd25519')
+    expect(source).toContain('allowInsecureFixtureLicense')
+    expect(source).toContain('createInsecureTestOnlyJWordLicenseSignature')
+    expect(source).not.toContain('createJWordLicenseSignature')
+    expect(source).not.toContain('readJWordLicenseVerifierMaterial')
+    expect(issueScript).toContain('JWORD_LICENSE_PRIVATE_KEY_PEM')
+    expect(issueScript).toContain('JWORD_LICENSE_PRIVATE_KEY_PATH')
+  })
+
   it('provides a Gate 5 third-party empty-project smoke script through public packages', () => {
     const scriptPath = 'tools/release/check-gate5-third-party-smoke.mjs'
 

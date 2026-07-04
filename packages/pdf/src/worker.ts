@@ -1,18 +1,29 @@
 /**
  * 职责：提供 Gate 5 PDF worker 的最小消息入口。
  * 边界：只负责接收 worker 请求、调用公开请求处理器并回发响应，不实现 PDF 绘制。
- * 协作模块：index.ts 的 PdfWorkerRequest/PdfWorkerResponse 和 handlePdfWorkerRequest。
+ * 协作模块：worker-api.ts 的 PdfWorkerRequest/PdfWorkerResponse 和 handlePdfWorkerRequest。
  * 性能/安全约束：成功导出时转移 ArrayBuffer；当前未实现导出时只返回稳定错误响应。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-21---建立-packagespdf-与-pdf-worker。
  */
 
 import {
   createPdfTransferables,
+  handlePdfWorkerRequest
+} from './worker-api.js'
+import type {
+  PdfTransferable,
+  PdfWorkerRequest,
+  PdfWorkerResponse
+} from './types.js'
+
+export {
+  createCancelPdfWorkerRequest,
+  createPdfErrorResponse,
+  createPdfProgressResponse,
+  createPdfTransferables,
   handlePdfWorkerRequest,
-  type PdfTransferable,
-  type PdfWorkerRequest,
-  type PdfWorkerResponse
-} from './index.js'
+  readPdfImageAsset
+} from './worker-api.js'
 
 export type PdfWorkerPostResponse = (
   response: PdfWorkerResponse,

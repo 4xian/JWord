@@ -242,6 +242,34 @@ describe('Gate 7 public API catalog', () => {
     }
   })
 
+  it('keeps PDF worker helpers out of the stable root API', () => {
+    const catalog = readFileSync(publicApiCatalogPath, 'utf8')
+    const pdfSource = readFileSync('packages/pdf/src/index.ts', 'utf8')
+    const pdfWorkerSource = readFileSync('packages/pdf/src/worker.ts', 'utf8')
+    const workerHelpers = [
+      'createPdfProgressResponse',
+      'createPdfErrorResponse',
+      'createCancelPdfWorkerRequest',
+      'createPdfTransferables',
+      'readPdfImageAsset',
+      'handlePdfWorkerRequest'
+    ]
+    const pdfSection = catalog.slice(
+      catalog.indexOf('## @4xian/jword-pdf'),
+      catalog.indexOf('## @4xian/jword-persistence')
+    )
+    const stableSection = pdfSection.slice(
+      pdfSection.indexOf('Stable：'),
+      pdfSection.indexOf('Worker-only')
+    )
+
+    for (const helper of workerHelpers) {
+      expect(stableSection, `stable root catalog:${helper}`).not.toContain(`\`${helper}()`)
+      expect(pdfSource, `root source:${helper}`).not.toContain(`export function ${helper}`)
+      expect(pdfWorkerSource, `worker source:${helper}`).toContain(helper)
+    }
+  })
+
   it('marks future wrapper and devtools packages as unimplemented instead of stable', () => {
     const catalog = readFileSync(publicApiCatalogPath, 'utf8')
 
@@ -275,6 +303,19 @@ describe('Gate 7 public API catalog', () => {
     ]
 
     for (const token of boundaryLevels) {
+      expect(catalog, token).toContain(token)
+    }
+  })
+
+  it('documents the Gate 7 no-alias third-party smoke command', () => {
+    const catalog = readFileSync(publicApiCatalogPath, 'utf8')
+
+    for (const token of [
+      'node tools/release/check-gate7-third-party-smoke.mjs',
+      '本地 tarball',
+      'Chromium 浏览器 smoke',
+      'pdf.export'
+    ]) {
       expect(catalog, token).toContain(token)
     }
   })

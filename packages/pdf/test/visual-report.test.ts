@@ -14,7 +14,7 @@ import {
   layoutDocument
 } from '@4xian/jword-core'
 import {
-  createJWordLicenseSignature,
+  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement
 } from '@4xian/jword-license'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
@@ -24,6 +24,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ExportPdfOptions } from '../src/index'
 import { exportPdfFromLayout as exportPdfFromLayoutPublic } from '../src/index'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 /** 以有效授权调用 PDF export，保持视觉报告测试聚焦于渲染证据。 */
 function exportPdfFromLayout(
@@ -50,7 +51,7 @@ function createVisualReportLicense(): JWordLicenseEntitlement {
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

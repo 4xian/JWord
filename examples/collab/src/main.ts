@@ -17,7 +17,7 @@ import {
 } from '@4xian/jword-core'
 import { createJWordUi } from '@4xian/jword-ui'
 import {
-  createJWordLicenseSignature,
+  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement,
   type JWordLicenseSignaturePayload
 } from '@4xian/jword-license'
@@ -29,6 +29,7 @@ import {
 import { createPresenceDisplayUsers } from './awareness-order'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 const editorHost = requireElement<HTMLElement>('#jword-collab-editor', 'Collab demo requires #jword-collab-editor.')
 const statusHost = requireElement<HTMLElement>('#jword-collab-status', 'Collab demo requires #jword-collab-status.')
@@ -459,7 +460,7 @@ function createDemoLicenseEntitlement(input: {
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

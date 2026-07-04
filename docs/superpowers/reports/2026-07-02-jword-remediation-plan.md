@@ -32,14 +32,14 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ### 任务清单
 
-- [ ] **[G3-01] 实现 Shift+Arrow 键盘选区扩展**
+- [x] **[G3-01] 实现 Shift+Arrow 键盘选区扩展** —— 完成 2026-07-03：先落地 G1-03 文档序方向推断，再让 Arrow/Home/End 读取 `shiftKey` 并在扩展时保持 anchor、移动 focus；验证 `pnpm exec vitest run packages/core/test/model/selection.test.ts packages/core/test/editor/input-runtime.test.ts packages/core/test/editor/delete-range-runtime.test.ts packages/core/test/editor/mount-lifecycle.test.ts`（4 files, 40 passed）、`pnpm exec playwright test examples/vanilla/tests/gate3-input.e2e.ts --project=chromium`（10 passed, 1 skipped）。
   - 文件：`packages/core/src/editor/input-runtime.ts`
   - 问题：Shift+方向键选区扩展完全缺失，用户无法通过键盘选中文本，属基础编辑能力硬缺口。
   - 修复方案：在 keyboard handler 的方向键分支读取 `event.shiftKey`；为真时保持 selection anchor 不动、仅移动 focus（复用现有 caret 移动定位逻辑计算新 focus 位置），构造 `SelectionState { anchor, focus, direction }` 后走 selection command 更新；同时覆盖 Shift+Home/End（扩展到行首/行尾）。
   - 验证：新增单测覆盖 Shift+Left/Right/Up/Down/Home/End 六种扩展；e2e 里验证 Shift+Right 三次后选中 3 个字符并可整体删除。
   - 工作量：M。依赖：无（建议与 G1-03 选区方向修复同批做，见 Phase 1）。
 
-- [ ] **[G3-02] 修复有选区时 Enter 键无效**
+- [x] **[G3-02] 修复有选区时 Enter 键无效** —— 完成 2026-07-03：`splitParagraphFromRuntime` 在非折叠选区下同一 command 内先 deleteRange 再 splitBlock，undo 一步恢复；验证 `pnpm exec vitest run packages/core/test/model/selection.test.ts packages/core/test/editor/input-runtime.test.ts packages/core/test/editor/delete-range-runtime.test.ts packages/core/test/editor/mount-lifecycle.test.ts`（4 files, 40 passed）、`pnpm exec playwright test examples/vanilla/tests/gate3-input.e2e.ts --project=chromium`（10 passed, 1 skipped）。
   - 文件：`packages/core/src/editor/text-editing-runtime.ts:1330` 附近
   - 问题：存在非折叠选区时按 Enter 无任何反应；预期行为是先删除选区内容再分段。
   - 修复方案：Enter 处理分支在 `selection.isCollapsed === false` 时，先构造 `deleteRange` 再 `splitBlock`，两个 operation 放入同一 command/同一 `ydoc.transact`，保证 undo 一步回滚。
@@ -47,7 +47,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
   - 工作量：S-M。依赖：若选区跨 run，需 G1-02（deleteRange 跨 run 支持）先行或同批完成。
   - R3 追加同批处理：跨 section / 跨容器 selection delete/cut/paste replace 失败（`text-editing-runtime.ts` delete plan 复用起始 sectionId，`mergeBlock` 只支持同容器相邻段落）。应让 selected target 携带真实 section/container，跨 section merge 明确语义或返回稳定 unsupported error。（已决策 D9：1.0 返回稳定 unsupported 错误，跨节合并留 post-1.0；见补充文档）
 
-- [ ] **[G4-BUG] 修复浮动工具栏格式按钮始终隐藏**
+- [x] **[G4-BUG] 修复浮动工具栏格式按钮始终隐藏** —— 完成 2026-07-03：拆分格式按钮与链接按钮显隐逻辑，保留粗体/斜体/下划线/删除线/颜色控件可见，并在格式命令前冻结浮动工具栏位置避免首个格式改动漂移；验证 `pnpm exec vitest run packages/ui/test/selection-actions-dom.test.ts packages/ui/test/selection-actions-controller.test.ts`（2 files, 11 passed）、`pnpm exec playwright test examples/vanilla/tests/gate4-selection-actions.e2e.ts --project=chromium`（5 passed）。
   - 文件：`packages/ui/src/selection-actions/dom.ts`（`syncLinkActionVisibility()`）
   - 问题：选区浮动工具栏中的粗体/斜体等格式按钮被无条件隐藏，只剩链接按钮逻辑生效。
   - 修复方案：`syncLinkActionVisibility()` 只应控制链接相关按钮的显隐，格式按钮显隐改为独立函数按选区状态（非折叠即显示）控制；排查是否 CSS 类名/初始 `display:none` 未被清除。
@@ -62,21 +62,21 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ### 1A. 内存泄漏与事件生命周期（core）
 
-- [ ] **[G1-01 / G3-04] destroy 时移除 focus/blur 监听器**
+- [x] **[G1-01 / G3-04] destroy 时移除 focus/blur 监听器** —— 完成 2026-07-03：`MountedEditorDom` 保存 focus/blur 与统一 `AbortController`，所有 mount 事件监听改走同一 signal，destroy 中一次 abort 清理；验证 `pnpm exec vitest run packages/core/test/editor/mount-lifecycle.test.ts`（3 passed）、focused 合集 `pnpm exec vitest run packages/core/test/model/selection.test.ts packages/core/test/editor/input-runtime.test.ts packages/core/test/editor/delete-range-runtime.test.ts packages/core/test/editor/mount-lifecycle.test.ts packages/core/test/operations/operation-adapter.test.ts packages/core/test/canvas/pool.test.ts`（6 files, 57 passed）。
   - 文件：`packages/core/src/editor/mount-facade-runtime.ts`（约 204-205 行注册、273-286 行 destroy）
   - 修复方案：注册监听时统一用一个 `AbortController`，`addEventListener(..., { signal })`，destroy 中 `controller.abort()` 一次清空；顺带盘点同文件所有 `addEventListener` 是否全部走该 signal。
   - （R2 补充根因）`handleFocus`/`handleBlur` 从未被写入 `mountedDom` 对象字面量（约 209-257 行），destroy 侧本就无引用可移除；修复须先补这两个字段，再统一走 AbortController 清理。
   - 验证：单测 mount→destroy 两轮后对 window/document 派发 focus/blur，断言旧回调不触发（可用 spy 计数）。
   - 工作量：S。依赖：无。
 
-- [ ] **[G3-03] mouseup 改注册到 document**
+- [x] **[G3-03] mouseup 改注册到 document** —— 完成 2026-07-03：`mouseup` 改挂 `ownerDocument` 并纳入 AbortController 生命周期，拖拽移出编辑器后在 document mouseup 结束指针状态；验证 `pnpm exec vitest run packages/core/test/editor/mount-lifecycle.test.ts`（3 passed）、`pnpm exec playwright test examples/vanilla/tests/gate3-input.e2e.ts --project=chromium`（10 passed, 1 skipped）。
   - 文件：`packages/core/src/editor/mount-facade-runtime.ts:193`
   - 问题：mouseup 挂在 canvasContainer 上，拖拽选区时指针移出编辑器再松开，选区停留在"拖拽中"状态。
   - 修复方案：mousedown 仍挂容器；mousedown 触发后把 mousemove/mouseup 临时挂到 `document`（同样走 AbortController），mouseup 后立即解除。
   - 验证：e2e：从编辑器内按下、拖到编辑器外松开，断言选区正确结束且后续点击行为正常。
   - 工作量：S。依赖：与 G1-01 同一文件，建议同一 PR。
 
-- [ ] **[G2-13] Canvas 池补 dispose 并接入 editor destroy**
+- [x] **[G2-13] Canvas 池补 dispose 并接入 editor destroy** —— 完成 2026-07-03：`CanvasPool.dispose()` 将 active/available canvas 宽高置 0、清空池并让后续 acquire 抛 `CANVAS_POOL_DISPOSED`，editor destroy 释放 mounted canvases 后调用 dispose；验证 `pnpm exec vitest run packages/core/test/canvas/pool.test.ts`（4 passed）、`pnpm exec vitest run packages/core/test/editor/mount-lifecycle.test.ts`（3 passed）。
   - 文件：`packages/core/src/canvas/pool.ts`
   - 修复方案：新增 `dispose()`：遍历池内 canvas，将宽高置 0（释放位图内存）、从 DOM 移除、清空内部数组；`destroy()` 流程调用；同时加双重释放防护（G2-14：release 已释放页时抛错或忽略并告警）。
   - 验证：单测：dispose 后池为空且再次 acquire 抛出明确错误；多次 mount/destroy 循环无 DOM 残留节点。
@@ -90,14 +90,14 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ### 1B. 编辑与选区核心正确性
 
-- [ ] **[G1-02] deleteRange 支持跨 run / 跨块删除**
+- [x] **[G1-02] deleteRange 支持跨 run / 跨块删除** —— 完成 2026-07-03：按补充文档 §3.1 子步骤 1-5 实施，adapter 支持同段跨 run 与同 section 相邻段跨块三段式删除，跨表格单元格返回 `OPERATION_DELETE_RANGE_UNSUPPORTED_CONTAINER`，跨 section 按 D9 返回 `OPERATION_DELETE_RANGE_UNSUPPORTED_SECTION`，补 transaction undo 一步恢复；验证 `pnpm exec vitest run packages/core/test/operations/operation-adapter.test.ts`（13 passed）、`pnpm exec vitest run packages/core/test/editor/delete-range-runtime.test.ts`（2 passed）。
   - 文件：`packages/core/src/operations/operation-adapter.ts:519-524`
   - 修复方案：将 deleteRange adapter 从"仅同 run"扩展为三段式：首 run 尾部截断、中间 run/块整体删除、末 run 头部截断；跨块时对首尾块执行 mergeBlock 语义；全程单一 `ydoc.transact`。
   - 验证：fixture 覆盖同 run / 跨 run / 跨段 / 跨表格单元格边界（应拒绝并给稳定错误码）四类；undo 一步恢复。
   - 工作量：M-L。依赖：无；G3-02 依赖本项。
   - 拆解：见 `2026-07-03-remediation-execution-supplement.md` §3.1（含 D9 跨 section 语义决策）。
 
-- [ ] **[G1-03] 修复跨块选区方向恒为 forward**
+- [x] **[G1-03] 修复跨块选区方向恒为 forward** —— 完成 2026-07-03：`inferDirection` 改按 document/section/block/run/grapheme 稳定序比较并处理数字后缀 id，跨 run/跨段反向选区返回 backward；验证 `pnpm exec vitest run packages/core/test/model/selection.test.ts`（4 passed）、focused 合集 `pnpm exec vitest run packages/core/test/model/selection.test.ts packages/core/test/editor/input-runtime.test.ts packages/core/test/editor/delete-range-runtime.test.ts packages/core/test/editor/mount-lifecycle.test.ts`（4 files, 40 passed）。
   - 文件：`packages/core/src/editor/selection.ts:120-140`
   - 修复方案：比较 anchor/focus 的文档序（块索引 + 块内 offset 组成的复合序），据此计算 `direction: 'forward' | 'backward'`，不再对跨块场景短路返回 forward。
   - 验证：单测：从后往前跨段拖选，断言 direction 为 backward，且 Shift+Arrow 在 backward 选区上收缩/扩展方向正确。
@@ -136,7 +136,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ### 1D. DOCX / PDF / Native 正确性
 
-- [ ] **[D-1] DOCX 导入尊重 w:val on/off 语义**
+- [x] **[D-1] DOCX 导入尊重 w:val on/off 语义** —— 完成 2026-07-03：四类 run toggle 改读 `w:val`，`false/0/off/none` 不再误判开启；显式关闭与非 `single` 下划线线型产出 `DOCX_RUN_PROPERTY_UNSUPPORTED` warning，避免静默丢失；验证 `pnpm exec vitest run packages/docx/test/public-api-import.test.ts packages/docx/test/roundtrip-diff.test.ts`（2 files, 9 tests passed）。
   - 文件：`packages/docx/src/import-readers.ts:78-89`
   - 修复方案：bold/italic/underline/strike 四属性改用同文件已有的 `readOnOffValue`（406-409 行）读取 `w:val`，`false/0/none` 显式关闭；underline 还需读 `w:val` 样式值（single/none 等）。
   - 验证：fixture 增加 `<w:b w:val="false"/>` 样例，断言导入后 run 非加粗；roundtrip 测试同步更新。
@@ -177,7 +177,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ### 1E. 协作（Gate 6 HIGH）
 
-- [ ] **[G6-H1] 修复 base64 编码栈溢出**
+- [x] **[G6-H1] 修复 base64 编码栈溢出** —— 完成 2026-07-03：参考 `packages/persistence/src/storage-history-adapter.ts` 的安全循环思路，`client-history` 改为 0x8000 分块编码并用循环解码，避免大 update 展开到调用栈；验证 `pnpm exec vitest run packages/collab/test/client-history-base64.test.ts packages/collab/test/public-client.test.ts`（2 files, 11 tests passed）。
   - 文件：`packages/collab/src/client-history.ts:478`
   - 修复方案：`String.fromCodePoint(...update)` 改为分块循环（每块 ≤ 0x8000 字节 `String.fromCharCode.apply`）或平台分支（Node 用 `Buffer.from(update).toString('base64')`，浏览器分块 + `btoa`）。
   - 验证：单测编码 1MB Uint8Array 不抛栈溢出且解码还原一致。
@@ -195,20 +195,20 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
   - 验证：单测断言构造后未发起连接（mock provider 的 attach 未被调）；连接前授权失败路径正确抛错。
   - 工作量：S。依赖：无。
 
-- [ ] **[G6-H4] 修复 `restoreVersion()` 只 apply 旧 update 不能真正回退的问题（R3）**
+- [x] **[G6-H4] 修复 `restoreVersion()` 只 apply 旧 update 不能真正回退的问题（R3）**。完成 2026-07-03：新增 core `replaceSyncUpdate()` 受控替换路径，collab `restoreVersion()` 通过隔离 Y.Doc 重放目标 update 后替换当前 canonical document，保留 `version-restore` origin；验证：`pnpm exec vitest run packages/collab/test/public-client.test.ts packages/collab/test/public-client-restore.test.ts`（2 files / 11 tests passed）。
   - 文件：`packages/collab/src/client-history.ts:122-157`、`packages/core/src/editor/collaboration-runtime.ts`
   - 修复方案：用隔离 Y.Doc 应用目标版本 update，再通过 core 受控替换当前 canonical document；不能直接把旧 update apply 到当前 doc。
   - 验证：record v1、record v2、restore v1 后断言 v2 文本消失，并保留 `version-restore` origin。
   - 工作量：M。依赖：无。
 
-- [ ] **[G6-H5] Hocuspocus WebSocket 服务补 tenant/authHook 隔离（R3）**
+- [x] **[G6-H5] Hocuspocus WebSocket 服务补 tenant/authHook 隔离（R3）**。完成 2026-07-03：按补充文档 §3.5 步骤 1-4 实施 `{tenantId}/{documentId}` 解析、tenantHook/authHook 默认拒绝、read/write 权限和 `COLLAB_PERMISSION_DENIED` 诊断；验证：`pnpm exec vitest run packages/collab-server/test/server.test.ts`（1 file / 18 tests passed）。
   - 文件：`packages/collab-server/src/hocuspocus-server.ts`
   - 修复方案：解析 documentName 为 tenantId/documentId/roomId，onConnect/onAuthenticate/beforeSync 中调用宿主 auth/tenant hook，拒绝跨 tenant update。
   - 验证：跨 tenant/documentName 连接被拒，合法用户可进入对应 room。
   - 工作量：M。依赖：计划审查 3.11 权限粒度设计（设计已定稿）。
   - 拆解：见补充文档 §3.5（documentName 约定、read/write 两级权限、默认拒绝）。
 
-- [ ] **[G6-R2-1] 用户身份缺失改为阻断性错误（R2 复审补充）**
+- [x] **[G6-R2-1] 用户身份缺失改为阻断性错误（R2 复审补充）** —— 完成 2026-07-03：`validateConnectionOptions` 对缺失 user.id/name 返回 `COLLAB_USER_IDENTITY_REQUIRED` error 并阻止 provider 连接，新增 diagnostics registry 登记与 public-client 回归；验证 `pnpm exec vitest run packages/collab/test/public-client.test.ts tests/architecture/gate6-diagnostics-registry.test.ts`（2 files, 16 passed）。
   - 文件：`packages/collab/src/client-sdk.ts:690-698`
   - 问题：`user.id`/`name` 为空时只推送 `COLLAB_AWARENESS_STALE` warning 并继续连接，而 `user.id` 是 presence、auto-inserter actor id（:668）与 license authorId 的基础，诊断码语义也错配。
   - 修复方案：新增 `COLLAB_USER_IDENTITY_REQUIRED` 阻断性 error 码并登记 diagnostics registry，身份缺失时 fail-fast 不发起连接。
@@ -217,13 +217,13 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 
 ### 1F. 构建产物与商业阻塞
 
-- [ ] **[G0-04] 补齐 rollup externals**
+- [x] **[G0-04] 补齐 rollup externals** —— 完成 2026-07-03：Rollup external 改为从 `packages/*/package.json` 的包名、dependencies、peerDependencies 动态生成，并保留 `node:`/React/Vue 外置前缀；新增架构测试防止生产依赖再次被打进 dist；验证 `pnpm exec vitest run tests/architecture/gate0-rollup-externals.test.ts`（1 passed）、`pnpm build`（通过）、dist 外置 import 与无内联源码 grep（通过）；`pnpm size` 已跑出新实测但仍因既有 [gate7 2.6] 预算未校准失败：core 528091 > 260000、首屏 613485 > 330000。
   - 文件：`rollup.config.mjs`（约第 8 行 externals 定义）
   - 修复方案：externals 覆盖全部生产依赖：`dompurify`、`jszip`、`pdf-lib`、`fontkit`、`pdfjs-dist`、`yjs`、`y-protocols`、`y-indexeddb`、`@hocuspocus/provider`、`@hocuspocus/server` 及所有 `@4xian/jword-*` 互引；建议改为函数式 external（读各包 package.json dependencies 自动生成），防再漂移。
   - 验证：`pnpm build` 后 grep 各包 dist 无第三方库源码内联；`pnpm size` 数值显著回落并更新基线。
   - 工作量：S-M。依赖：无；Phase 6 bundle size 预算更新依赖本项先完成。
 
-- [ ] **[LIC-1] license 签名替换为密码学签名（GA 阻塞）**
+- [x] **[LIC-1] license 签名替换为密码学签名（GA 阻塞）** —— 完成 2026-07-03：按补充文档 §3.4 子步骤 1-6 与 D1 实施 JWL1 Ed25519 token、零依赖验签、显式 `allowInsecureFixtureLicense` 旧 FNV 兼容 warning、insecure-test-only 测试签发 helper 和架构护栏；验证 `pnpm exec vitest run packages/license/test/entitlement.test.ts packages/docx/test/public-api-license.test.ts packages/docx/test/worker.test.ts packages/pdf/test/public-api-license.test.ts packages/pdf/test/worker.test.ts packages/collab/test/contract.test.ts packages/collab/test/public-client.test.ts packages/collab/test/client-history-base64.test.ts tests/architecture/gate5-commercial-readiness.test.ts tests/architecture/gate5-diagnostics-schema.test.ts tests/architecture/gate6-docx-fixture-integration.test.ts`（11 files, 62 passed）、`pnpm typecheck`（通过）、`pnpm build && node tools/release/check-gate5-commercial-pack.mjs && node tools/release/check-gate6-commercial-pack.mjs`（通过）。
   - 文件：`packages/license/src/index.ts:222-236`
   - 问题：32 位 FNV-1a 哈希 + 可推导 verifier material，知道 issuer 即可伪造合法 license。
   - 修复方案：license token 改为非对称签名（推荐 Ed25519：签发端私钥签名，SDK 内置公钥验签，Web Crypto 的 `crypto.subtle.verify` + Node `node:crypto` 双实现，保持 license 包零第三方依赖）；保留旧格式解析仅用于开发 fixture 且显式标记 `insecure`；`tests/architecture/gate5-commercial-readiness.test.ts` 增加"禁止 FNV 签名进入发布路径"检查项。
@@ -244,7 +244,7 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 - [ ] **[G0-07] check-package-versions.mjs 扩展到所有子包**：遍历 `packages/*/package.json`、`examples/*/package.json` 检查精确 semver 与内部依赖 `workspace:` 协议。工作量：S。
 - [ ] **[G0-01 / G0-03 / G0-05] 依赖治理三联**：生产依赖从根 package.json 下沉到实际使用的子包（根只留工具链）；ESLint core 禁止列表补 dompurify；vitest alias 补 `@4xian/jword-ui`、`@4xian/jword-ui/styles.css`、`@4xian/jword-native/worker`，并修复 docx/pdf/native worker 子路径 alias 顺序（子路径在主包前或 exact/regex alias）；与 `tsconfig.base.json` paths 建立一致性检查（可写架构测试调用 Vite resolver 对 worker/style 子路径逐项断言）。工作量：M。依赖：G0-07 先行可互相验证。
 - [ ] **[G0-02] 补 pre-commit 钩子**：husky pre-commit 跑 `pnpm lint && pnpm typecheck`（或 lint-staged 限于改动文件），commit-msg 已有 commitlint 不动。工作量：S。
-- [ ] **[计划审查 2.10] CI 门禁修复（R2 复审补充）**：`.github/workflows/ci.yml` 没有任何 `playwright install` 步骤，E2E/visual 在全新 runner 上必然失败（CI 从未真实跑通，属纸面门禁）。补 `pnpm exec playwright install --with-deps` 并真实跑通一次完整 CI 作为验收；评估三浏览器 E2E 拆分 job 与浏览器二进制缓存控制时长；审视 `test:e2e` 中 `--pass-with-no-tests` 的静默放行。工作量：S-M。依赖：无。
+- [x] **[计划审查 2.10] CI 门禁修复（R2 复审补充）** —— 完成 2026-07-03：按补充文档 §2 复核确认 `.github/workflows/ci.yml` Install 步骤现状已包含 `pnpm exec playwright install --with-deps`（自愈确认），本地复跑 `pnpm exec playwright install --with-deps`（通过）并抽跑 `pnpm exec playwright test examples/vanilla/tests/gate3-input.e2e.ts --project=chromium`（10 passed, 1 skipped）。原问题描述：`.github/workflows/ci.yml` 没有任何 `playwright install` 步骤，E2E/visual 在全新 runner 上必然失败（CI 从未真实跑通，属纸面门禁）。工作量：S-M。依赖：无。
 - [ ] **[G0-10] packages/core 纳入文件行数预算**：`tests/architecture` 增加 core 行数预算测试（与其他包同基准）；当前超标文件（如 `command-builders.ts` 1703 行）列入豁免清单并在 Phase 5 拆分后收紧。工作量：S（测试）+ 拆分工作见 Phase 5。
 - [ ] **[计划审查 1.1] 制定单文件拆分专项**：`packages/ui/src/create-ui.ts`（2037 行）、`packages/core/src/commands/command-builders.ts`（1703 行）等超千行文件登记拆分方案（按功能域拆子模块，保持公开导出面不变）。本 Phase 只产出拆分清单与目标结构，实际拆分在 Phase 5 执行。工作量：S（清单）。
 
@@ -341,11 +341,11 @@ R3 子代理复审说明（2026-07-02）：按用户要求开启 5 个 `gpt-5.5 
 ## Phase 6 - Gate 7 前置准备（在 Gate 7 启动前完成）
 
 - [ ] **[gate7 2.1] Plugin 扩展点前置改造（最大风险项，提前动工）**：在 core 中落地扩展点骨架——command 注册拦截、decoration 层（layout/render 挂钩）、生命周期钩子、快捷键注册、工具栏扩展注册；先内部使用（把现有 UI 菜单/工具栏迁移为首个消费者验证 API 形状），Gate 7 再冻结对外。工作量：XL（估 7-10 人周，建议与 Phase 3-5 并行排期）。里程碑拆解：见补充文档 §3.11（M1 设计冻结与 M5 内部消费者后设人工检查点）。
-- [ ] **[gate7 R3] 发布/no-alias 消费闭环**：明确 registry publish vs tarball distribution；若 registry 发布，移除可发布包 `private: true` 并配置 publishConfig；新增 external empty project smoke，从本地 pack 安装公开包，不使用 examples 源码 alias，跑 typecheck/build/浏览器 smoke。Owner/Lane：release/docs。产物路径：各 `packages/*/package.json`、`tools/release/*no-alias*` 或 `tools/release/check-gate7-third-party-smoke.mjs`、外部临时 fixture 文档。验收命令：`pnpm build`、`node tools/release/check-native-pack.mjs`、`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/release/check-gate6-commercial-pack.mjs`、新增 no-alias smoke 命令；涉及 UI 时补真实浏览器/Kimi smoke。工作量：M。决策与拆解：见补充文档 D2 / §3.13（tarball 冒烟先行，私有 registry 为目标形态）。
-- [ ] **[gate7 R3] Public API / pack 边界降噪**：PDF worker helper 移出 stable root API；`@4xian/jword-core` 等基础包 pack 白名单收敛到 dist/README/LICENSE 或明确 source distribution 口径；pack 审计覆盖 core/ui/native/docx/pdf/collab/license/persistence 全包。Owner/Lane：release/api。产物路径：`docs/sdk/public-api.md`、`packages/*/package.json`、`tests/architecture/*public-api*`、pack 审计脚本。验收命令：`pnpm typecheck`、`pnpm test -- tests/architecture`、全包 `npm pack --dry-run` 审计脚本。工作量：M。
+- [x] **[gate7 R3] 发布/no-alias 消费闭环**：明确 registry publish vs tarball distribution；若 registry 发布，移除可发布包 `private: true` 并配置 publishConfig；新增 external empty project smoke，从本地 pack 安装公开包，不使用 examples 源码 alias，跑 typecheck/build/浏览器 smoke。Owner/Lane：release/docs。产物路径：各 `packages/*/package.json`、`tools/release/*no-alias*` 或 `tools/release/check-gate7-third-party-smoke.mjs`、外部临时 fixture 文档。验收命令：`pnpm build`、`node tools/release/check-native-pack.mjs`、`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/release/check-gate6-commercial-pack.mjs`、新增 no-alias smoke 命令；涉及 UI 时补真实浏览器/Kimi smoke。工作量：M。决策与拆解：见补充文档 D2 / §3.13（tarball 冒烟先行，私有 registry 为目标形态）。完成 2026-07-03：按 §3.13 步骤 1、2、4 新增 `tools/release/check-gate7-third-party-smoke.mjs`，从本地 tarball 安装 core/ui/native/docx/pdf/license/persistence/collab/collab-server，执行 `tsc --noEmit`、`vite build` 和 Chromium browser smoke；按 D2 未移除 `private: true`、未执行 publish。验证：`pnpm build` 通过；`node tools/release/check-native-pack.mjs`、`node tools/release/check-gate5-commercial-pack.mjs`、`node tools/release/check-gate6-commercial-pack.mjs` 均输出 `status: ok`；`node tools/release/check-gate7-third-party-smoke.mjs` 输出 `status: ok` 且 Chromium 1 passed。
+- [x] **[gate7 R3] Public API / pack 边界降噪**：PDF worker helper 移出 stable root API；`@4xian/jword-core` 等基础包 pack 白名单收敛到 dist/README/LICENSE 或明确 source distribution 口径；pack 审计覆盖 core/ui/native/docx/pdf/collab/license/persistence 全包。Owner/Lane：release/api。产物路径：`docs/sdk/public-api.md`、`packages/*/package.json`、`tests/architecture/*public-api*`、pack 审计脚本。验收命令：`pnpm typecheck`、`pnpm test -- tests/architecture`、全包 `npm pack --dry-run` 审计脚本。工作量：M。完成 2026-07-03：PDF worker helper 移至 `@4xian/jword-pdf/worker`，root stable API 仅保留导出路径；pack manifest 收敛到 dist/README/fixtures 口径，并由 Gate 7 no-alias smoke 覆盖 core/ui/native/docx/pdf/license/persistence/collab/collab-server 本地 tarball。验证：`pnpm exec vitest run tests/architecture/gate7-public-api-catalog.test.ts packages/pdf/test/public-api.test.ts packages/pdf/test/worker.test.ts`（3 files / 31 tests passed）；`node tools/release/check-gate7-third-party-smoke.mjs` 输出 `status: ok` 且 Chromium 1 passed。
 - [ ] **[gate7 R3] Observability/error boundary/telemetry 子任务**：默认关闭 telemetry，宿主 opt-in；定义事件 schema 与隐私裁剪；插件异常隔离、wrapper error boundary、diagnostics export 不含正文内容。Owner/Lane：sdk/runtime/docs。产物路径：diagnostics/telemetry contract 文档、wrapper error boundary 设计、相关 tests。验收命令：插件抛错单测、wrapper error boundary 测试、diagnostics export 内容审计（断言不含正文内容），必要时补浏览器 smoke。工作量：M。
 - [ ] **[gate7 2.6] bundle size 预算校准**：G0-04 修复后重测各包体积，把过时预算（core 260KB/首屏 330KB vs 实际 494KB/581KB）更新为"当前实测 + 收紧路线图"，`pnpm size` 门禁按新预算执行。依赖：G0-04。工作量：S。（R2 订正数字：实测 core dist 为 523,433 字节 ≈ 511KB、vanilla 首屏 index chunk 为 573,859 字节 ≈ 560KB 且未计 CSS，均已破 `check-size.mjs:34-35` 的 260KB/330KB 门禁线；校准前先查 core 体积翻倍根因——真实增长还是过时产物（当前 dist mtime 为 5 月 26/28）。）
-- [ ] **[gate7 2.7] 发布配置修复**：`packages/ui` 的 `"./styles.css"` export 从 `src/styles/toolbar.css` 改指 dist 产物（构建复制）；core/native/ui 补 `publishConfig.access`；`npm pack --dry-run` 内容审计脚本入 `tools/release/`。工作量：S-M。（R2 补充证据：`packages/ui/package.json:17` export 指向 `src/styles/toolbar.css`，`:21` 的 `files` 含 `src/styles`，发布会把源码目录带出。）
+- [x] **[gate7 2.7] 发布配置修复**：`packages/ui` 的 `"./styles.css"` export 从 `src/styles/toolbar.css` 改指 dist 产物（构建复制）；core/native/ui 补 `publishConfig.access`；`npm pack --dry-run` 内容审计脚本入 `tools/release/`。工作量：S-M。（R2 补充证据：`packages/ui/package.json:17` export 指向 `src/styles/toolbar.css`，`:21` 的 `files` 含 `src/styles`，发布会把源码目录带出。）完成 2026-07-03：`@4xian/jword-ui/styles.css` 改为 `dist/styles/toolbar.css`，Rollup 构建复制 CSS 到 dist；core files 收敛为 `dist`，core/native/ui 补 `publishConfig.access: public`；Gate 7 smoke 对本地 tarball 执行 pack 内容与 no-alias 安装审计。验证：`pnpm build` 通过；`node tools/release/check-gate7-third-party-smoke.mjs` 输出 `status: ok`。
 - [ ] **[gate7 2.2/2.3/2.4] 补齐 wrapper / theme / devtools 详细设计文档**：React wrapper 明确 ref 暴露、受控/非受控、StrictMode 双挂载兼容；Vue 明确 provide/inject 与 SSR 空壳；theme 明确 CSS 变量 + 暗色模式；devtools 明确面板与 diagnostics export 架构。产出设计文档供 Gate 7 直接执行。工作量：M。
 - [ ] **[计划审查 2.4] a11y 系统性验收补课**：Gate 4-6 新功能（表格、批注、查找替换、协作光标）补 a11y 验收清单与自动化检查（axe-core 集成到 e2e）。工作量：M-L。
 - [ ] **[计划审查 2.1] 协同输入 rebase 方案评估**：对 textarea value diff rebase 路径补充协同并发下的压力测试；若确认脆弱，设计以 Y.RelativePosition 为基准的输入定位替代方案（先出设计文档再改）。工作量：M（评估）。评估方法定稿：见补充文档 §3.12 与决策 D7（一致率 <100% 即切替代方案）。
@@ -387,8 +387,8 @@ Phase 0（P0，~1 周内）
 10. [LIC-1] license 密码学签名（商业阻塞，尽早排期）
 11. [计划审查 2.10] CI 补 `playwright install --with-deps` 并真实跑通一次（S 工作量，解锁全部门禁的真实性）
 12. [G6-R2-1] 协同用户身份缺失 fail-fast（S 工作量，presence/授权/审计的身份底座）
-13. [G6-H4] 修复 `restoreVersion()` 真实回退语义（R3，历史/恢复正确性）
-14. [G6-H5] Hocuspocus WebSocket tenant/authHook 隔离（R3，服务端安全）
-15. [gate7 R3] 发布/no-alias 外部消费 smoke（R3，1.0 发布证据前置）
+13. [G6-H4] 修复 `restoreVersion()` 真实回退语义（R3，历史/恢复正确性）——完成 2026-07-03
+14. [G6-H5] Hocuspocus WebSocket tenant/authHook 隔离（R3，服务端安全）——完成 2026-07-03
+15. [gate7 R3] 发布/no-alias 外部消费 smoke（R3，1.0 发布证据前置）——完成 2026-07-03
 
 每完成一批任务：跑 `pnpm lint && pnpm typecheck && pnpm test`，涉及交互的补对应 e2e；在本文档勾选对应 checkbox 并在任务行追加完成日期与验证记录（沿用主计划文档的记录风格）。

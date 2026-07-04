@@ -17,9 +17,15 @@ import {
   createParagraphRecord,
   createRunRecord,
   createSectionRecord,
+  createTableCellRecord,
+  createTableRecord,
+  createTableRowRecord,
   getParagraphRuns,
   getRunText,
-  getSectionBlocks
+  getSectionBlocks,
+  getTableCellBlocks,
+  getTableRowCells,
+  getTableRows
 } from '../../src/model/document-store'
 import type { BlockRecord, DocumentStore, RunRecord, SectionRecord } from '../../src/model/document-store'
 import { createOperationAdapter } from '../../src/operations/operation-adapter'
@@ -101,6 +107,79 @@ describe('createOperationAdapter', () => {
     })
 
     expect(getRunText(run).toString()).toBe('aXe\u0301中')
+  })
+
+  it('applies deleteRange across runs in one paragraph', () => {
+    const { store, paragraphId, firstRunId, secondRunId } = createTwoRunTextFixture('abc', 'def')
+    const adapter = createOperationAdapter(store)
+
+    adapter.apply({
+      kind: 'deleteRange',
+      range: {
+        anchor: createPosition(paragraphId, firstRunId, 1),
+        focus: createPosition(paragraphId, secondRunId, 2)
+      }
+    })
+
+    expect(readParagraphTexts(store)).toEqual(['af'])
+  })
+
+  it('applies deleteRange across adjacent paragraphs and merges the remaining runs', () => {
+    const { store, firstParagraphId, firstRunId, secondParagraphId, secondRunId } = createTwoParagraphTextFixture('abc', 'def')
+    const adapter = createOperationAdapter(store)
+
+    adapter.apply({
+      kind: 'deleteRange',
+      range: {
+        anchor: createPosition(firstParagraphId, firstRunId, 1),
+        focus: createPosition(secondParagraphId, secondRunId, 2)
+      }
+    })
+
+    expect(readParagraphTexts(store)).toEqual(['af'])
+  })
+
+  it('rejects deleteRange across sections with a stable unsupported error', () => {
+    const { store, firstParagraphId, firstRunId, secondParagraphId, secondRunId } = createTwoSectionTextFixture('abc', 'def')
+    const adapter = createOperationAdapter(store)
+
+    let code: unknown
+
+    try {
+      adapter.apply({
+        kind: 'deleteRange',
+        range: {
+          anchor: createPosition(firstParagraphId, firstRunId, 1, 'section-1'),
+          focus: createPosition(secondParagraphId, secondRunId, 2, 'section-2')
+        }
+      })
+    } catch (error) {
+      code = (error as { readonly code?: unknown }).code
+    }
+
+    expect(code).toBe('OPERATION_DELETE_RANGE_UNSUPPORTED_SECTION')
+  })
+
+  it('rejects deleteRange across table cells with a stable unsupported error', () => {
+    const { store, firstParagraphId, firstRunId, secondParagraphId, secondRunId } = createTwoCellTableTextFixture('abc', 'def')
+    const adapter = createOperationAdapter(store)
+
+    let code: unknown
+
+    try {
+      adapter.apply({
+        kind: 'deleteRange',
+        range: {
+          anchor: createPosition(firstParagraphId, firstRunId, 1),
+          focus: createPosition(secondParagraphId, secondRunId, 2)
+        }
+      })
+    } catch (error) {
+      code = (error as { readonly code?: unknown }).code
+    }
+
+    expect(code).toBe('OPERATION_DELETE_RANGE_UNSUPPORTED_CONTAINER')
+    expect(readFirstTableCellTexts(store)).toEqual(['abc', 'def'])
   })
 
   it('splits blocks at grapheme boundaries and migrates tail anchors by grapheme index', () => {
@@ -383,6 +462,109 @@ function createTextFixture(text: string) {
   }
 }
 
+function createTwoParagraphTextFixture(firstText: string, secondText: string) {
+  const store = createDocumentStore()
+  const sectionId = 'section-1' as SectionId
+  const firstParagraphId = 'paragraph-1' as BlockId
+  const secondParagraphId = 'paragraph-2' as BlockId
+  const firstRunId = 'run-1' as RunId
+  const secondRunId = 'run-2' as RunId
+  const section = createSectionRecord(sectionId)
+  const firstParagraph = createParagraphRecord(firstParagraphId)
+  const secondParagraph = createParagraphRecord(secondParagraphId)
+  const firstRun = createRunRecord(firstRunId, firstText)
+  const secondRun = createRunRecord(secondRunId, secondText)
+
+  store.sections.push([section])
+  getSectionBlocks(section).push([firstParagraph, secondParagraph])
+  getParagraphRuns(firstParagraph).push([firstRun])
+  getParagraphRuns(secondParagraph).push([secondRun])
+
+  return {
+    store,
+    firstParagraphId,
+    secondParagraphId,
+    firstRunId,
+    secondRunId
+  } satisfies {
+    readonly store: DocumentStore
+    readonly firstParagraphId: BlockId
+    readonly secondParagraphId: BlockId
+    readonly firstRunId: RunId
+    readonly secondRunId: RunId
+  }
+}
+
+function createTwoSectionTextFixture(firstText: string, secondText: string) {
+  const store = createDocumentStore()
+  const firstSection = createSectionRecord('section-1' as SectionId)
+  const secondSection = createSectionRecord('section-2' as SectionId)
+  const firstParagraphId = 'paragraph-1' as BlockId
+  const secondParagraphId = 'paragraph-2' as BlockId
+  const firstRunId = 'run-1' as RunId
+  const secondRunId = 'run-2' as RunId
+  const firstParagraph = createParagraphRecord(firstParagraphId)
+  const secondParagraph = createParagraphRecord(secondParagraphId)
+
+  store.sections.push([firstSection, secondSection])
+  getSectionBlocks(firstSection).push([firstParagraph])
+  getSectionBlocks(secondSection).push([secondParagraph])
+  getParagraphRuns(firstParagraph).push([createRunRecord(firstRunId, firstText)])
+  getParagraphRuns(secondParagraph).push([createRunRecord(secondRunId, secondText)])
+
+  return {
+    store,
+    firstParagraphId,
+    secondParagraphId,
+    firstRunId,
+    secondRunId
+  } satisfies {
+    readonly store: DocumentStore
+    readonly firstParagraphId: BlockId
+    readonly secondParagraphId: BlockId
+    readonly firstRunId: RunId
+    readonly secondRunId: RunId
+  }
+}
+
+function createTwoCellTableTextFixture(firstText: string, secondText: string) {
+  const store = createDocumentStore()
+  const section = createSectionRecord('section-1' as SectionId)
+  const table = createTableRecord('table-1' as BlockId)
+  const row = createTableRowRecord('row-1')
+  const firstCell = createTableCellRecord('cell-1')
+  const secondCell = createTableCellRecord('cell-2')
+  const firstParagraphId = 'cell-paragraph-1' as BlockId
+  const secondParagraphId = 'cell-paragraph-2' as BlockId
+  const firstRunId = 'cell-run-1' as RunId
+  const secondRunId = 'cell-run-2' as RunId
+  const firstParagraph = createParagraphRecord(firstParagraphId)
+  const secondParagraph = createParagraphRecord(secondParagraphId)
+
+  store.sections.push([section])
+  getSectionBlocks(section).push([table])
+  getTableRows(table).push([row])
+  getTableRowCells(row).push([firstCell, secondCell])
+  getTableCellBlocks(firstCell).push([firstParagraph])
+  getTableCellBlocks(secondCell).push([secondParagraph])
+  getParagraphRuns(firstParagraph).push([createRunRecord(firstRunId, firstText)])
+  getParagraphRuns(secondParagraph).push([createRunRecord(secondRunId, secondText)])
+
+  return {
+    store,
+    firstParagraphId,
+    secondParagraphId,
+    firstRunId,
+    secondRunId
+  } satisfies {
+    readonly store: DocumentStore
+    readonly firstParagraphId: BlockId
+    readonly secondParagraphId: BlockId
+    readonly firstRunId: RunId
+    readonly secondRunId: RunId
+  }
+}
+
 function createTwoRunTextFixture(firstText: string, secondText: string) {
   const store = createDocumentStore()
   const sectionId = 'section-1' as SectionId
@@ -413,13 +595,43 @@ function createTwoRunTextFixture(firstText: string, secondText: string) {
   }
 }
 
-function createPosition(blockId: BlockId, runId: RunId, graphemeIndex: number): TextPosition {
+function createPosition(
+  blockId: BlockId,
+  runId: RunId,
+  graphemeIndex: number,
+  sectionId = 'section-1'
+): TextPosition {
   return {
-    sectionId: 'section-1',
+    sectionId,
     blockId: String(blockId),
     runId: String(runId),
     graphemeIndex
   }
+}
+
+function readParagraphTexts(store: DocumentStore): readonly string[] {
+  return getSectionBlocks(store.sections.get(0) as SectionRecord)
+    .toArray()
+    .map((block) => getParagraphRuns(block)
+      .toArray()
+      .map((run) => getRunText(run).toString())
+      .join(''))
+}
+
+function readFirstTableCellTexts(store: DocumentStore): readonly string[] {
+  const section = store.sections.get(0) as SectionRecord
+  const table = getSectionBlocks(section).get(0)!
+  const row = getTableRows(table).get(0)!
+
+  return getTableRowCells(row)
+    .toArray()
+    .map((cell) => getTableCellBlocks(cell)
+      .toArray()
+      .map((block) => getParagraphRuns(block)
+        .toArray()
+        .map((run) => getRunText(run).toString())
+        .join(''))
+      .join(''))
 }
 
 interface SharedMapReader {

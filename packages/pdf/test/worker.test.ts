@@ -14,11 +14,24 @@ import {
   type DocumentLayout,
   layoutDocument
 } from '@4xian/jword-core'
-import { createJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
+import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
 import { describe, expect, it } from 'vitest'
 
-import { createCancelPdfWorkerRequest, type PdfWorkerResponse } from '../src/index'
-import { dispatchPdfWorkerRequest } from '../src/worker'
+import type {
+  PdfExportImageInput,
+  PdfImageAsset,
+  PdfWorkerResponse
+} from '../src/index'
+import {
+  createCancelPdfWorkerRequest,
+  createPdfErrorResponse,
+  createPdfProgressResponse,
+  createPdfTransferables,
+  dispatchPdfWorkerRequest,
+  handlePdfWorkerRequest,
+  readPdfImageAsset
+} from '../src/worker'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 describe('@4xian/jword-pdf worker runtime', () => {
   it('fails export before mapping layout when license is missing', async () => {
@@ -172,6 +185,112 @@ describe('@4xian/jword-pdf worker runtime', () => {
     })
     expect(posted).toEqual([response])
   })
+
+  it('handles PDF worker export and cancel messages with stable responses', async () => {
+    const exportResponse = await handlePdfWorkerRequest({
+      kind: 'export-layout',
+      requestId: 'pdf-worker-export-1',
+      layout: createEmptyLayout(),
+      options: {
+        requestId: 'pdf-worker-export-1',
+        license: createWorkerLicense(['pdf.export'])
+      }
+    })
+    const cancelResponse = await handlePdfWorkerRequest(createCancelPdfWorkerRequest('pdf-worker-cancel-1'))
+
+    expect(exportResponse).toMatchObject({
+      kind: 'result',
+      result: {
+        warnings: [],
+        progress: [
+          { stage: 'queued', requestId: 'pdf-worker-export-1' },
+          { stage: 'mapping', requestId: 'pdf-worker-export-1' },
+          { stage: 'writing', requestId: 'pdf-worker-export-1' },
+          { stage: 'done', requestId: 'pdf-worker-export-1' }
+        ]
+      }
+    })
+    expect(cancelResponse).toEqual({
+      kind: 'error',
+      error: {
+        code: 'PDF_EXPORT_CANCELLED',
+        message: '导出已取消',
+        requestId: 'pdf-worker-cancel-1',
+        cancelled: true
+      }
+    })
+  })
+
+  it('creates stable worker messages and PDF transferables', () => {
+    const buffer = new ArrayBuffer(4)
+
+    expect(createPdfProgressResponse('pdf-worker-1', 'font-loading')).toEqual({
+      kind: 'progress',
+      progress: {
+        requestId: 'pdf-worker-1',
+        stage: 'font-loading'
+      }
+    })
+    expect(createCancelPdfWorkerRequest('pdf-worker-1')).toEqual({
+      kind: 'cancel',
+      requestId: 'pdf-worker-1'
+    })
+    expect(createPdfErrorResponse({
+      code: 'PDF_EXPORT_CANCELLED',
+      message: '导出已取消',
+      requestId: 'pdf-worker-1',
+      cancelled: true
+    })).toEqual({
+      kind: 'error',
+      error: {
+        code: 'PDF_EXPORT_CANCELLED',
+        message: '导出已取消',
+        requestId: 'pdf-worker-1',
+        cancelled: true
+      }
+    })
+    expect(createPdfTransferables(buffer)).toEqual([buffer])
+    expect(createPdfTransferables(new Uint8Array(buffer))).toEqual([buffer])
+  })
+
+  it('parses image inputs through worker-only helper API', async () => {
+    const dataUrlInput: PdfExportImageInput = {
+      kind: 'dataUrl',
+      id: 'image-1',
+      dataUrl: 'data:image/png;base64,AA==',
+      alt: 'Logo'
+    }
+    const binaryInput: PdfExportImageInput = {
+      kind: 'arrayBuffer',
+      id: 'image-2',
+      data: new ArrayBuffer(1),
+      mimeType: 'image/jpeg'
+    }
+    const blobInput: PdfExportImageInput = {
+      kind: 'blob',
+      id: 'image-3',
+      blob: new Blob([new Uint8Array([0])], { type: 'image/png' })
+    }
+    const parsed: PdfImageAsset = await readPdfImageAsset(dataUrlInput)
+
+    expect(dataUrlInput.kind).toBe('dataUrl')
+    expect(binaryInput.mimeType).toBe('image/jpeg')
+    expect(blobInput.blob.type).toBe('image/png')
+    expect(await readPdfImageAsset(binaryInput)).toMatchObject({
+      id: 'image-2',
+      mimeType: 'image/jpeg'
+    })
+    expect(await readPdfImageAsset(blobInput)).toMatchObject({
+      id: 'image-3',
+      mimeType: 'image/png'
+    })
+    expect(parsed).toEqual({
+      id: 'image-1',
+      mimeType: 'image/png',
+      bytes: new Uint8Array([0]),
+      alt: 'Logo'
+    })
+  })
 })
 
 /** 创建 PDF worker 测试使用的有效授权。 */
@@ -188,7 +307,7 @@ function createWorkerLicense(features: readonly string[]): JWordLicenseEntitleme
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

@@ -12,6 +12,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { createEvidenceRequests, createEvidenceTemplates, createExportArtifactEvidence, createOpenXmlValidationSummary, writeEvidenceTemplateFiles } from './gate5-docx-compatibility-evidence.mjs'
 import { commandExists, expandCommandTemplateParts, formatCommandEvidence, isAvailableFixture, isOptionalNumberField, isOptionalStringField, isStringField, parseCommandTemplate, printJson, readCommandFailureMessage, readJson, readPositiveIntegerEnv, runCommand, summarizeFixtures } from './gate5-docx-compatibility-utils.mjs'
 
+const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
 const registryPath = 'fixtures/docx/registry.json'
 const matrixPath = 'fixtures/docx/compatibility-matrix.json'
 const manualResultsPath = process.env.GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS ??
@@ -180,7 +181,7 @@ function createGate5CompatibilityLicense(licenseRuntime, features) {
 
   return {
     ...entitlement,
-    signature: licenseRuntime.createJWordLicenseSignature(entitlement)
+    signature: licenseRuntime.createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

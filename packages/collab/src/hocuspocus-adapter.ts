@@ -86,13 +86,15 @@ export function createHocuspocusCollabProviderAdapter(
     onClose({ event }) {
       const reason = readHocuspocusCloseReason(event)
 
-      if (reason !== 'COLLAB_UPDATE_REJECTED') {
+      if (reason !== 'COLLAB_UPDATE_REJECTED' && reason !== 'COLLAB_PERMISSION_DENIED') {
         return
       }
 
       emitHocuspocusAdapterError(createProviderError(
         reason,
-        'Collab provider rejected a local update',
+        reason === 'COLLAB_PERMISSION_DENIED'
+          ? 'Collab provider denied write permission for the local update'
+          : 'Collab provider rejected a local update',
         true
       ))
     },

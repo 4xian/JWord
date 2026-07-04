@@ -71,6 +71,27 @@ describe('createCanvasPool', () => {
     expect(pool.availableCount).toBe(1)
     expect(pool.activeCount).toBe(0)
   })
+
+  it('dispose 后清空活跃与可复用 canvas 并拒绝再次获取', () => {
+    const pool = createCanvasPool({
+      createCanvas: () => createMockCanvas()
+    })
+    const activeCanvas = pool.acquire(800, 1000)
+    const retainedCanvas = pool.acquire(400, 500)
+
+    pool.release(retainedCanvas)
+    pool.dispose()
+
+    expect(activeCanvas.width).toBe(0)
+    expect(activeCanvas.height).toBe(0)
+    expect(retainedCanvas.width).toBe(0)
+    expect(retainedCanvas.height).toBe(0)
+    expect(pool.activeCount).toBe(0)
+    expect(pool.availableCount).toBe(0)
+    expect(readThrownCode(() => {
+      pool.acquire(1, 1)
+    })).toBe('CANVAS_POOL_DISPOSED')
+  })
 })
 
 function createMockCanvas(): CanvasLike {
@@ -79,4 +100,14 @@ function createMockCanvas(): CanvasLike {
     height: 0,
     getContext: () => null
   }
+}
+
+function readThrownCode(callback: () => void): unknown {
+  try {
+    callback()
+  } catch (error) {
+    return (error as { readonly code?: unknown }).code
+  }
+
+  return undefined
 }

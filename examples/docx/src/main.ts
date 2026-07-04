@@ -17,7 +17,7 @@ import type {
 } from '@4xian/jword-docx'
 import {
   assertJWordFeatureEntitled,
-  createJWordLicenseSignature,
+  createInsecureTestOnlyJWordLicenseSignature,
   isJWordLicenseDiagnosticCode,
   type JWordLicenseEntitlement,
   type JWordLicenseFeatureKey,
@@ -32,6 +32,7 @@ import {
 } from './task-session'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 type DocxRuntime = typeof import('@4xian/jword-docx')
 type PdfRuntime = typeof import('@4xian/jword-pdf')
@@ -725,7 +726,7 @@ function createSignedDocxDemoLicense(
 ): JWordLicenseEntitlement {
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

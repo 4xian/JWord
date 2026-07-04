@@ -69,6 +69,8 @@ interface RawHistoryResponse {
   readonly diagnosticCode?: unknown
 }
 
+const BASE64_CHUNK_SIZE = 0x8000
+
 /** 创建协作历史 handle。 */
 export function createHistoryHandle(
   editor: JWordCollaborationEditor,
@@ -147,14 +149,20 @@ export function createHistoryHandle(
         }
       }
 
-      editor.applySyncUpdate(preview.update, {
+      const restoreOptions = {
         origin: 'version-restore',
         documentId: options.documentId,
         roomId: options.roomId,
         clientId: localUser.id,
         requestId: preview.version.versionId,
         recoverable: true
-      })
+      } as const
+
+      if (editor.replaceSyncUpdate !== undefined) {
+        editor.replaceSyncUpdate(preview.update, restoreOptions)
+      } else {
+        editor.applySyncUpdate(preview.update, restoreOptions)
+      }
 
       return {
         ok: true,
@@ -475,12 +483,25 @@ function readRawDiagnosticMessage(diagnostic: RawHistoryDiagnostic): string {
 
 /** 编码二进制 update。 */
 function encodeBase64(update: Uint8Array): string {
-  return btoa(String.fromCodePoint(...update))
+  let binary = ''
+
+  for (let offset = 0; offset < update.length; offset += BASE64_CHUNK_SIZE) {
+    binary += String.fromCharCode(...update.subarray(offset, offset + BASE64_CHUNK_SIZE))
+  }
+
+  return btoa(binary)
 }
 
 /** 解码二进制 update。 */
 function decodeBase64(value: string): Uint8Array {
-  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+  const binary = atob(value)
+  const bytes = new Uint8Array(binary.length)
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+
+  return bytes
 }
 
 /** 判断未知输入是否是普通对象。 */

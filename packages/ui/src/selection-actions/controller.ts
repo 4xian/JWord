@@ -363,12 +363,14 @@ export function createSelectionActionsController(
         break
     }
 
+    freezeFloatingToolbarForSelection(selection)
+
     if (!executeSelectionCommand(selection, command)) {
       announce('BLOCKED: 当前选区未生成可执行的格式命令。')
       return
     }
 
-    keepFloatingToolbarVisible(selection)
+    keepFloatingToolbarAtStickyPosition(selection)
     stableContextSelection.point = null
   }
 

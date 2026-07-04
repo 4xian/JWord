@@ -689,11 +689,11 @@ function validateConnectionOptions(
 
   if (options.user.id.length === 0 || options.user.name.length === 0) {
     diagnostics.push(createCollabDiagnostic(
-      'COLLAB_AWARENESS_STALE',
-      'warning',
-      'Collaboration user id and name are required for presence.',
+      'COLLAB_USER_IDENTITY_REQUIRED',
+      'error',
+      'Collaboration user id and name are required before provider connection.',
       true,
-      options.user.id
+      options.user.id.length === 0 ? undefined : options.user.id
     ))
   }
 

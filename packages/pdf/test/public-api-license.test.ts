@@ -15,11 +15,12 @@ import {
   type DocumentLayout
 } from '@4xian/jword-core'
 import type { JWordLicenseEntitlement, JWordLicenseSignaturePayload } from '@4xian/jword-license'
-import { createJWordLicenseSignature } from '@4xian/jword-license'
+import { createInsecureTestOnlyJWordLicenseSignature } from '@4xian/jword-license'
 import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 
 import { exportPdfFromLayout } from '../src/index'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 describe('@4xian/jword-pdf public API license boundary', () => {
   it('fails export before mapping layout when license is missing', async () => {
@@ -75,7 +76,7 @@ function createPdfPublicLicense(features: readonly string[]): JWordLicenseEntitl
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

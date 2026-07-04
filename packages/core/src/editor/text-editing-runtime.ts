@@ -1327,12 +1327,20 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
   protected splitParagraphFromRuntime(): void {
     const selection = this.currentSelection
 
-    if (selection === null || !isSelectionCollapsed(selection)) {
+    if (selection === null) {
       return
     }
 
-    const position = this.resolveTextPosition(selection.focus)
-    const identifiers = allocateParagraphSplitIds(this.currentProjection)
+    const selectedRange = isSelectionCollapsed(selection) ? undefined : this.resolveSelectedTextRange()
+    const deletePlan = selectedRange === undefined ? undefined : this.buildDeleteSelectionPlan(selectedRange)
+
+    if (!isSelectionCollapsed(selection) && deletePlan === undefined) {
+      return
+    }
+
+    const position = deletePlan?.caret ?? this.resolveTextPosition(selection.focus)
+    const leadingOperations = deletePlan?.operations ?? []
+    const identifiers = allocateParagraphSplitIds(this.currentProjection, leadingOperations)
     const selectionAfter = createSelectionState(
       createRuntimeAnchor({
         documentId: this.currentProjection.document.id,
@@ -1353,25 +1361,28 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
     this.executeCommand(
       {
         name: 'splitParagraph',
-        operations: [{
-          kind: 'splitBlock',
-          at: position,
-          newBlockId: identifiers.blockId,
-          newRunId: identifiers.runId
-        }]
+        operations: [
+          ...leadingOperations,
+          {
+            kind: 'splitBlock',
+            at: position,
+            newBlockId: identifiers.blockId,
+            newRunId: identifiers.runId
+          }
+        ]
       },
       { selectionAfter }
     )
   }
 
-  protected moveSelectionHorizontally(delta: -1 | 1): void {
+  protected moveSelectionHorizontally(delta: -1 | 1, extending = false): void {
     const selection = this.currentSelection
 
     if (selection === null) {
       return
     }
 
-    if (!isSelectionCollapsed(selection)) {
+    if (!extending && !isSelectionCollapsed(selection)) {
       const anchor = delta < 0
         ? selection.direction === 'backward' ? selection.focus : selection.anchor
         : selection.direction === 'backward' ? selection.anchor : selection.focus
@@ -1386,26 +1397,17 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
       return
     }
 
-    this.setSelection(createSelectionState(
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        ...nextPosition
-      }),
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        ...nextPosition
-      })
-    ))
+    this.setSelectionToTextPosition(selection.anchor, nextPosition, extending)
   }
 
-  protected moveSelectionVertically(direction: -1 | 1): void {
+  protected moveSelectionVertically(direction: -1 | 1, extending = false): void {
     const selection = this.currentSelection
 
     if (selection === null) {
       return
     }
 
-    if (!isSelectionCollapsed(selection)) {
+    if (!extending && !isSelectionCollapsed(selection)) {
       const anchor = direction < 0
         ? selection.direction === 'backward' ? selection.focus : selection.anchor
         : selection.direction === 'backward' ? selection.anchor : selection.focus
@@ -1442,19 +1444,10 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
       return
     }
 
-    this.setSelection(createSelectionState(
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        ...targetPosition
-      }),
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        ...targetPosition
-      })
-    ))
+    this.setSelectionToTextPosition(selection.anchor, targetPosition, extending)
   }
 
-  protected moveSelectionToLineBoundary(boundary: 'start' | 'end'): void {
+  protected moveSelectionToLineBoundary(boundary: 'start' | 'end', extending = false): void {
     const selection = this.currentSelection
 
     if (selection === null) {
@@ -1482,15 +1475,23 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
       return
     }
 
+    this.setSelectionToTextPosition(selection.anchor, targetPosition, extending)
+  }
+
+  /** 移动键盘选区的 focus；扩展时保留原 anchor，不扩展时折叠到目标位置。 */
+  private setSelectionToTextPosition(
+    anchor: ReturnType<typeof createRuntimeAnchor>,
+    position: TextPosition,
+    extending: boolean
+  ): void {
+    const focus = createRuntimeAnchor({
+      documentId: this.currentProjection.document.id,
+      ...position
+    })
+
     this.setSelection(createSelectionState(
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        ...targetPosition
-      }),
-      createRuntimeAnchor({
-        documentId: this.currentProjection.document.id,
-        ...targetPosition
-      })
+      extending ? anchor : focus,
+      focus
     ))
   }
 

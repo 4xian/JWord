@@ -19,27 +19,17 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createPdfVisualReport,
-  exportPdfFromLayout as exportPdfFromLayoutPublic,
-  handlePdfWorkerRequest,
-  readPdfImageAsset
+  exportPdfFromLayout as exportPdfFromLayoutPublic
 } from '../src/index'
 import type {
   ExportPdfOptions,
   ExportPdfWorkerRequest,
-  PdfExportImageInput,
   PdfError,
   PdfFontConfig,
-  PdfImageAsset,
   PdfProgressEvent,
   PdfWarning,
   PdfWorkerRequest,
   PdfWorkerResponse
-} from '../src/index'
-import {
-  createCancelPdfWorkerRequest,
-  createPdfErrorResponse,
-  createPdfProgressResponse,
-  createPdfTransferables
 } from '../src/index'
 import {
   ONE_PIXEL_JPEG_DATA_URL,
@@ -413,7 +403,10 @@ describe('@4xian/jword-pdf public API', () => {
       layout: createEmptyLayout(),
       options
     }
-    const cancelRequest: PdfWorkerRequest = createCancelPdfWorkerRequest('pdf-export-2')
+    const cancelRequest: PdfWorkerRequest = {
+      kind: 'cancel',
+      requestId: 'pdf-export-2'
+    }
     const response: PdfWorkerResponse = {
       kind: 'error',
       error
@@ -424,111 +417,6 @@ describe('@4xian/jword-pdf public API', () => {
     expect(response.error.cancelled).toBe(true)
   })
 
-  it('parses image inputs without coupling them to PDF rendering', async () => {
-    const dataUrlInput: PdfExportImageInput = {
-      kind: 'dataUrl',
-      id: 'image-1',
-      dataUrl: 'data:image/png;base64,AA==',
-      alt: 'Logo'
-    }
-    const binaryInput: PdfExportImageInput = {
-      kind: 'arrayBuffer',
-      id: 'image-2',
-      data: new ArrayBuffer(1),
-      mimeType: 'image/jpeg'
-    }
-    const blobInput: PdfExportImageInput = {
-      kind: 'blob',
-      id: 'image-3',
-      blob: new Blob([new Uint8Array([0])], { type: 'image/png' })
-    }
-    const parsed: PdfImageAsset = await readPdfImageAsset(dataUrlInput)
-
-    expect(dataUrlInput.kind).toBe('dataUrl')
-    expect(binaryInput.mimeType).toBe('image/jpeg')
-    expect(blobInput.blob.type).toBe('image/png')
-    expect(await readPdfImageAsset(binaryInput)).toMatchObject({
-      id: 'image-2',
-      mimeType: 'image/jpeg'
-    })
-    expect(await readPdfImageAsset(blobInput)).toMatchObject({
-      id: 'image-3',
-      mimeType: 'image/png'
-    })
-    expect(parsed).toEqual({
-      id: 'image-1',
-      mimeType: 'image/png',
-      bytes: new Uint8Array([0]),
-      alt: 'Logo'
-    })
-  })
-
-  it('handles PDF worker export and cancel messages with stable responses', async () => {
-    const exportResponse = await handlePdfWorkerRequest({
-      kind: 'export-layout',
-      requestId: 'pdf-worker-export-1',
-      layout: createEmptyLayout(),
-      options: {
-        requestId: 'pdf-worker-export-1',
-        license: createPdfPublicApiLicense(['pdf.export'])
-      }
-    })
-    const cancelResponse = await handlePdfWorkerRequest(createCancelPdfWorkerRequest('pdf-worker-cancel-1'))
-
-    expect(exportResponse).toMatchObject({
-      kind: 'result',
-      result: {
-        warnings: [],
-        progress: [
-          { stage: 'queued', requestId: 'pdf-worker-export-1' },
-          { stage: 'mapping', requestId: 'pdf-worker-export-1' },
-          { stage: 'writing', requestId: 'pdf-worker-export-1' },
-          { stage: 'done', requestId: 'pdf-worker-export-1' }
-        ]
-      }
-    })
-    expect(cancelResponse).toEqual({
-      kind: 'error',
-      error: {
-        code: 'PDF_EXPORT_CANCELLED',
-        message: '导出已取消',
-        requestId: 'pdf-worker-cancel-1',
-        cancelled: true
-      }
-    })
-  })
-
-  it('creates stable worker messages and PDF transferables', () => {
-    const buffer = new ArrayBuffer(4)
-
-    expect(createPdfProgressResponse('pdf-worker-1', 'font-loading')).toEqual({
-      kind: 'progress',
-      progress: {
-        requestId: 'pdf-worker-1',
-        stage: 'font-loading'
-      }
-    })
-    expect(createCancelPdfWorkerRequest('pdf-worker-1')).toEqual({
-      kind: 'cancel',
-      requestId: 'pdf-worker-1'
-    })
-    expect(createPdfErrorResponse({
-      code: 'PDF_EXPORT_CANCELLED',
-      message: '导出已取消',
-      requestId: 'pdf-worker-1',
-      cancelled: true
-    })).toEqual({
-      kind: 'error',
-      error: {
-        code: 'PDF_EXPORT_CANCELLED',
-        message: '导出已取消',
-        requestId: 'pdf-worker-1',
-        cancelled: true
-      }
-    })
-    expect(createPdfTransferables(buffer)).toEqual([buffer])
-    expect(createPdfTransferables(new Uint8Array(buffer))).toEqual([buffer])
-  })
 })
 
 /** 创建最小空 layout，测试只验证 PDF 包入口契约，不依赖实际分页内容。 */

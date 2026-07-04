@@ -91,6 +91,11 @@ export function createCollabHocuspocusService(
     port: options.port ?? defaultPort,
     address,
     roomPrefix,
+    authHook: (input) => ({
+      allow: true,
+      role: 'write',
+      ...(input.userId === undefined ? {} : { userId: input.userId })
+    }),
     licenseHook: () => ({ ok: true }),
     ...(options.requiredToken === undefined ? {} : { requiredToken: options.requiredToken }),
     ...(options.rejectUpdates === undefined ? {} : { rejectUpdates: options.rejectUpdates })

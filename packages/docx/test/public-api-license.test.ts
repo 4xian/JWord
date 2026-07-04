@@ -9,7 +9,7 @@
  */
 
 import type { JWordLicenseEntitlement, JWordLicenseSignaturePayload } from '@4xian/jword-license'
-import { createJWordLicenseSignature } from '@4xian/jword-license'
+import { createInsecureTestOnlyJWordLicenseSignature } from '@4xian/jword-license'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -21,6 +21,7 @@ import {
   createMinimalDocxPackage,
   createProjection
 } from './public-api-fixtures'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 describe('@4xian/jword-docx public API license boundary', () => {
   it('fails import before reading invalid bytes when license is missing', async () => {
@@ -115,6 +116,6 @@ function createDocxPublicLicense(features: readonly string[]): JWordLicenseEntit
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }

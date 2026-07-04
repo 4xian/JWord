@@ -11,6 +11,8 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { createServer, type IncomingMessage } from 'node:http'
 import type { EditorEventListener } from '@4xian/jword-core'
+import { createInsecureTestOnlyJWordLicenseSignature } from '@4xian/jword-license'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 import {
   GATE6_COLLAB_FEATURES,
@@ -265,8 +267,8 @@ describe('@4xian/jword-collab public client SDK', () => {
         severity: 'error',
         recoverable: true
       }])
-    expect(provider.status).toBe('idle')
-  } finally {
+      expect(provider.status).toBe('idle')
+    } finally {
       await handshakeServer.close()
     }
   })
@@ -722,6 +724,7 @@ interface TestHistoryServer extends TestHandshakeServer {
   readonly requests: TestHistoryRequest[]
 }
 
+
 /** 启动只返回 /version 的测试握手服务。 */
 async function startHandshakeServer(version: TestHandshakeVersion): Promise<TestHandshakeServer> {
   const server = createServer((request, response) => {
@@ -873,6 +876,7 @@ async function startHistoryServer(): Promise<TestHistoryServer> {
   }
 }
 
+
 /** 读取测试 HTTP JSON 请求体。 */
 async function readRequestJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
@@ -898,43 +902,8 @@ function createGate6License() {
 
   return {
     ...entitlement,
-    signature: createTestLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
-}
-
-/** 创建与 license 包测试 verifier 一致的确定性签名。 */
-function createTestLicenseSignature(entitlement: {
-  readonly customerId: string
-  readonly licenseToken: string
-  readonly features: readonly string[]
-  readonly issuer: string
-  readonly issuedAt: string
-  readonly expiresAt?: string
-  readonly offlineGraceUntil?: string
-  readonly status?: string
-}): string {
-  return `jword-license-v1:${createStableLicenseHash(JSON.stringify({
-    customerId: entitlement.customerId,
-    expiresAt: entitlement.expiresAt ?? null,
-    features: [...entitlement.features].toSorted(),
-    issuedAt: entitlement.issuedAt,
-    issuer: entitlement.issuer,
-    licenseToken: entitlement.licenseToken,
-    offlineGraceUntil: entitlement.offlineGraceUntil ?? null,
-    status: entitlement.status ?? 'valid'
-  }) + `|jword-local-verifier:${entitlement.issuer}`)}`
-}
-
-/** 创建测试签名使用的稳定 hash。 */
-function createStableLicenseHash(value: string): string {
-  let hash = 0x811c9dc5
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193) >>> 0
-  }
-
-  return hash.toString(16).padStart(8, '0')
 }
 
 /** 创建测试用 stable anchor snapshot。 */

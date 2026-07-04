@@ -154,6 +154,11 @@ import {
 import {
   createVolatileHistoryStorage
 } from '@4xian/jword-persistence'
+import {
+  createInsecureTestOnlyJWordLicenseSignature
+} from '@4xian/jword-license'
+
+const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
 
 const server = createJWordCollabServer({
   address: '127.0.0.1',
@@ -328,34 +333,8 @@ function createGate6License() {
 
   return {
     ...entitlement,
-    signature: createTestLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
-}
-
-/** 创建 smoke 授权使用的确定性签名。 */
-function createTestLicenseSignature(entitlement) {
-  return 'jword-license-v1:' + createStableLicenseHash(JSON.stringify({
-    customerId: entitlement.customerId,
-    expiresAt: entitlement.expiresAt ?? null,
-    features: [...entitlement.features].toSorted(),
-    issuedAt: entitlement.issuedAt,
-    issuer: entitlement.issuer,
-    licenseToken: entitlement.licenseToken,
-    offlineGraceUntil: entitlement.offlineGraceUntil ?? null,
-    status: entitlement.status ?? 'valid'
-  }) + '|jword-local-verifier:' + entitlement.issuer)
-}
-
-/** 创建 smoke 授权签名使用的稳定 hash。 */
-function createStableLicenseHash(value) {
-  let hash = 0x811c9dc5
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193) >>> 0
-  }
-
-  return hash.toString(16).padStart(8, '0')
 }
 
 /** 创建自动插入使用的显式锚点。 */

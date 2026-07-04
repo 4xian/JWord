@@ -117,6 +117,8 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
     }
 
     const ownerDocument = host.ownerDocument
+    const eventAbortController = new (ownerDocument.defaultView?.AbortController ?? AbortController)()
+    const eventListenerOptions = { signal: eventAbortController.signal }
     const shell = ownerDocument.createElement('div')
     shell.className = 'jw-editor'
     shell.setAttribute('data-jword-editor', '')
@@ -187,22 +189,22 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
       this.updateInputFocusState(false)
     }
 
-    canvasContainer.addEventListener('scroll', handleScroll)
-    canvasContainer.addEventListener('mousedown', handlePointerDown)
-    canvasContainer.addEventListener('mousemove', handlePointerMove)
-    canvasContainer.addEventListener('mouseup', handlePointerUp)
-    canvasContainer.addEventListener('dblclick', handleDoubleClick)
-    hiddenTextarea.addEventListener('beforeinput', handleBeforeInput)
-    hiddenTextarea.addEventListener('input', handleInput)
-    hiddenTextarea.addEventListener('keydown', handleKeyDown)
-    hiddenTextarea.addEventListener('copy', handleCopy)
-    hiddenTextarea.addEventListener('cut', handleCut)
-    hiddenTextarea.addEventListener('paste', handlePaste)
-    hiddenTextarea.addEventListener('compositionstart', handleCompositionStart)
-    hiddenTextarea.addEventListener('compositionupdate', handleCompositionUpdate)
-    hiddenTextarea.addEventListener('compositionend', handleCompositionEnd)
-    hiddenTextarea.addEventListener('focus', handleFocus)
-    hiddenTextarea.addEventListener('blur', handleBlur)
+    canvasContainer.addEventListener('scroll', handleScroll, eventListenerOptions)
+    canvasContainer.addEventListener('mousedown', handlePointerDown, eventListenerOptions)
+    canvasContainer.addEventListener('mousemove', handlePointerMove, eventListenerOptions)
+    ownerDocument.addEventListener('mouseup', handlePointerUp, eventListenerOptions)
+    canvasContainer.addEventListener('dblclick', handleDoubleClick, eventListenerOptions)
+    hiddenTextarea.addEventListener('beforeinput', handleBeforeInput, eventListenerOptions)
+    hiddenTextarea.addEventListener('input', handleInput, eventListenerOptions)
+    hiddenTextarea.addEventListener('keydown', handleKeyDown, eventListenerOptions)
+    hiddenTextarea.addEventListener('copy', handleCopy, eventListenerOptions)
+    hiddenTextarea.addEventListener('cut', handleCut, eventListenerOptions)
+    hiddenTextarea.addEventListener('paste', handlePaste, eventListenerOptions)
+    hiddenTextarea.addEventListener('compositionstart', handleCompositionStart, eventListenerOptions)
+    hiddenTextarea.addEventListener('compositionupdate', handleCompositionUpdate, eventListenerOptions)
+    hiddenTextarea.addEventListener('compositionend', handleCompositionEnd, eventListenerOptions)
+    hiddenTextarea.addEventListener('focus', handleFocus, eventListenerOptions)
+    hiddenTextarea.addEventListener('blur', handleBlur, eventListenerOptions)
     shell.append(canvasContainer, hiddenTextarea, liveRegion, textMirror)
     host.append(shell)
 
@@ -212,6 +214,7 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
       hiddenTextarea,
       liveRegion,
       textMirror,
+      eventAbortController,
       handleScroll,
       handleInput,
       handleBeforeInput,
@@ -226,6 +229,8 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
       handleCompositionStart,
       handleCompositionUpdate,
       handleCompositionEnd,
+      handleFocus,
+      handleBlur,
       pool: createCanvasPool({
         createCanvas: () => createCanvasElement(ownerDocument)
       }),
@@ -270,26 +275,14 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
       this.cancelDeferredPointerSelectionWork()
       this.cancelDeferredTextMirrorSync()
       this.stopCaretBlink()
-      this.mountedDom.canvasContainer.removeEventListener('scroll', this.mountedDom.handleScroll)
-      this.mountedDom.canvasContainer.removeEventListener('mousedown', this.mountedDom.handlePointerDown)
-      this.mountedDom.canvasContainer.removeEventListener('mousemove', this.mountedDom.handlePointerMove)
-      this.mountedDom.canvasContainer.removeEventListener('mouseup', this.mountedDom.handlePointerUp)
-      this.mountedDom.canvasContainer.removeEventListener('dblclick', this.mountedDom.handleDoubleClick)
-      this.mountedDom.hiddenTextarea.removeEventListener('beforeinput', this.mountedDom.handleBeforeInput)
-      this.mountedDom.hiddenTextarea.removeEventListener('input', this.mountedDom.handleInput)
-      this.mountedDom.hiddenTextarea.removeEventListener('keydown', this.mountedDom.handleKeyDown)
-      this.mountedDom.hiddenTextarea.removeEventListener('copy', this.mountedDom.handleCopy)
-      this.mountedDom.hiddenTextarea.removeEventListener('cut', this.mountedDom.handleCut)
-      this.mountedDom.hiddenTextarea.removeEventListener('paste', this.mountedDom.handlePaste)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionstart', this.mountedDom.handleCompositionStart)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionupdate', this.mountedDom.handleCompositionUpdate)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionend', this.mountedDom.handleCompositionEnd)
+      this.mountedDom.eventAbortController.abort()
       this.mountedDom.imageResourceResolver?.dispose()
 
       for (const canvas of this.mountedDom.canvases.values()) {
         this.mountedDom.pool.release(canvas)
       }
 
+      this.mountedDom.pool.dispose()
       this.mountedDom.shell.remove()
     }
 

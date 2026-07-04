@@ -9,6 +9,8 @@
 import * as Y from 'yjs'
 
 import { JWordEditorPointerRuntime } from './pointer-runtime'
+import { replaceStoreDocumentModel } from './document'
+import { createDocumentProjection } from '../model/projection'
 import type { EditorSyncUpdateInput, EditorApplyUpdateOptions } from './types'
 import type { TransactionResult } from '../operations/transaction'
 
@@ -25,5 +27,42 @@ export abstract class JWordEditorCollaborationRuntime extends JWordEditorPointer
     this.assertActive()
 
     return this.pipeline.applyUpdate(update, options)
+  }
+
+  /** 用隔离 Y.Doc 的投影替换当前文档，避免旧版本 update 与当前状态合并。 */
+  replaceSyncUpdate(update: Uint8Array, options: EditorApplyUpdateOptions): TransactionResult {
+    this.assertActive()
+
+    const previewDoc = new Y.Doc()
+
+    try {
+      Y.applyUpdate(previewDoc, update)
+      const previewProjection = createDocumentProjection(previewDoc)
+      const previousSelection = this.currentSelection
+
+      this.commitSelection(null, {
+        source: 'document',
+        render: false,
+        emit: false
+      })
+
+      this.dirtyPageIndex = 0
+      this.dirtyPageEndIndex = 0
+      this.layoutDirtyRange = undefined
+      const result = this.pipeline.runMutation('replaceSyncUpdate', options, () => {
+        replaceStoreDocumentModel(this.store, previewProjection.document)
+      })
+
+      this.currentProjection = result.projection
+      this.commitSelection(null, {
+        source: 'document',
+        previousSelection,
+        render: true
+      })
+
+      return result
+    } finally {
+      previewDoc.destroy()
+    }
   }
 }

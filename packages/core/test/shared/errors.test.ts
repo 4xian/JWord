@@ -74,36 +74,72 @@ describe('JWordError codes', () => {
     editor.destroy()
   })
 
-  it('returns a stable code for unsupported cross-run deleteRange', () => {
-    const editor = createEditor({ initialText: 'abc\n\ndef' })
-    const anchor = editor.createTextAnchor({
-      sectionId: 'section-1',
-      blockId: 'paragraph-1',
-      runId: 'run-1',
-      graphemeIndex: 1
-    })
-    const focus = editor.createTextAnchor({
-      sectionId: 'section-1',
-      blockId: 'paragraph-2',
-      runId: 'run-2',
-      graphemeIndex: 1
+  it('returns a stable code for unsupported cross-section deleteRange', () => {
+    const editor = createEditor()
+
+    editor.loadDocumentModel({
+      document: {
+        kind: 'document',
+        id: 'document-1',
+        sections: [{
+          kind: 'section',
+          id: 'section-1',
+          blocks: [{
+            kind: 'paragraph',
+            id: 'paragraph-1',
+            runs: [{
+              kind: 'run',
+              id: 'run-1',
+              inlines: [{
+                kind: 'text',
+                text: 'abc'
+              }]
+            }]
+          }]
+        }, {
+          kind: 'section',
+          id: 'section-2',
+          blocks: [{
+            kind: 'paragraph',
+            id: 'paragraph-2',
+            runs: [{
+              kind: 'run',
+              id: 'run-2',
+              inlines: [{
+                kind: 'text',
+                text: 'def'
+              }]
+            }]
+          }]
+        }]
+      }
     })
 
     expect(() =>
       editor.executeCommand({
-        name: 'cross-run-delete',
+        name: 'cross-section-delete',
         operations: [
           {
             kind: 'deleteRange',
             range: {
-              anchor: editor.resolveTextPosition(anchor),
-              focus: editor.resolveTextPosition(focus)
+              anchor: {
+                sectionId: 'section-1',
+                blockId: 'paragraph-1',
+                runId: 'run-1',
+                graphemeIndex: 1
+              },
+              focus: {
+                sectionId: 'section-2',
+                blockId: 'paragraph-2',
+                runId: 'run-2',
+                graphemeIndex: 1
+              }
             }
           }
         ]
       })
     ).toThrowError(expect.objectContaining({
-      code: 'OPERATION_DELETE_RANGE_CROSS_RUN'
+      code: 'OPERATION_DELETE_RANGE_UNSUPPORTED_SECTION'
     }))
 
     editor.destroy()

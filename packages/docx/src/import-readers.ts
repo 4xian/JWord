@@ -75,18 +75,10 @@ export function readRunProperties(
     properties.styleId = styleId
   }
 
-  if (children.some((child) => child.localName === 'b')) {
-    properties.bold = true
-  }
-  if (children.some((child) => child.localName === 'i')) {
-    properties.italic = true
-  }
-  if (children.some((child) => child.localName === 'u')) {
-    properties.underline = true
-  }
-  if (children.some((child) => child.localName === 'strike')) {
-    properties.strike = true
-  }
+  applyRunToggleProperty(properties, children.find((child) => child.localName === 'b'), 'bold', 'b', runId, warnings, part)
+  applyRunToggleProperty(properties, children.find((child) => child.localName === 'i'), 'italic', 'i', runId, warnings, part)
+  applyUnderlineProperty(properties, children.find((child) => child.localName === 'u'), runId, warnings, part)
+  applyRunToggleProperty(properties, children.find((child) => child.localName === 'strike'), 'strike', 'strike', runId, warnings, part)
   const fontFamily = children.find((child) => child.localName === 'rFonts')
   const fontSize = children.find((child) => child.localName === 'sz')
   const shading = children.find((child) => child.localName === 'shd')
@@ -134,6 +126,97 @@ export function readRunProperties(
   }
 
   return Object.freeze(properties)
+}
+
+/** 读取 run on/off toggle 属性，显式关闭时不误判为开启。 */
+function applyRunToggleProperty(
+  properties: Record<string, unknown>,
+  element: XmlElementNode | undefined,
+  propertyName: 'bold' | 'italic' | 'strike',
+  localName: string,
+  runId: string,
+  warnings: DocxWarning[],
+  part: string
+): void {
+  if (element === undefined) {
+    return
+  }
+
+  if (readOnOffValue(element)) {
+    properties[propertyName] = true
+    return
+  }
+
+  appendRunPropertyUnsupportedWarning(
+    runId,
+    localName,
+    warnings,
+    part,
+    `DOCX run property explicit disabled toggle is not represented yet: ${localName}`
+  )
+}
+
+/** 读取下划线属性，区分 none 和暂未映射的线型。 */
+function applyUnderlineProperty(
+  properties: Record<string, unknown>,
+  element: XmlElementNode | undefined,
+  runId: string,
+  warnings: DocxWarning[],
+  part: string
+): void {
+  if (element === undefined) {
+    return
+  }
+
+  const value = readXmlAttribute(element, 'w:val')?.toLowerCase()
+
+  if (!readOnOffValue(element)) {
+    appendRunPropertyUnsupportedWarning(
+      runId,
+      'u',
+      warnings,
+      part,
+      'DOCX underline explicit disabled toggle is not represented yet.'
+    )
+    return
+  }
+
+  properties.underline = true
+
+  if (
+    value !== undefined &&
+    value !== '1' &&
+    value !== 'true' &&
+    value !== 'on' &&
+    value !== 'single'
+  ) {
+    appendRunPropertyUnsupportedWarning(
+      runId,
+      'u',
+      warnings,
+      part,
+      `DOCX underline style is not mapped yet: ${value}`
+    )
+  }
+}
+
+/** 追加 run 属性降级 warning。 */
+function appendRunPropertyUnsupportedWarning(
+  runId: string,
+  localName: string,
+  warnings: DocxWarning[],
+  part: string,
+  message: string
+): void {
+  warnings.push({
+    code: 'DOCX_RUN_PROPERTY_UNSUPPORTED',
+    severity: 'warning',
+    part,
+    path: `${runId}/${localName}`,
+    message,
+    fallback: 'preserve-run-text',
+    recoverable: true
+  })
 }
 
 /** 对当前未映射的 run 属性输出稳定 warning。 */
@@ -404,9 +487,9 @@ export function readParagraphStyleId(element: XmlElementNode): string | undefine
 
 /** 读取 OOXML on/off 属性，缺省和空元素都按启用处理。 */
 function readOnOffValue(element: XmlElementNode): boolean {
-  const value = readXmlAttribute(element, 'w:val')
+  const value = readXmlAttribute(element, 'w:val')?.toLowerCase()
 
-  return value !== '0' && value !== 'false' && value !== 'off'
+  return value !== '0' && value !== 'false' && value !== 'off' && value !== 'none'
 }
 
 /** 校验段落样式是否在 style index 中，缺失时尽量回落到默认段落样式。 */

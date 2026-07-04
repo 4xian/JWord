@@ -28,7 +28,8 @@ import {
   createDocxIndexPackage,
   createDocxPageSetupPackage,
   createDocxParagraphSectionPackage,
-  createDocxTablePackage
+  createDocxTablePackage,
+  createZip
 } from './public-api-fixtures'
 
 /** 以有效授权调用 DOCX import，保持映射测试聚焦于导入结构。 */
@@ -286,6 +287,72 @@ describe('@4xian/jword-docx public API import mapping', () => {
       }
     })
     editor.destroy()
+  })
+
+
+  it('respects OOXML run toggle off values and warns for unsupported underline styles', async () => {
+    const bytes = await createZip({
+      '[Content_Types].xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
+        '</Types>'
+      ].join(''),
+      '_rels/.rels': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>',
+        '</Relationships>'
+      ].join(''),
+      'word/_rels/document.xml.rels': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>',
+        '</Relationships>'
+      ].join(''),
+      'word/styles.xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'
+      ].join(''),
+      'word/document.xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+        '<w:body><w:p>',
+        '<w:r><w:rPr><w:b w:val="false"/><w:i w:val="0"/><w:strike w:val="off"/><w:u w:val="none"/></w:rPr><w:t>Disabled</w:t></w:r>',
+        '<w:r><w:rPr><w:u w:val="double"/></w:rPr><w:t>Double</w:t></w:r>',
+        '<w:r><w:rPr><w:b/><w:i/><w:strike/><w:u w:val="single"/></w:rPr><w:t>Enabled</w:t></w:r>',
+        '</w:p></w:body>',
+        '</w:document>'
+      ].join('')
+    })
+    const result = await importDocx(bytes, {
+      requestId: 'docx-import-toggle-off-1'
+    })
+    const block = result.document.sections[0]?.blocks[0]
+
+    expect(block).toMatchObject({ kind: 'paragraph' })
+    if (block?.kind !== 'paragraph') {
+      throw new Error('Expected first imported block to be a paragraph.')
+    }
+
+    expect(block.runs.map((run) => run.properties ?? {})).toEqual([
+      {},
+      { underline: true },
+      {
+        bold: true,
+        italic: true,
+        strike: true,
+        underline: true
+      }
+    ])
+    expect(result.warnings.map((warning) => ({ code: warning.code, path: warning.path }))).toEqual([
+      { code: 'DOCX_RUN_PROPERTY_UNSUPPORTED', path: 'run-1/b' },
+      { code: 'DOCX_RUN_PROPERTY_UNSUPPORTED', path: 'run-1/i' },
+      { code: 'DOCX_RUN_PROPERTY_UNSUPPORTED', path: 'run-1/u' },
+      { code: 'DOCX_RUN_PROPERTY_UNSUPPORTED', path: 'run-1/strike' },
+      { code: 'DOCX_RUN_PROPERTY_UNSUPPORTED', path: 'run-2/u' }
+    ])
   })
 
   it('imports page setup, page breaks and section breaks into section metadata', async () => {

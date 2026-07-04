@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "sideEffects": [
-    "./src/styles/toolbar.css"
+    "./dist/styles/toolbar.css"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -14,12 +14,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./styles.css": "./src/styles/toolbar.css"
+    "./styles.css": "./dist/styles/toolbar.css"
   },
   "files": [
-    "dist",
-    "src/styles"
+    "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run --root ../.. packages/ui/test",

@@ -15,7 +15,7 @@ import {
   createPageConfig,
   layoutDocument
 } from '@4xian/jword-core'
-import { createJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
+import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
 import JSZip from 'jszip'
 import {
   DOCX_ERROR_CODE_METADATA,
@@ -36,6 +36,7 @@ import type {
   PdfWarning
 } from '../../packages/pdf/src/index'
 import { describe, expect, it } from 'vitest'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../fixtures/license/insecure-test-only-keys'
 
 describe('Gate 5 diagnostics schema', () => {
   it('registers every DOCX warning and error code used by package source', () => {
@@ -59,6 +60,8 @@ describe('Gate 5 diagnostics schema', () => {
   it('registers every PDF warning and error code used by package source', () => {
     const sourceCodes = readDiagnosticCodes('PDF', [
       'packages/pdf/src/index.ts',
+      'packages/pdf/src/image-assets.ts',
+      'packages/pdf/src/worker-api.ts',
       'packages/pdf/src/worker.ts'
     ])
     const registryCodes = readRegistryCodes(PDF_WARNING_CODE_METADATA, PDF_ERROR_CODE_METADATA)
@@ -163,7 +166,7 @@ function createGate5DiagnosticsLicense(features: readonly string[]): JWordLicens
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

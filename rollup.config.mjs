@@ -1,11 +1,16 @@
 import commonjs from '@rollup/plugin-commonjs'
 import { nodeResolve } from '@rollup/plugin-node-resolve'
 import typescript from '@rollup/plugin-typescript'
-import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, relative } from 'node:path'
 
 const packagesRoot = 'packages'
-const externalPrefixes = ['@4xian/', 'react', 'vue', 'yjs', 'pdf-lib', 'pdfjs-dist', 'fontkit', 'node:']
+const baseExternalSpecifiers = ['react', 'vue']
+const externalPrefixes = ['node:']
+const externalSpecifiers = new Set([
+  ...baseExternalSpecifiers,
+  ...readWorkspaceExternalSpecifiers()
+])
 const packageBuildOrder = new Map([
   ['@4xian/jword-core', 0],
   ['@4xian/jword-license', 1],
@@ -50,7 +55,50 @@ function discoverPackages() {
 }
 
 function isExternal(id) {
-  return externalPrefixes.some((prefix) => id === prefix || id.startsWith(prefix))
+  return externalPrefixes.some((prefix) => id === prefix || id.startsWith(prefix)) ||
+    [...externalSpecifiers].some((specifier) => id === specifier || id.startsWith(`${specifier}/`))
+}
+
+// 从 workspace package 清单读取所有应外置的生产依赖。
+function readWorkspaceExternalSpecifiers() {
+  if (!existsSync(packagesRoot)) {
+    return []
+  }
+
+  const specifiers = new Set()
+
+  for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue
+    }
+
+    const packageJson = readPackageJson(join(packagesRoot, entry.name))
+    if (packageJson === null) {
+      continue
+    }
+
+    if (typeof packageJson.name === 'string') {
+      specifiers.add(packageJson.name)
+    }
+
+    for (const dependency of readDependencyNames(packageJson.dependencies)) {
+      specifiers.add(dependency)
+    }
+    for (const dependency of readDependencyNames(packageJson.peerDependencies)) {
+      specifiers.add(dependency)
+    }
+  }
+
+  return [...specifiers]
+}
+
+// 读取 dependencies/peerDependencies 字段中的依赖名。
+function readDependencyNames(dependencies) {
+  if (dependencies === null || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
+    return []
+  }
+
+  return Object.keys(dependencies)
 }
 
 function stripPreservedDocComments() {
@@ -104,6 +152,29 @@ function cleanPackageDistBeforeBuild(packageDir) {
   }
 }
 
+// 创建样式资产复制插件，确保 CSS export 指向 dist 产物而不是源码目录。
+function copyPackageStyleAssets(packageDir) {
+  return {
+    name: 'copy-package-style-assets',
+    /** 在产物完成后复制 src/styles 下的 CSS 文件到 dist/styles。 */
+    closeBundle() {
+      const sourceDir = join(packageDir, 'src', 'styles')
+      if (!existsSync(sourceDir)) {
+        return
+      }
+
+      const targetDir = join(packageDir, 'dist', 'styles')
+      mkdirSync(targetDir, { recursive: true })
+
+      for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+        if (entry.isFile() && entry.name.endsWith('.css')) {
+          copyFileSync(join(sourceDir, entry.name), join(targetDir, entry.name))
+        }
+      }
+    }
+  }
+}
+
 function createPackageConfig(pkg, options = {}) {
   return {
     input: pkg.input,
@@ -120,6 +191,7 @@ function createPackageConfig(pkg, options = {}) {
       nodeResolve({ browser: true, preferBuiltins: false }),
       commonjs(),
       stripPreservedDocComments(),
+      copyPackageStyleAssets(pkg.dir),
       normalizeDistRelativeImports(pkg.dir)
     ],
     output: {

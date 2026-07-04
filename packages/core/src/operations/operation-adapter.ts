@@ -515,24 +515,139 @@ function deleteRange(
 ): void {
   const anchorSnapshot = resolveOperationPosition(store, anchor)
   const focusSnapshot = resolveOperationPosition(store, focus)
+  const { start, end } = normalizeDeleteRange(store, anchorSnapshot, focusSnapshot)
 
-  if (anchorSnapshot.runId !== focusSnapshot.runId) {
-    throw createJWordError('OPERATION_DELETE_RANGE_CROSS_RUN', 'deleteRange 暂只支持同一 run', {
-      anchorRunId: String(anchorSnapshot.runId),
-      focusRunId: String(focusSnapshot.runId)
+  if (start.runId === end.runId) {
+    deleteSameRunRange(start, end)
+    return
+  }
+
+  if (start.blockId === end.blockId) {
+    deleteSameBlockRange(start, end)
+    return
+  }
+
+  deleteCrossBlockRange(store, start, end)
+}
+
+function normalizeDeleteRange(
+  store: DocumentStore,
+  anchor: ResolvedTextPosition,
+  focus: ResolvedTextPosition
+): Readonly<{
+  start: ResolvedTextPosition
+  end: ResolvedTextPosition
+}> {
+  if (anchor.sectionId !== focus.sectionId) {
+    throw createJWordError('OPERATION_DELETE_RANGE_UNSUPPORTED_SECTION', 'deleteRange 暂不支持跨 section 删除', {
+      anchorSectionId: String(anchor.sectionId),
+      focusSectionId: String(focus.sectionId)
     })
   }
 
-  const run = anchorSnapshot.runLocation.run
-  const sharedText = getRunText(run)
-  const start = anchorSnapshot.utf16Index
-  const end = focusSnapshot.utf16Index
-  const from = Math.min(start, end)
-  const length = Math.abs(end - start)
+  return compareResolvedTextPositions(store, anchor, focus) <= 0
+    ? { start: anchor, end: focus }
+    : { start: focus, end: anchor }
+}
+
+function compareResolvedTextPositions(
+  store: DocumentStore,
+  left: ResolvedTextPosition,
+  right: ResolvedTextPosition
+): number {
+  if (left.blockId === right.blockId) {
+    if (left.runLocation.index !== right.runLocation.index) {
+      return left.runLocation.index - right.runLocation.index
+    }
+
+    return left.utf16Index - right.utf16Index
+  }
+
+  const leftBlock = findBlockLocation(store, left.blockId)
+  const rightBlock = findBlockLocation(store, right.blockId)
+
+  if (leftBlock.container !== rightBlock.container) {
+    throw createJWordError('OPERATION_DELETE_RANGE_UNSUPPORTED_CONTAINER', 'deleteRange 暂不支持跨容器删除', {
+      anchorBlockId: String(left.blockId),
+      focusBlockId: String(right.blockId)
+    })
+  }
+
+  return leftBlock.index - rightBlock.index
+}
+
+function deleteSameRunRange(start: ResolvedTextPosition, end: ResolvedTextPosition): void {
+  const sharedText = getRunText(start.runLocation.run)
+  const from = Math.min(start.utf16Index, end.utf16Index)
+  const length = Math.abs(end.utf16Index - start.utf16Index)
 
   if (length > 0) {
     sharedText.delete(from, length)
   }
+}
+
+function deleteSameBlockRange(start: ResolvedTextPosition, end: ResolvedTextPosition): void {
+  const runs = start.runLocation.container
+  const endText = getRunText(end.runLocation.run)
+  const startText = getRunText(start.runLocation.run)
+
+  if (end.utf16Index > 0) {
+    endText.delete(0, end.utf16Index)
+  }
+
+  if (start.utf16Index < startText.length) {
+    startText.delete(start.utf16Index, startText.length - start.utf16Index)
+  }
+
+  const middleRunCount = end.runLocation.index - start.runLocation.index - 1
+
+  if (middleRunCount > 0) {
+    runs.delete(start.runLocation.index + 1, middleRunCount)
+  }
+}
+
+function deleteCrossBlockRange(store: DocumentStore, start: ResolvedTextPosition, end: ResolvedTextPosition): void {
+  const startBlock = findBlockLocation(store, start.blockId)
+  const endBlock = findBlockLocation(store, end.blockId)
+
+  if (startBlock.container !== endBlock.container) {
+    throw createJWordError('OPERATION_DELETE_RANGE_UNSUPPORTED_CONTAINER', 'deleteRange 暂不支持跨容器删除', {
+      anchorBlockId: String(start.blockId),
+      focusBlockId: String(end.blockId)
+    })
+  }
+
+  assertBlockKind(startBlock.block, 'paragraph')
+  assertBlockKind(endBlock.block, 'paragraph')
+
+  const startRuns = getParagraphRuns(startBlock.block)
+  const endRuns = getParagraphRuns(endBlock.block)
+  const startText = getRunText(start.runLocation.run)
+  const endText = getRunText(end.runLocation.run)
+
+  if (start.utf16Index < startText.length) {
+    startText.delete(start.utf16Index, startText.length - start.utf16Index)
+  }
+
+  if (startRuns.length > start.runLocation.index + 1) {
+    startRuns.delete(start.runLocation.index + 1, startRuns.length - start.runLocation.index - 1)
+  }
+
+  if (end.utf16Index > 0) {
+    endText.delete(0, end.utf16Index)
+  }
+
+  if (end.runLocation.index > 0) {
+    endRuns.delete(0, end.runLocation.index)
+  }
+
+  const middleBlockCount = endBlock.index - startBlock.index - 1
+
+  if (middleBlockCount > 0) {
+    startBlock.container.delete(startBlock.index + 1, middleBlockCount)
+  }
+
+  mergeBlock(store, String(start.blockId), String(end.blockId))
 }
 
 function splitBlock(

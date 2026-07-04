@@ -16,22 +16,17 @@ import type {
   PdfErrorCode
 } from './diagnostics.js'
 import type {
-  CancelPdfWorkerRequest,
   ExportPdfOptions,
   ExportPdfResult,
-  PdfDataUrlImageInput,
   PdfError,
-  PdfExportImageInput,
   PdfFontSource,
   PdfImageAsset,
   PdfPageGeometry,
   PdfProgressEvent,
   PdfProgressStage,
-  PdfTransferable,
-  PdfWarning,
-  PdfWorkerRequest,
-  PdfWorkerResponse
+  PdfWarning
 } from './types.js'
+import { readPdfImageAsset } from './image-assets.js'
 
 export {
   PDF_ERROR_CODE_METADATA,
@@ -115,109 +110,6 @@ interface PdfEmbeddedFont {
 interface PdfFontRegistry {
   readonly standardFont: PDFFont
   readonly embeddedFonts: readonly PdfEmbeddedFont[]
-}
-
-/** 创建 PDF worker 进度响应。 */
-export function createPdfProgressResponse(
-  requestId: string,
-  stage: PdfProgressStage,
-  detail: Omit<PdfProgressEvent, 'requestId' | 'stage'> = {}
-): PdfWorkerResponse {
-  return {
-    kind: 'progress',
-    progress: {
-      requestId,
-      stage,
-      ...detail
-    }
-  }
-}
-
-/** 创建 PDF worker 错误响应。 */
-export function createPdfErrorResponse(error: PdfError): PdfWorkerResponse {
-  return {
-    kind: 'error',
-    error
-  }
-}
-
-/** 创建 PDF worker 取消请求。 */
-export function createCancelPdfWorkerRequest(requestId: string): CancelPdfWorkerRequest {
-  return {
-    kind: 'cancel',
-    requestId
-  }
-}
-
-/** 提取 PDF 导出结果可转移的底层 ArrayBuffer。 */
-export function createPdfTransferables(input: ArrayBuffer | ArrayBufferView): readonly PdfTransferable[] {
-  if (input instanceof ArrayBuffer) {
-    return [input]
-  }
-
-  return input.buffer instanceof ArrayBuffer ? [input.buffer] : []
-}
-
-/** 读取 PDF 导出前需要的图片资源字节和 MIME 元数据。 */
-export async function readPdfImageAsset(input: PdfExportImageInput): Promise<PdfImageAsset> {
-  if (input.kind === 'dataUrl') {
-    const asset = readDataUrlImageAsset(input)
-
-    return {
-      id: input.id,
-      mimeType: asset.mimeType,
-      bytes: asset.bytes,
-      ...(input.alt === undefined ? {} : { alt: input.alt })
-    }
-  }
-
-  if (input.kind === 'blob') {
-    return {
-      id: input.id,
-      mimeType: readSupportedImageMimeType(input.blob.type),
-      bytes: new Uint8Array(await input.blob.arrayBuffer()),
-      ...(input.alt === undefined ? {} : { alt: input.alt })
-    }
-  }
-
-  return {
-    id: input.id,
-    mimeType: readSupportedImageMimeType(input.mimeType),
-    bytes: readArrayBufferViewBytes(input.data),
-    ...(input.alt === undefined ? {} : { alt: input.alt })
-  }
-}
-
-/** 处理 PDF worker 请求，供真实 worker 入口复用同一消息边界。 */
-export async function handlePdfWorkerRequest(
-  request: PdfWorkerRequest,
-  signal?: AbortSignal
-): Promise<PdfWorkerResponse> {
-  if (request.kind === 'cancel') {
-    return createPdfErrorResponse({
-      code: 'PDF_EXPORT_CANCELLED',
-      message: '导出已取消',
-      requestId: request.requestId,
-      cancelled: true
-    })
-  }
-
-  try {
-    const requestId = request.options.requestId ?? request.requestId
-    assertJWordFeatureEntitled(request.options.license, 'pdf.export')
-    const result = await exportPdfFromLayout(request.layout, {
-      ...request.options,
-      ...(requestId === undefined ? {} : { requestId }),
-      ...(signal === undefined ? {} : { signal })
-    })
-
-    return {
-      kind: 'result',
-      result
-    }
-  } catch (error) {
-    return createPdfErrorResponse(readPdfWorkerError(error, request.requestId))
-  }
 }
 
 /** 从 JWord 当前分页 layout 导出 PDF。 */
@@ -903,38 +795,6 @@ function twipsToPdfPoints(twips: number): number {
   return twips / 20
 }
 
-/** 读取 data URL 图片资源。 */
-function readDataUrlImageAsset(input: PdfDataUrlImageInput): Pick<PdfImageAsset, 'mimeType' | 'bytes'> {
-  const match = /^data:([^;,]+);base64,(.*)$/u.exec(input.dataUrl)
-
-  if (match === null) {
-    throw createUnsupportedError('PDF_IMAGE_INVALID')
-  }
-
-  return {
-    mimeType: readSupportedImageMimeType(match[1] ?? ''),
-    bytes: readBase64Bytes(match[2] ?? '')
-  }
-}
-
-/** 限制当前 PDF 图片 API 只接收后续 renderer 已计划支持的格式。 */
-function readSupportedImageMimeType(mimeType: string): string {
-  if (mimeType === 'image/png' || mimeType === 'image/jpeg') {
-    return mimeType
-  }
-
-  throw createUnsupportedError('PDF_IMAGE_UNSUPPORTED')
-}
-
-/** 把 ArrayBuffer 或 view 转成独立 Uint8Array。 */
-function readArrayBufferViewBytes(data: ArrayBuffer | ArrayBufferView): Uint8Array {
-  if (data instanceof ArrayBuffer) {
-    return new Uint8Array(data)
-  }
-
-  return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength))
-}
-
 /** 把 Uint8Array 复制成独立 ArrayBuffer。 */
 function readOwnedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const output = new ArrayBuffer(bytes.byteLength)
@@ -942,48 +802,4 @@ function readOwnedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   new Uint8Array(output).set(bytes)
 
   return output
-}
-
-/** 读取 base64 图片字节。 */
-function readBase64Bytes(base64: string): Uint8Array {
-  const binary = globalThis.atob(base64)
-  const bytes = new Uint8Array(binary.length)
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-
-  return bytes
-}
-
-/** 把未知异常规整为 worker error 响应。 */
-function readPdfWorkerError(error: unknown, requestId: string | undefined): PdfError {
-  if (isPdfError(error)) {
-    const resolvedRequestId = error.requestId ?? requestId
-
-    return {
-      code: error.code,
-      message: error.message,
-      ...(resolvedRequestId === undefined ? {} : { requestId: resolvedRequestId }),
-      ...(error.cancelled === undefined ? {} : { cancelled: error.cancelled }),
-      ...(error.feature === undefined ? {} : { feature: error.feature }),
-      ...(error.customerId === undefined ? {} : { customerId: error.customerId })
-    }
-  }
-
-  return {
-    code: 'PDF_WORKER_UNAVAILABLE',
-    message: error instanceof Error ? error.message : 'PDF worker request failed.',
-    ...(requestId === undefined ? {} : { requestId })
-  }
-}
-
-/** 判断异常是否已经是稳定 PDF error。 */
-function isPdfError(error: unknown): error is PdfError {
-  return typeof error === 'object'
-    && error !== null
-    && 'code' in error
-    && typeof error.code === 'string'
-    && 'message' in error
-    && typeof error.message === 'string'
 }

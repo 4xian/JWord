@@ -219,37 +219,37 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
       case 'ArrowLeft':
         event.preventDefault()
         this.runProtectedInputHandler(() => {
-          this.moveSelectionHorizontally(-1)
+          this.moveSelectionHorizontally(-1, event.shiftKey)
         })
         return
       case 'ArrowRight':
         event.preventDefault()
         this.runProtectedInputHandler(() => {
-          this.moveSelectionHorizontally(1)
+          this.moveSelectionHorizontally(1, event.shiftKey)
         })
         return
       case 'ArrowUp':
         event.preventDefault()
         this.runProtectedInputHandler(() => {
-          this.moveSelectionVertically(-1)
+          this.moveSelectionVertically(-1, event.shiftKey)
         })
         return
       case 'ArrowDown':
         event.preventDefault()
         this.runProtectedInputHandler(() => {
-          this.moveSelectionVertically(1)
+          this.moveSelectionVertically(1, event.shiftKey)
         })
         return
       case 'Home':
         event.preventDefault()
         this.runProtectedInputHandler(() => {
-          this.moveSelectionToLineBoundary('start')
+          this.moveSelectionToLineBoundary('start', event.shiftKey)
         })
         return
       case 'End':
         event.preventDefault()
         this.runProtectedInputHandler(() => {
-          this.moveSelectionToLineBoundary('end')
+          this.moveSelectionToLineBoundary('end', event.shiftKey)
         })
         return
     }

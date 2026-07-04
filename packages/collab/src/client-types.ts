@@ -43,6 +43,8 @@ export interface JWordCollaborationEditor {
   encodeSyncUpdate(input?: EditorSyncUpdateInput): Uint8Array
   /** 应用远端、恢复或系统 update。 */
   applySyncUpdate(update: Uint8Array, options: JWordCollaborationRemoteUpdateOptions): unknown
+  /** 用历史版本 update 替换当前文档状态。 */
+  replaceSyncUpdate?(update: Uint8Array, options: JWordCollaborationRemoteUpdateOptions): unknown
   /** 订阅 core Editor 事件，用于发布本地协作事务。 */
   subscribe?(listener: Editor['subscribe'] extends (listener: infer Listener) => unknown ? Listener : never): () => void
   /** 创建稳定文本锚点，供自动插入消费显式 position。 */

@@ -6,6 +6,8 @@
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-分页-canvas-渲染。
  */
 
+import { createJWordError } from '../shared/errors'
+
 export interface CanvasRenderingContextLike {
   fillStyle: unknown
   font: unknown
@@ -37,12 +39,14 @@ export interface CanvasPool {
   readonly availableCount: number
   acquire(width: number, height: number): CanvasLike
   release(canvas: CanvasLike): void
+  dispose(): void
 }
 
 export function createCanvasPool(options: CanvasPoolOptions): CanvasPool {
   const maxRetained = options.maxRetained ?? 32
   const available: CanvasLike[] = []
   const active = new Set<CanvasLike>()
+  let disposed = false
 
   return {
     get activeCount() {
@@ -52,6 +56,10 @@ export function createCanvasPool(options: CanvasPoolOptions): CanvasPool {
       return available.length
     },
     acquire(width, height) {
+      if (disposed) {
+        throw createJWordError('CANVAS_POOL_DISPOSED', 'CanvasPool 已释放，不能再次获取 canvas')
+      }
+
       const canvas = available.pop() ?? options.createCanvas()
 
       canvas.width = width
@@ -61,6 +69,11 @@ export function createCanvasPool(options: CanvasPoolOptions): CanvasPool {
       return canvas
     },
     release(canvas) {
+      if (disposed) {
+        releaseCanvasMemory(canvas)
+        return
+      }
+
       active.delete(canvas)
       canvas.width = 1
       canvas.height = 1
@@ -68,6 +81,26 @@ export function createCanvasPool(options: CanvasPoolOptions): CanvasPool {
       if (available.length < maxRetained) {
         available.push(canvas)
       }
+    },
+    dispose() {
+      disposed = true
+
+      for (const canvas of active) {
+        releaseCanvasMemory(canvas)
+      }
+
+      for (const canvas of available) {
+        releaseCanvasMemory(canvas)
+      }
+
+      active.clear()
+      available.splice(0, available.length)
     }
   }
+}
+
+/** 释放 canvas 底层位图资源。 */
+function releaseCanvasMemory(canvas: CanvasLike): void {
+  canvas.width = 0
+  canvas.height = 0
 }

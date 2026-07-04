@@ -16,11 +16,12 @@ import {
   JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA,
   assertJWordFeatureEntitled,
   createJWordLicenseError,
-  createJWordLicenseSignature,
+  createInsecureTestOnlyJWordLicenseSignature,
   isJWordLicenseDiagnosticCode,
   type JWordLicenseEntitlement,
   type JWordLicenseSignaturePayload
 } from '../src/index'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 describe('@4xian/jword-license entitlement contract', () => {
   it('exposes the Gate 5 format feature keys', () => {
@@ -85,6 +86,20 @@ describe('@4xian/jword-license entitlement contract', () => {
     }), 'docx.import')).toThrowError(expect.objectContaining({
       code: 'JWORD_LICENSE_SERVER_UNAVAILABLE',
       feature: 'docx.import'
+    }))
+  })
+
+  it('emits JWL1 Ed25519 tokens and rejects tampered payload fields', () => {
+    const entitlement = createValidEntitlement(['docx.import'])
+
+    expect(entitlement.signature?.startsWith('JWL1.')).toBe(true)
+    expect(() => assertJWordFeatureEntitled({
+      ...entitlement,
+      features: ['docx.export']
+    }, 'docx.import')).toThrowError(expect.objectContaining({
+      code: 'JWORD_LICENSE_SIGNATURE_INVALID',
+      feature: 'docx.import',
+      customerId: 'customer-gate5'
     }))
   })
 
@@ -178,6 +193,6 @@ function createSignedEntitlement(
 ): JWordLicenseEntitlement {
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }

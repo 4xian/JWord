@@ -710,6 +710,14 @@ export interface Editor {
   applySyncUpdate(update: Uint8Array, options: EditorApplyUpdateOptions): TransactionResult
 
   /**
+   * 用指定 update 的完整文档状态替换当前文档。
+   *
+   * @remarks
+   * 仅供版本恢复使用；实现会先在隔离 Y.Doc 中读取目标版本，再经同一 transaction pipeline 替换当前 canonical 文档。
+   */
+  replaceSyncUpdate(update: Uint8Array, options: EditorApplyUpdateOptions): TransactionResult
+
+  /**
    * 粘贴已清洗的结构化富文本片段。
    *
    * @param fragment UI 或宿主已经完成 HTML 清洗后的结构化片段。
@@ -834,6 +842,7 @@ export interface MountedEditorDom {
   readonly hiddenTextarea: HTMLTextAreaElement
   readonly liveRegion: HTMLElement
   readonly textMirror: HTMLElement
+  readonly eventAbortController: AbortController
   readonly handleScroll: () => void
   readonly handleInput: (event: Event) => void
   readonly handleBeforeInput: (event: Event) => void
@@ -848,6 +857,8 @@ export interface MountedEditorDom {
   readonly handleCompositionStart: (event: Event) => void
   readonly handleCompositionUpdate: (event: Event) => void
   readonly handleCompositionEnd: (event: Event) => void
+  readonly handleFocus: () => void
+  readonly handleBlur: () => void
   readonly pool: ReturnType<typeof createCanvasPool>
   readonly pageWrappers: Map<number, HTMLElement>
   readonly baseCanvases: Map<number, HTMLCanvasElement>

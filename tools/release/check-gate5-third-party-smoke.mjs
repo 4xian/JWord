@@ -128,7 +128,7 @@ import {
   layoutDocument
 } from '@4xian/jword-core'
 import {
-  createJWordLicenseSignature,
+  createInsecureTestOnlyJWordLicenseSignature,
   GATE5_FORMAT_FEATURES
 } from '@4xian/jword-license'
 import {
@@ -138,6 +138,8 @@ import {
 import {
   exportPdfFromLayout
 } from '@4xian/jword-pdf'
+
+const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
 
 const projection = {
   document: {
@@ -220,7 +222,7 @@ function createGate5License(features) {
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }
 

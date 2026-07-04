@@ -11,7 +11,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as Y from 'yjs'
 import {
-  createJWordLicenseSignature,
+  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement,
   type JWordLicenseSignaturePayload
 } from '@4xian/jword-license'
@@ -36,6 +36,7 @@ import type {
   JWordCollabProviderStatus,
   JWordCollabUpdateMetadata
 } from '../src/index'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 describe('@4xian/jword-collab contract', () => {
   it('exposes provider adapter and diagnostic types', () => {
@@ -506,6 +507,6 @@ function createGate6TestLicense(
 
   return {
     ...entitlement,
-    signature: createJWordLicenseSignature(entitlement)
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
   }
 }

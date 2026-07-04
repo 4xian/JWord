@@ -15,6 +15,13 @@ Gate 7 Step 7.1 公开 API 清单。本文只记录当前仓库已经实现并�
 - 禁止公开 Y.Doc store、provider 内部类型、worker 内部 helper 和 demo runtime。
 - 示例和文档只能演示 stable 或明确标注的 experimental API，不能把 monorepo 内部路径当作集成方式。
 
+## Release / no-alias 验收
+
+- Stable E2E 矩阵必须包含 `node tools/release/check-gate7-third-party-smoke.mjs`。
+- 该 smoke 使用本地 tarball 安装当前已实现包，不使用 examples 源码 alias，覆盖 `tsc --noEmit`、`vite build` 和 Chromium 浏览器 smoke。
+- 浏览器路径必须同时触达免费基础 layout 能力和至少一条付费授权能力；当前付费路径为 `pdf.export`。
+- 真实 registry URL、移除 `private: true` 与任何 `publish` 动作仍需人工审批。
+
 ## Edition Matrix
 
 - free：`@4xian/jword-core`、`@4xian/jword-ui`、`@4xian/jword-native`、基础 `@4xian/jword-persistence` contract 和基础 diagnostics。
@@ -218,17 +225,20 @@ Stable：
 - `PdfPageGeometry`
 - `PdfExportImageInput`
 - `PdfImageAsset`
+- `createPdfVisualReport()`
+- `PDF_ERROR_CODE_METADATA`
+- `PDF_WARNING_CODE_METADATA`
+- `GATE5_FORMAT_FEATURES` defines required paid format feature keys through `@4xian/jword-license`。
+- `./worker` is a public worker entry for PDF export orchestration。
+
+Worker-only（`@4xian/jword-pdf/worker`）：
+
 - `createPdfProgressResponse()`
 - `createPdfErrorResponse()`
 - `createCancelPdfWorkerRequest()`
 - `createPdfTransferables()`
 - `readPdfImageAsset()`
 - `handlePdfWorkerRequest()`
-- `createPdfVisualReport()`
-- `PDF_ERROR_CODE_METADATA`
-- `PDF_WARNING_CODE_METADATA`
-- `GATE5_FORMAT_FEATURES` defines required paid format feature keys through `@4xian/jword-license`。
-- `./worker` is a public worker entry for PDF export orchestration。
 
 Experimental：当前无。
 

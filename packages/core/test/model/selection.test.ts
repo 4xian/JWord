@@ -49,6 +49,18 @@ describe('SelectionState', () => {
     expect(isSelectionCollapsed(selection)).toBe(true)
   })
 
+  it('按文档序推断跨 run 与跨段反向选区', () => {
+    const firstRunStart = createTestAnchor(0)
+    const secondRunStart = createTestAnchor(0, { runId: 'run-2' })
+    const firstParagraphStart = createTestAnchor(0)
+    const secondParagraphStart = createTestAnchor(0, { blockId: 'paragraph-2', runId: 'run-3' })
+
+    expect(createSelectionState(firstRunStart, secondRunStart).direction).toBe('forward')
+    expect(createSelectionState(secondRunStart, firstRunStart).direction).toBe('backward')
+    expect(createSelectionState(firstParagraphStart, secondParagraphStart).direction).toBe('forward')
+    expect(createSelectionState(secondParagraphStart, firstParagraphStart).direction).toBe('backward')
+  })
+
   it('restores selection from an immutable snapshot', () => {
     const selection = createSelectionState(createTestAnchor(0), createTestAnchor(3), {
       direction: 'forward',
@@ -61,12 +73,19 @@ describe('SelectionState', () => {
   })
 })
 
-function createTestAnchor(graphemeIndex: number) {
+function createTestAnchor(
+  graphemeIndex: number,
+  overrides: Partial<Readonly<{
+    sectionId: string
+    blockId: string
+    runId: string
+  }>> = {}
+) {
   return createAnchorRef({
     documentId: 'document-1' as DocumentId,
-    sectionId: 'section-1' as SectionId,
-    blockId: 'paragraph-1' as BlockId,
-    runId: 'run-1' as RunId,
+    sectionId: (overrides.sectionId ?? 'section-1') as SectionId,
+    blockId: (overrides.blockId ?? 'paragraph-1') as BlockId,
+    runId: (overrides.runId ?? 'run-1') as RunId,
     graphemeIndex: createGraphemeIndex(graphemeIndex)
   })
 }

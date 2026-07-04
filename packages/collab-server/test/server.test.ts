@@ -138,6 +138,10 @@ describe('@4xian/jword-collab-server', () => {
       address: '127.0.0.1',
       roomPrefix: 'jword-collab-server-test',
       requiredToken: 'valid-token',
+      authHook: () => ({
+        allow: true,
+        role: 'write'
+      }),
       licenseHook: (input) => {
         licenseCalls.push({
           documentId: input.documentId,
@@ -180,6 +184,10 @@ describe('@4xian/jword-collab-server', () => {
       address: '127.0.0.1',
       roomPrefix: 'jword-collab-server-denied',
       requiredToken: 'valid-token',
+      authHook: () => ({
+        allow: true,
+        role: 'write'
+      }),
       licenseHook: ({ documentId }) => {
         licenseCalls.push(documentId)
 
@@ -212,6 +220,113 @@ describe('@4xian/jword-collab-server', () => {
     } finally {
       await adapter.destroy()
       document.destroy()
+    }
+  }, 15000)
+
+  it('rejects formal Hocuspocus connections when auth hook is missing', async () => {
+    let licenseCalls = 0
+
+    hocuspocusServer = createJWordCollabHocuspocusServer({
+      port: 0,
+      address: '127.0.0.1',
+      roomPrefix: 'jword-collab-server-auth-required',
+      licenseHook: () => {
+        licenseCalls += 1
+
+        return { ok: true }
+      }
+    })
+    const state = await hocuspocusServer.start()
+    const document = new Y.Doc()
+    const adapter = createHocuspocusCollabProviderAdapter({
+      document,
+      documentId: 'doc-formal-hocuspocus-auth-required',
+      roomId: `${state.roomPrefix}-room`,
+      clientId: 'client-a',
+      webSocketUrl: state.webSocketUrl
+    })
+
+    try {
+      const error = await waitForProviderError(adapter)
+
+      expect(error).toMatchObject({
+        code: 'COLLAB_PROVIDER_AUTH_FAILED',
+        recoverable: false
+      })
+      expect(licenseCalls).toBe(0)
+    } finally {
+      await adapter.destroy()
+      document.destroy()
+    }
+  }, 15000)
+
+  it('rejects read-only Hocuspocus clients when they send updates', async () => {
+    const authCalls: Array<{
+      readonly tenantId: string
+      readonly documentId: string
+      readonly userId?: string
+      readonly token?: string
+    }> = []
+
+    hocuspocusServer = createJWordCollabHocuspocusServer({
+      port: 0,
+      address: '127.0.0.1',
+      roomPrefix: 'tenant-a',
+      requiredToken: 'read-token',
+      authHook: (input) => {
+        authCalls.push({
+          tenantId: input.tenantId,
+          documentId: input.documentId,
+          ...(input.userId === undefined ? {} : { userId: input.userId }),
+          ...(input.token === undefined ? {} : { token: input.token })
+        })
+
+        return {
+          allow: true,
+          role: 'read'
+        }
+      },
+      licenseHook: () => ({ ok: true })
+    })
+    const state = await hocuspocusServer.start()
+    const document = new Y.Doc()
+    const adapter = createHocuspocusCollabProviderAdapter({
+      document,
+      documentId: 'doc-read-only',
+      roomId: 'tenant-a/doc-read-only',
+      clientId: 'client-read',
+      webSocketUrl: `${state.webSocketUrl}?userId=client-read`,
+      token: 'read-token'
+    })
+    const updateDoc = new Y.Doc()
+
+    try {
+      await waitForSynced(adapter)
+      updateDoc.getText('content').insert(0, 'blocked')
+      const errorPromise = waitForProviderError(adapter)
+
+      await adapter.sendUpdate(Y.encodeStateAsUpdate(updateDoc), {
+        documentId: 'doc-read-only',
+        roomId: 'tenant-a/doc-read-only',
+        clientId: 'client-read',
+        updateId: 'read-update-1',
+        origin: 'local'
+      })
+
+      await expect(errorPromise).resolves.toMatchObject({
+        code: 'COLLAB_PERMISSION_DENIED',
+        recoverable: true
+      })
+      expect(authCalls[0]).toEqual({
+        tenantId: 'tenant-a',
+        documentId: 'doc-read-only',
+        userId: 'client-read',
+        token: 'read-token'
+      })
+    } finally {
+      await adapter.destroy()
+      document.destroy()
+      updateDoc.destroy()
     }
   }, 15000)
 
@@ -638,7 +753,11 @@ describe('@4xian/jword-collab-server', () => {
     hocuspocusServer = createJWordCollabHocuspocusServer({
       port: 0,
       address: '127.0.0.1',
-      roomPrefix: 'jword-collab-server-missing-license'
+      roomPrefix: 'jword-collab-server-missing-license',
+      authHook: () => ({
+        allow: true,
+        role: 'write'
+      })
     })
     const state = await hocuspocusServer.start()
     const document = new Y.Doc()

@@ -6,6 +6,15 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-619冻结-gate-6-商业-edition-matrix。
  */
 
+import {
+  decodeBase64Url,
+  decodeUtf8,
+  encodeBase64Url,
+  encodeUtf8,
+  signEd25519,
+  verifyEd25519
+} from './crypto.js'
+
 /** Gate 5 高级格式互通 feature matrix。 */
 export const GATE5_FORMAT_FEATURES = {
   docxImport: 'docx.import',
@@ -33,6 +42,8 @@ export type JWordLicenseDiagnosticCode =
   | 'JWORD_LICENSE_SERVER_UNAVAILABLE'
   | 'JWORD_LICENSE_SIGNATURE_INVALID'
 
+export type JWordLicenseWarningCode = 'JWORD_LICENSE_INSECURE_FIXTURE_ACCEPTED'
+
 export type JWordLicenseStatus = 'valid' | 'server-unavailable'
 
 export interface JWordLicenseDiagnosticCodeMetadata {
@@ -41,25 +52,56 @@ export interface JWordLicenseDiagnosticCodeMetadata {
   readonly recoverable: boolean
 }
 
+export interface JWordLicenseWarning {
+  readonly code: JWordLicenseWarningCode
+  readonly message: string
+}
+
 export interface JWordLicenseEntitlement {
   readonly customerId: string
   readonly licenseToken: string
+  readonly licenseId?: string
   readonly issuer?: string
   readonly issuedAt?: string
   readonly features: readonly string[]
   readonly expiresAt?: string
   readonly offlineGraceUntil?: string
+  readonly offlineGraceDays?: number
+  readonly schemaVersion?: 1
   readonly status?: JWordLicenseStatus
   readonly signature?: string
 }
 
-export type JWordLicenseSignaturePayload = Omit<JWordLicenseEntitlement, 'signature'> & {
+export interface JWordLicenseSignaturePayload {
+  readonly customerId: string
+  readonly licenseToken: string
+  readonly licenseId?: string
   readonly issuer: string
   readonly issuedAt: string
+  readonly features: readonly string[]
+  readonly expiresAt?: string
+  readonly offlineGraceUntil?: string
+  readonly offlineGraceDays?: number
+  readonly schemaVersion?: 1
+  readonly status?: JWordLicenseStatus
+}
+
+export interface JWordLicenseTokenPayload {
+  readonly licenseId: string
+  readonly customerId: string
+  readonly issuer: string
+  readonly features: readonly string[]
+  readonly issuedAt: string
+  readonly expiresAt?: string
+  readonly offlineGraceDays: number
+  readonly schemaVersion: 1
 }
 
 export interface JWordLicenseValidationOptions {
   readonly now?: Date | string | number
+  readonly publicKeyBase64Url?: string
+  readonly allowInsecureFixtureLicense?: boolean
+  readonly onWarning?: (warning: JWordLicenseWarning) => void
 }
 
 export interface JWordLicenseValidationResult {
@@ -97,6 +139,16 @@ export const JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA = {
   }
 } as const satisfies Record<JWordLicenseDiagnosticCode, JWordLicenseDiagnosticCodeMetadata>
 
+const JWORD_LICENSE_TOKEN_VERSION = 'JWL1'
+const JWORD_LICENSE_TOKEN_SCHEMA_VERSION = 1
+const JWORD_LICENSE_DEFAULT_PUBLIC_KEY_BASE64URL = '11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo'
+const LEGACY_INSECURE_LICENSE_PREFIX = 'jword-license-v1:'
+interface VerifiedLicensePayloadResult {
+  readonly ok: boolean
+  readonly payload?: JWordLicenseTokenPayload
+}
+
+
 export class JWordLicenseError extends Error {
   override readonly name = 'JWordLicenseError'
   readonly code: JWordLicenseDiagnosticCode
@@ -128,7 +180,13 @@ export function assertJWordFeatureEntitled(
     throw createJWordLicenseError('JWORD_LICENSE_MISSING', feature)
   }
 
-  if (!isJWordLicenseSignatureValid(entitlement)) {
+  const verification = readVerifiedLicensePayload(entitlement, options)
+
+  if (!verification.ok || verification.payload === undefined) {
+    throw createJWordLicenseError('JWORD_LICENSE_SIGNATURE_INVALID', feature, entitlement.customerId)
+  }
+
+  if (!doesEntitlementMatchSignedPayload(entitlement, verification.payload)) {
     throw createJWordLicenseError('JWORD_LICENSE_SIGNATURE_INVALID', feature, entitlement.customerId)
   }
 
@@ -136,26 +194,26 @@ export function assertJWordFeatureEntitled(
     throw createJWordLicenseError('JWORD_LICENSE_SERVER_UNAVAILABLE', feature, entitlement.customerId)
   }
 
-  if (!entitlement.features.includes(feature)) {
-    throw createJWordLicenseError('JWORD_FEATURE_NOT_ENTITLED', feature, entitlement.customerId)
+  if (!verification.payload.features.includes(feature)) {
+    throw createJWordLicenseError('JWORD_FEATURE_NOT_ENTITLED', feature, verification.payload.customerId)
   }
 
   const now = readValidationTime(options.now)
-  const expiresAt = readOptionalTime(entitlement.expiresAt)
-  const offlineGraceUntil = readOptionalTime(entitlement.offlineGraceUntil)
+  const expiresAt = readOptionalTime(verification.payload.expiresAt)
+  const offlineGraceUntil = readOfflineGraceUntil(expiresAt, verification.payload.offlineGraceDays)
   const hasExpired = expiresAt !== undefined && expiresAt.getTime() < now.getTime()
   const offlineGrace = hasExpired &&
     offlineGraceUntil !== undefined &&
     offlineGraceUntil.getTime() >= now.getTime()
 
   if (hasExpired && !offlineGrace) {
-    throw createJWordLicenseError('JWORD_LICENSE_EXPIRED', feature, entitlement.customerId)
+    throw createJWordLicenseError('JWORD_LICENSE_EXPIRED', feature, verification.payload.customerId)
   }
 
   return {
     ok: true,
     feature,
-    customerId: entitlement.customerId,
+    customerId: verification.payload.customerId,
     offlineGrace
   }
 }
@@ -169,13 +227,18 @@ export function createJWordLicenseError(
   return new JWordLicenseError(code, feature, customerId)
 }
 
-/** 创建仓库内测试与本地离线校验共享的确定性授权签名。 */
-export function createJWordLicenseSignature(
-  entitlement: JWordLicenseSignaturePayload
+/** 使用仓库测试私钥签发非生产授权 token；调用方必须显式传入 insecure-test-only seed。 */
+export function createInsecureTestOnlyJWordLicenseSignature(
+  entitlement: JWordLicenseSignaturePayload,
+  privateKeySeedBase64Url: string
 ): string {
-  return `jword-license-v1:${createStableLicenseHash(
-    `${createCanonicalLicensePayload(entitlement)}|${readJWordLicenseVerifierMaterial(entitlement.issuer)}`
-  )}`
+  const tokenPayload = createLicenseTokenPayload(entitlement)
+  const payloadJson = createCanonicalLicenseTokenPayload(tokenPayload)
+  const payloadSegment = encodeBase64Url(encodeUtf8(payloadJson))
+  const signingInput = encodeUtf8(`${JWORD_LICENSE_TOKEN_VERSION}.${payloadSegment}`)
+  const signature = signEd25519(signingInput, decodeBase64Url(privateKeySeedBase64Url))
+
+  return `${JWORD_LICENSE_TOKEN_VERSION}.${payloadSegment}.${encodeBase64Url(signature)}`
 }
 
 /** 判断字符串是否是公开授权诊断 code。 */
@@ -183,29 +246,214 @@ export function isJWordLicenseDiagnosticCode(code: string): code is JWordLicense
   return code in JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA
 }
 
-/** 判断 entitlement 签名是否匹配本地 deterministic payload。 */
-function isJWordLicenseSignatureValid(entitlement: JWordLicenseEntitlement): boolean {
-  if (
-    entitlement.signature === undefined ||
-    entitlement.signature.length === 0 ||
-    entitlement.issuer === undefined ||
-    entitlement.issuedAt === undefined
-  ) {
-    return false
+/** 读取签名 token 并执行 Ed25519 或显式旧 fixture 校验。 */
+function readVerifiedLicensePayload(
+  entitlement: JWordLicenseEntitlement,
+  options: JWordLicenseValidationOptions
+): VerifiedLicensePayloadResult {
+  const token = readLicenseToken(entitlement)
+
+  if (token === undefined) {
+    return { ok: false }
   }
 
-  const { signature: _signature, ...payload } = entitlement
-  const signedPayload: JWordLicenseSignaturePayload = {
-    ...payload,
-    issuer: entitlement.issuer,
-    issuedAt: entitlement.issuedAt
+  if (token.startsWith(`${JWORD_LICENSE_TOKEN_VERSION}.`)) {
+    return readVerifiedEd25519LicensePayload(token, options.publicKeyBase64Url)
   }
 
-  return entitlement.signature === createJWordLicenseSignature(signedPayload)
+  if (token.startsWith(LEGACY_INSECURE_LICENSE_PREFIX)) {
+    return readVerifiedInsecureFixturePayload(entitlement, token, options)
+  }
+
+  return { ok: false }
 }
 
-/** 创建稳定 JSON payload，避免字段顺序影响签名。 */
-function createCanonicalLicensePayload(entitlement: JWordLicenseSignaturePayload): string {
+/** 读取当前 entitlement 中承载签名 token 的字段。 */
+function readLicenseToken(entitlement: JWordLicenseEntitlement): string | undefined {
+  if (entitlement.signature !== undefined && entitlement.signature.length > 0) {
+    return entitlement.signature
+  }
+
+  if (entitlement.licenseToken.startsWith(`${JWORD_LICENSE_TOKEN_VERSION}.`)) {
+    return entitlement.licenseToken
+  }
+
+  return undefined
+}
+
+/** 验证 JWL1 Ed25519 token 并读取签名 payload。 */
+function readVerifiedEd25519LicensePayload(
+  token: string,
+  publicKeyBase64Url: string | undefined
+): VerifiedLicensePayloadResult {
+  const parts = token.split('.')
+
+  if (parts.length !== 3 || parts[0] !== JWORD_LICENSE_TOKEN_VERSION) {
+    return { ok: false }
+  }
+
+  const payloadSegment = parts[1]
+  const signatureSegment = parts[2]
+
+  if (payloadSegment === undefined || signatureSegment === undefined) {
+    return { ok: false }
+  }
+
+  try {
+    const payloadBytes = decodeBase64Url(payloadSegment)
+    const signature = decodeBase64Url(signatureSegment)
+    const publicKey = decodeBase64Url(publicKeyBase64Url ?? JWORD_LICENSE_DEFAULT_PUBLIC_KEY_BASE64URL)
+    const signingInput = encodeUtf8(`${JWORD_LICENSE_TOKEN_VERSION}.${payloadSegment}`)
+
+    if (!verifyEd25519(signingInput, signature, publicKey)) {
+      return { ok: false }
+    }
+
+    return {
+      ok: true,
+      payload: readLicenseTokenPayload(decodeUtf8(payloadBytes))
+    }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/** 显式接受旧 FNV fixture，并通过 warning 暴露迁移风险。 */
+function readVerifiedInsecureFixturePayload(
+  entitlement: JWordLicenseEntitlement,
+  token: string,
+  options: JWordLicenseValidationOptions
+): VerifiedLicensePayloadResult {
+  if (options.allowInsecureFixtureLicense !== true) {
+    return { ok: false }
+  }
+
+  const payload = createLicenseTokenPayloadFromEntitlement(entitlement)
+  const expected = `${LEGACY_INSECURE_LICENSE_PREFIX}${createInsecureFixtureLicenseHash(
+    `${createCanonicalInsecureFixturePayload(entitlement)}|jword-local-verifier:${entitlement.issuer ?? ''}`
+  )}`
+
+  if (token !== expected) {
+    return { ok: false }
+  }
+
+  options.onWarning?.({
+    code: 'JWORD_LICENSE_INSECURE_FIXTURE_ACCEPTED',
+    message: '已显式接受旧 FNV fixture 授权；该格式只能用于仓库测试。'
+  })
+
+  return {
+    ok: true,
+    payload
+  }
+}
+
+/** 比对公开 entitlement 字段与签名 payload，避免宿主篡改未签字段绕过授权。 */
+function doesEntitlementMatchSignedPayload(
+  entitlement: JWordLicenseEntitlement,
+  payload: JWordLicenseTokenPayload
+): boolean {
+  const licenseId = entitlement.licenseId ?? (
+    entitlement.licenseToken.startsWith(`${JWORD_LICENSE_TOKEN_VERSION}.`) ? payload.licenseId : entitlement.licenseToken
+  )
+
+  return licenseId === payload.licenseId &&
+    entitlement.customerId === payload.customerId &&
+    entitlement.issuer === payload.issuer &&
+    entitlement.issuedAt === payload.issuedAt &&
+    entitlement.expiresAt === payload.expiresAt &&
+    areStringSetsEqual(entitlement.features, payload.features)
+}
+
+/** 创建供 JWL1 token 签名使用的稳定 payload。 */
+function createLicenseTokenPayload(entitlement: JWordLicenseSignaturePayload): JWordLicenseTokenPayload {
+  const payload = {
+    licenseId: entitlement.licenseId ?? entitlement.licenseToken,
+    customerId: entitlement.customerId,
+    issuer: entitlement.issuer,
+    features: [...entitlement.features].sort(),
+    issuedAt: entitlement.issuedAt,
+    offlineGraceDays: readOfflineGraceDays(entitlement),
+    schemaVersion: entitlement.schemaVersion ?? JWORD_LICENSE_TOKEN_SCHEMA_VERSION
+  }
+
+  if (entitlement.expiresAt === undefined) {
+    return payload
+  }
+
+  return {
+    ...payload,
+    expiresAt: entitlement.expiresAt
+  }
+}
+
+/** 从旧 entitlement 对象创建可用于授权判断的签名 payload。 */
+function createLicenseTokenPayloadFromEntitlement(entitlement: JWordLicenseEntitlement): JWordLicenseTokenPayload {
+  const payload = {
+    licenseId: entitlement.licenseId ?? entitlement.licenseToken,
+    customerId: entitlement.customerId,
+    issuer: entitlement.issuer ?? '',
+    features: [...entitlement.features].sort(),
+    issuedAt: entitlement.issuedAt ?? '',
+    offlineGraceDays: readOfflineGraceDays(entitlement),
+    schemaVersion: entitlement.schemaVersion ?? JWORD_LICENSE_TOKEN_SCHEMA_VERSION
+  }
+
+  if (entitlement.expiresAt === undefined) {
+    return payload
+  }
+
+  return {
+    ...payload,
+    expiresAt: entitlement.expiresAt
+  }
+}
+
+/** 创建 JWL1 payload 的稳定 JSON。 */
+function createCanonicalLicenseTokenPayload(payload: JWordLicenseTokenPayload): string {
+  return JSON.stringify({
+    licenseId: payload.licenseId,
+    customerId: payload.customerId,
+    issuer: payload.issuer,
+    features: [...payload.features].sort(),
+    issuedAt: payload.issuedAt,
+    expiresAt: payload.expiresAt ?? null,
+    offlineGraceDays: payload.offlineGraceDays,
+    schemaVersion: payload.schemaVersion
+  })
+}
+
+/** 解析并校验 JWL1 payload JSON。 */
+function readLicenseTokenPayload(payloadJson: string): JWordLicenseTokenPayload {
+  const value: unknown = JSON.parse(payloadJson)
+
+  if (!isRecord(value)) {
+    throw new Error('Invalid license payload')
+  }
+
+  const expiresAt = value.expiresAt
+  const payload = {
+    licenseId: readRequiredString(value.licenseId),
+    customerId: readRequiredString(value.customerId),
+    issuer: readRequiredString(value.issuer),
+    features: readStringArray(value.features),
+    issuedAt: readRequiredString(value.issuedAt),
+    offlineGraceDays: readNonNegativeInteger(value.offlineGraceDays),
+    schemaVersion: readSchemaVersion(value.schemaVersion)
+  }
+
+  if (expiresAt === null || expiresAt === undefined) {
+    return payload
+  }
+
+  return {
+    ...payload,
+    expiresAt: readRequiredString(expiresAt)
+  }
+}
+
+/** 读取旧 fixture payload 的稳定 JSON，供显式迁移兼容路径使用。 */
+function createCanonicalInsecureFixturePayload(entitlement: JWordLicenseEntitlement): string {
   return JSON.stringify({
     customerId: entitlement.customerId,
     expiresAt: entitlement.expiresAt ?? null,
@@ -218,13 +466,8 @@ function createCanonicalLicensePayload(entitlement: JWordLicenseSignaturePayload
   })
 }
 
-/** 读取离线 verifier material；当前 Gate 5 只提供仓库内稳定测试 material。 */
-function readJWordLicenseVerifierMaterial(issuer: string): string {
-  return `jword-local-verifier:${issuer}`
-}
-
-/** 创建仓库内稳定 hash；用于离线测试签名契约，不声明为密码学签名。 */
-function createStableLicenseHash(value: string): string {
+/** 旧 FNV fixture hash，只能在 allowInsecureFixtureLicense 分支使用。 */
+function createInsecureFixtureLicenseHash(value: string): string {
   let hash = 0x811c9dc5
 
   for (let index = 0; index < value.length; index += 1) {
@@ -249,10 +492,82 @@ function readOptionalTime(value: string | undefined): Date | undefined {
   return value === undefined ? undefined : new Date(value)
 }
 
+/** 根据过期时间和离线宽限天数计算宽限截止时间。 */
+function readOfflineGraceUntil(expiresAt: Date | undefined, offlineGraceDays: number): Date | undefined {
+  if (expiresAt === undefined || offlineGraceDays <= 0) {
+    return undefined
+  }
+
+  return new Date(expiresAt.getTime() + offlineGraceDays * 24 * 60 * 60 * 1000)
+}
+
+/** 从兼容输入中读取离线宽限天数。 */
+function readOfflineGraceDays(entitlement: Pick<JWordLicenseSignaturePayload, 'expiresAt' | 'offlineGraceUntil' | 'offlineGraceDays'>): number {
+  if (entitlement.offlineGraceDays !== undefined) {
+    return Math.max(0, Math.floor(entitlement.offlineGraceDays))
+  }
+
+  if (entitlement.expiresAt === undefined || entitlement.offlineGraceUntil === undefined) {
+    return 0
+  }
+
+  const expiresAt = new Date(entitlement.expiresAt).getTime()
+  const graceUntil = new Date(entitlement.offlineGraceUntil).getTime()
+  const duration = graceUntil - expiresAt
+
+  return duration <= 0 ? 0 : Math.ceil(duration / (24 * 60 * 60 * 1000))
+}
+
+/** 比对两个字符串集合是否只存在顺序差异。 */
+function areStringSetsEqual(left: readonly string[], right: readonly string[]): boolean {
+  return JSON.stringify([...left].sort()) === JSON.stringify([...right].sort())
+}
+
 /** 读取授权错误的人类可读消息。 */
 function readJWordLicenseMessage(
   code: JWordLicenseDiagnosticCode,
   feature: JWordLicenseFeatureKey
 ): string {
   return `${code}: ${feature}`
+}
+
+/** 判断值是否是普通对象记录。 */
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** 读取必填字符串字段。 */
+function readRequiredString(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('Invalid license string field')
+  }
+
+  return value
+}
+
+/** 读取字符串数组字段。 */
+function readStringArray(value: unknown): readonly string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.length === 0)) {
+    throw new Error('Invalid license features field')
+  }
+
+  return [...value].sort()
+}
+
+/** 读取非负整数。 */
+function readNonNegativeInteger(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new Error('Invalid license number field')
+  }
+
+  return value
+}
+
+/** 读取 token schema version。 */
+function readSchemaVersion(value: unknown): 1 {
+  if (value !== JWORD_LICENSE_TOKEN_SCHEMA_VERSION) {
+    throw new Error('Unsupported license schema version')
+  }
+
+  return JWORD_LICENSE_TOKEN_SCHEMA_VERSION
 }

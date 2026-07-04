@@ -88,6 +88,11 @@ export async function createCollabHocuspocusServiceForTest(
     port: options.port ?? 4188,
     address,
     roomPrefix,
+    authHook: (input) => ({
+      allow: true,
+      role: 'write',
+      ...(input.userId === undefined ? {} : { userId: input.userId })
+    }),
     licenseHook: () => ({ ok: true }),
     ...(options.requiredToken === undefined ? {} : { requiredToken: options.requiredToken }),
     ...(options.rejectUpdates === undefined ? {} : { rejectUpdates: options.rejectUpdates })
