@@ -500,6 +500,9 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       editor: options.editor,
       host: toolbar.panelHost ?? options.findReplace.host ?? toolbarHost,
       readonly: options.readonly,
+      findOptions: {
+        caseSensitive: options.findReplace.caseSensitive !== false
+      },
       ...(options.editorHost === undefined ? {} : { editorHost: options.editorHost }),
       scrollToRange(range): void {
         scrollTextRangeIntoView(options.editor, options.editorHost, range)
@@ -515,6 +518,11 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
           findReplace.toggleVisible()
         }
       }
+  const unsubscribeFindReplaceKeyboardShortcuts = findReplace === null
+    || options.findReplace?.keyboardShortcuts === false
+    || options.editorHost === undefined
+    ? (): void => {}
+    : bindFindReplaceKeyboardShortcuts([options.editorHost, toolbarHost, findReplace.elements.root], findReplace)
   const revisions = !shouldCreateRevisions || options.revisions === undefined
     ? null
     : createRevisionController({
@@ -720,6 +728,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       headerFooter?.destroy()
       headingOutline?.destroy()
       headingOutlineMount?.cleanup()
+      unsubscribeFindReplaceKeyboardShortcuts()
       findReplace?.destroy()
       revisions?.destroy()
       link?.destroy()
@@ -730,6 +739,52 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       toolbarMount.cleanup()
     }
   }
+}
+
+/** 绑定查找替换编辑区快捷键。 */
+function bindFindReplaceKeyboardShortcuts(
+  shortcutHosts: readonly HTMLElement[],
+  findReplace: { open(): void, elements: { readonly queryInput: HTMLInputElement, readonly replacementInput: HTMLInputElement } }
+): () => void {
+  const signalController = new AbortController()
+  const ownerDocument = shortcutHosts[0]?.ownerDocument
+
+  if (ownerDocument === undefined) {
+    return (): void => {}
+  }
+
+  ownerDocument.addEventListener('keydown', (event) => {
+    const lowerKey = event.key.toLowerCase()
+
+    if (
+      !event.altKey
+      && !event.shiftKey
+      && (event.ctrlKey || event.metaKey)
+      && (lowerKey === 'f' || lowerKey === 'h')
+      && isFindReplaceShortcutTarget(event.target, shortcutHosts)
+    ) {
+      event.preventDefault()
+      findReplace.open()
+      if (lowerKey === 'h') {
+        findReplace.elements.replacementInput.focus()
+        return
+      }
+
+      findReplace.elements.queryInput.focus()
+    }
+  }, {
+    capture: true,
+    signal: signalController.signal
+  })
+
+  return () => {
+    signalController.abort()
+  }
+}
+
+/** 判断快捷键是否来自当前 UI 接管范围。 */
+function isFindReplaceShortcutTarget(target: EventTarget | null, shortcutHosts: readonly HTMLElement[]): boolean {
+  return target instanceof Node && shortcutHosts.some((host) => host.contains(target))
 }
 
 /** 解析图片工具配置；宿主未提供上传适配器时保留禁用入口。 */

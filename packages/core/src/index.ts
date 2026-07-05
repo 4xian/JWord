@@ -133,7 +133,11 @@ export {
   buildInsertLinkCommand,
   buildSetLinkCommand
 } from './operations/link-command-builders'
-export { buildAddRevisionMetadataCommand } from './operations/revision-command-builders'
+export {
+  buildAcceptRevisionCommand,
+  buildAddRevisionMetadataCommand,
+  buildRejectRevisionCommand
+} from './operations/revision-command-builders'
 export type { AddRevisionMetadataInput } from './operations/revision-command-builders'
 export { buildSetSectionPropertiesCommand } from './operations/section-command-builders'
 export type { SectionPropertiesInput } from './operations/section-command-builders'
@@ -148,19 +152,30 @@ export {
   replaceAllMatches
 } from './find-replace/find-replace'
 export type {
+  FindTextOptions,
   FindTextMatch,
   ReplaceAllMatchesResult
 } from './find-replace/find-replace'
 export { isAllowedLinkUrl } from './link/policy'
-export { createFontManager } from './layout/font-manager'
+export {
+  SCRIPT_FONT_SCALE,
+  SUBSCRIPT_BASELINE_SHIFT_RATIO,
+  SUPERSCRIPT_BASELINE_SHIFT_RATIO,
+  createCanvasTextMeasurer,
+  createFontManager
+} from './layout/font-manager'
 export type {
+  CanvasTextMeasurerContext,
+  CanvasTextMetricsLike,
   FontAvailabilityStatus,
   FontCacheStats,
   FontManager,
   FontManagerOptions,
   ResolvedFontStyle,
   RunTextStyle,
-  TextMeasurement
+  TextMeasurement,
+  TextMeasurementMetrics,
+  TextMeasurer
 } from './layout/font-manager'
 export type {
   HistoryEntryMetadata,

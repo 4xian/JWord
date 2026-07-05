@@ -10,7 +10,8 @@
 
 import { describe, expect, test } from 'vitest'
 
-import { createEditor } from '../../src/editor/runtime'
+import { buildSetBoldCommand, createEditor } from '../../src/index'
+import { createSelectionState } from '../../src/model/selection'
 import {
   buildReplaceMatchCommand,
   findTextMatches,
@@ -90,6 +91,59 @@ describe('find replace', () => {
 
     editor.destroy()
   })
+
+  test('能在大小写不敏感模式下匹配并替换跨 run 文本', () => {
+    const editor = createEditor({ initialText: 'AlphaBeta alphaBeta' })
+
+    editor.setSelection(createSelectionState(
+      editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 3
+      }),
+      editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 8
+      })
+    ))
+    editor.executeCommand(buildSetBoldCommand(editor.getProjection(), editor.getSelection(), true)!)
+
+    const caseSensitiveMatches = findTextMatches(editor, 'alphabeta')
+    const insensitiveMatches = findTextMatches(editor, 'alphabeta', {
+      caseSensitive: false
+    })
+
+    expect(readParagraphRunTexts(editor)).toEqual([['Alp', 'haBet', 'a alphaBeta']])
+    expect(caseSensitiveMatches).toHaveLength(0)
+    expect(insensitiveMatches.map((match) => ({
+      text: match.text,
+      start: editor.locateRangeSnapshot(match.rangeSnapshot)?.anchor.graphemeIndex,
+      end: editor.locateRangeSnapshot(match.rangeSnapshot)?.focus.graphemeIndex
+    }))).toEqual([
+      {
+        text: 'AlphaBeta',
+        start: 0,
+        end: 1
+      },
+      {
+        text: 'alphaBeta',
+        start: 2,
+        end: 11
+      }
+    ])
+
+    const result = replaceAllMatches(editor, 'alphabeta', 'X', {
+      caseSensitive: false
+    })
+
+    expect(result.replacedCount).toBe(2)
+    expect(readDocumentText(editor)).toBe('X X')
+
+    editor.destroy()
+  })
 })
 
 /** 读取测试文档第一节的段落纯文本。 */
@@ -101,4 +155,13 @@ function readDocumentText(editor: ReturnType<typeof createEditor>): string {
       ? [block.runs.flatMap((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : [])).join('')]
       : [])
     .join('\n\n')
+}
+
+/** 读取每段按 run 切开的纯文本。 */
+function readParagraphRunTexts(editor: ReturnType<typeof createEditor>): readonly (readonly string[])[] {
+  const blocks = editor.getProjection().document.sections[0]?.blocks ?? []
+
+  return blocks.flatMap((block) => block.kind === 'paragraph'
+    ? [block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join(''))]
+    : [])
 }

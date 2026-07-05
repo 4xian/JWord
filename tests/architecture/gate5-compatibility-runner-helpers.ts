@@ -160,6 +160,19 @@ export interface Gate5ExportArtifactEvidence {
   readonly sha256: string
 }
 
+/** 创建隔离外部工具与默认证据文件的 runner 测试环境。 */
+export function createRunnerTestEnv(overrides: Record<string, string | undefined> = {}): Record<string, string | undefined> {
+  const tempDir = mkdtempSync(join(tmpdir(), 'jword-gate5-test-env-'))
+
+  return {
+    ...process.env,
+    GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: join(tempDir, 'missing-manual-results.json'),
+    GATE5_DOCX_OPENXML_VALIDATION_RESULTS: join(tempDir, 'missing-openxml-validation-results.json'),
+    GATE5_DISABLE_DEFAULT_OPENXML_VALIDATOR: '1',
+    ...overrides
+  }
+}
+
 /** 读取 run styles fixture 当前导出 artifact 证据。 */
 export function readFreshRunStylesArtifactEvidence(): Gate5ExportArtifactEvidence {
   return readFreshArtifactEvidence('docx-t1-run-styles')
@@ -173,10 +186,9 @@ export function readFreshArtifactEvidence(fixtureId: string): Gate5ExportArtifac
   execFileSync(process.execPath, [
     'tools/compat/run-gate5-docx-compatibility.mjs'
   ], {
-    env: {
-      ...process.env,
+    env: createRunnerTestEnv({
       GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath
-    },
+    }),
     encoding: 'utf8'
   })
 
@@ -189,4 +201,3 @@ export function readFreshArtifactEvidence(fixtureId: string): Gate5ExportArtifac
 
   return runStylesResult.exportArtifactEvidence
 }
-

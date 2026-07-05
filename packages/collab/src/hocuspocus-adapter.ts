@@ -2,7 +2,7 @@
  * 职责：将 @hocuspocus/provider 4.x 包装为 JWord Gate 6 的 ProviderAdapter 契约。
  * 边界：只接入 Y.Doc、WebSocket provider、awareness 和诊断事件，不访问 core 内部 store、DOM 节点或 IndexedDB。
  * 协作模块：packages/collab/src/index.ts 负责稳定公共类型，examples/collab/server 提供本地 Hocuspocus 服务。
- * 性能/安全约束：默认由调用方决定是否自动连接；room、token、client metadata 均由宿主传入。
+ * 性能/安全约束：构造阶段不得自动连接；room、token、client metadata 均由宿主传入并在显式 connect 前完成授权。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.2。
  */
 import {
@@ -10,6 +10,13 @@ import {
   HocuspocusProviderWebsocket
 } from '@hocuspocus/provider'
 import * as Y from 'yjs'
+
+import {
+  isAwarenessPresenceState,
+  isAwarenessRangeSnapshot,
+  isAwarenessState,
+  isRecord
+} from './awareness-validation.js'
 
 import type {
   JWordAwarenessState,
@@ -34,6 +41,7 @@ export interface CreateHocuspocusCollabProviderAdapterOptions {
   readonly roomId: string
   readonly clientId: string
   readonly webSocketUrl: string
+  /** 兼容旧调用参数；为保证授权前置，真实连接始终由 connect() 显式触发。 */
   readonly autoConnect?: boolean
   readonly token?: string | (() => string) | (() => Promise<string>)
   readonly webSocketPolyfill?: unknown
@@ -54,7 +62,7 @@ export function createHocuspocusCollabProviderAdapter(
   const awarenessListeners = new Set<JWordAwarenessChangeListener>()
   const websocketProvider = new HocuspocusProviderWebsocket({
     url: options.webSocketUrl,
-    autoConnect: options.autoConnect ?? true,
+    autoConnect: false,
     WebSocketPolyfill: options.webSocketPolyfill
   })
   const provider = new HocuspocusProvider({
@@ -110,8 +118,6 @@ export function createHocuspocusCollabProviderAdapter(
       assertHocuspocusAdapterActive(destroyed)
     }
   )
-
-  provider.attach()
 
   return {
     // 读取当前 provider 状态。
@@ -395,7 +401,10 @@ function readHocuspocusAwarenessState(
   if (isAwarenessState(value)) {
     return [value]
   }
-  if (!isAwarenessWithInvalidRange(value)) {
+  if (!isRecord(value) || value.rangeSnapshot === undefined || isAwarenessRangeSnapshot(value.rangeSnapshot)) {
+    return []
+  }
+  if (!isAwarenessPresenceState(value)) {
     return []
   }
 
@@ -504,121 +513,3 @@ function readHocuspocusCloseReason(value: unknown): string | undefined {
   return typeof value.reason === 'string' ? value.reason : undefined
 }
 
-// 判断未知值是否符合 awareness state 最小 schema。
-function isAwarenessState(value: unknown): value is JWordAwarenessState {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.clientId === 'string'
-    && isAwarenessUser(value.user)
-    && typeof value.updatedAt === 'number'
-    && (value.cursor === undefined || isAwarenessCursor(value.cursor))
-    && (value.rangeSnapshot === undefined || isAwarenessRangeSnapshot(value.rangeSnapshot))
-    && (value.viewport === undefined || isAwarenessViewport(value.viewport))
-    && (value.selectionLabel === undefined || typeof value.selectionLabel === 'string')
-}
-
-// 判断 unknown 是否可从非法 range 降级为 presence。
-function isAwarenessWithInvalidRange(
-  value: unknown
-): value is Pick<JWordAwarenessState, 'clientId' | 'user' | 'updatedAt'> {
-  if (!isRecord(value) || value.rangeSnapshot === undefined || isAwarenessRangeSnapshot(value.rangeSnapshot)) {
-    return false
-  }
-
-  return typeof value.clientId === 'string' &&
-    isAwarenessUser(value.user) &&
-    typeof value.updatedAt === 'number'
-}
-
-// 判断未知值是否符合 awareness user schema。
-function isAwarenessUser(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.id === 'string'
-    && typeof value.name === 'string'
-    && (value.color === undefined || typeof value.color === 'string')
-    && (value.avatarUrl === undefined || typeof value.avatarUrl === 'string')
-}
-
-// 判断未知值是否符合 awareness cursor schema。
-function isAwarenessCursor(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return isAwarenessAnchor(value.anchor) && isAwarenessAnchor(value.focus)
-}
-
-// 判断未知值是否符合 awareness anchor schema。
-function isAwarenessAnchor(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.blockId === 'string' && typeof value.offset === 'number'
-}
-
-// 判断未知值是否符合 JWord range snapshot schema。
-function isAwarenessRangeSnapshot(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.id === 'string'
-    && isAwarenessTextAnchorRecord(value.anchor)
-    && isAwarenessTextAnchorRecord(value.focus)
-}
-
-// 判断未知值是否符合 JWord text anchor record schema。
-function isAwarenessTextAnchorRecord(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.documentId === 'string'
-    && typeof value.sectionId === 'string'
-    && typeof value.blockId === 'string'
-    && typeof value.runId === 'string'
-    && typeof value.graphemeIndex === 'number'
-    && (value.assoc === undefined || typeof value.assoc === 'number')
-    && isAwarenessRelativePositionSnapshot(value.relativePosition)
-}
-
-// 判断未知值是否符合 Yjs relative position JSON schema。
-function isAwarenessRelativePositionSnapshot(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (value.type === undefined || isAwarenessRelativePositionId(value.type))
-    && (value.tname === undefined || typeof value.tname === 'string')
-    && (value.item === undefined || isAwarenessRelativePositionId(value.item))
-    && (value.assoc === undefined || typeof value.assoc === 'number')
-}
-
-// 判断未知值是否符合 Yjs relative position id schema。
-function isAwarenessRelativePositionId(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.client === 'number' && typeof value.clock === 'number'
-}
-
-// 判断未知值是否符合 awareness viewport schema。
-function isAwarenessViewport(value: unknown): boolean {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.pageIndex === 'number'
-}
-
-// 判断未知值是否是普通记录对象。
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}

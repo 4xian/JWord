@@ -359,13 +359,15 @@ describe('collab Hocuspocus provider integration', () => {
 /** 等待 adapter 报告 synced 状态。 */
 async function waitForSynced(adapter: {
   readonly status: string
+  connect(): Promise<void>
   onSynced(listener: () => void): () => void
 }): Promise<void> {
   if (adapter.status === 'synced') {
     return
   }
 
-  await new Promise<void>((resolve, reject) => {
+  let connectError: unknown
+  const waitPromise = new Promise<void>((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       unsubscribe()
       reject(new Error(`provider did not sync, current status: ${adapter.status}`))
@@ -376,6 +378,18 @@ async function waitForSynced(adapter: {
       resolve()
     })
   })
+  const connectPromise = adapter.status === 'idle'
+    ? adapter.connect().catch((error: unknown) => {
+      connectError = error
+    })
+    : Promise.resolve()
+
+  await waitPromise
+  await connectPromise
+
+  if (connectError !== undefined) {
+    throw connectError
+  }
 }
 
 /** 等待指定 Y.Doc 文本收敛到预期值。 */
@@ -465,10 +479,12 @@ async function waitForAwarenessPropagation(adapter: {
 
 /** 等待 provider 报告错误。 */
 async function waitForProviderError(adapter: {
+  readonly status: string
   readonly error: {
     readonly code: string
     readonly recoverable: boolean
   } | undefined
+  connect(): Promise<void>
   onError(listener: (error: {
     readonly code: string
     readonly recoverable: boolean
@@ -481,7 +497,10 @@ async function waitForProviderError(adapter: {
     return adapter.error
   }
 
-  return new Promise((resolve, reject) => {
+  const waitPromise = new Promise<{
+    readonly code: string
+    readonly recoverable: boolean
+  }>((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       unsubscribe()
       reject(new Error(timeoutMessage))
@@ -492,4 +511,12 @@ async function waitForProviderError(adapter: {
       resolve(error)
     })
   })
+  const connectPromise = adapter.status === 'idle'
+    ? adapter.connect().catch(() => {})
+    : Promise.resolve()
+  const error = await waitPromise
+
+  await connectPromise
+
+  return error
 }

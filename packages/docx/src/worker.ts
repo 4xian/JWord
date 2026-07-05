@@ -13,6 +13,7 @@ import {
 } from '@4xian/jword-license'
 import {
   createDocxErrorEvent,
+  createDocxProgressEvent,
   createDocxTransferables,
   exportDocx,
   importDocx,
@@ -23,6 +24,7 @@ import {
   type DocxWorkerEvent,
   type DocxWorkerRequest
 } from './index.js'
+import type { DocxProgressStage } from './types.js'
 
 export type DocxWorkerPostEvent = (
   event: DocxWorkerEvent,
@@ -46,6 +48,7 @@ interface DocxWorkerRuntimeScope {
 }
 
 const activeDocxWorkerTasks = new Map<string, DocxWorkerActiveTask>()
+const cancelledDocxWorkerRequestIds = new Set<string>()
 
 /** 分发 DOCX worker 请求并回发稳定事件。 */
 export async function dispatchDocxWorkerRequest(
@@ -58,6 +61,8 @@ export async function dispatchDocxWorkerRequest(
     task?.controller.abort()
     if (task !== undefined) {
       task.cancelledByWorker = true
+    } else {
+      cancelledDocxWorkerRequestIds.add(request.requestId)
     }
 
     const event = createDocxWorkerCancelledEvent(request.requestId)
@@ -76,7 +81,14 @@ export async function dispatchDocxWorkerRequest(
   activeDocxWorkerTasks.set(request.requestId, task)
 
   try {
-    const event = await handleDocxWorkerRequest(request, task.controller.signal)
+    if (cancelledDocxWorkerRequestIds.delete(request.requestId)) {
+      task.controller.abort()
+      task.cancelledByWorker = true
+
+      return createDocxWorkerCancelledEvent(request.requestId)
+    }
+
+    const event = await handleDocxWorkerRequest(request, task.controller.signal, postEvent)
 
     if (!task.cancelledByWorker) {
       postEvent(event, readDocxWorkerEventTransferables(event))
@@ -95,7 +107,8 @@ export async function dispatchDocxWorkerRequest(
 /** 处理 DOCX worker 请求。 */
 async function handleDocxWorkerRequest(
   request: DocxWorkerRequest,
-  signal?: AbortSignal
+  signal: AbortSignal,
+  postEvent: DocxWorkerPostEvent
 ): Promise<DocxWorkerEvent> {
   if (request.type === 'cancel') {
     return createDocxWorkerCancelledEvent(request.requestId)
@@ -104,11 +117,14 @@ async function handleDocxWorkerRequest(
   try {
     if (request.type === 'export') {
       assertDocxWorkerFeature(request, 'docx.export')
+      postDocxWorkerProgress(request.requestId, 'queued', postEvent)
+      postDocxWorkerProgress(request.requestId, 'writing', postEvent)
       const result = await exportDocx(request.document, {
         ...request.options,
         requestId: request.options?.requestId ?? request.requestId,
-        ...(signal === undefined ? {} : { signal })
+        signal
       })
+      postDocxWorkerProgress(request.requestId, 'done', postEvent)
 
       return {
         type: 'export-result',
@@ -119,11 +135,15 @@ async function handleDocxWorkerRequest(
 
     if (request.type === 'inspect') {
       assertDocxWorkerFeature(request, 'docx.import')
+      postDocxWorkerProgress(request.requestId, 'queued', postEvent)
+      postDocxWorkerProgress(request.requestId, 'reading', postEvent)
       const result = await inspectDocxPackage(request.input, {
         ...request.options,
         requestId: request.options?.requestId ?? request.requestId,
-        ...(signal === undefined ? {} : { signal })
+        signal
       })
+      postDocxWorkerProgress(request.requestId, 'parsing', postEvent)
+      postDocxWorkerProgress(request.requestId, 'done', postEvent)
 
       return {
         type: 'inspect-result',
@@ -133,11 +153,16 @@ async function handleDocxWorkerRequest(
     }
 
     assertDocxWorkerFeature(request, 'docx.import')
+    postDocxWorkerProgress(request.requestId, 'queued', postEvent)
+    postDocxWorkerProgress(request.requestId, 'reading', postEvent)
     const result = await importDocx(request.input, {
       ...request.options,
       requestId: request.options?.requestId ?? request.requestId,
-      ...(signal === undefined ? {} : { signal })
+      signal
     })
+    postDocxWorkerProgress(request.requestId, 'parsing', postEvent)
+    postDocxWorkerProgress(request.requestId, 'mapping', postEvent)
+    postDocxWorkerProgress(request.requestId, 'done', postEvent)
 
     return {
       type: 'import-result',
@@ -147,6 +172,15 @@ async function handleDocxWorkerRequest(
   } catch (error) {
     return createDocxErrorEvent(request.requestId, readDocxWorkerError(error, request.requestId))
   }
+}
+
+/** 投递 DOCX worker 进度事件。 */
+function postDocxWorkerProgress(
+  requestId: string,
+  stage: DocxProgressStage,
+  postEvent: DocxWorkerPostEvent
+): void {
+  postEvent(createDocxProgressEvent(requestId, stage), [])
 }
 
 /** 在读取或输出用户文档内容前校验 DOCX worker 高级 feature。 */

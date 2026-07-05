@@ -14,10 +14,7 @@ import type {
   Resource,
   Run,
   Section,
-  Table,
-  TableBorder,
-  TableCell,
-  TableRow
+  TableBorder
 } from '@4xian/jword-core'
 import { assertJWordFeatureEntitled } from '@4xian/jword-license'
 import JSZip from 'jszip'
@@ -29,15 +26,14 @@ import {
   readNumberProperty,
   readPositiveTwips,
   readStringProperty,
-  readTableBorderSnapshot,
   splitTextInlineXml,
   twipsToEmu,
   writeAppPropertiesXml,
   writeCorePropertiesXml,
   writeNumberingXml,
-  writeStylesXml,
-  writeTableBordersXml
+  writeStylesXml
 } from './export-utils.js'
+import { writeTableXml } from './export-table.js'
 import type {
   DocxOpaquePreservation,
   DocxOpaqueUnsupportedPart,
@@ -322,7 +318,50 @@ function collectExportUnsupportedWarnings(projection: DocumentProjection): reado
     })
   }
 
+  return [
+    ...warnings,
+    ...collectUnsupportedImageExportWarnings(projection)
+  ]
+}
+
+/** 收集正文图片导出时会因不支持 MIME 而省略的 warning。 */
+function collectUnsupportedImageExportWarnings(projection: DocumentProjection): readonly DocxWarning[] {
+  const resourcesById = new Map((projection.document.resources ?? []).map((resource) => [resource.id, resource]))
+  const warnedResourceIds = new Set<string>()
+  const warnings: DocxWarning[] = []
+
+  for (const image of readExportImageInlines(projection)) {
+    if (warnedResourceIds.has(image.resourceId)) {
+      continue
+    }
+
+    const resource = resourcesById.get(image.resourceId)
+    if (resource === undefined || readImageExtension(resource.mime) !== undefined) {
+      continue
+    }
+
+    warnedResourceIds.add(image.resourceId)
+    warnings.push({
+      code: 'DOCX_IMAGE_EXPORT_MIME_UNSUPPORTED',
+      severity: 'warning',
+      part: 'word/document.xml',
+      path: `resource:${resource.id}`,
+      message: `DOCX export does not support image MIME type: ${resource.mime}`,
+      fallback: 'omit-image',
+      recoverable: true
+    })
+  }
+
   return warnings
+}
+
+/** 读取导出正文中所有 inline image。 */
+function readExportImageInlines(projection: DocumentProjection): readonly ImageInline[] {
+  return projection.document.sections.flatMap((section) =>
+    section.blocks.flatMap(readBlockParagraphs).flatMap((paragraph) =>
+      paragraph.runs.flatMap((run) => run.inlines.filter((inline): inline is ImageInline => inline.kind === 'image'))
+    )
+  )
 }
 
 /** 判断 section 是否包含当前 DOCX export 尚未写出的页眉页脚 metadata。 */
@@ -545,12 +584,16 @@ function readDocumentRelationshipTarget(relationship: DocxOpaqueUnsupportedRelat
 
 /** 写正文 XML。 */
 function writeDocumentXml(projection: DocumentProjection, context: ExportContext): string {
-  const blocks = projection.document.sections.flatMap((section) => section.blocks)
-  const bodyXml = blocks.length === 0
+  const sections = projection.document.sections
+  const bodyXml = sections.length === 0
     ? '<w:p/>'
-    : blocks.map((block) => writeBlockXml(block, context)).join('')
+    : sections.map((section, index) => writeSectionBodyXml(
+      section,
+      context,
+      index === sections.length - 1
+    )).join('')
   const sectionPropertiesXml = writeSectionPropertiesXml(
-    projection.document.sections[projection.document.sections.length - 1]
+    sections[sections.length - 1]
   )
 
   return [
@@ -559,6 +602,47 @@ function writeDocumentXml(projection: DocumentProjection, context: ExportContext
     `<w:body>${bodyXml}${sectionPropertiesXml}</w:body>`,
     '</w:document>'
   ].join('')
+}
+
+/** 写单个 section 的正文块，非末节把分节属性写入本节结束段落。 */
+function writeSectionBodyXml(section: Section, context: ExportContext, isLastSection: boolean): string {
+  if (isLastSection) {
+    return section.blocks.length === 0
+      ? '<w:p/>'
+      : section.blocks.map((block) => writeBlockXml(block, context)).join('')
+  }
+
+  const sectionPropertiesXml = writeSectionPropertiesXml(section)
+
+  if (section.blocks.length === 0) {
+    return writeSectionBreakParagraphXml(sectionPropertiesXml)
+  }
+
+  return section.blocks.map((block, index) => {
+    if (index !== section.blocks.length - 1) {
+      return writeBlockXml(block, context)
+    }
+
+    return writeSectionEndingBlockXml(block, context, sectionPropertiesXml)
+  }).join('')
+}
+
+/** 写带分节符的 section 末尾块。 */
+function writeSectionEndingBlockXml(
+  block: Block,
+  context: ExportContext,
+  sectionPropertiesXml: string
+): string {
+  if (block.kind === 'paragraph') {
+    return writeParagraphXml(block, context, sectionPropertiesXml)
+  }
+
+  return `${writeBlockXml(block, context)}${writeSectionBreakParagraphXml(sectionPropertiesXml)}`
+}
+
+/** 写只有分节属性的空段落。 */
+function writeSectionBreakParagraphXml(sectionPropertiesXml: string): string {
+  return `<w:p><w:pPr>${sectionPropertiesXml}</w:pPr></w:p>`
 }
 
 /** 写正文末尾 section properties。 */
@@ -603,7 +687,9 @@ function writeBlockXml(block: Block, context: ExportContext): string {
     return writeParagraphXml(block, context)
   }
 
-  return writeTableXml(block, context)
+  return writeTableXml(block, {
+    writeBlock: (nestedBlock) => writeBlockXml(nestedBlock, context)
+  })
 }
 
 /** 从 block 中递归读取段落，用于列表定义收集。 */
@@ -618,12 +704,16 @@ function readBlockParagraphs(block: Block): readonly Paragraph[] {
 }
 
 /** 写段落 XML。 */
-function writeParagraphXml(paragraph: Paragraph, context: ExportContext): string {
+function writeParagraphXml(
+  paragraph: Paragraph,
+  context: ExportContext,
+  sectionPropertiesXml = ''
+): string {
   const runs = paragraph.runs.length === 0
     ? '<w:r/>'
     : paragraph.runs.map((run) => writeRunXml(run, context)).join('')
 
-  return `<w:p>${writeParagraphPropertiesXml(paragraph)}${runs}</w:p>`
+  return `<w:p>${writeParagraphPropertiesXml(paragraph, sectionPropertiesXml)}${runs}</w:p>`
 }
 
 /** 写 run XML。 */
@@ -638,14 +728,15 @@ function writeRunXml(run: Run, context: ExportContext): string {
 }
 
 /** 写段落属性 XML。 */
-function writeParagraphPropertiesXml(paragraph: Paragraph): string {
+function writeParagraphPropertiesXml(paragraph: Paragraph, sectionPropertiesXml = ''): string {
   const properties = paragraph.properties
   const children = [
     paragraph.styleId === undefined ? '' : `<w:pStyle w:val="${escapeXmlAttribute(paragraph.styleId)}"/>`,
     writeParagraphNumberingXml(paragraph),
-    readStringProperty(properties, 'alignment') === undefined ? '' : `<w:jc w:val="${escapeXmlAttribute(readStringProperty(properties, 'alignment')!)}"/>`,
     writeParagraphSpacingXml(paragraph),
-    writeParagraphIndentXml(properties)
+    writeParagraphIndentXml(properties),
+    readStringProperty(properties, 'alignment') === undefined ? '' : `<w:jc w:val="${escapeXmlAttribute(readStringProperty(properties, 'alignment')!)}"/>`,
+    sectionPropertiesXml
   ].filter((child) => child.length > 0).join('')
 
   return children.length === 0 ? '' : `<w:pPr>${children}</w:pPr>`
@@ -744,13 +835,13 @@ function writeRunPropertiesXml(run: Run): string {
   const properties = run.properties
   const children = [
     writeRunStyleXml(properties),
+    writeRunFontFamilyXml(properties),
     readBooleanProperty(properties, 'bold') ? '<w:b/>' : '',
     readBooleanProperty(properties, 'italic') ? '<w:i/>' : '',
-    readBooleanProperty(properties, 'underline') ? '<w:u/>' : '',
     readBooleanProperty(properties, 'strike') ? '<w:strike/>' : '',
-    writeRunFontFamilyXml(properties),
-    writeRunFontSizeXml(properties),
     readRunColorXml(properties),
+    writeRunFontSizeXml(properties),
+    readBooleanProperty(properties, 'underline') ? '<w:u w:val="single"/>' : '',
     writeRunBackgroundColorXml(properties),
     writeRunVerticalAlignXml(properties)
   ].filter((child) => child.length > 0).join('')
@@ -804,7 +895,9 @@ function writeRunBackgroundColorXml(properties: Run['properties']): string {
   const backgroundColor = readStringProperty(properties, 'backgroundColor')
   const value = backgroundColor?.startsWith('#') === true ? backgroundColor.slice(1) : backgroundColor
 
-  return value === undefined ? '' : `<w:shd w:fill="${escapeXmlAttribute(value.toUpperCase())}"/>`
+  return value === undefined
+    ? ''
+    : `<w:shd w:val="clear" w:color="auto" w:fill="${escapeXmlAttribute(value.toUpperCase())}"/>`
 }
 
 /** 写 run 上下标 XML。 */
@@ -879,67 +972,4 @@ function writeImageInlineXml(inline: ImageInline, context: ExportContext): reado
     '</wp:inline>',
     '</w:drawing>'
   ].join('')]
-}
-
-/** 写基础表格 XML。 */
-function writeTableXml(table: Table, context: ExportContext): string {
-  const rows = table.rows.map((row) => writeTableRowXml(row, context)).join('')
-
-  return `<w:tbl>${writeTablePropertiesXml(table)}${writeTableGridXml(table.grid)}${rows}</w:tbl>`
-}
-
-/** 写表格属性 XML。 */
-function writeTablePropertiesXml(table: Table): string {
-  const border = readTableBorderSnapshot(table.border, table.properties)
-  const children = [
-    writeTableBordersXml(border, 'tblBorders')
-  ].filter((child) => child.length > 0).join('')
-
-  return children.length === 0 ? '' : `<w:tblPr>${children}</w:tblPr>`
-}
-
-/** 写表格列宽网格 XML。 */
-function writeTableGridXml(grid: readonly number[] | undefined): string {
-  const columns = grid
-    ?.filter((width) => Number.isFinite(width) && width > 0)
-    .map((width) => `<w:gridCol w:w="${Math.round(width)}"/>`)
-
-  if (columns === undefined || columns.length === 0) {
-    return ''
-  }
-
-  return `<w:tblGrid>${columns.join('')}</w:tblGrid>`
-}
-
-/** 写表格行 XML。 */
-function writeTableRowXml(row: TableRow, context: ExportContext): string {
-  return `<w:tr>${row.cells.map((cell) => writeTableCellXml(cell, context)).join('')}</w:tr>`
-}
-
-/** 写表格单元格 XML。 */
-function writeTableCellXml(cell: TableCell, context: ExportContext): string {
-  const blocks = cell.blocks.length === 0
-    ? '<w:p/>'
-    : cell.blocks.map((block) => writeBlockXml(block, context)).join('')
-
-  return `<w:tc>${writeTableCellPropertiesXml(cell)}${blocks}</w:tc>`
-}
-
-/** 写表格单元格属性 XML。 */
-function writeTableCellPropertiesXml(cell: TableCell): string {
-  const children = [
-    writeTableCellGridSpanXml(cell.gridSpan),
-    writeTableBordersXml(readTableBorderSnapshot(cell.border, cell.properties), 'tcBorders')
-  ].filter((child) => child.length > 0).join('')
-
-  return children.length === 0 ? '' : `<w:tcPr>${children}</w:tcPr>`
-}
-
-/** 写表格单元格横向 span XML。 */
-function writeTableCellGridSpanXml(gridSpan: number | undefined): string {
-  if (gridSpan === undefined || !Number.isFinite(gridSpan) || gridSpan <= 1) {
-    return ''
-  }
-
-  return `<w:gridSpan w:val="${Math.round(gridSpan)}"/>`
 }

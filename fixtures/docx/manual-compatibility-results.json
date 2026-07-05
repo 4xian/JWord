@@ -162,14 +162,14 @@
       "fixtureId": "docx-t2-section-breaks",
       "app": "WPS",
       "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-      "artifactByteLength": 4856,
-      "artifactSha256": "409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2",
-      "result": "pass",
-      "editable": "pass",
-      "repairPrompt": "none",
-      "mainVisualDifference": "none",
-      "blockingIssue": "",
-      "evidence": "2026-05-25 21:04-21:34 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. WPS-only Gate 5 compatibility evidence. Source artifact fixtures/docx/exports/docx-t2-section-breaks.docx byteLength 4856 sha256 409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t2-section-breaks-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t2_section_breaks, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t2_section_breaks. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t2_section_breaks; edited copy byteLength 10047 sha256 1ab3c24210903526cf8198f67a66b7fc78af8a2f7bdd5883dcb39c0e44d3ac57. The source artifact hash remained 409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2."
+      "artifactByteLength": 4993,
+      "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
+      "result": "pending",
+      "editable": "pending",
+      "repairPrompt": "pending",
+      "mainVisualDifference": "pending",
+      "blockingIssue": "D-2 多 section 导出修复后 artifact hash 已变化，旧 WPS 手工证据失效，需重新打开验证。",
+      "evidence": "pending: previous WPS evidence was bound to artifact SHA-256 409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2; current artifact SHA-256 is 19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925."
     },
     {
       "fixtureId": "docx-t2-floating-object-warning",

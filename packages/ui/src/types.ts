@@ -407,6 +407,10 @@ export interface JWordHeadingOutlineOptions {
 export interface JWordFindReplaceOptions {
   /** 查找替换面板挂载宿主；为空时挂到 SDK 默认 toolbar 面板宿主。 */
   readonly host?: HTMLElement
+  /** 是否启用 Ctrl/Cmd+F 与 Ctrl/Cmd+H 快捷键；默认启用。 */
+  readonly keyboardShortcuts?: boolean
+  /** 是否大小写敏感；默认 true，宿主可设 false 启用大小写不敏感搜索。 */
+  readonly caseSensitive?: boolean
 }
 
 /** Gate 4 修订 metadata 面板配置。 */
@@ -466,7 +470,10 @@ export interface CreateJWordUiOptions {
 
 /** live region 控制器的最小协作边界。 */
 export interface JWordUiLiveRegionController {
-  announce(message: string, options?: { readonly force?: boolean }): void
+  announce(message: string, options?: {
+    readonly force?: boolean
+    readonly priority?: 'polite' | 'assertive'
+  }): void
   destroy(): void
 }
 

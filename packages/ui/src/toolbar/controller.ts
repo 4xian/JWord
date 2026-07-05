@@ -326,20 +326,20 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
         if (focusOptions.restoreEditorFocus !== false) {
           restoreEditorFocusSoon()
         }
-      })
+      }, signalController.signal)
     }
     const bindToolbarSelect = (control: JWordToolbarControlElement | undefined, handler: () => void) => {
       bindSelect(control, () => {
         openColorPicker = null
         handler()
         restoreEditorFocusSoon()
-      })
+      }, signalController.signal)
     }
     const bindToolbarColorInput = (
       control: JWordToolbarControlElement | undefined,
       handler: (event: Event) => void
     ) => {
-      bindColorInput(control, handler)
+      bindColorInput(control, handler, signalController.signal)
     }
 
     options.editorHost?.addEventListener('mousedown', () => {
@@ -547,11 +547,11 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     bindColorClick(dom.controls['format.textColor'], () => {
       openColorPicker = 'textColor'
       captureColorSelection('textColor')
-    })
+    }, signalController.signal)
     bindColorClick(dom.controls['format.backgroundColor'], () => {
       openColorPicker = 'backgroundColor'
       captureColorSelection('backgroundColor')
-    })
+    }, signalController.signal)
     bindToolbarColorInput(dom.controls['format.textColor'], (event) => {
       const control = readColor(dom.controls['format.textColor'])
 
@@ -1295,43 +1295,60 @@ function readToolbarPanelSelector(): string {
 }
 
 /** 在按钮上绑定点击事件。 */
-function bindButton(control: JWordToolbarControlElement | undefined, handler: () => void): void {
+function bindButton(
+  control: JWordToolbarControlElement | undefined,
+  handler: () => void,
+  signal: AbortSignal
+): void {
   if (!(control instanceof HTMLButtonElement)) {
     return
   }
 
-  control.addEventListener('click', handler)
+  control.addEventListener('click', handler, { signal })
 }
 
 /** 在 select 上绑定 change 事件。 */
-function bindSelect(control: JWordToolbarControlElement | undefined, handler: () => void): void {
+function bindSelect(
+  control: JWordToolbarControlElement | undefined,
+  handler: () => void,
+  signal: AbortSignal
+): void {
   if (!(control instanceof HTMLSelectElement)) {
     return
   }
 
-  control.addEventListener('change', handler)
+  control.addEventListener('change', handler, { signal })
 }
 
 /** 在颜色控件上绑定打开 picker 前后的关键事件。 */
-function bindColorClick(control: JWordToolbarControlElement | undefined, handler: () => void): void {
+function bindColorClick(
+  control: JWordToolbarControlElement | undefined,
+  handler: () => void,
+  signal: AbortSignal
+): void {
   if (!(control instanceof HTMLInputElement)) {
     return
   }
 
-  control.addEventListener('pointerdown', handler)
-  control.addEventListener('mousedown', handler)
-  control.addEventListener('click', handler)
+  control.addEventListener('pointerdown', handler, { signal })
+  control.addEventListener('mousedown', handler, { signal })
+  control.addEventListener('click', handler, { signal })
 }
 
 /** 在颜色控件上绑定即时 input 与最终 change 事件。 */
-function bindColorInput(control: JWordToolbarControlElement | undefined, handler: (event: Event) => void): void {
+function bindColorInput(
+  control: JWordToolbarControlElement | undefined,
+  handler: (event: Event) => void,
+  signal: AbortSignal
+): void {
   if (!(control instanceof HTMLInputElement)) {
     return
   }
 
-  control.addEventListener('input', handler)
-  control.addEventListener('change', handler)
+  control.addEventListener('input', handler, { signal })
+  control.addEventListener('change', handler, { signal })
 }
+
 
 /** 安全读取 select 控件。 */
 function readSelect(control: JWordToolbarControlElement | undefined): HTMLSelectElement | null {

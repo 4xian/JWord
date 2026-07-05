@@ -47,7 +47,10 @@ export function createToolbarDom(host: HTMLElement, config: ResolvedToolbarConfi
   host.classList.add('jw-toolbar')
   host.setAttribute('data-jword-toolbar', 'true')
   host.setAttribute('aria-label', 'JWord toolbar')
-  const bar = document.createElement('div')
+  host.setAttribute('role', 'toolbar')
+  const ownerDocument = host.ownerDocument
+  const rovingTabindex = createToolbarRovingTabindex(ownerDocument)
+  const bar = ownerDocument.createElement('div')
   const controls: Partial<Record<JWordToolbarToolId, JWordToolbarControlElement>> = {}
   const destroyParts: Array<() => void> = []
   const groups: HTMLElement[] = []
@@ -61,17 +64,19 @@ export function createToolbarDom(host: HTMLElement, config: ResolvedToolbarConfi
     let group = groups.at(-1) ?? null
 
     if (group === null || previousGroupId !== definition.group) {
-      group = createToolbarGroup(groups.length > 0)
+      group = createToolbarGroup(ownerDocument, groups.length > 0)
       bar.append(group)
       groups.push(group)
       previousGroupId = definition.group
     }
 
-    const control = createControl(definition)
-    const { anchor } = wrapWithTooltip(control.wrapper, definition.tooltip)
+    const control = createControl(definition, ownerDocument)
+    const { anchor, destroy } = wrapWithTooltip(control.wrapper, definition.tooltip)
 
+    rovingTabindex.register(readToolbarFocusableElement(control.wrapper, control.control))
     group.append(anchor)
     controls[toolId] = control.control
+    destroyParts.push(destroy)
     if (control.destroy !== undefined) {
       destroyParts.push(control.destroy)
     }
@@ -81,7 +86,7 @@ export function createToolbarDom(host: HTMLElement, config: ResolvedToolbarConfi
     host,
     bar,
     controls,
-    destroyParts,
+    destroyParts: [...destroyParts, rovingTabindex.destroy],
     groups
   }
 }
@@ -153,12 +158,13 @@ export function destroyToolbarDom(dom: ToolbarDom): void {
   dom.host.replaceChildren()
   dom.host.removeAttribute('data-jword-toolbar')
   dom.host.removeAttribute('aria-label')
+  dom.host.removeAttribute('role')
   dom.host.classList.remove('jw-toolbar')
 }
 
 /** 创建单个分组容器。 */
-function createToolbarGroup(separated: boolean): HTMLElement {
-  const group = document.createElement('div')
+function createToolbarGroup(ownerDocument: Document, separated: boolean): HTMLElement {
+  const group = ownerDocument.createElement('div')
 
   group.className = separated
     ? 'jw-toolbar__group jw-toolbar__group--separated'
@@ -168,10 +174,10 @@ function createToolbarGroup(separated: boolean): HTMLElement {
 }
 
 /** 创建单个工具对应的控件包装。 */
-function createControl(definition: BuiltinToolDefinition): ControlParts {
+function createControl(definition: BuiltinToolDefinition, ownerDocument: Document): ControlParts {
   switch (definition.kind) {
     case 'button': {
-      const button = createToolbarButton(definition)
+      const button = createToolbarButton(definition, ownerDocument)
 
       button.setAttribute('data-jword-tool-id', definition.id)
 
@@ -181,7 +187,7 @@ function createControl(definition: BuiltinToolDefinition): ControlParts {
       }
     }
     case 'select': {
-      const { wrapper, control } = createToolbarSelectControl(definition)
+      const { wrapper, control } = createToolbarSelectControl(definition, ownerDocument)
 
       wrapper.setAttribute('data-jword-tool-id', definition.id)
       control.setAttribute(definition.dataAttribute, 'true')
@@ -189,7 +195,7 @@ function createControl(definition: BuiltinToolDefinition): ControlParts {
       return { wrapper, control }
     }
     case 'color': {
-      const { wrapper, control } = createToolbarColorControl(definition.label, definition.icon)
+      const { wrapper, control } = createToolbarColorControl(definition.label, definition.icon, ownerDocument)
 
       wrapper.setAttribute('data-jword-tool-id', definition.id)
       control.setAttribute(definition.dataAttribute, 'true')
@@ -200,8 +206,11 @@ function createControl(definition: BuiltinToolDefinition): ControlParts {
 }
 
 /** 创建按钮控件。 */
-function createToolbarButton(definition: BuiltinToolDefinition): HTMLButtonElement {
-  const button = document.createElement('button')
+function createToolbarButton(
+  definition: BuiltinToolDefinition,
+  ownerDocument: Document
+): HTMLButtonElement {
+  const button = ownerDocument.createElement('button')
 
   button.type = 'button'
   button.className = 'jw-toolbar__button'
@@ -214,7 +223,7 @@ function createToolbarButton(definition: BuiltinToolDefinition): HTMLButtonEleme
   }
 
   if (readButtonNeedsCaret(definition.id)) {
-    const arrow = document.createElement('span')
+    const arrow = ownerDocument.createElement('span')
 
     arrow.className = 'jw-toolbar__button-caret'
     arrow.append(createToolbarIcon('caretDown'))
@@ -236,7 +245,8 @@ function readButtonNeedsCaret(toolId: JWordToolbarToolId): boolean {
 
 /** 创建 select 控件包装。 */
 function createToolbarSelectControl(
-  definition: BuiltinToolDefinition
+  definition: BuiltinToolDefinition,
+  ownerDocument: Document
 ): { readonly wrapper: HTMLElement, readonly control: HTMLSelectElement, readonly destroy: () => void } {
   const options = definition.options ?? []
   const ariaLabel = definition.label
@@ -244,15 +254,15 @@ function createToolbarSelectControl(
   const triggerVariant = definition.triggerVariant ?? 'plain'
   const menuLayout = resolveToolbarSelectMenuLayout(definition, options)
   const menuTextAlign = definition.menuTextAlign ?? 'start'
-  const wrapper = document.createElement('div')
-  const trigger = document.createElement('button')
-  const triggerIcon = document.createElement('span')
-  const triggerPrefix = document.createElement('span')
-  const triggerLabel = document.createElement('span')
-  const triggerArrow = document.createElement('span')
-  const menu = document.createElement('div')
-  const select = document.createElement('select')
-  const signalController = new AbortController()
+  const wrapper = ownerDocument.createElement('div')
+  const trigger = ownerDocument.createElement('button')
+  const triggerIcon = ownerDocument.createElement('span')
+  const triggerPrefix = ownerDocument.createElement('span')
+  const triggerLabel = ownerDocument.createElement('span')
+  const triggerArrow = ownerDocument.createElement('span')
+  const menu = ownerDocument.createElement('div')
+  const select = ownerDocument.createElement('select')
+  const signalController = new (ownerDocument.defaultView?.AbortController ?? AbortController)()
 
   wrapper.className = 'jw-toolbar__select-wrap'
   wrapper.setAttribute('data-jword-field-label', fieldLabel)
@@ -266,23 +276,30 @@ function createToolbarSelectControl(
   trigger.className = 'jw-toolbar__select-trigger'
   trigger.type = 'button'
   trigger.setAttribute('data-jword-tooltip-surface', 'true')
+  const menuId = `jw-toolbar-select-menu-${definition.id.replace(/[^a-z0-9-]/gi, '-')}`
+
   trigger.setAttribute('aria-haspopup', 'listbox')
   trigger.setAttribute('aria-expanded', 'false')
   trigger.setAttribute('aria-label', ariaLabel)
+  trigger.setAttribute('aria-controls', menuId)
   triggerIcon.className = 'jw-toolbar__select-trigger-icon'
   triggerPrefix.className = 'jw-toolbar__select-prefix'
   triggerPrefix.textContent = `${fieldLabel}：`
   triggerLabel.className = 'jw-toolbar__select-label'
   triggerArrow.className = 'jw-toolbar__select-arrow'
   triggerArrow.append(createToolbarIcon('caretDown'))
+  menu.id = menuId
   menu.className = 'jw-toolbar__select-menu'
   menu.setAttribute('data-jword-tooltip-skip', 'true')
+  menu.setAttribute('role', 'listbox')
+  menu.setAttribute('aria-label', ariaLabel)
   menu.hidden = true
   select.className = 'jw-toolbar__select'
+  select.tabIndex = -1
   select.setAttribute('aria-label', ariaLabel)
 
   for (const option of options) {
-    const node = document.createElement('option')
+    const node = ownerDocument.createElement('option')
 
     node.value = option.value
     node.textContent = option.label
@@ -306,12 +323,14 @@ function createToolbarSelectControl(
       continue
     }
 
-    const optionButton = document.createElement('button')
-    const optionLabel = document.createElement('span')
-    const optionCheck = document.createElement('span')
+    const optionButton = ownerDocument.createElement('button')
+    const optionLabel = ownerDocument.createElement('span')
+    const optionCheck = ownerDocument.createElement('span')
 
     optionButton.type = 'button'
     optionButton.className = 'jw-toolbar__select-option'
+    optionButton.setAttribute('role', 'option')
+    optionButton.setAttribute('aria-selected', 'false')
     optionLabel.className = 'jw-toolbar__select-option-label'
     optionLabel.textContent = option.label
     optionCheck.className = 'jw-toolbar__select-option-check'
@@ -339,7 +358,7 @@ function createToolbarSelectControl(
     )
 
     if (menuLayout === 'icon') {
-      const optionIcon = document.createElement('span')
+      const optionIcon = ownerDocument.createElement('span')
 
       optionIcon.className = 'jw-toolbar__select-option-icon'
 
@@ -382,10 +401,10 @@ function createToolbarSelectControl(
     { signal: signalController.signal }
   )
 
-  document.addEventListener(
+  ownerDocument.addEventListener(
     'pointerdown',
     (event) => {
-      if (!(event.target instanceof Node) || wrapper.contains(event.target)) {
+      if (!isNodeInDocument(ownerDocument, event.target) || wrapper.contains(event.target)) {
         return
       }
 
@@ -394,10 +413,10 @@ function createToolbarSelectControl(
     { signal: signalController.signal }
   )
 
-  document.addEventListener(
+  ownerDocument.addEventListener(
     'click',
     (event) => {
-      if (!(event.target instanceof Node) || wrapper.contains(event.target)) {
+      if (!isNodeInDocument(ownerDocument, event.target) || wrapper.contains(event.target)) {
         return
       }
 
@@ -406,7 +425,7 @@ function createToolbarSelectControl(
     { signal: signalController.signal }
   )
 
-  document.addEventListener(
+  ownerDocument.addEventListener(
     'keydown',
     (event) => {
       if (event.key !== 'Escape') {
@@ -439,13 +458,14 @@ function createToolbarSelectControl(
 /** 创建颜色控件包装。 */
 function createToolbarColorControl(
   ariaLabel: string,
-  iconName: BuiltinToolDefinition['icon']
+  iconName: BuiltinToolDefinition['icon'],
+  ownerDocument: Document
 ): { readonly wrapper: HTMLElement, readonly control: HTMLInputElement } {
-  const wrapper = document.createElement('label')
-  const visual = document.createElement('span')
-  const indicator = document.createElement('span')
-  const arrow = document.createElement('span')
-  const input = document.createElement('input')
+  const wrapper = ownerDocument.createElement('label')
+  const visual = ownerDocument.createElement('span')
+  const indicator = ownerDocument.createElement('span')
+  const arrow = ownerDocument.createElement('span')
+  const input = ownerDocument.createElement('input')
 
   input.type = 'color'
   input.className = 'jw-toolbar__color'
@@ -506,6 +526,7 @@ function syncToolbarSelectVisual(control: HTMLSelectElement): void {
       'data-jword-selected',
       isSelected ? 'true' : 'false'
     )
+    optionButton.setAttribute('aria-selected', isSelected ? 'true' : 'false')
 
     if (isSelected) {
       selectedIconName = optionButton.getAttribute('data-jword-option-icon') ?? selectedIconName
@@ -542,10 +563,10 @@ function syncToolbarSelectRuntimeOption(control: HTMLSelectElement): void {
   }
 
   const label = readToolbarRuntimeOptionLabel(control, value)
-  const option = document.createElement('option')
-  const button = document.createElement('button')
-  const buttonLabel = document.createElement('span')
-  const buttonCheck = document.createElement('span')
+  const option = control.ownerDocument.createElement('option')
+  const button = control.ownerDocument.createElement('button')
+  const buttonLabel = control.ownerDocument.createElement('span')
+  const buttonCheck = control.ownerDocument.createElement('span')
   const trigger = wrapper.querySelector<HTMLButtonElement>('.jw-toolbar__select-trigger')
 
   option.value = value
@@ -556,6 +577,8 @@ function syncToolbarSelectRuntimeOption(control: HTMLSelectElement): void {
 
   button.type = 'button'
   button.className = 'jw-toolbar__select-option'
+  button.setAttribute('role', 'option')
+  button.setAttribute('aria-selected', 'false')
   button.setAttribute('data-jword-option-value', value)
   button.setAttribute('data-jword-runtime-option', 'true')
   buttonLabel.className = 'jw-toolbar__select-option-label'
@@ -648,6 +671,112 @@ function applyToolbarSelectSizing(wrapper: HTMLElement, definition: BuiltinToolD
   if (definition.menuMaxWidthPx !== undefined) {
     wrapper.style.setProperty('--jw-toolbar-select-menu-max-width', `${definition.menuMaxWidthPx}px`)
   }
+}
+
+
+interface ToolbarRovingTabindexController {
+  register(element: HTMLElement): void
+  destroy(): void
+}
+
+/** 创建 toolbar roving tabindex 控制器。 */
+function createToolbarRovingTabindex(ownerDocument: Document): ToolbarRovingTabindexController {
+  const signalController = new (ownerDocument.defaultView?.AbortController ?? AbortController)()
+  const elements: HTMLElement[] = []
+  let activeIndex = 0
+
+  function register(element: HTMLElement): void {
+    element.tabIndex = elements.length === activeIndex ? 0 : -1
+    element.addEventListener('focus', () => {
+      setActiveElement(element)
+    }, { signal: signalController.signal })
+    element.addEventListener('keydown', (event) => {
+      handleToolbarRovingKeydown(event, element)
+    }, { signal: signalController.signal })
+    elements.push(element)
+  }
+
+  function setActiveElement(element: HTMLElement): void {
+    const nextIndex = elements.indexOf(element)
+
+    if (nextIndex < 0) {
+      return
+    }
+
+    activeIndex = nextIndex
+    syncToolbarRovingTabindex(elements, activeIndex)
+  }
+
+  function handleToolbarRovingKeydown(event: KeyboardEvent, element: HTMLElement): void {
+    const currentIndex = elements.indexOf(element)
+    const nextIndex = readNextToolbarRovingIndex(event.key, currentIndex, elements.length)
+
+    if (nextIndex === null) {
+      return
+    }
+
+    event.preventDefault()
+    activeIndex = nextIndex
+    syncToolbarRovingTabindex(elements, activeIndex)
+    elements[activeIndex]?.focus()
+  }
+
+  return {
+    register,
+    destroy: () => {
+      signalController.abort()
+    }
+  }
+}
+
+/** 计算 toolbar roving tabindex 的下一焦点索引。 */
+function readNextToolbarRovingIndex(key: string, currentIndex: number, length: number): number | null {
+  if (length === 0 || currentIndex < 0) {
+    return null
+  }
+
+  if (key === 'ArrowRight' || key === 'ArrowDown') {
+    return (currentIndex + 1) % length
+  }
+
+  if (key === 'ArrowLeft' || key === 'ArrowUp') {
+    return (currentIndex - 1 + length) % length
+  }
+
+  if (key === 'Home') {
+    return 0
+  }
+
+  if (key === 'End') {
+    return length - 1
+  }
+
+  return null
+}
+
+/** 同步 toolbar roving tabindex 状态。 */
+function syncToolbarRovingTabindex(elements: readonly HTMLElement[], activeIndex: number): void {
+  for (const [index, element] of elements.entries()) {
+    element.tabIndex = index === activeIndex ? 0 : -1
+  }
+}
+
+/** 读取 toolbar 工具对应的真实可聚焦元素。 */
+function readToolbarFocusableElement(wrapper: HTMLElement, control: JWordToolbarControlElement): HTMLElement {
+  const trigger = wrapper.querySelector<HTMLElement>('.jw-toolbar__select-trigger')
+
+  if (trigger !== null) {
+    return trigger
+  }
+
+  return control
+}
+
+/** 判断事件目标是否属于指定 document 的 Node。 */
+function isNodeInDocument(ownerDocument: Document, target: EventTarget | null): target is Node {
+  const NodeCtor = ownerDocument.defaultView?.Node ?? Node
+
+  return target instanceof NodeCtor
 }
 
 /** 设置动作按钮状态。 */

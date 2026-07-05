@@ -146,10 +146,10 @@ function readSectionPageMargins(element: XmlElementNode): DocxImportSectionMargi
     return undefined
   }
 
-  const top = readPositiveNumber(readXmlAttribute(pageMargins, 'w:top'))
-  const right = readPositiveNumber(readXmlAttribute(pageMargins, 'w:right'))
-  const bottom = readPositiveNumber(readXmlAttribute(pageMargins, 'w:bottom'))
-  const left = readPositiveNumber(readXmlAttribute(pageMargins, 'w:left'))
+  const top = readSignedNumber(readXmlAttribute(pageMargins, 'w:top'))
+  const right = readSignedNumber(readXmlAttribute(pageMargins, 'w:right'))
+  const bottom = readSignedNumber(readXmlAttribute(pageMargins, 'w:bottom'))
+  const left = readSignedNumber(readXmlAttribute(pageMargins, 'w:left'))
 
   if (top === undefined && right === undefined && bottom === undefined && left === undefined) {
     return undefined
@@ -161,6 +161,17 @@ function readSectionPageMargins(element: XmlElementNode): DocxImportSectionMargi
     ...(bottom === undefined ? {} : { bottom }),
     ...(left === undefined ? {} : { left })
   }
+}
+
+/** 读取可带符号数字或返回 undefined。 */
+function readSignedNumber(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const number = Number(value)
+
+  return Number.isFinite(number) ? number : undefined
 }
 
 /** 读取 section 的 type，默认 next-page。 */

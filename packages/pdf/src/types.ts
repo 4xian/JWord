@@ -42,6 +42,7 @@ export interface PdfFontConfig {
   readonly weight?: number
   readonly style?: 'normal' | 'italic'
   readonly fallback?: boolean
+  readonly subset?: boolean
 }
 
 export interface PdfProgressEvent {
@@ -67,6 +68,7 @@ export interface PdfError {
   readonly requestId?: string
   readonly cancelled?: boolean
   readonly fontFamily?: string
+  readonly missingTextSample?: string
   readonly recoverable?: boolean
   readonly feature?: JWordLicenseFeatureKey
   readonly customerId?: string

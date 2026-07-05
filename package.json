@@ -23,14 +23,6 @@
     "bench": "node tools/bench/run-bench.mjs",
     "size": "pnpm build && pnpm --filter @4xian/jword-example-vanilla build && node tools/size/check-size.mjs"
   },
-  "dependencies": {
-    "@hocuspocus/server": "4.0.0",
-    "dompurify": "3.4.2",
-    "fontkit": "2.0.4",
-    "jszip": "3.10.1",
-    "pdf-lib": "1.17.1",
-    "yjs": "13.6.30"
-  },
   "devDependencies": {
     "@commitlint/cli": "21.0.0",
     "@commitlint/config-conventional": "21.0.0",
@@ -41,6 +33,7 @@
     "@rollup/plugin-typescript": "12.3.0",
     "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "25.6.2",
+    "@xarsh/ooxml-validator": "0.3.0",
     "eslint": "10.3.0",
     "globals": "17.6.0",
     "husky": "9.1.7",

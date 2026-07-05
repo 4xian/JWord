@@ -290,6 +290,83 @@ describe('@4xian/jword-docx public API import mapping', () => {
   })
 
 
+  it('keeps DOCX comment text and markers when ids or marker order are irregular', async () => {
+    const bytes = await createZip({
+      '[Content_Types].xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+        '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>',
+        '</Types>'
+      ].join(''),
+      '_rels/.rels': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>',
+        '</Relationships>'
+      ].join(''),
+      'word/_rels/document.xml.rels': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rIdComments" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>',
+        '</Relationships>'
+      ].join(''),
+      'word/document.xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+        '<w:body><w:p>',
+        '<w:commentRangeEnd w:id="7"/>',
+        '<w:r><w:t>Trailing marker text</w:t></w:r>',
+        '</w:p></w:body>',
+        '</w:document>'
+      ].join(''),
+      'word/comments.xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+        '<w:comment w:author="Missing"><w:p><w:r><w:t>Skip me</w:t></w:r></w:p></w:comment>',
+        '<w:comment w:id="7" w:author="JWord" w:date="2026-05-25T00:00:00Z">',
+        '<w:p><w:r><w:t>Before<w:tab/>After</w:t></w:r></w:p>',
+        '</w:comment>',
+        '<w:comment w:author="Missing again"><w:p><w:r><w:t>Skip me too</w:t></w:r></w:p></w:comment>',
+        '</w:comments>'
+      ].join('')
+    })
+    const result = await importDocx(bytes, {
+      requestId: 'docx-import-comment-remediation-1'
+    })
+    const paragraph = result.document.sections[0]?.blocks[0]
+
+    expect(result.document.comments).toEqual([
+      {
+        id: 'comment-thread-docx-7',
+        commentId: '7',
+        author: 'JWord',
+        date: '2026-05-25T00:00:00Z',
+        text: 'BeforeAfter'
+      }
+    ])
+    expect(result.warnings.map((warning) => ({ code: warning.code, path: warning.path }))).toEqual([
+      { code: 'DOCX_COMMENT_ID_MISSING', path: 'word/comments.xml/comment-1' },
+      { code: 'DOCX_COMMENT_ID_MISSING', path: 'word/comments.xml/comment-3' }
+    ])
+    expect(paragraph).toMatchObject({ kind: 'paragraph' })
+    if (paragraph?.kind !== 'paragraph') {
+      throw new Error('Expected first imported block to be a paragraph.')
+    }
+    expect(paragraph.runs[0]?.inlines).toEqual([
+      {
+        kind: 'commentRangeMarker',
+        commentId: 'comment-thread-docx-7',
+        edge: 'end'
+      },
+      {
+        kind: 'text',
+        text: 'Trailing marker text'
+      }
+    ])
+  })
+
+
   it('respects OOXML run toggle off values and warns for unsupported underline styles', async () => {
     const bytes = await createZip({
       '[Content_Types].xml': [
@@ -423,6 +500,45 @@ describe('@4xian/jword-docx public API import mapping', () => {
       ]
     })
     expect(result.document.opaque.unsupportedElementFragments).toEqual([])
+  })
+
+  it('preserves signed section page margins from pgMar', async () => {
+    const bytes = await createZip({
+      '[Content_Types].xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+        '</Types>'
+      ].join(''),
+      '_rels/.rels': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>',
+        '</Relationships>'
+      ].join(''),
+      'word/document.xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+        '<w:body>',
+        '<w:p><w:r><w:t>Negative margins</w:t></w:r></w:p>',
+        '<w:sectPr>',
+        '<w:pgMar w:top="-720" w:right="1440" w:bottom="-360" w:left="1800"/>',
+        '</w:sectPr>',
+        '</w:body>',
+        '</w:document>'
+      ].join('')
+    })
+    const result = await importDocx(bytes, {
+      requestId: 'docx-import-negative-margin-1'
+    })
+
+    expect(result.warnings).toEqual([])
+    expect(result.document.sections[0]?.page?.marginTwips).toEqual({
+      top: -720,
+      right: 1440,
+      bottom: -360,
+      left: 1800
+    })
   })
 
   it('imports basic header text and footer page number source ids', async () => {

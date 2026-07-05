@@ -84,6 +84,7 @@ export function createCollabHocuspocusService(
     address,
     historyStorage,
     featureFlags: Object.values(GATE6_COLLAB_FEATURES),
+    authHook: () => ({ ok: true }),
     licenseHook: () => ({ ok: true }),
     ...(options.historyPort === undefined ? {} : { port: options.historyPort })
   })

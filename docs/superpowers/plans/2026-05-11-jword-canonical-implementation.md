@@ -2696,7 +2696,8 @@ Gate 6 的资料分为“主实现依据”“可选 provider”“替代方案�
   - 完成 2026-05-27：Gate 5 当前工作树复核中 `packages/pdf/test/visual-report.test.ts`、`packages/pdf/test/public-api.test.ts`、`packages/pdf/test/worker.test.ts` 均包含在 focused suite 内；Kimi valid 路径 PDF 导出完成，progress 为 `queued -> mapping -> writing -> done`，当前入口继续明确不提供 PDF 导入查看。
 - [x] Gate 5 未授权、过期和 feature 不匹配失败路径通过。
   - 完成 2026-05-27：商业化执行记录覆盖 `missing`、`expired`、`feature-mismatch`、`server-unavailable`、`valid` 五种模式；当前工作树复核重新验证 missing 和 feature-mismatch 真实浏览器路径，focused suite 覆盖 `tests/architecture/gate5-commercial-readiness.test.ts`。
-- [ ] 保格式粘贴通过安全验收。
+- [x] 保格式粘贴通过安全验收。
+  - 完成 2026-07-05：新增 `tests/security/paste-security-acceptance.test.ts` 固化 Beta 安全验收，覆盖 SVG payload、data URL 图片、Word HTML `mso-*` 样式、DOCX 外链图片和不可信 HTML 纯文本降级；补充 `paste/sanitizer` 对 `svg/math` 与 data URL 图片返回 `null` 走纯文本路径。验证：`pnpm exec vitest run tests/security/paste-security-acceptance.test.ts`（3 passed）、focused 粘贴/DOCX 安全集（4 files, 8 passed / 6 skipped）、`pnpm exec playwright test examples/vanilla/tests/gate4-paste-mobile.e2e.ts --project=chromium`（2 passed）、`pnpm typecheck`、`pnpm lint`。
 
 ### Stable 完成
 

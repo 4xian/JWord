@@ -1,0 +1,9 @@
+{
+  "name": "@4xian/jword-tools-fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "jszip": "3.10.1"
+  }
+}

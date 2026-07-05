@@ -30,6 +30,10 @@ export function createDocxDemoViteConfig() {
           replacement: fileURLToPath(new URL('../../packages/license/src/index.ts', import.meta.url))
         },
         {
+          find: '@4xian/jword-docx/worker',
+          replacement: fileURLToPath(new URL('../../packages/docx/src/worker.ts', import.meta.url))
+        },
+        {
           find: '@4xian/jword-docx',
           replacement: fileURLToPath(new URL('../../packages/docx/src/index.ts', import.meta.url))
         },

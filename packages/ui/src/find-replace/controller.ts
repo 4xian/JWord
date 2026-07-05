@@ -13,6 +13,7 @@ import {
   replaceAllMatches,
   twipsToCssPx,
   type Editor,
+  type FindTextOptions,
   type FindTextMatch,
   type TextRange,
   type TextPosition
@@ -28,6 +29,7 @@ export interface CreateFindReplaceControllerOptions {
   readonly announce?: (message: string) => void
   readonly scrollToRange?: (range: TextRange) => void
   readonly readonly?: JWordReadonlyMode
+  readonly findOptions?: FindTextOptions
 }
 
 export interface FindReplaceControllerHandle {
@@ -63,7 +65,7 @@ export function createFindReplaceController(
 
   /** 执行查找并定位第一个结果。 */
   function runFind(): void {
-    matches = findTextMatches(options.editor, elements.queryInput.value)
+    matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = matches.length === 0 ? -1 : 0
     lastMessage = matches.length === 0 ? '未找到结果' : `${matches.length} 个结果`
     focusActiveMatch()
@@ -115,7 +117,7 @@ export function createFindReplaceController(
     }
 
     options.editor.executeCommand(command)
-    matches = findTextMatches(options.editor, elements.queryInput.value)
+    matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = Math.min(activeIndex, matches.length - 1)
     lastMessage = matches.length === 0 ? '已替换，未剩余结果' : `已替换，剩余 ${matches.length} 个结果`
     focusActiveMatch()
@@ -125,9 +127,14 @@ export function createFindReplaceController(
 
   /** 替换全部当前查询结果。 */
   function replaceAll(): void {
-    const result = replaceAllMatches(options.editor, elements.queryInput.value, elements.replacementInput.value)
+    const result = replaceAllMatches(
+      options.editor,
+      elements.queryInput.value,
+      elements.replacementInput.value,
+      options.findOptions
+    )
 
-    matches = findTextMatches(options.editor, elements.queryInput.value)
+    matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = matches.length === 0 ? -1 : 0
     lastMessage = `已替换 ${result.replacedCount} 个结果`
     focusActiveMatch()

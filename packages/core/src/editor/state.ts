@@ -10,7 +10,7 @@ import type { DocumentStore } from '../model/document-store'
 import { DOCUMENT_STORE_FIELDS } from '../model/document-store'
 import { createDocumentProjection } from '../model/projection'
 import { createJWordError } from '../shared/errors'
-import { createFontManager } from '../layout/font-manager'
+import { createFontManager, type FontManager } from '../layout/font-manager'
 import { createHistoryManager } from '../operations/history'
 import type { PageConfig, PageConfigInput, PageMargins, PagePreset } from '../layout/page-config'
 import type { DocumentLayout, LayoutDirtyRange, LayoutOptions } from '../layout/runtime'
@@ -44,7 +44,7 @@ export abstract class JWordEditorState {
   protected readonly currentUser: EditorUser
   protected readonly initialFocusPosition: InitialFocusPosition
   protected pageConfig: PageConfig
-  protected readonly fontManager = createFontManager()
+  protected fontManager: FontManager = createFontManager()
   protected readonly layoutOptions: LayoutOptions
   protected readonly listeners = new Set<EditorEventListener>()
   protected readonly unsubscribePipeline: () => void
@@ -65,6 +65,7 @@ export abstract class JWordEditorState {
   protected mountedDom: MountedEditorDom | undefined
   protected deferredSelectionChangeId: ReturnType<typeof setTimeout> | undefined
   protected deferredPointerSelectionRenderId: ReturnType<typeof setTimeout> | undefined
+  protected deferredPointerAutoScrollId: ReturnType<typeof setInterval> | undefined
   protected caretBlinkIntervalId: ReturnType<typeof setInterval> | undefined
   protected caretBlinkVisible = true
   protected isInputFocused = false

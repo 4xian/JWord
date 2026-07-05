@@ -196,4 +196,11 @@ export interface RevisionMetadata {
   readonly rangeId?: string
   readonly rangeSnapshot: TextRangeRecord
   readonly summary: string
+  readonly formatSnapshots?: readonly RevisionFormatSnapshot[]
+}
+
+/** 格式修订拒绝时用于恢复的原始 run 属性快照。 */
+export interface RevisionFormatSnapshot {
+  readonly runId: string
+  readonly previousProperties: ModelProperties
 }

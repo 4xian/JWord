@@ -202,6 +202,12 @@ function hitTestTableBoxes(
           return fragmentHit
         }
 
+        const inlineHit = hitTestInlineBoxes(cell.inlines, absoluteX, absoluteY)
+
+        if (inlineHit !== undefined) {
+          return resolveInlineHitPosition(createTableInlineLine(cell.inlines, inlineHit), inlineHit, absoluteX)
+        }
+
         if (cell.textPosition !== undefined) {
           return cell.textPosition
         }
@@ -210,6 +216,29 @@ function hitTestTableBoxes(
   }
 
   return undefined
+}
+
+/** 为表格单元格行内对象创建最小查询行。 */
+function createTableInlineLine(inlines: readonly InlineBox[], inline: InlineBox): LineBox {
+  const lineInlines = inlines.filter((candidate) =>
+    candidate.pageIndex === inline.pageIndex && candidate.blockId === inline.blockId && candidate.y === inline.y
+  )
+  const first = lineInlines[0] ?? inline
+  const last = lineInlines[lineInlines.length - 1] ?? inline
+
+  return Object.freeze({
+    kind: 'line' as const,
+    pageIndex: inline.pageIndex,
+    sectionId: inline.sectionId,
+    paragraphId: inline.blockId,
+    x: first.x,
+    y: Math.min(...lineInlines.map((candidate) => candidate.y), inline.y),
+    width: (last.x + last.width) - first.x,
+    height: Math.max(...lineInlines.map((candidate) => candidate.y + candidate.height), inline.y + inline.height) - first.y,
+    baseline: Math.max(...lineInlines.map((candidate) => candidate.y + candidate.height), inline.y + inline.height),
+    fragments: Object.freeze([]),
+    inlines: Object.freeze(lineInlines.length === 0 ? [inline] : lineInlines)
+  })
 }
 
 /** 命中单元格内文本片段，返回最接近的文本位置。 */

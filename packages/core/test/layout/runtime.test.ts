@@ -835,7 +835,7 @@ describe('Gate 2 布局', () => {
     expect(page?.footerIds).toEqual([])
   })
 
-  it('moves an overflowing table onto a real next page and keeps that page tied to the owning section boundary', () => {
+  it('splits an overflowing table by rows and keeps continuation pages tied to the owning section boundary', () => {
     const layout = layoutDocument({
       projection: {
         document: {
@@ -926,26 +926,55 @@ describe('Gate 2 布局', () => {
     })
     const firstPage = layout.pages[0]
     const secondPage = layout.pages[1]
+    const thirdPage = layout.pages[2]
+    const firstPageTable = firstPage?.blocks.find((block) => block.kind === 'table')
     const secondPageTable = secondPage?.blocks.find((block) => block.kind === 'table')
+    const thirdPageTable = thirdPage?.blocks.find((block) => block.kind === 'table')
 
-    expect(layout.pages).toHaveLength(2)
-    expect(firstPage?.blocks.map((block) => block.kind)).toEqual(['paragraph'])
+    expect(layout.pages).toHaveLength(3)
+    expect(firstPage?.blocks.map((block) => block.kind)).toEqual(['paragraph', 'table'])
+    expect(firstPageTable).toMatchObject({
+      kind: 'table',
+      pageIndex: 0,
+      sectionId: 'section-layout-table-overflow',
+      tableId: 'table-layout-overflow',
+      startRowIndex: 0,
+      continuesFromPreviousPage: false,
+      continuesOnNextPage: true,
+      rowCount: 1
+    })
     expect(secondPageTable).toMatchObject({
       kind: 'table',
       pageIndex: 1,
       sectionId: 'section-layout-table-overflow',
-      tableId: 'table-layout-overflow'
+      tableId: 'table-layout-overflow',
+      startRowIndex: 1,
+      continuesFromPreviousPage: true,
+      continuesOnNextPage: true,
+      rowCount: 1
     })
-    expect(secondPage).toMatchObject({
-      sectionBoundary: 'single',
-      sectionIds: ['section-layout-table-overflow'],
+    expect(thirdPageTable).toMatchObject({
+      kind: 'table',
+      pageIndex: 2,
       sectionId: 'section-layout-table-overflow',
-      pageLayout: {
-        widthTwips: 12240
-      },
-      headerIds: ['header-table'],
-      footerIds: ['footer-table']
+      tableId: 'table-layout-overflow',
+      startRowIndex: 2,
+      continuesFromPreviousPage: true,
+      continuesOnNextPage: false,
+      rowCount: 1
     })
+    for (const page of layout.pages) {
+      expect(page).toMatchObject({
+        sectionBoundary: 'single',
+        sectionIds: ['section-layout-table-overflow'],
+        sectionId: 'section-layout-table-overflow',
+        pageLayout: {
+          widthTwips: 12240
+        },
+        headerIds: ['header-table'],
+        footerIds: ['footer-table']
+      })
+    }
   })
 
   it('emits explicit table block boxes instead of dropping table structure', () => {

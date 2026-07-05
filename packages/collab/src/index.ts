@@ -15,6 +15,12 @@ import {
   type JWordLicenseFeatureKey,
   type JWordLicenseValidationOptions
 } from '@4xian/jword-license'
+import {
+  isAwarenessPresenceState,
+  isAwarenessRangeSnapshot,
+  isAwarenessState,
+  isRecord
+} from './awareness-validation.js'
 
 export {
   GATE6_COLLAB_FEATURES
@@ -238,6 +244,11 @@ interface MemoryCollabRoom {
 }
 
 const memoryCollabRooms = new Map<string, MemoryCollabRoom>()
+
+/** 清空内存协作 room，供测试隔离与宿主销毁内存 demo 时释放全局状态。 */
+export function resetMemoryCollabRooms(): void {
+  memoryCollabRooms.clear()
+}
 
 /** 在连接、离线、历史或自动插入读取文档内容前执行 Gate 6 授权检查。 */
 export function createJWordCollabFeatureGate(
@@ -739,117 +750,3 @@ function maybeDowngradeInvalidRangeAwareness(value: unknown): ParseAwarenessStat
   }
 }
 
-// 判断未知值是否符合 awareness state 最小 schema。
-function isAwarenessState(value: unknown): value is JWordAwarenessState {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.clientId === 'string'
-    && isAwarenessUser(value.user)
-    && typeof value.updatedAt === 'number'
-    && (value.cursor === undefined || isAwarenessCursor(value.cursor))
-    && (value.rangeSnapshot === undefined || isAwarenessRangeSnapshot(value.rangeSnapshot))
-    && (value.viewport === undefined || isAwarenessViewport(value.viewport))
-    && (value.selectionLabel === undefined || typeof value.selectionLabel === 'string')
-}
-
-// 判断未知值是否具备可降级为 presence 的基础字段。
-function isAwarenessPresenceState(
-  value: Readonly<Record<string, unknown>>
-): value is Pick<JWordAwarenessState, 'clientId' | 'user' | 'updatedAt'> {
-  return typeof value.clientId === 'string' &&
-    isAwarenessUser(value.user) &&
-    typeof value.updatedAt === 'number'
-}
-
-// 判断未知值是否符合 awareness user schema。
-function isAwarenessUser(value: unknown): value is JWordAwarenessUser {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.id === 'string'
-    && typeof value.name === 'string'
-    && (value.color === undefined || typeof value.color === 'string')
-    && (value.avatarUrl === undefined || typeof value.avatarUrl === 'string')
-}
-
-// 判断未知值是否符合 awareness cursor schema。
-function isAwarenessCursor(value: unknown): value is JWordAwarenessCursor {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return isAwarenessAnchor(value.anchor) && isAwarenessAnchor(value.focus)
-}
-
-// 判断未知值是否符合 awareness anchor schema。
-function isAwarenessAnchor(value: unknown): value is JWordAwarenessAnchor {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.blockId === 'string' && typeof value.offset === 'number'
-}
-
-// 判断未知值是否符合 JWord range snapshot schema。
-function isAwarenessRangeSnapshot(value: unknown): value is JWordAwarenessRangeSnapshot {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.id === 'string'
-    && isAwarenessTextAnchorRecord(value.anchor)
-    && isAwarenessTextAnchorRecord(value.focus)
-}
-
-// 判断未知值是否符合 JWord text anchor record schema。
-function isAwarenessTextAnchorRecord(value: unknown): value is JWordAwarenessTextAnchorRecord {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.documentId === 'string'
-    && typeof value.sectionId === 'string'
-    && typeof value.blockId === 'string'
-    && typeof value.runId === 'string'
-    && typeof value.graphemeIndex === 'number'
-    && (value.assoc === undefined || typeof value.assoc === 'number')
-    && isAwarenessRelativePositionSnapshot(value.relativePosition)
-}
-
-// 判断未知值是否符合 Yjs relative position JSON schema。
-function isAwarenessRelativePositionSnapshot(value: unknown): value is JWordAwarenessRelativePositionSnapshot {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (value.type === undefined || isAwarenessRelativePositionId(value.type))
-    && (value.tname === undefined || typeof value.tname === 'string')
-    && (value.item === undefined || isAwarenessRelativePositionId(value.item))
-    && (value.assoc === undefined || typeof value.assoc === 'number')
-}
-
-// 判断未知值是否符合 Yjs relative position id schema。
-function isAwarenessRelativePositionId(value: unknown): value is { readonly client: number, readonly clock: number } {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.client === 'number' && typeof value.clock === 'number'
-}
-
-// 判断未知值是否符合 awareness viewport schema。
-function isAwarenessViewport(value: unknown): value is JWordAwarenessViewport {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return typeof value.pageIndex === 'number'
-}
-
-// 判断未知值是否是普通记录对象。
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}

@@ -20,6 +20,7 @@ import { JWordEditorInputRuntime } from './input-runtime'
 import { createPageStartKeys, mergePageIndexes, renderPageBatch, resolveCanvasPixelRatio } from './rendering'
 import {
   createRuntimeAnchor,
+  collectParagraphRuntimeContexts,
   isWordLikeGrapheme,
   readDoubleClickExpansionKind,
   readProjectionRunText,
@@ -159,6 +160,36 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
         blockId: position.blockId,
         runId: position.runId,
         graphemeIndex: end
+      })
+    )
+  }
+
+  protected expandParagraphSelection(anchor: AnchorRef): SelectionState {
+    const position = this.resolveTextPosition(anchor)
+    const paragraph = collectParagraphRuntimeContexts(this.currentProjection)
+      .find((candidate) => candidate.blockId === position.blockId)
+    const firstRun = paragraph?.runs[0]
+    const lastRun = paragraph?.runs[paragraph.runs.length - 1]
+
+    if (paragraph === undefined || firstRun === undefined || lastRun === undefined) {
+      return createSelectionState(anchor, anchor)
+    }
+
+    return createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: paragraph.sectionId,
+        blockId: paragraph.blockId,
+        runId: firstRun.id,
+        graphemeIndex: 0
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: paragraph.sectionId,
+        blockId: paragraph.blockId,
+        runId: lastRun.id,
+        graphemeIndex: lastRun.graphemeLength,
+        assoc: -1
       })
     )
   }

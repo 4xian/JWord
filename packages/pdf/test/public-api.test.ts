@@ -13,7 +13,6 @@ import {
   createPageConfig,
   layoutDocument
 } from '@4xian/jword-core'
-import { inflateSync } from 'node:zlib'
 import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 
@@ -40,6 +39,16 @@ import {
   readTestFontBytes,
   type PdfChineseFontFixture
 } from './public-api-fixtures'
+import {
+  countPdfStrokeOperations,
+  createStyledTextLayout,
+  hasPdfStrokeOperation,
+  readFontResourceForText,
+  readFontSizeForText,
+  readInflatedPdfStreams,
+  readStreamForText,
+  readTextMatrixYForText
+} from './public-api-pdf-style-helpers'
 
 /** 以有效授权调用 PDF export，保持渲染测试聚焦于 PDF 输出行为。 */
 function exportPdfFromLayout(
@@ -216,6 +225,26 @@ describe('@4xian/jword-pdf public API', () => {
     })
   })
 
+  it('exports Latin-1 text with the standard PDF font when no embedded font is configured', async () => {
+    const result = await exportPdfFromLayout(createAccentedTextLayout('Café über señor'), {
+      requestId: 'pdf-latin-1-standard-font-1'
+    })
+    const pdf = await PDFDocument.load(result.bytes)
+    const streams = readInflatedPdfStreams(result.bytes)
+
+    expect(pdf.getPageCount()).toBe(1)
+    expect(result.warnings).toEqual([])
+    expect(result.progress.map((event) => event.stage)).toEqual([
+      'queued',
+      'mapping',
+      'writing',
+      'done'
+    ])
+    expect(streams.some((stream) => stream.includes('<436166E9> Tj'))).toBe(true)
+    expect(streams.some((stream) => stream.includes('<FC626572> Tj'))).toBe(true)
+    expect(streams.some((stream) => stream.includes('<7365F16F72> Tj'))).toBe(true)
+  })
+
   it('embeds a configured font for non-ASCII text when the font covers all characters', async () => {
     const result = await exportPdfFromLayout(createAccentedTextLayout(), {
       requestId: 'pdf-embedded-font-1',
@@ -238,6 +267,110 @@ describe('@4xian/jword-pdf public API', () => {
       'writing',
       'done'
     ])
+  })
+
+  it('exports bold and italic text with matching PDF font variants', async () => {
+    const result = await exportPdfFromLayout(createStyledTextLayout([
+      { id: 'normal', text: 'Normal' },
+      { id: 'bold', text: 'Bold', properties: { bold: true } },
+      { id: 'italic', text: 'Italic', properties: { italic: true } },
+      { id: 'both', text: 'Both', properties: { bold: true, italic: true } }
+    ]))
+    const rawPdf = Buffer.from(result.bytes).toString('latin1')
+    const streams = readInflatedPdfStreams(result.bytes)
+    const fontByText = new Map([
+      ['Normal', readFontResourceForText(streams, 'Normal')],
+      ['Bold', readFontResourceForText(streams, 'Bold')],
+      ['Italic', readFontResourceForText(streams, 'Italic')],
+      ['Both', readFontResourceForText(streams, 'Both')]
+    ])
+
+    expect(rawPdf).toContain('/BaseFont /Helvetica')
+    expect(rawPdf).toContain('/BaseFont /Helvetica-Bold')
+    expect(rawPdf).toContain('/BaseFont /Helvetica-Oblique')
+    expect(rawPdf).toContain('/BaseFont /Helvetica-BoldOblique')
+    expect(new Set(fontByText.values())).toHaveLength(4)
+    expect(fontByText.get('Bold')).not.toBe(fontByText.get('Normal'))
+    expect(fontByText.get('Italic')).not.toBe(fontByText.get('Normal'))
+    expect(fontByText.get('Both')).not.toBe(fontByText.get('Bold'))
+    expect(fontByText.get('Both')).not.toBe(fontByText.get('Italic'))
+  })
+
+  it('warns and falls back to an embedded regular font when a requested variant is missing', async () => {
+    const result = await exportPdfFromLayout(createStyledTextLayout([
+      {
+        id: 'custom-bold',
+        text: 'CustomBold',
+        properties: { fontFamily: 'Arial', bold: true }
+      }
+    ]), {
+      fonts: [{
+        family: 'Arial',
+        source: {
+          kind: 'arrayBuffer',
+          data: readTestFontBytes()
+        },
+        weight: 400,
+        style: 'normal'
+      }]
+    })
+
+    expect(result.warnings).toContainEqual({
+      code: 'PDF_FONT_MISSING',
+      severity: 'warning',
+      message: 'PDF 字体变体缺失，已回退常规字体',
+      fontFamily: 'Arial',
+      fallback: 'regular-font-variant',
+      recoverable: true
+    })
+  })
+
+  it('exports underline and strike text decorations as PDF lines', async () => {
+    const result = await exportPdfFromLayout(createStyledTextLayout([
+      { id: 'underline', text: 'Underline', properties: { underline: true, color: '#223344' } },
+      { id: 'strike', text: 'Strike', properties: { strike: true, color: '#223344' } }
+    ]))
+    const streams = readInflatedPdfStreams(result.bytes)
+    const decorationStrokeCount = streams.reduce(
+      (total, stream) => total + countPdfStrokeOperations(stream),
+      0
+    )
+
+    expect(streams.some((stream) => stream.includes('<556E6465726C696E65> Tj'))).toBe(true)
+    expect(streams.some((stream) => stream.includes('<537472696B65> Tj'))).toBe(true)
+    expect(decorationStrokeCount).toBeGreaterThanOrEqual(2)
+  })
+
+  it('exports text background rectangles before text drawing', async () => {
+    const result = await exportPdfFromLayout(createStyledTextLayout([
+      { id: 'highlight', text: 'Highlight', properties: { backgroundColor: '#fff59d' } }
+    ]))
+    const stream = readStreamForText(readInflatedPdfStreams(result.bytes), 'Highlight')
+    const backgroundFillIndex = stream.indexOf('\nf\n')
+    const textIndex = stream.indexOf('<486967686C69676874> Tj')
+
+    expect(backgroundFillIndex).toBeGreaterThanOrEqual(0)
+    expect(backgroundFillIndex).toBeLessThan(textIndex)
+  })
+
+  it('exports superscript and subscript with shifted PDF baselines and reduced font size', async () => {
+    const result = await exportPdfFromLayout(createStyledTextLayout([
+      { id: 'base', text: 'Base', properties: { fontSizeTwips: 320 } },
+      { id: 'sup', text: 'Sup', properties: { fontSizeTwips: 320, superscript: true } },
+      { id: 'sub', text: 'Sub', properties: { fontSizeTwips: 320, subscript: true } }
+    ]))
+    const streams = readInflatedPdfStreams(result.bytes)
+    const baseFontSize = readFontSizeForText(streams, 'Base')
+    const superscriptFontSize = readFontSizeForText(streams, 'Sup')
+    const subscriptFontSize = readFontSizeForText(streams, 'Sub')
+    const baseY = readTextMatrixYForText(streams, 'Base')
+    const superscriptY = readTextMatrixYForText(streams, 'Sup')
+    const subscriptY = readTextMatrixYForText(streams, 'Sub')
+
+    expect(superscriptFontSize).toBeLessThan(baseFontSize)
+    expect(subscriptFontSize).toBeLessThan(baseFontSize)
+    expect(superscriptY).toBeGreaterThan(baseY)
+    expect(subscriptY).toBeLessThan(baseY)
   })
 
   it('exports Chinese text with the portable PDF font fixture', async () => {
@@ -269,7 +402,9 @@ describe('@4xian/jword-pdf public API', () => {
       'done'
     ])
     expect(report.pages[0]?.renderedCanvas.nonEmptyPixelCount).toBeGreaterThan(0)
-    expect(report.pages[0]?.pdfTextBoundingBoxes.map((box) => box.text).join('')).toContain(fixture.expectation.pdfJsText)
+    expect(report.pages[0]?.pdfTextBoundingBoxes.map((box) => box.text).join('').replace(/\s+/gu, '')).toContain(
+      fixture.expectation.pdfJsText
+    )
   })
 
   it('returns a stable missing font error when configured fonts do not cover Chinese text', async () => {
@@ -701,8 +836,8 @@ function createChineseFixtureTextLayout(fixture: PdfChineseFontFixture): Paramet
   })
 }
 
-/** 创建包含可由测试字体覆盖的非 ASCII 拉丁文本 layout。 */
-function createAccentedTextLayout(): Parameters<typeof exportPdfFromLayout>[0] {
+/** 创建包含可由 PDF 标准字体或测试字体覆盖的拉丁扩展文本 layout。 */
+function createAccentedTextLayout(text = 'Café PDF'): Parameters<typeof exportPdfFromLayout>[0] {
   return layoutDocument({
     projection: {
       document: {
@@ -723,7 +858,7 @@ function createAccentedTextLayout(): Parameters<typeof exportPdfFromLayout>[0] {
                     inlines: [
                       {
                         kind: 'text',
-                        text: 'Café PDF'
+                        text
                       }
                     ]
                   }
@@ -833,41 +968,4 @@ function createTableCellParagraph(text: string) {
       }
     ]
   } as const
-}
-
-/** 判断内容流中是否包含 PDF stroke 操作。 */
-function hasPdfStrokeOperation(stream: string): boolean {
-  return /(?:^|\s)S(?:\s|$)/u.test(stream)
-}
-
-/** 解压 pdf-lib 生成的 Flate 内容流，供基础文本输出测试复查绘制操作。 */
-function readInflatedPdfStreams(bytes: ArrayBuffer): readonly string[] {
-  const buffer = Buffer.from(bytes)
-  const text = buffer.toString('latin1')
-  const streams: string[] = []
-  let index = 0
-
-  while ((index = text.indexOf('stream', index)) !== -1) {
-    let start = index + 'stream'.length
-    if (text[start] === '\r' && text[start + 1] === '\n') {
-      start += 2
-    } else if (text[start] === '\n') {
-      start += 1
-    }
-
-    const end = text.indexOf('endstream', start)
-    if (end === -1) {
-      break
-    }
-
-    try {
-      streams.push(inflateSync(buffer.subarray(start, end)).toString('latin1'))
-    } catch {
-      streams.push(buffer.subarray(start, end).toString('latin1'))
-    }
-
-    index = end + 'endstream'.length
-  }
-
-  return streams
 }

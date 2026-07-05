@@ -9,6 +9,7 @@
 import * as Y from 'yjs'
 
 import { createJWordError } from '../shared/errors'
+import { createJsonMap, isRecord, isRelativePositionId, toDocumentStoreJson } from './document-store-json'
 import type { Comment, CommentMessage, Inline, RevisionMetadata, RunField, RunLink } from './types'
 import type { BlockId, CommentId, DocumentId, RevisionId, RunId, SectionId } from './position'
 import type { TextAnchorRecord, TextRangeRecord } from './position'
@@ -153,6 +154,7 @@ export const DOCUMENT_STORE_FIELDS = {
     rangeId: 'rangeId',
     rangeSnapshot: 'rangeSnapshot',
     summary: 'summary',
+    formatSnapshots: 'formatSnapshots',
     targetId: 'targetId'
   }
 } as const
@@ -553,6 +555,9 @@ export function createRevisionRecord(revision: RevisionMetadata): RevisionRecord
   record.set(DOCUMENT_STORE_FIELDS.revision.rangeId, revision.rangeId ?? revision.rangeSnapshot.id)
   record.set(DOCUMENT_STORE_FIELDS.revision.rangeSnapshot, toDocumentStoreJson(revision.rangeSnapshot))
   record.set(DOCUMENT_STORE_FIELDS.revision.summary, revision.summary)
+  if (revision.formatSnapshots !== undefined) {
+    record.set(DOCUMENT_STORE_FIELDS.revision.formatSnapshots, toDocumentStoreJson(revision.formatSnapshots))
+  }
 
   return record
 }
@@ -767,7 +772,8 @@ export function projectRevisionRecord(revision: RevisionRecord): RevisionMetadat
     type,
     rangeId: readString(revision.get(DOCUMENT_STORE_FIELDS.revision.rangeId), 'revision rangeId'),
     rangeSnapshot,
-    summary: readString(revision.get(DOCUMENT_STORE_FIELDS.revision.summary), 'revision summary')
+    summary: readString(revision.get(DOCUMENT_STORE_FIELDS.revision.summary), 'revision summary'),
+    ...projectRevisionFormatSnapshots(revision.get(DOCUMENT_STORE_FIELDS.revision.formatSnapshots))
   }
 }
 
@@ -777,6 +783,25 @@ function readRevisionType(value: unknown): RevisionType {
   }
 
   throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'revision type 字段非法')
+}
+
+function projectRevisionFormatSnapshots(value: unknown): Pick<RevisionMetadata, 'formatSnapshots'> {
+  if (!Array.isArray(value)) {
+    return {}
+  }
+
+  const formatSnapshots = value.flatMap((snapshot) => {
+    if (!isRecord(snapshot) || typeof snapshot.runId !== 'string' || !isRecord(snapshot.previousProperties)) {
+      return []
+    }
+
+    return [{
+      runId: snapshot.runId,
+      previousProperties: snapshot.previousProperties
+    }]
+  })
+
+  return formatSnapshots.length === 0 ? {} : { formatSnapshots }
 }
 
 /**
@@ -1039,30 +1064,6 @@ function projectInlineFromJson(value: unknown): Inline {
   })
 }
 
-function toDocumentStoreJson(value: unknown): DocumentStoreJson {
-  if (
-    value === null
-    || typeof value === 'string'
-    || typeof value === 'number'
-    || typeof value === 'boolean'
-  ) {
-    return value
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(toDocumentStoreJson)
-  }
-
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([, nestedValue]) => nestedValue !== undefined)
-        .map(([key, nestedValue]) => [key, toDocumentStoreJson(nestedValue)])
-    )
-  }
-
-  throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', 'run 结构化数据必须是 JSON 兼容数据')
-}
 
 function readResourceSource(resource: ResourceRecord): ResourceSource {
   const value = resource.get(DOCUMENT_STORE_FIELDS.resource.source)
@@ -1124,31 +1125,4 @@ function readString(value: unknown, label: string): string {
   throw createJWordError('PROJECTION_INVALID_DOCUMENT', `${label} 缺少字符串值`, {
     label
   })
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isRelativePositionId(value: unknown): value is {
-  readonly client: number
-  readonly clock: number
-} {
-  return isRecord(value)
-    && typeof value.client === 'number'
-    && typeof value.clock === 'number'
-}
-
-function createJsonMap(properties: Readonly<Record<string, unknown>> | undefined): Y.Map<DocumentStoreJson> {
-  const map = new Y.Map<DocumentStoreJson>()
-
-  if (properties === undefined) {
-    return map
-  }
-
-  for (const [key, value] of Object.entries(properties)) {
-    map.set(key, toDocumentStoreJson(value))
-  }
-
-  return map
 }

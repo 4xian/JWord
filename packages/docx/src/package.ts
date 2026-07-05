@@ -48,12 +48,44 @@ import type {
 } from './types.js'
 import type { DocxErrorCode } from './diagnostics.js'
 import {
+  readChildVal,
+  readChildValue,
+  readElementText,
+  readOptionalAttribute,
+  readPositiveNumber
+} from './package-xml-readers.js'
+export {
+  readChildVal,
+  readChildValue,
+  readElementText,
+  readOptionalAttribute,
+  readPositiveNumber
+} from './package-xml-readers.js'
+import {
+  createDocxPartGraph,
+  readMissingRelationshipWarnings,
+  readRelationshipTargetTraversalWarnings
+} from './package-part-graph.js'
+import {
   type XmlElementNode,
   parseXml,
   readXmlAttribute,
   readXmlChildren,
   readXmlElementsByLocalName
 } from './xml.js'
+
+const DOCX_MAX_PART_COUNT = 2000
+const DOCX_MAX_TOTAL_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
+const DOCX_MAX_PART_UNCOMPRESSED_BYTES = 64 * 1024 * 1024
+const DOCX_MAX_TEXT_PART_UNCOMPRESSED_BYTES = 16 * 1024 * 1024
+
+interface JsZipInternalData {
+  readonly uncompressedSize?: unknown
+}
+
+interface JsZipObjectWithInternalData {
+  readonly _data?: JsZipInternalData
+}
 
 export interface DocxHeaderFooterSourceIdIndex {
   readonly headers: ReadonlyMap<string, readonly string[]>
@@ -156,6 +188,7 @@ export interface DocxRelationship {
 }
 
 export interface DocxPackageContext {
+  readonly requestId?: string
   readonly zip: JSZip
   readonly parts: readonly string[]
   readonly contentTypes: ReadonlyMap<string, string>
@@ -191,10 +224,10 @@ export async function readDocxPackageContext(
   assertRequiredPart(parts, '[Content_Types].xml', 'DOCX_CONTENT_TYPES_MISSING', requestId)
   assertRequiredPart(parts, '_rels/.rels', 'DOCX_ROOT_RELS_MISSING', requestId)
 
-  const contentTypes = readContentTypes(await readPartText(zip, '[Content_Types].xml'), parts)
+  const contentTypes = readContentTypes(await readPartText(zip, '[Content_Types].xml', requestId), parts)
   assertDocxNotCancelled(options)
 
-  const rootRelationships = await readRelationships(zip, '_rels/.rels')
+  const rootRelationships = await readRelationships(zip, '_rels/.rels', requestId)
   assertDocxNotCancelled(options)
 
   const mainDocumentPart = rootRelationships.find((relationship) =>
@@ -207,7 +240,7 @@ export async function readDocxPackageContext(
 
   const documentRelsPart = readRelationshipPartPath(mainDocumentPart)
   const documentRelationships = parts.includes(documentRelsPart)
-    ? await readRelationships(zip, documentRelsPart)
+    ? await readRelationships(zip, documentRelsPart, requestId)
     : []
   assertDocxNotCancelled(options)
 
@@ -217,6 +250,11 @@ export async function readDocxPackageContext(
     parts,
     mainDocumentPart
   )
+  const traversalRelationshipWarnings = readRelationshipTargetTraversalWarnings(
+    documentRelsPart,
+    documentRelationships,
+    mainDocumentPart
+  )
   const opaque = await readPackageOpaquePreservation(
     zip,
     parts,
@@ -224,17 +262,20 @@ export async function readDocxPackageContext(
     rootRelationships,
     mainDocumentPart,
     documentRelsPart,
-    documentRelationships
+    documentRelationships,
+    requestId
   )
   assertDocxNotCancelled(options)
 
   const warnings = [
+    ...traversalRelationshipWarnings,
     ...missingRelationshipWarnings,
     ...readUnsupportedRelationshipWarnings(documentRelsPart, opaque.unsupportedRelationships),
     ...readUnsupportedPartWarnings(opaque.unsupportedParts)
   ]
 
   return {
+    ...(requestId === undefined ? {} : { requestId }),
     zip,
     parts,
     contentTypes,
@@ -250,9 +291,59 @@ export async function readDocxPackageContext(
 /** 读取 DOCX zip，失败时返回稳定 package 错误。 */
 async function readDocxZip(input: DocxBinaryInput, requestId?: string): Promise<JSZip> {
   try {
-    return await JSZip.loadAsync(input)
-  } catch {
+    const zip = await JSZip.loadAsync(input)
+
+    assertZipResourceLimits(zip, requestId)
+
+    return zip
+  } catch (error) {
+    if (error instanceof DocxPackageError) {
+      throw error
+    }
+
     throw new DocxPackageError('DOCX_PACKAGE_INVALID', requestId)
+  }
+}
+
+/** 校验 zip 目录声明的资源上限，避免读取不可信 DOCX 时放大内存。 */
+function assertZipResourceLimits(zip: JSZip, requestId?: string): void {
+  const files = Object.values(zip.files).filter((file) => !file.dir)
+
+  if (files.length > DOCX_MAX_PART_COUNT) {
+    throw new DocxPackageError('DOCX_PACKAGE_RESOURCE_LIMIT_EXCEEDED', requestId)
+  }
+
+  let totalUncompressedSize = 0
+  for (const file of files) {
+    const uncompressedSize = readZipUncompressedSize(file)
+
+    if (uncompressedSize > DOCX_MAX_PART_UNCOMPRESSED_BYTES) {
+      throw new DocxPackageError('DOCX_PACKAGE_RESOURCE_LIMIT_EXCEEDED', requestId)
+    }
+
+    totalUncompressedSize += uncompressedSize
+    if (totalUncompressedSize > DOCX_MAX_TOTAL_UNCOMPRESSED_BYTES) {
+      throw new DocxPackageError('DOCX_PACKAGE_RESOURCE_LIMIT_EXCEEDED', requestId)
+    }
+  }
+}
+
+/** 从 JSZip 内部中央目录数据读取未解压大小。 */
+function readZipUncompressedSize(file: JSZip.JSZipObject): number {
+  const internalData = (file as JSZip.JSZipObject & JsZipObjectWithInternalData)._data
+  const size = internalData?.uncompressedSize
+
+  return typeof size === 'number' && Number.isFinite(size) ? size : 0
+}
+
+/** 校验即将读取的 part 大小，避免 XML/二进制 part 局部放大。 */
+function assertPartReadLimit(
+  file: JSZip.JSZipObject,
+  limit: number,
+  requestId?: string
+): void {
+  if (readZipUncompressedSize(file) > limit) {
+    throw new DocxPackageError('DOCX_PACKAGE_RESOURCE_LIMIT_EXCEEDED', requestId)
   }
 }
 
@@ -269,8 +360,12 @@ function assertRequiredPart(
 }
 
 /** 读取 OPC relationships part 中的关系。 */
-async function readRelationships(zip: JSZip, part: string): Promise<readonly DocxRelationship[]> {
-  const document = parseXml(await readPartText(zip, part))
+async function readRelationships(
+  zip: JSZip,
+  part: string,
+  requestId?: string
+): Promise<readonly DocxRelationship[]> {
+  const document = parseXml(await readPartText(zip, part, requestId))
 
   return readXmlElementsByLocalName(document.root, 'Relationship').map((element) => {
     const type = readXmlAttribute(element, 'Type') ?? ''
@@ -294,7 +389,8 @@ async function readPackageOpaquePreservation(
   rootRelationships: readonly DocxRelationship[],
   mainDocumentPart: string,
   documentRelsPart: string,
-  documentRelationships: readonly DocxRelationship[]
+  documentRelationships: readonly DocxRelationship[],
+  requestId?: string
 ): Promise<DocxPackageOpaquePreservation> {
   const mappedParts = readMappedPartSet(rootRelationships, mainDocumentPart, documentRelsPart, documentRelationships)
   const existingParts = new Set(parts)
@@ -305,7 +401,7 @@ async function readPackageOpaquePreservation(
     .filter((part) => !mappedParts.has(part) && !isRelationshipPart(part))
     .sort(compareOpaquePartPath)
   const unsupportedParts = await Promise.all(unsupportedPartNames.map((part) =>
-    readOpaquePart(zip, part, contentTypes.get(part))
+    readOpaquePart(zip, part, contentTypes.get(part), requestId)
   ))
 
   return {
@@ -391,7 +487,8 @@ function readOpaqueRelationship(
 async function readOpaquePart(
   zip: JSZip,
   part: string,
-  contentType: string | undefined
+  contentType: string | undefined,
+  requestId?: string
 ): Promise<DocxOpaqueUnsupportedPart> {
   const base = {
     part,
@@ -402,11 +499,11 @@ async function readOpaquePart(
   return isTextOpaquePart(part, contentType)
     ? {
       ...base,
-      text: await readPartText(zip, part)
+      text: await readPartText(zip, part, requestId)
     }
     : {
       ...base,
-      bytes: Array.from(await readPartBytes(zip, part))
+      bytes: Array.from(await readPartBytes(zip, part, requestId))
     }
 }
 
@@ -552,7 +649,7 @@ async function buildStyleIndex(context: DocxPackageContext): Promise<DocxStyleIn
     }
   }
 
-  const document = parseXml(await readPartText(context.zip, stylesPart))
+  const document = parseXml(await readPartText(context.zip, stylesPart, context.requestId))
   const styleElements = readXmlElementsByLocalName(document.root, 'style')
   const styleRecords = styleElements.flatMap((element) => {
     const type = readXmlAttribute(element, 'w:type')
@@ -588,7 +685,7 @@ async function buildNumberingIndex(context: DocxPackageContext): Promise<DocxNum
     }
   }
 
-  const document = parseXml(await readPartText(context.zip, numberingPart))
+  const document = parseXml(await readPartText(context.zip, numberingPart, context.requestId))
   const abstractNumberings = readXmlElementsByLocalName(document.root, 'abstractNum').map((element) => ({
     abstractNumberingId: readXmlAttribute(element, 'w:abstractNumId') ?? '',
     levels: readXmlChildren(element)
@@ -652,7 +749,7 @@ async function buildMediaIndex(
     targetPart: image.targetPart,
     mimeType: image.mimeType,
     extension: image.extension,
-    bytes: Array.from(await readPartBytes(context.zip, image.targetPart))
+    bytes: Array.from(await readPartBytes(context.zip, image.targetPart, context.requestId))
   })))
 
   return { items }
@@ -662,20 +759,40 @@ async function buildMediaIndex(
 async function buildCommentsIndex(context: DocxPackageContext): Promise<DocxCommentsIndex> {
   const commentsPart = createDocxPartGraph(context.mainDocumentPart, context.documentRelationships).comments[0]
   if (commentsPart === undefined || !context.parts.includes(commentsPart)) {
-    return { comments: [] }
+    return { comments: [], warnings: [] }
   }
 
-  const document = parseXml(await readPartText(context.zip, commentsPart))
+  const document = parseXml(await readPartText(context.zip, commentsPart, context.requestId))
+  const warnings: DocxWarning[] = []
+  const comments = readXmlElementsByLocalName(document.root, 'comment').flatMap((comment, index) => {
+    const commentId = readXmlAttribute(comment, 'w:id')
 
-  return {
-    comments: readXmlElementsByLocalName(document.root, 'comment').map((comment) => ({
-      ...createDocxImportCommentId(readXmlAttribute(comment, 'w:id') ?? ''),
+    if (commentId === undefined) {
+      warnings.push({
+        code: 'DOCX_COMMENT_ID_MISSING',
+        severity: 'warning',
+        part: commentsPart,
+        path: `${commentsPart}/comment-${index + 1}`,
+        message: 'DOCX comment is missing w:id and will be skipped.',
+        fallback: 'skip-comment',
+        recoverable: true
+      })
+      return []
+    }
+
+    return [{
+      ...createDocxImportCommentId(commentId),
       author: readXmlAttribute(comment, 'w:author') ?? '',
       ...readOptionalAttribute(comment, 'w:date', 'date'),
       text: readXmlElementsByLocalName(comment, 't')
-        .map((text) => readXmlChildren(text).length === 0 ? readElementText(text) : '')
+        .map(readElementText)
         .join('')
-    }))
+    }]
+  })
+
+  return {
+    comments,
+    warnings
   }
 }
 
@@ -705,7 +822,7 @@ async function buildHeaderFooterSourceIdMap(
 
     return [
       part,
-      readHeaderFooterSourceIdsFromRoot(parseXml(await readPartText(context.zip, part)).root, role)
+      readHeaderFooterSourceIdsFromRoot(parseXml(await readPartText(context.zip, part, context.requestId)).root, role)
     ] as const
   }))
 
@@ -789,37 +906,6 @@ export function readUnsupportedNumberingFormatWarnings(numbering: DocxNumberingI
   )
 }
 
-/** 读取直接子元素的 w:val。 */
-export function readChildVal(element: XmlElementNode, localName: string): string | undefined {
-  return readXmlChildren(element)
-    .find((child) => child.localName === localName)
-    ?.[
-      'attributes'
-    ].find((attribute) => attribute.name === 'w:val')?.value
-}
-
-/** 将直接子元素 w:val 映射到对象字段。 */
-export function readChildValue<Key extends string>(
-  element: XmlElementNode,
-  localName: string,
-  key: Key
-): Partial<Record<Key, string>> {
-  const value = readChildVal(element, localName)
-
-  return value === undefined ? {} : { [key]: value } as Partial<Record<Key, string>>
-}
-
-/** 读取可选属性并映射为对象字段。 */
-export function readOptionalAttribute<Key extends string>(
-  element: XmlElementNode,
-  attributeName: string,
-  key: Key
-): Partial<Record<Key, string>> {
-  const value = readXmlAttribute(element, attributeName)
-
-  return value === undefined ? {} : { [key]: value } as Partial<Record<Key, string>>
-}
-
 /** 读取 linked style 对。 */
 function readLinkedStyles(styleElements: readonly XmlElementNode[]): readonly DocxLinkedStyleRecord[] {
   return styleElements.flatMap((element) => {
@@ -868,22 +954,6 @@ function readDefaultStyleId(
     ].find((attribute) => attribute.name === 'w:styleId')?.value
 }
 
-/** 读取元素下所有文本节点。 */
-export function readElementText(element: XmlElementNode): string {
-  return element.children.map((child) => child.kind === 'text' ? child.text : readElementText(child)).join('')
-}
-
-/** 读取正数或返回 undefined。 */
-export function readPositiveNumber(value: string | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-
-  const number = Number(value)
-
-  return Number.isFinite(number) && number > 0 ? number : undefined
-}
-
 /** 根据 part path 读取扩展名。 */
 function readExtension(part: string): string {
   const index = part.lastIndexOf('.')
@@ -897,93 +967,25 @@ function readMimeType(context: DocxPackageContext, part: string): string {
 }
 
 /** 读取 part 文本。 */
-export async function readPartText(zip: JSZip, part: string): Promise<string> {
+export async function readPartText(zip: JSZip, part: string, requestId?: string): Promise<string> {
   const file = zip.file(part)
 
-  return file === null || file === undefined ? '' : file.async('text')
+  if (file === null || file === undefined) {
+    return ''
+  }
+  assertPartReadLimit(file, DOCX_MAX_TEXT_PART_UNCOMPRESSED_BYTES, requestId)
+
+  return file.async('text')
 }
 
 /** 读取 part 二进制。 */
-export async function readPartBytes(zip: JSZip, part: string): Promise<Uint8Array> {
+export async function readPartBytes(zip: JSZip, part: string, requestId?: string): Promise<Uint8Array> {
   const file = zip.file(part)
 
-  return file === null || file === undefined ? new Uint8Array() : file.async('uint8array')
-}
-
-/** 根据 document relationships 建立 Gate 5 第一版 part graph。 */
-export function createDocxPartGraph(
-  documentPart: string,
-  relationships: readonly DocxRelationship[]
-): DocxPartGraph {
-  const resolved = relationships.map((relationship) => ({
-    ...relationship,
-    target: resolvePartTarget(documentPart, relationship.target)
-  }))
-
-  return {
-    document: documentPart,
-    ...readOptionalPart(resolved, 'styles', 'styles'),
-    ...readOptionalPart(resolved, 'numbering', 'numbering'),
-    ...readOptionalPart(resolved, 'settings', 'settings'),
-    ...readOptionalPart(resolved, 'theme', 'theme'),
-    headers: readRelationshipTargets(resolved, 'header'),
-    footers: readRelationshipTargets(resolved, 'footer'),
-    comments: readRelationshipTargets(resolved, 'comments'),
-    media: resolved
-      .filter((relationship) => relationship.kind === 'image' && relationship.targetMode !== 'External')
-      .map((relationship) => relationship.target)
+  if (file === null || file === undefined) {
+    return new Uint8Array()
   }
-}
+  assertPartReadLimit(file, DOCX_MAX_PART_UNCOMPRESSED_BYTES, requestId)
 
-/** 读取可选单例 part。 */
-function readOptionalPart(
-  relationships: readonly DocxRelationship[],
-  property: 'styles' | 'numbering' | 'settings' | 'theme',
-  kind: string
-): Partial<Pick<DocxPartGraph, typeof property>> {
-  const target = relationships.find((relationship) => relationship.kind === kind && relationship.targetMode !== 'External')?.target
-
-  return target === undefined ? {} : { [property]: target }
-}
-
-/** 读取同类 relationship 目标路径。 */
-function readRelationshipTargets(
-  relationships: readonly DocxRelationship[],
-  kind: string
-): readonly string[] {
-  return relationships
-    .filter((relationship) => relationship.kind === kind && relationship.targetMode !== 'External')
-    .map((relationship) => relationship.target)
-}
-
-/** 为断裂的 document relationships 生成可恢复 warning。 */
-function readMissingRelationshipWarnings(
-  relationshipsPart: string,
-  relationships: readonly DocxRelationship[],
-  parts: readonly string[],
-  sourcePart: string
-): readonly DocxWarning[] {
-  return relationships.flatMap((relationship) => {
-    if (relationship.targetMode === 'External') {
-      return []
-    }
-
-    const target = resolvePartTarget(sourcePart, relationship.target)
-
-    if (parts.includes(target)) {
-      return []
-    }
-
-    return [
-      {
-        code: 'DOCX_RELATIONSHIP_TARGET_MISSING',
-        severity: 'warning',
-        part: relationshipsPart,
-        path: target,
-        message: `DOCX relationship target is missing: ${target}`,
-        fallback: 'preserve-relationship-metadata',
-        recoverable: true
-      }
-    ]
-  })
+  return file.async('uint8array')
 }

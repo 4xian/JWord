@@ -14,7 +14,7 @@ import { countGraphemes, splitGraphemes } from '../shared/grapheme'
 import { getCaretRect as getLayoutCaretRect } from '../layout/runtime'
 import { createSelectionState, isSelectionCollapsed } from '../model/selection'
 import { collectSelectionTargets } from '../model/selection-targets'
-import type { ModelProperties, Paragraph, Run } from '../model/types'
+import type { ModelProperties, Paragraph, Run, RunLink } from '../model/types'
 import type { Command, Operation, TextPosition } from '../operations/transaction'
 import { createAllTextSelection, readSelectionHtmlFromProjection } from './clipboard-runtime'
 import { flattenLayoutLines, hitTestLineAtAbsoluteX, resolveLineBoundaryPosition } from './rendering'
@@ -28,7 +28,14 @@ import {
   moveTextPosition,
   normalizePlainText
 } from './text-runtime'
-
+import {
+  allocateGeneratedRuntimeRunId,
+  appendRichTextParagraphPropertyOperations,
+  collectProjectionRunIds,
+  hasModelProperties,
+  normalizeRichTextParagraphs,
+  type NormalizedRichTextParagraph
+} from './rich-text-runtime-helpers'
 export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRuntime {
   /** 粘贴 UI 层已清洗过的结构化富文本片段。 */
   pasteRichTextFragment(fragment: EditorRichTextFragment): boolean {
@@ -152,6 +159,9 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
       for (const run of paragraph.runs) {
         const insertedStartGraphemeIndex = currentPosition.graphemeIndex
         const insertedGraphemeLength = countGraphemes(run.text)
+        const link = run.link
+        let linkStartGraphemeIndex = insertedStartGraphemeIndex
+        let linkRunGraphemeLength = currentRunGraphemeLength + insertedGraphemeLength
 
         operations.push({
           kind: 'insertText',
@@ -175,6 +185,28 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
             insertedGraphemeLength,
             currentRunGraphemeLength,
             run.properties
+          )
+
+          currentRunId = pendingCaret.runId
+          currentRunGraphemeLength = insertedGraphemeLength
+          linkStartGraphemeIndex = 0
+          linkRunGraphemeLength = insertedGraphemeLength
+          currentPosition = {
+            ...currentPosition,
+            runId: currentRunId,
+            graphemeIndex: pendingCaret.graphemeIndex
+          }
+        }
+
+        if (link !== undefined) {
+          const pendingCaret = this.appendRichTextRunLinkToInsertedText(
+            operations,
+            usedRunIds,
+            currentRunId,
+            linkStartGraphemeIndex,
+            insertedGraphemeLength,
+            linkRunGraphemeLength,
+            link
           )
 
           currentRunId = pendingCaret.runId
@@ -431,6 +463,59 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
 
     return {
       runId: formattedRunId,
+      graphemeIndex: insertedGraphemeLength
+    }
+  }
+
+  /**
+   * 把富文本粘贴中的安全链接只补到本次新增文本上。
+   */
+  protected appendRichTextRunLinkToInsertedText(
+    operations: Operation[],
+    usedRunIds: Set<string>,
+    runId: string,
+    startGraphemeIndex: number,
+    insertedGraphemeLength: number,
+    graphemeLengthAfterInsert: number,
+    link: RunLink
+  ): Readonly<{
+    runId: string
+    graphemeIndex: number
+  }> {
+    if (startGraphemeIndex === 0 && insertedGraphemeLength === graphemeLengthAfterInsert) {
+      operations.push({
+        kind: 'setRunLink',
+        runId,
+        link
+      })
+
+      return {
+        runId,
+        graphemeIndex: insertedGraphemeLength
+      }
+    }
+
+    const linkedRunId = startGraphemeIndex > 0
+      ? allocateGeneratedRuntimeRunId(usedRunIds, runId, 'link')
+      : runId
+    const endGraphemeIndex = startGraphemeIndex + insertedGraphemeLength
+
+    operations.push({
+      kind: 'setRunLink',
+      runId,
+      link,
+      range: {
+        startGraphemeIndex,
+        endGraphemeIndex,
+        ...(startGraphemeIndex > 0 ? { linkedRunId } : {}),
+        ...(endGraphemeIndex < graphemeLengthAfterInsert
+          ? { trailingRunId: allocateGeneratedRuntimeRunId(usedRunIds, runId, 'tail') }
+          : {})
+      }
+    })
+
+    return {
+      runId: linkedRunId,
       graphemeIndex: insertedGraphemeLength
     }
   }
@@ -1479,7 +1564,7 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
   }
 
   /** 移动键盘选区的 focus；扩展时保留原 anchor，不扩展时折叠到目标位置。 */
-  private setSelectionToTextPosition(
+  protected setSelectionToTextPosition(
     anchor: ReturnType<typeof createRuntimeAnchor>,
     position: TextPosition,
     extending: boolean
@@ -1524,128 +1609,6 @@ export abstract class JWordEditorTextEditingRuntime extends JWordEditorMountedRu
 
     this.executeCommand(command, {
       selectionAfter: this.currentSelection
-    })
-  }
-}
-
-function collectProjectionRunIds(
-  projection: import('../model/projection').DocumentProjection
-): Set<string> {
-  return new Set(
-    collectParagraphRuntimeContexts(projection).flatMap((paragraph) => paragraph.runs.map((run) => run.id))
-  )
-}
-
-function allocateGeneratedRuntimeRunId(
-  usedRunIds: Set<string>,
-  runId: string,
-  suffix: 'format' | 'tail'
-): string {
-  let sequence = 1
-  let candidate = `${runId}__${suffix}-${sequence}`
-
-  while (usedRunIds.has(candidate)) {
-    sequence += 1
-    candidate = `${runId}__${suffix}-${sequence}`
-  }
-
-  usedRunIds.add(candidate)
-
-  return candidate
-}
-
-interface NormalizedRichTextRun {
-  readonly text: string
-  readonly properties: ModelProperties
-}
-
-interface NormalizedRichTextParagraph {
-  readonly properties: ModelProperties
-  readonly runs: readonly NormalizedRichTextRun[]
-}
-
-/** 归一化富文本粘贴片段，丢弃空文本 run 和空段落。 */
-function normalizeRichTextParagraphs(fragment: EditorRichTextFragment): readonly NormalizedRichTextParagraph[] {
-  return fragment.paragraphs.flatMap((paragraph) => {
-    const runs = normalizeRichTextRuns(paragraph.runs)
-
-    if (runs.length === 0) {
-      return []
-    }
-
-    return [{
-      properties: normalizeModelProperties(paragraph.properties),
-      runs
-    }]
-  })
-}
-
-/** 归一化富文本 run，避免空字符串生成无效 operation。 */
-function normalizeRichTextRuns(runs: readonly EditorRichTextRun[]): readonly NormalizedRichTextRun[] {
-  return runs.flatMap((run) => {
-    const text = normalizePlainText(run.text)
-
-    if (text.length === 0) {
-      return []
-    }
-
-    return [{
-      text,
-      properties: normalizeRichTextRunProperties(run.properties)
-    }]
-  })
-}
-
-/** 归一化 run 属性，并显式清掉上一段 split 继承来的常见格式。 */
-function normalizeRichTextRunProperties(properties: ModelProperties | undefined): ModelProperties {
-  return Object.freeze({
-    bold: false,
-    italic: false,
-    underline: false,
-    strike: false,
-    superscript: false,
-    subscript: false,
-    color: null,
-    backgroundColor: null,
-    fontFamily: null,
-    fontSizePx: null,
-    fontSizeTwips: null,
-    ...normalizeModelProperties(properties)
-  })
-}
-
-/** 复制模型属性对象，避免事务构造持有外部可变引用。 */
-function normalizeModelProperties(properties: ModelProperties | undefined): ModelProperties {
-  if (properties === undefined) {
-    return {}
-  }
-
-  return Object.freeze({ ...properties })
-}
-
-/** 判断模型属性是否包含可写入字段。 */
-function hasModelProperties(properties: ModelProperties): boolean {
-  return Object.keys(properties).length > 0
-}
-
-/** 把富文本段落属性追加到已生成的段落上。 */
-function appendRichTextParagraphPropertyOperations(
-  operations: Operation[],
-  paragraphs: readonly NormalizedRichTextParagraph[],
-  paragraphIds: readonly string[]
-): void {
-  for (let index = 0; index < paragraphs.length; index += 1) {
-    const paragraph = paragraphs[index]
-    const paragraphId = paragraphIds[index]
-
-    if (paragraph === undefined || paragraphId === undefined || !hasModelProperties(paragraph.properties)) {
-      continue
-    }
-
-    operations.push({
-      kind: 'setParagraphProperties',
-      paragraphId,
-      properties: paragraph.properties
     })
   }
 }

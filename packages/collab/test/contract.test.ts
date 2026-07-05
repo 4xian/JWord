@@ -23,6 +23,7 @@ import {
   createMemoryCollabProviderAdapter,
   downgradeUnresolvedAnchorToPresence,
   parseAwarenessState,
+  resetMemoryCollabRooms,
   serializeAwarenessState
 } from '../src/index'
 import {
@@ -160,6 +161,48 @@ describe('@4xian/jword-collab contract', () => {
     expect(adapter.status).toBe('disconnected')
     expect(adapter.diagnostics).toEqual([])
     await adapter.destroy()
+  })
+
+  it('resets global memory collaboration rooms for tests and host teardown', async () => {
+    const stale = createMemoryCollabProviderAdapter({
+      documentId: 'doc-memory-reset',
+      roomId: 'room-memory-reset',
+      clientId: 'client-a'
+    })
+    const fresh = createMemoryCollabProviderAdapter({
+      documentId: 'doc-memory-reset',
+      roomId: 'room-memory-reset',
+      clientId: 'client-b'
+    })
+    const staleUpdates: JWordCollabUpdateMetadata[] = []
+
+    stale.onUpdate((_update, metadata) => {
+      staleUpdates.push(metadata)
+    })
+    await stale.connect()
+    stale.awareness.setLocalState({
+      clientId: 'client-a',
+      user: {
+        id: 'user-a',
+        name: 'Alice'
+      },
+      updatedAt: 1
+    })
+
+    resetMemoryCollabRooms()
+    await fresh.connect()
+    await fresh.sendUpdate(new Uint8Array([4, 5, 6]), {
+      documentId: 'doc-memory-reset',
+      roomId: 'room-memory-reset',
+      clientId: 'client-b',
+      updateId: 'update-after-reset'
+    })
+
+    expect(staleUpdates).toEqual([])
+    expect(fresh.awareness.getStates()).toEqual([])
+
+    await stale.destroy()
+    await fresh.destroy()
   })
 
   it('exposes a Hocuspocus provider adapter factory through the public contract', async () => {

@@ -46,7 +46,7 @@ export function parseXml(xml: string): XmlDocumentNode {
     index: 0
   }
   skipXmlPrelude(state)
-  const root = parseElement(state)
+  const root = parseElement(state, new Map())
 
   skipWhitespace(state)
   if (state.index !== state.input.length) {
@@ -97,16 +97,26 @@ interface ParserState {
   index: number
 }
 
-function parseElement(state: ParserState): XmlElementNode {
+interface RawXmlAttributeNode {
+  readonly name: string
+  readonly value: string
+}
+
+function parseElement(
+  state: ParserState,
+  inheritedNamespaces: ReadonlyMap<string, string>
+): XmlElementNode {
   skipWhitespace(state)
   expect(state, '<')
 
   const name = readName(state)
-  const attributes = readAttributes(state)
+  const rawAttributes = readAttributes(state)
+  const namespaces = readNamespaceContext(inheritedNamespaces, rawAttributes)
+  const attributes = rawAttributes.map((attribute) => createAttribute(attribute.name, attribute.value, namespaces))
   const selfClosing = readSelfClosing(state)
 
   if (selfClosing) {
-    return createElement(name, attributes, [])
+    return createElement(name, attributes, [], namespaces)
   }
 
   expect(state, '>')
@@ -128,7 +138,18 @@ function parseElement(state: ParserState): XmlElementNode {
         continue
       }
 
-      children.push(parseElement(state))
+      if (startsWith(state, '<![CDATA[')) {
+        const text = readCdata(state)
+        if (text !== '') {
+          children.push({
+            kind: 'text',
+            text
+          })
+        }
+        continue
+      }
+
+      children.push(parseElement(state, namespaces))
       continue
     }
 
@@ -143,11 +164,11 @@ function parseElement(state: ParserState): XmlElementNode {
 
   expect(state, `</${name}>`)
 
-  return createElement(name, attributes, children)
+  return createElement(name, attributes, children, namespaces)
 }
 
-function readAttributes(state: ParserState): readonly XmlAttributeNode[] {
-  const attributes: XmlAttributeNode[] = []
+function readAttributes(state: ParserState): readonly RawXmlAttributeNode[] {
+  const attributes: RawXmlAttributeNode[] = []
 
   while (true) {
     skipWhitespace(state)
@@ -168,7 +189,10 @@ function readAttributes(state: ParserState): readonly XmlAttributeNode[] {
     state.index += 1
     const value = readUntil(state, quote)
     expect(state, quote)
-    attributes.push(createAttribute(name, decodeXml(value)))
+    attributes.push({
+      name,
+      value: decodeXml(value)
+    })
   }
 }
 
@@ -190,6 +214,20 @@ function readText(state: ParserState): string {
   }
 
   return state.input.slice(start, state.index)
+}
+
+/** 读取 CDATA 段文本并保持原始字符语义。 */
+function readCdata(state: ParserState): string {
+  expect(state, '<![CDATA[')
+  const end = state.input.indexOf(']]>', state.index)
+  if (end === -1) {
+    throw createXmlParseError()
+  }
+
+  const value = state.input.slice(state.index, end)
+  state.index = end + 3
+
+  return value
 }
 
 function readName(state: ParserState): string {
@@ -243,9 +281,14 @@ function peek(state: ParserState): string {
   return state.input[state.index] ?? ''
 }
 
-function createElement(name: string, attributes: readonly XmlAttributeNode[], children: readonly XmlNode[]): XmlElementNode {
+function createElement(
+  name: string,
+  attributes: readonly XmlAttributeNode[],
+  children: readonly XmlNode[],
+  namespaces: ReadonlyMap<string, string>
+): XmlElementNode {
   const [prefix, localName] = splitName(name)
-  const namespaceUri = readNamespaceUri(attributes, prefix)
+  const namespaceUri = readNamespaceUri(namespaces, prefix)
 
   return {
     kind: 'element',
@@ -258,9 +301,13 @@ function createElement(name: string, attributes: readonly XmlAttributeNode[], ch
   }
 }
 
-function createAttribute(name: string, value: string): XmlAttributeNode {
+function createAttribute(
+  name: string,
+  value: string,
+  namespaces: ReadonlyMap<string, string>
+): XmlAttributeNode {
   const [prefix, localName] = splitName(name)
-  const namespaceUri = prefix === 'xml' ? 'http://www.w3.org/XML/1998/namespace' : prefix === 'xmlns' ? 'http://www.w3.org/2000/xmlns/' : undefined
+  const namespaceUri = readAttributeNamespaceUri(name, prefix, namespaces)
 
   return {
     name,
@@ -269,6 +316,27 @@ function createAttribute(name: string, value: string): XmlAttributeNode {
     ...(namespaceUri === undefined ? {} : { namespaceUri }),
     value
   }
+}
+
+/** 合并祖先和当前元素的 namespace 声明。 */
+function readNamespaceContext(
+  inheritedNamespaces: ReadonlyMap<string, string>,
+  attributes: readonly RawXmlAttributeNode[]
+): ReadonlyMap<string, string> {
+  const namespaces = new Map(inheritedNamespaces)
+
+  for (const attribute of attributes) {
+    if (attribute.name === 'xmlns') {
+      namespaces.set('', attribute.value)
+      continue
+    }
+
+    if (attribute.name.startsWith('xmlns:')) {
+      namespaces.set(attribute.name.slice('xmlns:'.length), attribute.value)
+    }
+  }
+
+  return namespaces
 }
 
 function splitName(name: string): readonly [string | undefined, string] {
@@ -280,15 +348,25 @@ function splitName(name: string): readonly [string | undefined, string] {
   return [name.slice(0, index), name.slice(index + 1)]
 }
 
-function readNamespaceUri(attributes: readonly XmlAttributeNode[], prefix?: string): string | undefined {
-  if (prefix === undefined) {
-    const defaultNamespace = attributes.find((attribute) => attribute.name === 'xmlns')
-    return defaultNamespace?.value
+function readNamespaceUri(namespaces: ReadonlyMap<string, string>, prefix?: string): string | undefined {
+  return namespaces.get(prefix ?? '')
+}
+
+/** 读取属性 namespace，默认 namespace 不作用于普通属性。 */
+function readAttributeNamespaceUri(
+  name: string,
+  prefix: string | undefined,
+  namespaces: ReadonlyMap<string, string>
+): string | undefined {
+  if (prefix === 'xml') {
+    return 'http://www.w3.org/XML/1998/namespace'
   }
 
-  const namespaceAttribute = attributes.find((attribute) => attribute.name === `xmlns:${prefix}`)
+  if (name === 'xmlns' || prefix === 'xmlns') {
+    return 'http://www.w3.org/2000/xmlns/'
+  }
 
-  return namespaceAttribute?.value
+  return prefix === undefined ? undefined : namespaces.get(prefix)
 }
 
 function walkElements(element: XmlElementNode): readonly XmlElementNode[] {
@@ -324,11 +402,23 @@ function escapeXml(value: string): string {
 /** 解码 XML predefined entities，保持 parser 对 OOXML 文本和属性的真实值语义。 */
 function decodeXml(value: string): string {
   return value
+    .replace(/&#x([0-9A-Fa-f]+);/gu, (_, codePoint: string) => readNumericCharacterReference(codePoint, 16))
+    .replace(/&#([0-9]+);/gu, (_, codePoint: string) => readNumericCharacterReference(codePoint, 10))
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&quot;', '"')
     .replaceAll('&apos;', "'")
     .replaceAll('&amp;', '&')
+}
+
+/** 解码 XML 数值字符引用。 */
+function readNumericCharacterReference(value: string, radix: number): string {
+  const codePoint = Number.parseInt(value, radix)
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10FFFF) {
+    throw createXmlParseError()
+  }
+
+  return String.fromCodePoint(codePoint)
 }
 
 /** 跳过 XML 声明、处理指令和前置空白。 */

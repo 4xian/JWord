@@ -7,26 +7,46 @@
  */
 /// <reference path="./fontkit.d.ts" />
 
-import type { DocumentLayout, PageBox, TextFragment } from '@4xian/jword-core'
+import {
+  type DocumentLayout,
+  type PageBox,
+  type TextFragment
+} from '@4xian/jword-core'
 import {
   assertJWordFeatureEntitled
 } from '@4xian/jword-license'
 import type { PDFDocument as PdfLibDocument, PDFFont, PDFImage, PDFPage, RGB } from 'pdf-lib'
 import type {
-  PdfErrorCode
-} from './diagnostics.js'
-import type {
   ExportPdfOptions,
   ExportPdfResult,
   PdfError,
-  PdfFontSource,
   PdfImageAsset,
   PdfPageGeometry,
   PdfProgressEvent,
   PdfProgressStage,
   PdfWarning
 } from './types.js'
+import {
+  assertPdfFontsCanCoverLayout,
+  readPdfEmbeddedFonts,
+  readPdfStandardFonts,
+  resolvePdfFontForText,
+  resolvePdfFontRunsForTextFragment,
+  warnPdfMissingFontVariants,
+  type PdfFontRegistry,
+  type PdfStandardFontSet
+} from './font-registry.js'
 import { readPdfImageAsset } from './image-assets.js'
+import { twipsToPdfPoints } from './pdf-geometry.js'
+import {
+  readPdfBorderColor,
+  readPdfFontSize,
+  readPdfTextBaseline,
+  readPdfTextColor,
+  renderPdfTextBackground,
+  renderPdfTextDecoration,
+  type PdfRgbFactory
+} from './text-style-renderer.js'
 
 export {
   PDF_ERROR_CODE_METADATA,
@@ -80,37 +100,12 @@ export type {
   PdfWorkerResponse
 } from './types.js'
 
-type PdfRgbFactory = (red: number, green: number, blue: number) => RGB
-type PdfDocumentFontkit = Parameters<PdfLibDocument['registerFontkit']>[0]
 type PdfInlineObjectBox = Extract<PageBox['lines'][number]['inlines'][number], { readonly kind: 'inlineObject' }>
 type PdfImageInlineBox = PdfInlineObjectBox & {
   readonly inlineKind: 'image'
   readonly payload: Extract<PdfInlineObjectBox['payload'], { readonly resourceId: string }>
 }
 type PdfTableBox = Extract<PageBox['blocks'][number], { readonly kind: 'table' }>
-
-interface PdfFontkitModule {
-  create(input: Uint8Array): PdfFontkitFont | PdfFontkitCollection
-}
-
-interface PdfFontkitFont {
-  hasGlyphForCodePoint(codePoint: number): boolean
-}
-
-interface PdfFontkitCollection {
-  readonly fonts: readonly PdfFontkitFont[]
-}
-
-interface PdfEmbeddedFont {
-  readonly family: string
-  readonly font: PDFFont
-  readonly coverage: PdfFontkitFont
-}
-
-interface PdfFontRegistry {
-  readonly standardFont: PDFFont
-  readonly embeddedFonts: readonly PdfEmbeddedFont[]
-}
 
 /** 从 JWord 当前分页 layout 导出 PDF。 */
 export async function exportPdfFromLayout(
@@ -133,20 +128,23 @@ export async function exportPdfFromLayout(
   const pdfDocument = await PDFDocument.create()
   assertPdfExportNotCancelled(options)
 
-  const font = await pdfDocument.embedFont(StandardFonts.Helvetica)
+  const standardFonts = await readPdfStandardFonts(pdfDocument, StandardFonts)
   assertPdfExportNotCancelled(options)
 
   const imageAssets = await readPdfImageAssets(options)
   assertPdfExportNotCancelled(options)
 
   const pages = layout.pages.length === 0 ? [createBlankPageFromLayout(layout)] : layout.pages
-  const embeddedFonts = await readPdfEmbeddedFonts(pdfDocument, progress, warnings, options)
+  const embeddedFonts = await readPdfEmbeddedFonts(pdfDocument, progress, warnings, options, () => {
+    assertPdfExportNotCancelled(options)
+  })
   const fontRegistry: PdfFontRegistry = {
-    standardFont: font,
+    standardFonts,
     embeddedFonts
   }
 
   assertPdfFontsCanCoverLayout(pages, fontRegistry, options)
+  warnPdfMissingFontVariants(pages, fontRegistry, warnings, options)
   assertPdfExportNotCancelled(options)
 
   for (const page of pages) {
@@ -170,19 +168,6 @@ export async function exportPdfFromLayout(
     progress,
     pageGeometry: readPdfPageGeometry(pages)
   }
-}
-
-/** 创建当前占位实现的稳定错误，避免调用方误判为成功导出。 */
-function createUnsupportedError(code: PdfErrorCode, requestId?: string): Error & PdfError {
-  const error = new Error(code) as Error & PdfError
-
-  error.name = 'PdfExportUnsupportedError'
-  Object.assign(error, {
-    code,
-    ...(requestId === undefined ? {} : { requestId })
-  })
-
-  return error
 }
 
 /** 检查 PDF 导出是否已被取消。 */
@@ -286,15 +271,29 @@ function renderPdfTextFragment(
   fragment: TextFragment,
   createRgb: PdfRgbFactory
 ): void {
-  const font = resolvePdfFontForText(fragment.text, fontRegistry)
+  const x = twipsToPdfPoints(fragment.x)
+  const baseline = readPdfTextBaseline(page, fragment)
+  const size = readPdfFontSize(fragment)
+  const color = readPdfTextColor(fragment, createRgb)
 
-  pdfPage.drawText(fragment.text, {
-    x: twipsToPdfPoints(fragment.x),
-    y: twipsToPdfPoints(page.height - fragment.baseline),
-    size: readPdfFontSize(fragment),
-    font,
-    color: readPdfTextColor(fragment, createRgb)
-  })
+  renderPdfTextBackground(pdfPage, page, fragment, createRgb)
+  for (const run of resolvePdfFontRunsForTextFragment(fragment, fontRegistry)) {
+    pdfPage.drawText(run.text, {
+      x: run.x,
+      y: baseline,
+      size,
+      font: run.font,
+      color
+    })
+  }
+  renderPdfTextDecoration(pdfPage, fragment, x, baseline, size, color)
+}
+
+/** 读取 PDF 导出需要的图片资产。 */
+async function readPdfImageAssets(options: ExportPdfOptions): Promise<ReadonlyMap<string, PdfImageAsset>> {
+  const assets = await Promise.all((options.images ?? []).map(readPdfImageAsset))
+
+  return new Map(assets.map((asset) => [asset.id, asset] as const))
 }
 
 /** 渲染页面里的 inline 图片。 */
@@ -485,276 +484,6 @@ function isPdfPageNumberSourceId(value: string): boolean {
   return value.startsWith('page-number-')
 }
 
-/** 读取 PDF 字号，优先使用 layout 已解析出的 CSS px。 */
-function readPdfFontSize(fragment: TextFragment): number {
-  return (fragment.style.fontSizePx ?? 16) * 0.75
-}
-
-/** 读取 PDF 文本颜色。 */
-function readPdfTextColor(fragment: TextFragment, createRgb: PdfRgbFactory): RGB {
-  const color = fragment.style.color ?? '#000000'
-  const match = /^#(?<red>[0-9a-f]{2})(?<green>[0-9a-f]{2})(?<blue>[0-9a-f]{2})$/iu.exec(color)
-
-  if (match?.groups === undefined) {
-    return createRgb(0, 0, 0)
-  }
-
-  return createRgb(
-    parseInt(match.groups.red ?? '00', 16) / 255,
-    parseInt(match.groups.green ?? '00', 16) / 255,
-    parseInt(match.groups.blue ?? '00', 16) / 255
-  )
-}
-
-/** 读取 PDF 边框颜色。 */
-function readPdfBorderColor(color: string | undefined, createRgb: PdfRgbFactory): RGB {
-  if (color === undefined) {
-    return createRgb(0, 0, 0)
-  }
-
-  const match = /^#(?<red>[0-9a-f]{2})(?<green>[0-9a-f]{2})(?<blue>[0-9a-f]{2})$/iu.exec(color)
-
-  if (match?.groups === undefined) {
-    return createRgb(0, 0, 0)
-  }
-
-  return createRgb(
-    parseInt(match.groups.red ?? '00', 16) / 255,
-    parseInt(match.groups.green ?? '00', 16) / 255,
-    parseInt(match.groups.blue ?? '00', 16) / 255
-  )
-}
-
-/** 读取并嵌入调用方配置的 PDF 字体。 */
-async function readPdfEmbeddedFonts(
-  pdfDocument: PdfLibDocument,
-  progress: PdfProgressEvent[],
-  warnings: PdfWarning[],
-  options: ExportPdfOptions
-): Promise<readonly PdfEmbeddedFont[]> {
-  const fontConfigs = options.fonts ?? []
-
-  if (fontConfigs.length === 0) {
-    return []
-  }
-
-  pushPdfProgress(progress, options, 'font-loading')
-  assertPdfExportNotCancelled(options)
-
-  const fontkitModule = await loadPdfFontkitModule()
-
-  pdfDocument.registerFontkit(fontkitModule as PdfDocumentFontkit)
-
-  const fonts: PdfEmbeddedFont[] = []
-
-  for (const config of fontConfigs) {
-    try {
-      const bytes = await readPdfFontBytes(config.source)
-      const coverage = readPdfFontCoverage(fontkitModule, bytes)
-      const font = await pdfDocument.embedFont(bytes, { subset: false })
-
-      fonts.push({
-        family: config.family,
-        font,
-        coverage
-      })
-    } catch {
-      pushPdfWarning(warnings, options, {
-        code: 'PDF_FONT_MISSING',
-        severity: 'warning',
-        message: 'PDF 字体无法读取或嵌入',
-        fontFamily: config.family,
-        fallback: 'provide-compatible-font',
-        recoverable: true
-      })
-    }
-  }
-
-  return fonts
-}
-
-/** 动态加载 fontkit，避免普通 PDF 导出路径提前拉入重依赖。 */
-async function loadPdfFontkitModule(): Promise<PdfFontkitModule> {
-  return import('fontkit') as Promise<unknown> as Promise<PdfFontkitModule>
-}
-
-/** 读取字体 source 的二进制内容。 */
-async function readPdfFontBytes(source: PdfFontSource): Promise<Uint8Array> {
-  if (source.kind === 'arrayBuffer') {
-    return new Uint8Array(source.data)
-  }
-
-  if (source.kind === 'file') {
-    return new Uint8Array(await source.file.arrayBuffer())
-  }
-
-  const response = await fetch(source.url)
-
-  if (!response.ok) {
-    throw createUnsupportedError('PDF_FONT_MISSING')
-  }
-
-  return new Uint8Array(await response.arrayBuffer())
-}
-
-/** 建立字体覆盖检测对象，字体集合只使用第一张具体字体。 */
-function readPdfFontCoverage(fontkitModule: PdfFontkitModule, bytes: Uint8Array): PdfFontkitFont {
-  const font = fontkitModule.create(bytes)
-
-  if (isPdfFontkitCollection(font)) {
-    const firstFont = font.fonts[0]
-
-    if (firstFont === undefined) {
-      throw createUnsupportedError('PDF_FONT_MISSING')
-    }
-
-    return firstFont
-  }
-
-  return font
-}
-
-/** 判断 fontkit 结果是否是字体集合。 */
-function isPdfFontkitCollection(value: PdfFontkitFont | PdfFontkitCollection): value is PdfFontkitCollection {
-  return Array.isArray(Reflect.get(value, 'fonts'))
-}
-
-/** 记录 PDF warning 并同步调用方回调。 */
-function pushPdfWarning(
-  warnings: PdfWarning[],
-  options: ExportPdfOptions,
-  warning: PdfWarning
-): void {
-  warnings.push(warning)
-  options.onWarning?.(warning)
-}
-
-/** 根据文本内容选择可编码的 PDF 字体。 */
-function resolvePdfFontForText(text: string, registry: PdfFontRegistry): PDFFont {
-  if (!containsNonAsciiText(text)) {
-    return registry.standardFont
-  }
-
-  return findPdfEmbeddedFontForText(text, registry)?.font ?? registry.standardFont
-}
-
-/** 读取 PDF 导出需要的图片资产。 */
-async function readPdfImageAssets(options: ExportPdfOptions): Promise<ReadonlyMap<string, PdfImageAsset>> {
-  const assets = await Promise.all((options.images ?? []).map(readPdfImageAsset))
-
-  return new Map(assets.map((asset) => [asset.id, asset] as const))
-}
-
-/** 在缺少可用字体时提前阻止非 ASCII 文本乱码导出。 */
-function assertPdfFontsCanCoverLayout(
-  pages: readonly PageBox[],
-  registry: PdfFontRegistry,
-  options: ExportPdfOptions
-): void {
-  for (const page of pages) {
-    for (const text of iteratePdfVisibleText(page)) {
-      if (containsNonAsciiText(text) && findPdfEmbeddedFontForText(text, registry) === undefined) {
-        throw createPdfFontMissingError(options.requestId, options, registry.embeddedFonts[0]?.family)
-      }
-    }
-  }
-}
-
-/** 查找覆盖整段文本的嵌入字体。 */
-function findPdfEmbeddedFontForText(text: string, registry: PdfFontRegistry): PdfEmbeddedFont | undefined {
-  return registry.embeddedFonts.find((font) => canPdfFontCoverText(font.coverage, text))
-}
-
-/** 判断字体是否覆盖整段文本。 */
-function canPdfFontCoverText(font: PdfFontkitFont, text: string): boolean {
-  for (const character of text) {
-    const codePoint = character.codePointAt(0)
-
-    if (codePoint !== undefined && !font.hasGlyphForCodePoint(codePoint)) {
-      return false
-    }
-  }
-
-  return true
-}
-
-/** 遍历当前 PDF renderer 会输出的可见文本。 */
-function* iteratePdfVisibleText(page: PageBox): Iterable<string> {
-  for (const line of page.lines) {
-    for (const fragment of line.fragments) {
-      yield fragment.text
-    }
-  }
-
-  for (const block of page.blocks) {
-    if (block.kind !== 'table') {
-      continue
-    }
-
-    for (const row of block.rows) {
-      for (const cell of row.cells) {
-        for (const fragment of cell.fragments) {
-          yield fragment.text
-        }
-      }
-    }
-  }
-
-  for (const box of page.headerFooterBoxes) {
-    yield formatPdfHeaderFooterText(box.sourceId, box.pageNumber)
-  }
-}
-
-/** 判断文本是否需要非标准 PDF 字体覆盖。 */
-function containsNonAsciiText(text: string): boolean {
-  for (const character of text) {
-    const codePoint = character.codePointAt(0)
-
-    if (codePoint !== undefined && codePoint > 127) {
-      return true
-    }
-  }
-
-  return false
-}
-
-/** 创建缺少 PDF 字体的稳定错误并触发回调。 */
-function createPdfFontMissingError(
-  requestId: string | undefined,
-  options: ExportPdfOptions,
-  fontFamily?: string
-): Error & PdfError {
-  const message = fontFamily === undefined
-    ? '缺少可用于 PDF 中文文本的字体'
-    : '配置的 PDF 字体不覆盖当前文本'
-  const error = new Error(message) as Error & PdfError
-
-  error.name = 'PdfExportFontMissingError'
-  Object.assign(error, {
-    code: 'PDF_FONT_MISSING',
-    ...(fontFamily === undefined ? {} : {
-      fontFamily,
-      recoverable: true
-    }),
-    ...(requestId === undefined ? {} : { requestId })
-  })
-
-  if (fontFamily !== undefined) {
-    options.onWarning?.({
-      code: 'PDF_FONT_MISSING',
-      severity: 'warning',
-      message,
-      fontFamily,
-      fallback: 'provide-compatible-font',
-      recoverable: true
-    })
-  }
-
-  options.onError?.(error)
-
-  return error
-}
-
 /** 判断 inlineObject 是否是图片。 */
 function isPdfImageInlineBox(inline: PageBox['lines'][number]['inlines'][number]): inline is PdfImageInlineBox {
   return inline.kind === 'inlineObject'
@@ -788,11 +517,6 @@ function readPdfPageGeometry(pages: readonly PageBox[]): readonly PdfPageGeometr
       }
     }
   })
-}
-
-/** twips 转 PDF points。 */
-function twipsToPdfPoints(twips: number): number {
-  return twips / 20
 }
 
 /** 把 Uint8Array 复制成独立 ArrayBuffer。 */

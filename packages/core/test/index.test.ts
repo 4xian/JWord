@@ -16,13 +16,14 @@ import {
   buildUpsertResourceCommand,
   JWordError,
   createEditor,
+  createCanvasTextMeasurer,
   createFontManager,
   createPageConfig,
   isAllowedResourceUrl,
   layoutDocument,
   resolveSelectedImageTarget
 } from '../src/index'
-import type { DocumentLayout, Editor, EditorLocationQuery, EditorLocationTarget, EditorRangeSnapshot, EditorResolvedLocation, EditorScrollToLocationOptions, EditorTextLocation, EditorTextQueryResult, HistoryOperationResult, HistoryScope, JWordErrorCode, TextInserterError, TextInserterErrorCode } from '../src/index'
+import type { DocumentLayout, Editor, EditorLocationQuery, EditorLocationTarget, EditorRangeSnapshot, EditorResolvedLocation, EditorScrollToLocationOptions, EditorTextLocation, EditorTextQueryResult, HistoryOperationResult, HistoryScope, JWordErrorCode, TextInserterError, TextInserterErrorCode, TextMeasurer, TextMeasurementMetrics } from '../src/index'
 
 describe('core public API', () => {
   it('exports the Gate 1 editor facade and diagnostic error contract from the root entry', () => {
@@ -115,6 +116,21 @@ describe('core public API', () => {
 
   it('exports Gate 2 布局, page config and font manager entry points', () => {
     const editor = createEditor({ initialText: '分页' })
+    const textMeasurer: TextMeasurer = createCanvasTextMeasurer({
+      font: '',
+      measureText() {
+        return {
+          width: 10,
+          actualBoundingBoxAscent: 8,
+          actualBoundingBoxDescent: 2
+        }
+      }
+    })
+    const metrics: TextMeasurementMetrics = textMeasurer.measureText('字', {
+      fontFamily: 'Arial',
+      fontSizePx: 16,
+      status: 'available'
+    })
     const layout: DocumentLayout = layoutDocument({
       projection: editor.getProjection(),
       pageConfig: createPageConfig(),
@@ -122,6 +138,7 @@ describe('core public API', () => {
     })
 
     expect(layout.pages[0]?.kind).toBe('page')
+    expect(metrics.widthCssPx).toBe(10)
 
     editor.destroy()
   })

@@ -10,8 +10,9 @@
   },
   "toolAvailability": {
     "openXmlValidator": {
-      "status": "missing",
-      "evidence": "Open XML validator command was not found."
+      "status": "available",
+      "command": "node_modules/.bin/ooxml-validator",
+      "evidence": "Open XML validator command found: node_modules/.bin/ooxml-validator"
     },
     "libreOffice": {
       "status": "missing",
@@ -31,19 +32,6 @@
   "evidenceRequests": [
     {
       "fixtureId": "docx-t1-paragraphs",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-paragraphs.docx",
-      "artifactByteLength": 4889,
-      "artifactSha256": "e02ab84410d40de07e7bbe65d8ec3e1948e3f14bb6f846a31afcd8084a744191",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-paragraphs",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-paragraphs.docx",
@@ -74,24 +62,11 @@
     },
     {
       "fixtureId": "docx-t1-run-styles",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-      "artifactByteLength": 5247,
-      "artifactSha256": "bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-run-styles",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-      "artifactByteLength": 5247,
-      "artifactSha256": "bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551",
+      "artifactByteLength": 5291,
+      "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
       "requiredEvidence": [
         "app version and machine/date",
         "open result and repair prompt state",
@@ -102,11 +77,26 @@
     },
     {
       "fixtureId": "docx-t1-run-styles",
+      "target": "WPS",
+      "status": "stale-artifact-evidence",
+      "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
+      "artifactByteLength": 5291,
+      "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
+      "requiredEvidence": [
+        "app version and machine/date",
+        "open result and repair prompt state",
+        "edit/save/reopen result",
+        "main visual difference notes",
+        "artifact path and SHA-256 match this run"
+      ]
+    },
+    {
+      "fixtureId": "docx-t1-run-styles",
       "target": "LibreOffice",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-      "artifactByteLength": 5247,
-      "artifactSha256": "bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551",
+      "artifactByteLength": 5291,
+      "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
       "requiredEvidence": [
         "app version and machine/date",
         "open result and repair prompt state",
@@ -117,24 +107,26 @@
     },
     {
       "fixtureId": "docx-t1-paragraph-formatting",
-      "target": "Open XML validator",
+      "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
       "artifactByteLength": 5144,
-      "artifactSha256": "306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621",
+      "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
       "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
+        "app version and machine/date",
+        "open result and repair prompt state",
+        "edit/save/reopen result",
+        "main visual difference notes",
         "artifact path and SHA-256 match this run"
       ]
     },
     {
       "fixtureId": "docx-t1-paragraph-formatting",
-      "target": "Word",
-      "status": "pending",
+      "target": "WPS",
+      "status": "stale-artifact-evidence",
       "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
       "artifactByteLength": 5144,
-      "artifactSha256": "306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621",
+      "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
       "requiredEvidence": [
         "app version and machine/date",
         "open result and repair prompt state",
@@ -149,25 +141,12 @@
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
       "artifactByteLength": 5144,
-      "artifactSha256": "306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621",
+      "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
       "requiredEvidence": [
         "app version and machine/date",
         "open result and repair prompt state",
         "edit/save/reopen result",
         "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-headings",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-headings.docx",
-      "artifactByteLength": 4961,
-      "artifactSha256": "c98e14109c7c15055d664ea2e2e7da1ba716e05d05fcd25cbb76fa4c8c52af3e",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
         "artifact path and SHA-256 match this run"
       ]
     },
@@ -203,19 +182,6 @@
     },
     {
       "fixtureId": "docx-t1-lists",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-lists.docx",
-      "artifactByteLength": 5651,
-      "artifactSha256": "d6245e206767bc9b700d227c12487d3ce743ac903a1b8d85173151d52793ef87",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-lists",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-lists.docx",
@@ -246,19 +212,6 @@
     },
     {
       "fixtureId": "docx-t1-table-basic",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-table-basic.docx",
-      "artifactByteLength": 5376,
-      "artifactSha256": "abe71d33ac03eb87272411e393d0c42b24c43c40f8f012efb7456af818306dbd",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-table-basic",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-table-basic.docx",
@@ -289,19 +242,6 @@
     },
     {
       "fixtureId": "docx-t1-inline-image",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-inline-image.docx",
-      "artifactByteLength": 5987,
-      "artifactSha256": "c049724c884d7b5e100f54efc70b6fa39c4bcf26b43127ae10f1654ffb8c2174",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-inline-image",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-inline-image.docx",
@@ -332,19 +272,6 @@
     },
     {
       "fixtureId": "docx-t1-page-setup",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-page-setup.docx",
-      "artifactByteLength": 4823,
-      "artifactSha256": "fc27dea6a16a85204fa5890f3fa970f08d6c140eb5d58ee32ee78518639f23da",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-page-setup",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-page-setup.docx",
@@ -375,19 +302,6 @@
     },
     {
       "fixtureId": "docx-t2-header-footer",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-header-footer.docx",
-      "artifactByteLength": 4756,
-      "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-header-footer",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-header-footer.docx",
@@ -418,19 +332,6 @@
     },
     {
       "fixtureId": "docx-t2-page-number",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-page-number.docx",
-      "artifactByteLength": 4756,
-      "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-page-number",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-page-number.docx",
@@ -461,19 +362,6 @@
     },
     {
       "fixtureId": "docx-t2-comments",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-comments.docx",
-      "artifactByteLength": 4745,
-      "artifactSha256": "bba6063e7ee21c5b13624d87499822d93eb20a825b3aee33d04b2e810f26f855",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-comments",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-comments.docx",
@@ -504,19 +392,6 @@
     },
     {
       "fixtureId": "docx-t2-links",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-links.docx",
-      "artifactByteLength": 4980,
-      "artifactSha256": "8c8b7f2db79d3f3bd9346ebd801a6fc375c797baf26095c7c78a535a1c850874",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-links",
       "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-links.docx",
@@ -547,24 +422,26 @@
     },
     {
       "fixtureId": "docx-t2-section-breaks",
-      "target": "Open XML validator",
+      "target": "Word",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-      "artifactByteLength": 4856,
-      "artifactSha256": "409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2",
+      "artifactByteLength": 4993,
+      "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
       "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
+        "app version and machine/date",
+        "open result and repair prompt state",
+        "edit/save/reopen result",
+        "main visual difference notes",
         "artifact path and SHA-256 match this run"
       ]
     },
     {
       "fixtureId": "docx-t2-section-breaks",
-      "target": "Word",
+      "target": "WPS",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-      "artifactByteLength": 4856,
-      "artifactSha256": "409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2",
+      "artifactByteLength": 4993,
+      "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
       "requiredEvidence": [
         "app version and machine/date",
         "open result and repair prompt state",
@@ -578,26 +455,13 @@
       "target": "LibreOffice",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-      "artifactByteLength": 4856,
-      "artifactSha256": "409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2",
+      "artifactByteLength": 4993,
+      "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
       "requiredEvidence": [
         "app version and machine/date",
         "open result and repair prompt state",
         "edit/save/reopen result",
         "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-floating-object-warning",
-      "target": "Open XML validator",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-floating-object-warning.docx",
-      "artifactByteLength": 4720,
-      "artifactSha256": "a0cc2d82f8732c2d02c2bd02361e6fe4d61dceeffea3c115297cc44aa28dfec1",
-      "requiredEvidence": [
-        "OpenXmlValidator output or converted diagnostics JSON",
-        "diagnostic severity/code/part/path/message fields",
         "artifact path and SHA-256 match this run"
       ]
     },
@@ -668,8 +532,21 @@
           "fixtureId": "docx-t1-run-styles",
           "app": "Word",
           "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-          "artifactByteLength": 5247,
-          "artifactSha256": "bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551",
+          "artifactByteLength": 5291,
+          "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
+          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
+        },
+        {
+          "fixtureId": "docx-t1-run-styles",
+          "app": "WPS",
+          "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
+          "artifactByteLength": 5291,
+          "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -681,8 +558,8 @@
           "fixtureId": "docx-t1-run-styles",
           "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-          "artifactByteLength": 5247,
-          "artifactSha256": "bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551",
+          "artifactByteLength": 5291,
+          "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -695,7 +572,20 @@
           "app": "Word",
           "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
           "artifactByteLength": 5144,
-          "artifactSha256": "306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621",
+          "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
+          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
+        },
+        {
+          "fixtureId": "docx-t1-paragraph-formatting",
+          "app": "WPS",
+          "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
+          "artifactByteLength": 5144,
+          "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -708,7 +598,7 @@
           "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
           "artifactByteLength": 5144,
-          "artifactSha256": "306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621",
+          "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -954,8 +844,21 @@
           "fixtureId": "docx-t2-section-breaks",
           "app": "Word",
           "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-          "artifactByteLength": 4856,
-          "artifactSha256": "409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2",
+          "artifactByteLength": 4993,
+          "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
+          "result": "pending",
+          "editable": "pending",
+          "repairPrompt": "pending",
+          "mainVisualDifference": "pending",
+          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
+          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
+        },
+        {
+          "fixtureId": "docx-t2-section-breaks",
+          "app": "WPS",
+          "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
+          "artifactByteLength": 4993,
+          "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -967,8 +870,8 @@
           "fixtureId": "docx-t2-section-breaks",
           "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-          "artifactByteLength": 4856,
-          "artifactSha256": "409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2",
+          "artifactByteLength": 4993,
+          "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -1008,120 +911,7 @@
       "path": "fixtures/docx/openxml-validation-results.json",
       "schemaVersion": 1,
       "scope": "docx-openxml-validation-results",
-      "results": [
-        {
-          "fixtureId": "docx-t1-paragraphs",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-paragraphs.docx",
-          "artifactByteLength": 4889,
-          "artifactSha256": "e02ab84410d40de07e7bbe65d8ec3e1948e3f14bb6f846a31afcd8084a744191",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t1-run-styles",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-          "artifactByteLength": 5247,
-          "artifactSha256": "bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t1-paragraph-formatting",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
-          "artifactByteLength": 5144,
-          "artifactSha256": "306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t1-headings",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-headings.docx",
-          "artifactByteLength": 4961,
-          "artifactSha256": "c98e14109c7c15055d664ea2e2e7da1ba716e05d05fcd25cbb76fa4c8c52af3e",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t1-lists",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-lists.docx",
-          "artifactByteLength": 5651,
-          "artifactSha256": "d6245e206767bc9b700d227c12487d3ce743ac903a1b8d85173151d52793ef87",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t1-table-basic",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-table-basic.docx",
-          "artifactByteLength": 5376,
-          "artifactSha256": "abe71d33ac03eb87272411e393d0c42b24c43c40f8f012efb7456af818306dbd",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t1-inline-image",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-inline-image.docx",
-          "artifactByteLength": 5987,
-          "artifactSha256": "c049724c884d7b5e100f54efc70b6fa39c4bcf26b43127ae10f1654ffb8c2174",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t1-page-setup",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-page-setup.docx",
-          "artifactByteLength": 4823,
-          "artifactSha256": "fc27dea6a16a85204fa5890f3fa970f08d6c140eb5d58ee32ee78518639f23da",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t2-header-footer",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-header-footer.docx",
-          "artifactByteLength": 4756,
-          "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t2-page-number",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-page-number.docx",
-          "artifactByteLength": 4756,
-          "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t2-comments",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-comments.docx",
-          "artifactByteLength": 4745,
-          "artifactSha256": "bba6063e7ee21c5b13624d87499822d93eb20a825b3aee33d04b2e810f26f855",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t2-links",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-links.docx",
-          "artifactByteLength": 4980,
-          "artifactSha256": "8c8b7f2db79d3f3bd9346ebd801a6fc375c797baf26095c7c78a535a1c850874",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t2-section-breaks",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-          "artifactByteLength": 4856,
-          "artifactSha256": "409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        },
-        {
-          "fixtureId": "docx-t2-floating-object-warning",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-floating-object-warning.docx",
-          "artifactByteLength": 4720,
-          "artifactSha256": "a0cc2d82f8732c2d02c2bd02361e6fe4d61dceeffea3c115297cc44aa28dfec1",
-          "evidence": "TODO: record OpenXmlValidator version, command, machine/date, and converted diagnostics JSON.",
-          "diagnostics": []
-        }
-      ]
+      "results": []
     }
   },
   "results": [
@@ -1155,9 +945,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t1-paragraphs.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1202,8 +992,8 @@
       "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
       "exportArtifactEvidence": {
         "path": "fixtures/docx/exports/docx-t1-run-styles.docx",
-        "byteLength": 5247,
-        "sha256": "bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551"
+        "byteLength": 5291,
+        "sha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912"
       },
       "importWarningCount": 0,
       "exportWarningCount": 0,
@@ -1225,9 +1015,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t1-run-styles.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1242,12 +1032,12 @@
           },
           {
             "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 19:54-20:00 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. Source artifact fixtures/docx/exports/docx-t1-run-styles.docx byteLength 5247 sha256 bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551. Computer Use opened the source artifact in WPS and read window title docx-t1-run-styles.docx with visible content Styled run / superscript / subscript / Character style run; no repair/recovery prompt or modal dialog was visible. To avoid modifying the source artifact, the same bytes were copied to /tmp/jword-gate5-wps-compat/docx-t1-run-styles-wps-edit-copy.docx and opened in WPS; before edit the copy had the same sha256 and byteLength as the source. WPS accepted typed text WPS_EDIT_PROOF, saved with Command+S, closed, reopened the copy, and the reopened WPS window visibly contained WPS_EDIT_PROOF with no repair prompt. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF; edited copy byteLength 10144 sha256 48816509b23ce034194198bbd1a2affe80fa77a20dd2073d318849d4b681b397. The source artifact hash remained bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551."
+            "result": "pending",
+            "editable": "pending",
+            "repairPrompt": "pending",
+            "mainVisualDifference": "pending",
+            "blockingIssue": "External WPS evidence artifact does not match current export artifact.",
+            "evidence": "ignored stale WPS evidence; current artifact SHA-256: abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912; external artifact path: fixtures/docx/exports/docx-t1-run-styles.docx; external byteLength: 5247; external SHA-256: bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551"
           },
           {
             "app": "LibreOffice",
@@ -1273,7 +1063,7 @@
       "exportArtifactEvidence": {
         "path": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
         "byteLength": 5144,
-        "sha256": "306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621"
+        "sha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e"
       },
       "importWarningCount": 0,
       "exportWarningCount": 0,
@@ -1295,9 +1085,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t1-paragraph-formatting.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1312,12 +1102,12 @@
           },
           {
             "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 20:19-20:51 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. Source artifact fixtures/docx/exports/docx-t1-paragraph-formatting.docx byteLength 5144 sha256 306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t1-paragraph-formatting-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t1_paragraph_formatting, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t1_paragraph_formatting. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t1_paragraph_formatting; edited copy byteLength 10113 sha256 f05344d536ee52bdca4111186f5a90ea0996acea1d5e0184cde9c2d6ee07052d. The source artifact hash remained 306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621."
+            "result": "pending",
+            "editable": "pending",
+            "repairPrompt": "pending",
+            "mainVisualDifference": "pending",
+            "blockingIssue": "External WPS evidence artifact does not match current export artifact.",
+            "evidence": "ignored stale WPS evidence; current artifact SHA-256: d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e; external artifact path: fixtures/docx/exports/docx-t1-paragraph-formatting.docx; external byteLength: 5144; external SHA-256: 306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621"
           },
           {
             "app": "LibreOffice",
@@ -1365,9 +1155,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t1-headings.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1435,9 +1225,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t1-lists.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1505,9 +1295,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t1-table-basic.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1575,9 +1365,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t1-inline-image.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1645,9 +1435,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t1-page-setup.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1715,9 +1505,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t2-header-footer.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1785,9 +1575,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t2-page-number.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1855,9 +1645,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t2-comments.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1925,9 +1715,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t2-links.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -1972,8 +1762,8 @@
       "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
       "exportArtifactEvidence": {
         "path": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-        "byteLength": 4856,
-        "sha256": "409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2"
+        "byteLength": 4993,
+        "sha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925"
       },
       "importWarningCount": 0,
       "exportWarningCount": 0,
@@ -1995,9 +1785,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t2-section-breaks.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [
@@ -2012,12 +1802,12 @@
           },
           {
             "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 21:04-21:34 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. WPS-only Gate 5 compatibility evidence. Source artifact fixtures/docx/exports/docx-t2-section-breaks.docx byteLength 4856 sha256 409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t2-section-breaks-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t2_section_breaks, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t2_section_breaks. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t2_section_breaks; edited copy byteLength 10047 sha256 1ab3c24210903526cf8198f67a66b7fc78af8a2f7bdd5883dcb39c0e44d3ac57. The source artifact hash remained 409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2."
+            "result": "pending",
+            "editable": "pending",
+            "repairPrompt": "pending",
+            "mainVisualDifference": "pending",
+            "blockingIssue": "D-2 多 section 导出修复后 artifact hash 已变化，旧 WPS 手工证据失效，需重新打开验证。",
+            "evidence": "pending: previous WPS evidence was bound to artifact SHA-256 409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2; current artifact SHA-256 is 19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925."
           },
           {
             "app": "LibreOffice",
@@ -2065,9 +1855,9 @@
           },
           {
             "kind": "open-xml-validator",
-            "result": "pending",
-            "evidence": "not-run",
-            "blockingIssue": "Open XML validator result was not provided."
+            "result": "pass",
+            "evidence": "node_modules/.bin/ooxml-validator: {\n  \"file\": \"fixtures/docx/exports/docx-t2-floating-object-warning.docx\",\n  \"ok\": true,\n  \"errors\": []\n}",
+            "diagnosticCount": 0
           }
         ],
         "appResults": [

@@ -36,7 +36,6 @@ const BLOCKED_EDIT_EVENTS = [
   'cut',
   'drop',
   'keydown',
-  'mousedown',
   'contextmenu',
   'dblclick'
 ] as const
@@ -120,12 +119,46 @@ function bindReadonlyEvents(
 ): void {
   for (const type of BLOCKED_EDIT_EVENTS) {
     options.editorHost.addEventListener(type, (event) => {
+      if (isReadonlyAllowedKeydown(event)) {
+        return
+      }
+
       preventReadonlyEdit(event, options.assistive.liveRegion)
     }, {
       capture: true,
       signal: signalController.signal
     })
   }
+}
+
+/** 判断只读模式下仍允许透传的复制快捷键。 */
+function isReadonlyAllowedKeydown(event: Event): boolean {
+  if (!(event instanceof KeyboardEvent)) {
+    return false
+  }
+
+  if (isReadonlyNavigationKey(event.key)) {
+    return true
+  }
+
+  if (!event.altKey && (event.ctrlKey || event.metaKey)) {
+    return ['a', 'c', 'f', 'h'].includes(event.key.toLowerCase())
+  }
+
+  return false
+}
+
+/** 判断键盘事件是否只移动或扩展选区。 */
+function isReadonlyNavigationKey(key: string): boolean {
+  return key === 'ArrowLeft'
+    || key === 'ArrowRight'
+    || key === 'ArrowUp'
+    || key === 'ArrowDown'
+    || key === 'Home'
+    || key === 'End'
+    || key === 'PageUp'
+    || key === 'PageDown'
+    || key === 'Escape'
 }
 
 /** 阻止一次只读模式下的编辑事件。 */

@@ -1,11 +1,12 @@
 /**
  * @fileoverview 职责: 用真实浏览器 canvas 像素验证 Gate 2 多页内容和中段挂载窗口的真实渲染。
- * 边界: 只做浏览器视觉验收，不固定跨平台截图基线，不把 Gate 3 手势语义算作 Gate 2 证据。
+ * 边界: 只做浏览器视觉验收，固定少量 Gate 2 修复样张，不把 Gate 3 手势语义算作 Gate 2 证据。
  * 协作: vanilla demo 测试钩子和 canvas renderer。
  * 约束: 通过像素采样证明首/中/末页非空以及中段窗口页已绘制，避免人工打开页面。
  * Specs: docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
  */
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 interface CanvasPixelProbe {
   readonly pageIndex: number
@@ -107,8 +108,32 @@ test('Gate 2 demo paints only the mounted middle-window pages after scrolling th
   expect(lastWindowPixels.pageIndex).toBe(probe.viewportPageIndexes[probe.viewportPageIndexes.length - 1])
 })
 
+test('Gate 2 remediation visual baseline renders justify text and row-split table', async ({ page }) => {
+  await page.setViewportSize({
+    width: 1100,
+    height: 900
+  })
+  await page.goto('/')
+  await waitForGate2FixtureLayout(page)
+  await loadGate2RemediationVisualDocument(page)
+
+  const probe = await readGate2RemediationProbe(page)
+
+  expect(probe.pageCount).toBe(2)
+  expect(probe.justifiedLineRightEdge).toBeCloseTo(probe.contentRightEdge, 5)
+  expect(probe.tableBoxCount).toBe(2)
+  expect(probe.tablePageIndexes).toEqual([0, 1])
+  expect(probe.tableRowCounts).toEqual([4, 4])
+  expect(probe.secondPageNonWhitePixels).toBeGreaterThan(100)
+  await expect(page.locator('.jw-demo__workspace')).toHaveScreenshot('gate2-remediation-justify-table-baseline.png', {
+    animations: 'disabled',
+    caret: 'hide',
+    maxDiffPixelRatio: 0.02
+  })
+})
+
 /** 等待 demo 完成 Gate 2 fixture 初始化并产出分页 layout。 */
-async function waitForGate2FixtureLayout(page: import('@playwright/test').Page): Promise<void> {
+async function waitForGate2FixtureLayout(page: Page): Promise<void> {
   await expect.poll(async () => {
     return page.evaluate(() => {
       return window.__jwordDemo?.editor.getLayout().pages.length ?? 0
@@ -116,7 +141,7 @@ async function waitForGate2FixtureLayout(page: import('@playwright/test').Page):
   }).toBeGreaterThan(0)
 }
 
-async function readFixturePageBounds(page: import('@playwright/test').Page): Promise<Readonly<{
+async function readFixturePageBounds(page: Page): Promise<Readonly<{
   firstPageIndex: number
   lastPageIndex: number
   pageCount: number
@@ -145,7 +170,7 @@ async function readFixturePageBounds(page: import('@playwright/test').Page): Pro
 }
 
 /** 读取当前 demo layout 的页数，避免浏览器测试重复固化 draw-call baseline。 */
-async function readFixturePageCount(page: import('@playwright/test').Page): Promise<number> {
+async function readFixturePageCount(page: Page): Promise<number> {
   return page.evaluate(() => {
     const pages = window.__jwordDemo?.editor.getLayout().pages
 
@@ -157,7 +182,7 @@ async function readFixturePageCount(page: import('@playwright/test').Page): Prom
   })
 }
 
-async function scrollToRatio(page: import('@playwright/test').Page, ratio: number): Promise<void> {
+async function scrollToRatio(page: Page, ratio: number): Promise<void> {
   await page.evaluate((inputRatio) => {
     const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
 
@@ -201,7 +226,7 @@ async function scrollToRatio(page: import('@playwright/test').Page, ratio: numbe
 }
 
 async function readMountedEdgePageIndex(
-  page: import('@playwright/test').Page,
+  page: Page,
   edge: 'first' | 'last'
 ): Promise<number> {
   return page.evaluate((targetEdge) => {
@@ -221,7 +246,7 @@ async function readMountedEdgePageIndex(
   }, edge)
 }
 
-async function readMountedMedianPageIndex(page: import('@playwright/test').Page): Promise<number> {
+async function readMountedMedianPageIndex(page: Page): Promise<number> {
   return page.evaluate(() => {
     const pageIndexes = [...document.querySelectorAll<HTMLElement>('[data-jword-page]')]
       .filter((element) => element.querySelector('canvas') !== null)
@@ -237,7 +262,7 @@ async function readMountedMedianPageIndex(page: import('@playwright/test').Page)
   })
 }
 
-async function readMountedWindowProbe(page: import('@playwright/test').Page): Promise<MountedWindowProbe> {
+async function readMountedWindowProbe(page: Page): Promise<MountedWindowProbe> {
   return page.evaluate(() => {
     const demo = window.__jwordDemo
 
@@ -279,7 +304,152 @@ async function readMountedWindowProbe(page: import('@playwright/test').Page): Pr
   })
 }
 
-async function samplePagePixels(page: import('@playwright/test').Page, pageIndex: number): Promise<CanvasPixelProbe> {
+/** 加载同时覆盖 justify 与跨页表格的视觉修复夹具。 */
+async function loadGate2RemediationVisualDocument(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const demo = window.__jwordDemo
+
+    if (demo === undefined) {
+      throw new Error('缺少 Gate 2 remediation visual 所需的 demo 测试钩子')
+    }
+
+    demo.editor.setPageConfig({
+      widthTwips: 3600,
+      heightTwips: 4800,
+      marginTwips: {
+        top: 240,
+        right: 240,
+        bottom: 240,
+        left: 240
+      }
+    })
+    demo.editor.loadDocumentModel({
+      document: {
+        kind: 'document',
+        id: 'gate2-remediation-visual-document',
+        sections: [
+          {
+            kind: 'section',
+            id: 'gate2-remediation-visual-section',
+            blocks: [
+              {
+                kind: 'paragraph',
+                id: 'gate2-remediation-justify-paragraph',
+                properties: {
+                  alignment: 'justify'
+                },
+                runs: [
+                  {
+                    kind: 'run',
+                    id: 'gate2-remediation-justify-run',
+                    properties: {
+                      fontSizePx: 24
+                    },
+                    inlines: [
+                      {
+                        kind: 'text',
+                        text: '甲乙丙丁戊己庚辛壬癸'
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                kind: 'table',
+                id: 'gate2-remediation-split-table',
+                grid: [960, 960, 960],
+                border: {
+                  color: '#334155',
+                  widthTwips: 18
+                },
+                rows: Array.from({ length: 8 }, (_, rowIndex) => ({
+                  id: `gate2-remediation-table-row-${rowIndex + 1}`,
+                  properties: {
+                    heightTwips: 720
+                  },
+                  cells: Array.from({ length: 3 }, (_, columnIndex) => ({
+                    id: `gate2-remediation-table-cell-${rowIndex + 1}-${columnIndex + 1}`,
+                    blocks: [
+                      {
+                        kind: 'paragraph',
+                        id: `gate2-remediation-table-paragraph-${rowIndex + 1}-${columnIndex + 1}`,
+                        runs: [
+                          {
+                            kind: 'run',
+                            id: `gate2-remediation-table-run-${rowIndex + 1}-${columnIndex + 1}`,
+                            properties: {
+                              fontSizePx: 14
+                            },
+                            inlines: [
+                              {
+                                kind: 'text',
+                                text: columnIndex === 0 ? `分页表格 ${rowIndex + 1}` : `C${columnIndex + 1}`
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }))
+                }))
+              }
+            ]
+          }
+        ]
+      }
+    })
+  })
+
+  await expect.poll(async () => {
+    return page.evaluate(() => {
+      const layout = window.__jwordDemo?.editor.getLayout()
+      const tableBoxes = layout?.pages.flatMap((pageBox) =>
+        pageBox.blocks.filter((block) => block.kind === 'table')
+      ) ?? []
+
+      return layout?.pages.length === 2 && tableBoxes.length === 2
+    })
+  }).toBe(true)
+}
+
+/** 读取 Gate 2 修复样张的布局与像素探针。 */
+async function readGate2RemediationProbe(page: Page): Promise<Readonly<{
+  pageCount: number
+  justifiedLineRightEdge: number
+  contentRightEdge: number
+  tableBoxCount: number
+  tablePageIndexes: readonly number[]
+  tableRowCounts: readonly number[]
+  secondPageNonWhitePixels: number
+}>> {
+  const secondPagePixels = await samplePagePixels(page, 1)
+
+  return page.evaluate((nonWhitePixels) => {
+    const layout = window.__jwordDemo?.editor.getLayout()
+    const firstPage = layout?.pages[0]
+    const firstLine = firstPage?.lines.find((line) => line.paragraphId === 'gate2-remediation-justify-paragraph')
+    const lastFragment = firstLine?.fragments.at(-1)
+    const tableBoxes = layout?.pages.flatMap((pageBox) =>
+      pageBox.blocks.filter((block) => block.kind === 'table')
+    ) ?? []
+
+    if (layout === undefined || firstPage === undefined || firstLine === undefined || lastFragment === undefined) {
+      throw new Error('缺少 Gate 2 remediation visual 布局探针数据')
+    }
+
+    return {
+      pageCount: layout.pages.length,
+      justifiedLineRightEdge: lastFragment.x + lastFragment.width,
+      contentRightEdge: firstPage.contentRect.x + firstPage.contentRect.width,
+      tableBoxCount: tableBoxes.length,
+      tablePageIndexes: tableBoxes.map((tableBox) => tableBox.pageIndex),
+      tableRowCounts: tableBoxes.map((tableBox) => tableBox.rowCount),
+      secondPageNonWhitePixels: nonWhitePixels
+    }
+  }, secondPagePixels.nonWhitePixels)
+}
+
+async function samplePagePixels(page: Page, pageIndex: number): Promise<CanvasPixelProbe> {
   return page.evaluate((targetPageIndex): CanvasPixelProbe => {
     const canvas = document.querySelector<HTMLCanvasElement>(`[data-jword-page="${targetPageIndex}"] .jw-editor__page-canvas`)
     const context = canvas?.getContext('2d')

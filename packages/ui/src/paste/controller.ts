@@ -7,7 +7,7 @@
  */
 import type { Editor } from '@4xian/jword-core'
 import type { JWordUiLiveRegionController } from '../types'
-import { sanitizePastedHtmlToRichTextFragment } from './sanitizer'
+import { sanitizePastedHtmlToRichTextFragmentWithWarnings } from './sanitizer'
 
 interface CreatePasteControllerOptions {
   readonly editor: Editor
@@ -48,7 +48,8 @@ function handlePasteEvent(options: CreatePasteControllerOptions, event: Clipboar
     return
   }
 
-  const fragment = sanitizePastedHtmlToRichTextFragment(html)
+  const result = sanitizePastedHtmlToRichTextFragmentWithWarnings(html)
+  const fragment = result.fragment
 
   if (fragment === null) {
     return
@@ -61,6 +62,9 @@ function handlePasteEvent(options: CreatePasteControllerOptions, event: Clipboar
   event.preventDefault()
   event.stopImmediatePropagation()
   options.assistive.liveRegion?.announce('已粘贴保留格式的安全富文本。', { force: true })
+  for (const warning of result.warnings) {
+    options.assistive.liveRegion?.announce(`WARN: ${warning.message}`, { force: true })
+  }
 }
 
 /** 读取 editor mount 后的隐藏输入框。 */

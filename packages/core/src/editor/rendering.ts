@@ -209,6 +209,7 @@ export function renderPageBatch(input: Readonly<{
   rerenderPageIndexes: readonly number[]
   selectionRender: Readonly<{
     selectionRects?: readonly LayoutRect[]
+    commentRects?: readonly LayoutRect[]
     caretRect?: LayoutRect
   }>
   scale: number
@@ -223,6 +224,9 @@ export function renderPageBatch(input: Readonly<{
     ...(input.selectionRender.selectionRects === undefined
       ? {}
       : { selectionRects: input.selectionRender.selectionRects }),
+    ...(input.selectionRender.commentRects === undefined
+      ? {}
+      : { commentRects: input.selectionRender.commentRects }),
     ...(input.selectionRender.caretRect === undefined
       ? {}
       : { caretRect: input.selectionRender.caretRect }),
@@ -343,6 +347,13 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
     case 'setRunLink':
     case 'addRevisionMetadata':
       return findRunPageIndexes(layout, operation.runId)
+    case 'acceptRevision':
+    case 'rejectRevision':
+      return mergePageIndexes(
+        findTextPositionPageIndexes(layout, operation.range.anchor),
+        findTextPositionPageIndexes(layout, operation.range.focus),
+        ...operation.formatTargets.map((target) => findRunPageIndexes(layout, target.runId))
+      )
     case 'setParagraphProperties':
       return findParagraphPageIndexes(layout, operation.paragraphId)
     case 'setSectionProperties':
@@ -433,6 +444,12 @@ function findSectionPageIndexes(layout: DocumentLayout, sectionId: string): read
 export function findBlockPageIndexes(layout: DocumentLayout, blockId: string): readonly number[] {
   return mergePageIndexes(
     findParagraphPageIndexes(layout, blockId),
+    layout.pages.flatMap((page) => page.blocks.some((block) =>
+      block.kind === 'table' && block.tableId === blockId
+      || block.kind === 'table' && block.rows.some((row) =>
+        row.cells.some((cell) => cell.blockIds.includes(blockId))
+      )
+    ) ? [page.pageIndex] : []),
     layout.pages.flatMap((page) => page.lines.some((line) =>
       line.fragments.some((fragment) => fragment.blockId === blockId)
       || line.inlines.some((inline) => inline.blockId === blockId)

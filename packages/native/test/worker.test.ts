@@ -73,6 +73,37 @@ describe('@4xian/jword-native worker runtime', () => {
     expect(posted).toEqual([event])
   })
 
+  it('keeps a cancel that arrives before the matching save is registered', async () => {
+    const posted: JWordNativeWorkerEvent[] = []
+    const requestId = 'native-worker-cancel-before-save-1'
+    const cancelEvent = await dispatchJWordNativeWorkerRequest(
+      createCancelJWordNativeRequest(requestId),
+      (response) => {
+        posted.push(response)
+      }
+    )
+    const saveEvent = await dispatchJWordNativeWorkerRequest(
+      createSaveJWordNativeRequest(requestId, {
+        kind: 'document',
+        id: 'document-native-cancel-before-save',
+        sections: []
+      }),
+      (response) => {
+        posted.push(response)
+      }
+    )
+
+    expect(saveEvent).toMatchObject({
+      type: 'error',
+      requestId,
+      error: {
+        code: 'JWORD_NATIVE_WORKER_CANCELLED',
+        requestId
+      }
+    })
+    expect(posted).toEqual([cancelEvent])
+  })
+
   it('cancels a running save request before posting a stale success result', async () => {
     const posted: JWordNativeWorkerEvent[] = []
     const requestId = 'native-worker-running-cancel'

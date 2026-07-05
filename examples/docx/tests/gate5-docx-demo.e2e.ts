@@ -76,13 +76,20 @@ test('Gate 5 DOCX demo imports exports and keeps editor editable with a valid li
     return {
       byteLength: bytes?.byteLength ?? 0,
       roundtrip: window.__jwordDocxDemo?.readRoundtripText() ?? '',
-      status: window.__jwordDocxDemo?.readStatus() ?? ''
+      status: window.__jwordDocxDemo?.readStatus() ?? '',
+      workerEvents: window.__jwordDocxDemo?.readWorkerEvents() ?? []
     }
   })
 
   expect(docxExport.byteLength).toBeGreaterThan(0)
   expect(docxExport.status).toContain('DOCX 导出完成')
   expect(docxExport.roundtrip).toContain('"matches": true')
+  expect(docxExport.workerEvents).toEqual(expect.arrayContaining([
+    'progress:examples-export-docx-2:queued',
+    'progress:examples-export-docx-2:writing',
+    'progress:examples-export-docx-2:done',
+    'export-result:examples-export-docx-2'
+  ]))
 
   const pdfExport = await page.evaluate(async () => {
     const bytes = await window.__jwordDocxDemo?.exportPdf()
@@ -97,8 +104,21 @@ test('Gate 5 DOCX demo imports exports and keeps editor editable with a valid li
   expect(pdfExport.byteLength).toBeGreaterThan(0)
   expect(pdfExport.status).toContain('PDF 导出完成')
   expect(pdfExport.pdfOutput).toContain('progress: queued -> mapping -> writing -> done')
-  expect(runtimeRequests.some((url) => url.includes('/packages/docx/') || url.includes('@4xian/jword-docx'))).toBe(true)
+  expect(runtimeRequests.some((url) => url.includes('/packages/docx/src/worker.ts') || url.includes('@4xian/jword-docx/worker'))).toBe(true)
   expect(runtimeRequests.some((url) => url.includes('/packages/pdf/') || url.includes('@4xian/jword-pdf'))).toBe(true)
+})
+
+test('Gate 5 DOCX demo can cancel a real worker request through the worker message protocol', async ({ page }) => {
+  await page.goto(`${docxDemoUrl}/?license=valid`)
+  await expect(page.locator('#jword-docx-import')).toBeVisible()
+
+  const cancelResult = await page.evaluate(async () => {
+    await window.__jwordDocxDemo?.cancelWorkerProbe('examples-worker-cancel-probe')
+
+    return window.__jwordDocxDemo?.readWorkerEvents() ?? []
+  })
+
+  expect(cancelResult).toContain('error:examples-worker-cancel-probe:DOCX_WORKER_CANCELLED')
 })
 
 test('Gate 5 DOCX demo reports stable license diagnostics without changing editor state', async ({ page }) => {

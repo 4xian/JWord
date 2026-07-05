@@ -1,6 +1,6 @@
 /**
- * 职责：构造 Gate 4 修订 metadata 的最小核心命令。
- * 边界：只生成 revision metadata 和目标 run 标记，不实现接受、拒绝或 diff 引擎。
+ * 职责：构造 Gate 4 修订 metadata 与单条接受/拒绝的核心命令。
+ * 边界：只生成 revision metadata、目标 run 标记和单条接受/拒绝命令，不实现全部处理或嵌套修订 diff 引擎。
  * 协作模块：selection targets、文本范围快照、事务流水线和投影共同提供修订闭环。
  * 性能/安全约束：builder 只读取当前 projection 与 selection，不访问 DOM、网络或磁盘。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.14。
@@ -11,11 +11,12 @@ import { collectSelectionTargets } from '../model/selection-targets'
 import type { DocumentProjection } from '../model/projection'
 import { isSelectionCollapsed } from '../model/selection'
 import type { SelectionState } from '../model/selection'
-import type { RevisionMetadata } from '../model/types'
-import type { Command } from './transaction'
+import type { Block, RevisionFormatSnapshot, RevisionMetadata, Run } from '../model/types'
+import type { Command, Operation } from './transaction'
 
 let revisionSequence = 0
 let revisionRangeSequence = 0
+
 
 export interface AddRevisionMetadataInput {
   readonly authorId: string
@@ -36,17 +37,19 @@ export function buildAddRevisionMetadataCommand(
     return null
   }
 
-  const target = collectSelectionTargets(projection, selection).runs[0]
+  const targets = collectSelectionTargets(projection, selection).runs
 
-  if (target === undefined) {
+  if (targets.length === 0) {
     return null
   }
 
   const usedRevisionIds = collectRevisionIds(projection)
   const usedRangeIds = collectRevisionRangeIds(projection)
+  const usedRunIds = collectRunIds(projection)
   const revisionId = allocateRevisionId(usedRevisionIds, 'revision', () => ++revisionSequence)
   const rangeId = allocateRevisionId(usedRangeIds, 'revision-range', () => ++revisionRangeSequence)
   const rangeSnapshot = createTextRangeRecord(rangeId, selection.range)
+  const formatSnapshots: RevisionFormatSnapshot[] = []
   const revision: RevisionMetadata = {
     kind: 'revision',
     id: revisionId,
@@ -55,17 +58,106 @@ export function buildAddRevisionMetadataCommand(
     type: input.type,
     rangeId,
     rangeSnapshot,
-    summary: input.summary
+    summary: input.summary,
+    ...(input.type === 'format' ? { formatSnapshots } : {})
   }
+  const operations: Operation[] = targets.map((target) => {
+    const isWholeRunSelection =
+      target.selectedStartGraphemeIndex === 0
+      && target.selectedEndGraphemeIndex === target.graphemeLength
+
+    if (isWholeRunSelection) {
+      appendRevisionFormatSnapshot(formatSnapshots, target.run.id, target.run)
+
+      return {
+        kind: 'addRevisionMetadata',
+        revision,
+        runId: target.run.id
+      }
+    }
+
+    const revisedRunId = target.selectedStartGraphemeIndex > 0
+      ? allocateGeneratedRunId(usedRunIds, target.run.id, 'revision')
+      : undefined
+    const trailingRunId = target.selectedEndGraphemeIndex < target.graphemeLength
+      ? allocateGeneratedRunId(usedRunIds, target.run.id, 'tail')
+      : undefined
+
+    appendRevisionFormatSnapshot(formatSnapshots, revisedRunId ?? target.run.id, target.run)
+
+    return {
+      kind: 'addRevisionMetadata',
+      revision,
+      runId: target.run.id,
+      range: {
+        startGraphemeIndex: target.selectedStartGraphemeIndex,
+        endGraphemeIndex: target.selectedEndGraphemeIndex,
+        ...(revisedRunId === undefined ? {} : { revisedRunId }),
+        ...(trailingRunId === undefined ? {} : { trailingRunId })
+      }
+    }
+  })
 
   return {
     name: 'addRevisionMetadata',
+    operations
+  }
+}
+
+
+/** 构造接受单条修订命令。 */
+export function buildAcceptRevisionCommand(
+  projection: DocumentProjection,
+  revisionId: string
+): Command | null {
+  return buildResolveRevisionCommand(projection, revisionId, 'acceptRevision')
+}
+
+/** 构造拒绝单条修订命令。 */
+export function buildRejectRevisionCommand(
+  projection: DocumentProjection,
+  revisionId: string
+): Command | null {
+  return buildResolveRevisionCommand(projection, revisionId, 'rejectRevision')
+}
+
+
+/** 构造接受或拒绝修订命令。 */
+function buildResolveRevisionCommand(
+  projection: DocumentProjection,
+  revisionId: string,
+  name: 'acceptRevision' | 'rejectRevision'
+): Command | null {
+  const revision = projection.document.revisions?.find((candidate) => candidate.id === revisionId)
+
+  if (revision === undefined) {
+    return null
+  }
+
+  return {
+    name,
     operations: [{
-      kind: 'addRevisionMetadata',
-      revision,
-      runId: target.run.id
+      kind: name,
+      revisionId,
+      range: {
+        anchor: revision.rangeSnapshot.anchor,
+        focus: revision.rangeSnapshot.focus
+      },
+      formatTargets: revision.formatSnapshots ?? []
     }]
   }
+}
+
+/** 记录格式修订拒绝时需要恢复的 run 属性快照。 */
+function appendRevisionFormatSnapshot(
+  snapshots: RevisionFormatSnapshot[],
+  runId: string,
+  run: Run
+): void {
+  snapshots.push({
+    runId,
+    previousProperties: run.properties ?? {}
+  })
 }
 
 /**
@@ -80,6 +172,35 @@ function collectRevisionIds(projection: DocumentProjection): Set<string> {
  */
 function collectRevisionRangeIds(projection: DocumentProjection): Set<string> {
   return new Set((projection.document.revisions ?? []).map((revision) => revision.rangeSnapshot.id))
+}
+
+/** 收集当前 projection 内已使用的 run ID。 */
+function collectRunIds(projection: DocumentProjection): Set<string> {
+  const runIds = new Set<string>()
+
+  for (const section of projection.document.sections) {
+    visitBlocks(section.blocks)
+  }
+
+  return runIds
+
+  function visitBlocks(blocks: readonly Block[]) {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        for (const run of block.runs) {
+          runIds.add(run.id)
+        }
+
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          visitBlocks(cell.blocks)
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -97,6 +218,25 @@ function allocateRevisionId(
   }
 
   usedIds.add(candidate)
+
+  return candidate
+}
+
+/** 分配用于局部修订拆分的 run ID。 */
+function allocateGeneratedRunId(
+  usedRunIds: Set<string>,
+  runId: string,
+  suffix: 'revision' | 'tail'
+): string {
+  let sequence = 1
+  let candidate = `${runId}__${suffix}-${sequence}`
+
+  while (usedRunIds.has(candidate)) {
+    sequence += 1
+    candidate = `${runId}__${suffix}-${sequence}`
+  }
+
+  usedRunIds.add(candidate)
 
   return candidate
 }

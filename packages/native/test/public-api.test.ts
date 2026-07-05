@@ -211,6 +211,22 @@ describe('@4xian/jword-native public API', () => {
     })
   })
 
+  it('reports corrupted metadata with metadata-specific diagnostics', async () => {
+    const save = await saveJWordDocument(createTextDocument('document-native-metadata-invalid', 'metadata'))
+    const corruptedMetadataPackage = await overwriteZipEntry(save.bytes, 'metadata.json', new TextEncoder().encode('[]'))
+    const validation = await validateJWordPackage(corruptedMetadataPackage)
+
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'JWORD_NATIVE_METADATA_INVALID',
+      entry: 'metadata.json',
+      recoverable: false
+    }))
+    await expect(loadJWordDocument(corruptedMetadataPackage)).rejects.toMatchObject({
+      code: 'JWORD_NATIVE_METADATA_INVALID',
+      entry: 'metadata.json'
+    })
+  })
+
   it('rejects mismatched resource MIME and missing document resource references', async () => {
     const save = await saveJWordDocument(createImageDocument([
       createPngResource('image-integrity', 'data:image/png;base64,QUJDRA==')
@@ -245,9 +261,11 @@ describe('@4xian/jword-native public API', () => {
     })
   })
 
-  it('migrates old schema packages and rejects future schema versions with diagnostics', async () => {
+  it('migrates old schema packages and rejects unsupported schema versions with diagnostics', async () => {
     const oldPackage = await createPackageWithSchemaVersion(0)
     const migrated = await loadJWordDocument(oldPackage)
+    const unsupportedOldPackage = await createPackageWithSchemaVersion(-1)
+    const unsupportedValidation = await validateJWordPackage(unsupportedOldPackage)
     const futurePackage = await createPackageWithSchemaVersion(999)
     const validation = await validateJWordPackage(futurePackage)
 
@@ -260,6 +278,14 @@ describe('@4xian/jword-native public API', () => {
           code: 'JWORD_NATIVE_OLD_SCHEMA_MIGRATED'
         })
       ]
+    })
+    expect(unsupportedValidation.valid).toBe(false)
+    expect(unsupportedValidation.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'JWORD_NATIVE_SCHEMA_UNSUPPORTED',
+      recoverable: false
+    }))
+    await expect(loadJWordDocument(unsupportedOldPackage)).rejects.toMatchObject({
+      code: 'JWORD_NATIVE_SCHEMA_UNSUPPORTED'
     })
     expect(validation.valid).toBe(false)
     expect(validation.diagnostics).toContainEqual(expect.objectContaining({

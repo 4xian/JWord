@@ -8,7 +8,7 @@
 
 import * as Y from 'yjs'
 
-import type { Block, Comment, CommentMessage, ImageInline, ModelProperties, RevisionMetadata, RunLink, TableBorder } from '../model/types'
+import type { Block, Comment, CommentMessage, ImageInline, ModelProperties, RevisionFormatSnapshot, RevisionMetadata, RunLink, TableBorder } from '../model/types'
 import { createDocumentProjection } from '../model/projection'
 import { createOperationAdapter } from './operation-adapter'
 import { createJWordError } from '../shared/errors'
@@ -54,6 +54,8 @@ export type OperationKind =
   | 'deleteCommentThread'
   | 'setRunLink'
   | 'addRevisionMetadata'
+  | 'acceptRevision'
+  | 'rejectRevision'
 
 const OPERATION_KINDS = new Set<OperationKind>([
   'insertText',
@@ -89,7 +91,9 @@ const OPERATION_KINDS = new Set<OperationKind>([
   'reopenCommentThread',
   'deleteCommentThread',
   'setRunLink',
-  'addRevisionMetadata'
+  'addRevisionMetadata',
+  'acceptRevision',
+  'rejectRevision'
 ])
 
 /**
@@ -370,6 +374,22 @@ export interface SetRunLinkOperation extends OperationBase<'setRunLink'> {
 export interface AddRevisionMetadataOperation extends OperationBase<'addRevisionMetadata'> {
   readonly revision: RevisionMetadata
   readonly runId: string
+  readonly range?: AddRevisionMetadataRange
+}
+
+/** 接受或拒绝单条修订。 */
+export interface ResolveRevisionOperation extends OperationBase<'acceptRevision' | 'rejectRevision'> {
+  readonly revisionId: string
+  readonly range: TextRange
+  readonly formatTargets: readonly RevisionFormatSnapshot[]
+}
+
+/** 局部写入修订 metadata 的 run 范围。 */
+export interface AddRevisionMetadataRange {
+  readonly startGraphemeIndex: number
+  readonly endGraphemeIndex: number
+  readonly revisedRunId?: string
+  readonly trailingRunId?: string
 }
 
 /**
@@ -410,6 +430,7 @@ export type Operation =
   | DeleteCommentThreadOperation
   | SetRunLinkOperation
   | AddRevisionMetadataOperation
+  | ResolveRevisionOperation
 
 /**
  * 最小命令描述。
@@ -748,7 +769,34 @@ function notifyListeners(
     diagnostic: result.diagnostic
   }
 
+  const listenerErrors: unknown[] = []
+
   for (const listener of listeners) {
-    listener(event)
+    try {
+      listener(event)
+    } catch (error) {
+      listenerErrors.push(error)
+    }
   }
+
+  if (listenerErrors.length > 0) {
+    logTransactionListenerErrors(result.commandName, listenerErrors)
+  }
+}
+
+/** 仅在开发模式下暴露监听器异常，避免已提交事务被监听器副作用回滚。 */
+function logTransactionListenerErrors(commandName: string, errors: readonly unknown[]): void {
+  const runtime = globalThis as typeof globalThis & {
+    readonly process?: {
+      readonly env?: {
+        readonly NODE_ENV?: string
+      }
+    }
+  }
+
+  if (runtime.process?.env?.NODE_ENV !== 'development') {
+    return
+  }
+
+  console.error(`[JWord] 事务监听器失败：${commandName}`, errors.length === 1 ? errors[0] : errors)
 }

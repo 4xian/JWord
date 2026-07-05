@@ -87,7 +87,7 @@ class BrowserIndexedDbOfflineAdapter implements JWordIndexedDbOfflineAdapter {
   private readonly provider: IndexeddbPersistence
   private readonly diagnostics: JWordPersistenceDiagnostic[] = []
   private readonly diagnosticListeners = new Set<JWordPersistenceDiagnosticListener>()
-  private readonly updateStateListener: () => void
+  private readonly updateStateListener: (update: Uint8Array) => void
   private status: JWordIndexedDbOfflineStatus = 'restoring'
   private updateByteLength = 0
   private lastSyncedAt: string | undefined
@@ -100,14 +100,13 @@ class BrowserIndexedDbOfflineAdapter implements JWordIndexedDbOfflineAdapter {
     this.documentId = options.documentId
     this.databaseName = databaseName
     this.provider = new IndexeddbPersistence(databaseName, options.document)
-    this.updateStateListener = () => {
-      this.updateByteLength = Y.encodeStateAsUpdate(this.document).byteLength
+    this.updateStateListener = (update) => {
+      this.updateByteLength += update.byteLength
     }
     this.document.on('update', this.updateStateListener)
     this.whenSynced = this.provider.whenSynced.then(() => {
       this.status = 'synced'
       this.lastSyncedAt = new Date().toISOString()
-      this.updateByteLength = Y.encodeStateAsUpdate(this.document).byteLength
     }).catch(() => {
       this.status = 'error'
       this.emitDiagnostic(createDiagnostic('PERSISTENCE_INDEXEDDB_UNAVAILABLE', this.documentId))
@@ -123,7 +122,6 @@ class BrowserIndexedDbOfflineAdapter implements JWordIndexedDbOfflineAdapter {
     await this.whenSynced
     await this.provider.set('jword-state-update', copyBytesToArrayBuffer(input.update))
     Y.applyUpdate(this.document, input.update, 'jword-indexeddb-offline-store')
-    this.updateByteLength = Y.encodeStateAsUpdate(this.document).byteLength
 
     return {
       ok: true,
@@ -240,6 +238,7 @@ class BrowserIndexedDbOfflineAdapter implements JWordIndexedDbOfflineAdapter {
       }
     } finally {
       await restoredProvider.destroy()
+      restoredDoc.destroy()
     }
   }
 

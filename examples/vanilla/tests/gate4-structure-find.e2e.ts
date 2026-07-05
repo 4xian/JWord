@@ -31,6 +31,18 @@ test('Gate 4 heading outline clicks stable anchor and find replace UI writes thr
     selectionOffsets: [0, 0]
   })
 
+  await page.locator('[data-jword-hidden-textarea]').focus()
+  await page.keyboard.press('Control+F')
+  await expect(page.locator('[data-jword-find-replace]')).toBeVisible()
+  await expect(page.locator('[data-jword-find-query-input]')).toBeFocused()
+
+  await page.locator('[data-jword-find-close-button]').click()
+  await page.locator('[data-jword-hidden-textarea]').focus()
+  await page.keyboard.press('Control+H')
+  await expect(page.locator('[data-jword-find-replace]')).toBeVisible()
+  await expect(page.locator('[data-jword-find-replacement-input]')).toBeFocused()
+  await page.locator('[data-jword-find-close-button]').click()
+
   await page.locator('[data-jword-open-find-replace]').click()
   await expect(page.locator('[data-jword-find-status]')).toBeHidden()
 

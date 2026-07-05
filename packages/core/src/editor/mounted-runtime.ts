@@ -299,6 +299,15 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
       clearTimeout(this.deferredSelectionChangeId)
       this.deferredSelectionChangeId = undefined
     }
+
+    if (this.deferredPointerAutoScrollId !== undefined) {
+      clearInterval(this.deferredPointerAutoScrollId)
+      this.deferredPointerAutoScrollId = undefined
+    }
+
+    if (this.mountedDom !== undefined) {
+      this.mountedDom.pointerState.autoScrollDeltaY = 0
+    }
   }
 
   protected syncMountedBaseCanvases(layout: DocumentLayout, pageIndexes: readonly number[]): void {
@@ -335,6 +344,7 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
         page,
         scale: this.pageConfig.scale,
         pixelRatio,
+        commentRects: this.collectCommentRects(layout),
         ...(mountedDom.imageResourceResolver === undefined
           ? {}
           : { imageResourceResolver: mountedDom.imageResourceResolver })

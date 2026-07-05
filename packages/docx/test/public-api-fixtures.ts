@@ -105,6 +105,82 @@ export function createProjectionWithPngResource(): DocumentProjection {
   }
 }
 
+/** 创建双 section 导出测试使用的只读文档投影。 */
+export function createMultiSectionProjection(): DocumentProjection {
+  return {
+    document: {
+      kind: 'document',
+      id: 'document-export-multi-section',
+      sections: [
+        {
+          kind: 'section',
+          id: 'section-export-first',
+          page: {
+            widthTwips: 10000,
+            heightTwips: 12000,
+            marginTwips: {
+              top: 111,
+              right: 222,
+              bottom: 333,
+              left: 444
+            }
+          },
+          blocks: [
+            {
+              kind: 'paragraph',
+              id: 'paragraph-export-first',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-export-first',
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: 'First section'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          kind: 'section',
+          id: 'section-export-second',
+          page: {
+            widthTwips: 20000,
+            heightTwips: 22000,
+            marginTwips: {
+              top: 555,
+              right: 666,
+              bottom: 777,
+              left: 888
+            }
+          },
+          blocks: [
+            {
+              kind: 'paragraph',
+              id: 'paragraph-export-second',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-export-second',
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: 'Second section'
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
 /** 计算二进制内容的 SHA-256 十六进制摘要。 */
 export function createSha256Hex(bytes: ArrayBuffer): string {
   return createHash('sha256').update(Buffer.from(bytes)).digest('hex')

@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { readFreshArtifactEvidence, readFreshRunStylesArtifactEvidence } from './gate5-compatibility-runner-helpers'
+import { createRunnerTestEnv, readFreshArtifactEvidence, readFreshRunStylesArtifactEvidence } from './gate5-compatibility-runner-helpers'
 import type { Gate5CompatibilityRunnerResultDocument } from './gate5-compatibility-runner-helpers'
 
 describe('Gate 5 DOCX compatibility runner external evidence', () => {
@@ -68,12 +68,11 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: manualResultsPath,
         GATE5_DOCX_OPENXML_VALIDATION_RESULTS: validationResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -128,11 +127,10 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         OPENXML_VALIDATOR_COMMAND: validatorPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -152,6 +150,63 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
           part: 'word/document.xml',
           path: '/w:document/w:body/w:p[1]',
           message: 'validator command diagnostic'
+        }
+      ]
+    })
+  })
+
+  it('normalizes @xarsh ooxml-validator JSON errors into structured diagnostics', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jword-gate5-ooxml-validator-'))
+    const validatorPath = join(tempDir, 'fake-ooxml-validator.sh')
+    const outputPath = join(tempDir, 'compatibility-results.json')
+
+    const validatorOutput = JSON.stringify({
+      file: '$1',
+      ok: false,
+      errors: [
+        {
+          description: 'The element has invalid child element.',
+          path: '/word/document.xml',
+          xPath: '/w:document[1]/w:body[1]/w:p[1]',
+          id: 'Sch_InvalidElementContentExpectingComplex',
+          errorType: 'Schema'
+        }
+      ]
+    })
+
+    writeFileSync(validatorPath, [
+      '#!/bin/sh',
+      `printf '%s\n' '${validatorOutput}'`
+    ].join('\n'))
+    chmodSync(validatorPath, 0o755)
+
+    execFileSync(process.execPath, [
+      'tools/compat/run-gate5-docx-compatibility.mjs'
+    ], {
+      env: createRunnerTestEnv({
+        GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
+        OPENXML_VALIDATOR_COMMAND: validatorPath
+      }),
+      encoding: 'utf8'
+    })
+
+    const report = JSON.parse(readFileSync(outputPath, 'utf8')) as Gate5CompatibilityRunnerResultDocument
+    const runStylesResult = report.results.find((result) => result.fixtureId === 'docx-t1-run-styles')
+    const validatorCheck = runStylesResult?.report.automatedChecks.find((check) => check.kind === 'open-xml-validator')
+
+    expect(validatorCheck).toEqual({
+      kind: 'open-xml-validator',
+      result: 'fail',
+      evidence: expect.stringContaining('fake-ooxml-validator.sh: {'),
+      diagnosticCount: 1,
+      blockingIssue: 'word/document.xml /w:document[1]/w:body[1]/w:p[1]: The element has invalid child element.',
+      diagnostics: [
+        {
+          severity: 'error',
+          code: 'Sch_InvalidElementContentExpectingComplex',
+          part: 'word/document.xml',
+          path: '/w:document[1]/w:body[1]/w:p[1]',
+          message: 'The element has invalid child element.'
         }
       ]
     })
@@ -180,11 +235,10 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         OPENXML_VALIDATOR_COMMAND: `'${validatorPath}' '{artifact}'`
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -215,12 +269,11 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         OPENXML_VALIDATOR_COMMAND: validatorPath,
         OPENXML_VALIDATOR_TIMEOUT_MS: '20'
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -249,8 +302,7 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: missingManualResultsPath,
         GATE5_WPS_APP_PATH: fakeWpsAppPath,
@@ -258,7 +310,7 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
           'wpsoffice 26079 jian 82w REG 1,17 5613 76128878 ',
           exportedArtifactPath
         ].join('')
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -306,11 +358,10 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: manualResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 

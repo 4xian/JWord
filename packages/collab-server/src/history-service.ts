@@ -24,6 +24,7 @@ import type {
 
 export interface CreateJWordCollabHistoryServiceOptions {
   readonly storage?: JWordHistoryStorage
+  readonly maxDocumentLockQueueDepth?: number
 }
 
 export interface RecordJWordCollabHistoryVersionInput extends AppendJWordUpdateInput {
@@ -54,20 +55,56 @@ export interface JWordCollabHistoryService {
   createAdapter(): JWordPersistenceSnapshotAdapter
 }
 
+export const JWORD_COLLAB_HISTORY_LOCK_QUEUE_EXCEEDED = 'JWORD_COLLAB_HISTORY_LOCK_QUEUE_EXCEEDED'
+
+interface DocumentLockState {
+  tail: Promise<void>
+  depth: number
+}
+
+const defaultMaxDocumentLockQueueDepth = 64
+
+export class JWordCollabHistoryLockQueueExceededError extends Error {
+  readonly diagnosticCode = JWORD_COLLAB_HISTORY_LOCK_QUEUE_EXCEEDED
+  readonly recoverable = true
+  readonly documentId: string
+  readonly maxDocumentLockQueueDepth: number
+
+  /** 创建 history document lock 队列超限错误。 */
+  constructor(documentId: string, maxDocumentLockQueueDepth: number) {
+    super(`JWord collab history queue exceeded for document ${documentId}.`)
+    this.name = 'JWordCollabHistoryLockQueueExceededError'
+    this.documentId = documentId
+    this.maxDocumentLockQueueDepth = maxDocumentLockQueueDepth
+  }
+}
+
+/** 判断未知错误是否为 history document lock 队列超限。 */
+export function isJWordCollabHistoryLockQueueExceededError(
+  error: unknown
+): error is JWordCollabHistoryLockQueueExceededError {
+  return error instanceof JWordCollabHistoryLockQueueExceededError
+}
+
 /** 创建正式服务包内的共享 history service。 */
 export function createJWordCollabHistoryService(
   options: CreateJWordCollabHistoryServiceOptions = {}
 ): JWordCollabHistoryService {
-  return new StorageBackedJWordCollabHistoryService(options.storage ?? createVolatileHistoryStorage())
+  return new StorageBackedJWordCollabHistoryService(
+    options.storage ?? createVolatileHistoryStorage(),
+    normalizeDocumentLockQueueDepth(options.maxDocumentLockQueueDepth)
+  )
 }
 
 class StorageBackedJWordCollabHistoryService implements JWordCollabHistoryService {
   private readonly storage: JWordHistoryStorage
-  private readonly documentLocks = new Map<string, Promise<void>>()
+  private readonly documentLocks = new Map<string, DocumentLockState>()
+  private readonly maxDocumentLockQueueDepth: number
 
   /** 绑定宿主注入的 history storage backend。 */
-  constructor(storage: JWordHistoryStorage) {
+  constructor(storage: JWordHistoryStorage, maxDocumentLockQueueDepth: number) {
     this.storage = storage
+    this.maxDocumentLockQueueDepth = maxDocumentLockQueueDepth
   }
 
   /** 创建绑定同一 storage backend 的底层 adapter。 */
@@ -121,23 +158,40 @@ class StorageBackedJWordCollabHistoryService implements JWordCollabHistoryServic
     documentId: string,
     task: (adapter: JWordPersistenceSnapshotAdapter) => Promise<Result>
   ): Promise<Result> {
-    const previous = this.documentLocks.get(documentId) ?? Promise.resolve()
+    const lockState = this.documentLocks.get(documentId) ?? {
+      tail: Promise.resolve(),
+      depth: 0
+    }
+
+    if (lockState.depth >= this.maxDocumentLockQueueDepth) {
+      throw new JWordCollabHistoryLockQueueExceededError(documentId, this.maxDocumentLockQueueDepth)
+    }
+
+    const previous = lockState.tail
     let releaseCurrentLock = (): void => {}
     const current = new Promise<void>((resolve) => {
       releaseCurrentLock = resolve
     })
     const queued = previous.catch(() => undefined).then(() => current)
 
-    this.documentLocks.set(documentId, queued)
+    lockState.tail = queued
+    lockState.depth += 1
+    this.documentLocks.set(documentId, lockState)
     await previous.catch(() => undefined)
 
     try {
       return await task(this.createAdapter())
     } finally {
       releaseCurrentLock()
-      if (this.documentLocks.get(documentId) === queued) {
+      lockState.depth -= 1
+      if (lockState.depth === 0 && this.documentLocks.get(documentId) === lockState) {
         this.documentLocks.delete(documentId)
       }
     }
   }
+}
+
+/** 归一化 document lock 队列深度，至少允许当前执行中的一个任务。 */
+function normalizeDocumentLockQueueDepth(value: number | undefined): number {
+  return Math.max(1, Math.floor(value ?? defaultMaxDocumentLockQueueDepth))
 }

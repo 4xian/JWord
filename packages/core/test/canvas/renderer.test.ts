@@ -58,7 +58,7 @@ describe('renderPageCanvas', () => {
     ])
   })
 
-  it('在选区高亮之上绘制 run 背景，保证背景色选择时可实时预览', () => {
+  it('在 run 背景之上、文本之下绘制选区高亮，避免背景色遮住选区', () => {
     const canvas = createMockCanvas()
     const page = createPageLayout(0, '背景色', {
       backgroundColor: '#00aa66'
@@ -78,8 +78,49 @@ describe('renderPageCanvas', () => {
       ]
     })
 
-    expect(canvas.calls.indexOf('fillStyle:#cfe3ff')).toBeLessThan(canvas.calls.indexOf('fillStyle:#00aa66'))
-    expect(canvas.calls.indexOf('fillStyle:#00aa66')).toBeLessThan(canvas.calls.indexOf('fillText:背景色,72,110'))
+    expect(canvas.calls.indexOf('fillStyle:#00aa66')).toBeLessThan(canvas.calls.indexOf('fillStyle:#cfe3ff'))
+    expect(canvas.calls.indexOf('fillStyle:#cfe3ff')).toBeLessThan(canvas.calls.indexOf('fillText:背景色,72,110'))
+  })
+
+  it('在选区之下绘制批注范围高亮，并过滤非当前页矩形', () => {
+    const canvas = createMockCanvas()
+    const page = createPageLayout(0, '批注文本') satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page,
+      commentRects: [
+        {
+          pageIndex: 0,
+          x: cssPxToTwips(72),
+          y: cssPxToTwips(96),
+          width: cssPxToTwips(60),
+          height: cssPxToTwips(18)
+        },
+        {
+          pageIndex: 1,
+          x: cssPxToTwips(72),
+          y: cssPxToTwips(916),
+          width: cssPxToTwips(60),
+          height: cssPxToTwips(18)
+        }
+      ],
+      selectionRects: [
+        {
+          pageIndex: 0,
+          x: cssPxToTwips(84),
+          y: cssPxToTwips(96),
+          width: cssPxToTwips(36),
+          height: cssPxToTwips(18)
+        }
+      ]
+    })
+
+    expect(canvas.calls).toContain('fillStyle:#fff3bf')
+    expect(canvas.calls).toContain('fillRect:72,96,60,18')
+    expect(canvas.calls).not.toContain('fillRect:72,916,60,18')
+    expect(canvas.calls.indexOf('fillStyle:#fff3bf')).toBeLessThan(canvas.calls.indexOf('fillStyle:#cfe3ff'))
+    expect(canvas.calls.indexOf('fillStyle:#cfe3ff')).toBeLessThan(canvas.calls.indexOf('fillText:批注文本,72,110'))
   })
 
   it('在高 DPR 屏幕上放大 backing store，但保持页面 CSS 尺寸不变', () => {
@@ -357,6 +398,31 @@ describe('syncPageCanvases', () => {
 
     expect(third.get(1)).toBe(pageOneCanvas)
     expect(third.get(2)).toBe(pageZeroCanvas)
+  })
+
+  it('向页面渲染透传批注矩形', () => {
+    const pool = createCanvasPool({
+      createCanvas: () => createMockCanvas()
+    })
+    const pages = [createPageLayout(0, '批注页') satisfies LayoutBox]
+    const result = syncPageCanvases({
+      pages,
+      retainedPageIndexes: [0],
+      canvases: new Map(),
+      pool,
+      commentRects: [
+        {
+          pageIndex: 0,
+          x: cssPxToTwips(72),
+          y: cssPxToTwips(96),
+          width: cssPxToTwips(60),
+          height: cssPxToTwips(18)
+        }
+      ]
+    })
+
+    expect((result.get(0) as MockCanvas | undefined)?.calls).toContain('fillStyle:#fff3bf')
+    expect((result.get(0) as MockCanvas | undefined)?.calls).toContain('fillRect:72,96,60,18')
   })
 })
 

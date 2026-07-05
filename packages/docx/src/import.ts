@@ -90,6 +90,7 @@ export async function importDocx(
     warnings: [
       ...context.warnings,
       ...indexes.styles.tableStyleWarnings,
+      ...indexes.comments.warnings,
       ...readUnsupportedNumberingFormatWarnings(indexes.numbering),
       ...documentResult.warnings
     ],
@@ -109,7 +110,7 @@ async function readImportDocument(
   context: DocxPackageContext,
   indexes: DocxIndexes
 ): Promise<DocxImportDocumentResult> {
-  const document = parseXml(await readPartText(context.zip, context.mainDocumentPart))
+  const document = parseXml(await readPartText(context.zip, context.mainDocumentPart, context.requestId))
   const body = readXmlChildren(document.root).find((child) => child.localName === 'body')
   const warnings: DocxWarning[] = []
   const unsupportedElementFragments: DocxOpaqueUnsupportedElementFragment[] = []
@@ -434,6 +435,8 @@ function readImportParagraph(
           ...lastRun!,
           inlines: [...lastRun!.inlines, marker]
         }
+      } else if (marker !== undefined) {
+        pendingMarkers.push(marker)
       }
       continue
     }

@@ -41,6 +41,7 @@ interface JWordNativeWorkerRuntimeScope {
 }
 
 const activeJWordNativeWorkerTasks = new Map<string, JWordNativeWorkerActiveTask>()
+const cancelledJWordNativeWorkerRequestIds = new Set<string>()
 
 /** 分发 native worker 请求并回发稳定事件。 */
 export async function dispatchJWordNativeWorkerRequest(
@@ -53,6 +54,8 @@ export async function dispatchJWordNativeWorkerRequest(
     task?.controller.abort()
     if (task !== undefined) {
       task.cancelledByWorker = true
+    } else {
+      cancelledJWordNativeWorkerRequestIds.add(request.requestId)
     }
 
     const event = createJWordNativeWorkerCancelledEvent(request.requestId)
@@ -71,6 +74,13 @@ export async function dispatchJWordNativeWorkerRequest(
   activeJWordNativeWorkerTasks.set(request.requestId, task)
 
   try {
+    if (cancelledJWordNativeWorkerRequestIds.delete(request.requestId)) {
+      task.controller.abort()
+      task.cancelledByWorker = true
+
+      return createJWordNativeWorkerCancelledEvent(request.requestId)
+    }
+
     const event = await handleJWordNativeWorkerRequest(request, task.controller.signal, postEvent)
 
     if (!task.cancelledByWorker) {

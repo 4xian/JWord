@@ -7,6 +7,7 @@
  */
 
 import { assertJWordFeatureEntitled } from '@4xian/jword-license'
+import { compareVersions } from './version-compare.js'
 import {
   createTextInserter,
   createRangeRef,
@@ -859,33 +860,6 @@ function readServerVersion(version: RawCollaborationServerVersion): {
     minimumClientVersion: version.minimumClientVersion,
     minimumServerVersion: version.minimumServerVersion
   }
-}
-
-/** 比较简单 semver 数字版本，不支持预发布排序。 */
-function compareVersions(left: string, right: string): number {
-  const leftParts = readVersionParts(left)
-  const rightParts = readVersionParts(right)
-  const maxLength = Math.max(leftParts.length, rightParts.length)
-
-  for (let index = 0; index < maxLength; index += 1) {
-    const leftPart = leftParts[index] ?? 0
-    const rightPart = rightParts[index] ?? 0
-
-    if (leftPart !== rightPart) {
-      return leftPart < rightPart ? -1 : 1
-    }
-  }
-
-  return 0
-}
-
-/** 读取版本号数字段，非法段按 0 处理。 */
-function readVersionParts(version: string): readonly number[] {
-  return version.split('.').map((part) => {
-    const value = Number.parseInt(part, 10)
-
-    return Number.isFinite(value) ? value : 0
-  })
 }
 
 /** 创建版本握手诊断。 */

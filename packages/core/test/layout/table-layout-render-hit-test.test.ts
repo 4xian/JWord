@@ -169,7 +169,7 @@ describe('table layout render hit-test', () => {
     expect(Math.abs(topInset - bottomInset)).toBeLessThanOrEqual(1)
   })
 
-  it('renders table fragment backgrounds and decorations after selection overlays', () => {
+  it('renders table fragment backgrounds before selection overlays and text decorations after text', () => {
     const layout = layoutDocument({
       projection: createStyledTableProjection(),
       pageConfig: createPageConfig({
@@ -218,8 +218,8 @@ describe('table layout render hit-test', () => {
 
     expect(backgroundIndex).toBeGreaterThanOrEqual(0)
     expect(selectionIndex).toBeGreaterThanOrEqual(0)
-    expect(backgroundIndex).toBeGreaterThan(selectionIndex)
-    expect(textIndex).toBeGreaterThan(backgroundIndex)
+    expect(backgroundIndex).toBeLessThan(selectionIndex)
+    expect(textIndex).toBeGreaterThan(selectionIndex)
     expect(decorationRectCount).toBeGreaterThanOrEqual(2)
   })
 

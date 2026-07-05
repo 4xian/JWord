@@ -1,6 +1,6 @@
 /**
  * 职责：提供正式协同服务端 HTTP auth、tenant hook 和受保护路由判断。
- * 边界：只调用宿主注入 hook 并归一默认放行策略，不读取请求体、不访问 history storage。
+ * 边界：只调用宿主注入 hook 并归一默认拒绝策略，不读取请求体、不访问 history storage。
  * 协作模块：index.ts 和 auto-insert-relay.ts 在进入 license/storage/relay 前复用这里的守卫。
  * 性能/安全约束：hook 拒绝时调用方必须立即停止后续 license、storage 或 relay 操作。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-631。
@@ -13,7 +13,9 @@ import type {
   JWordCollabServerTenantHookResult
 } from './index.js'
 
-/** 调用宿主请求认证 hook，默认放行本地开发路径。 */
+const authHookRequiredDiagnosticCode = 'JWORD_COLLAB_AUTH_HOOK_REQUIRED'
+
+/** 调用宿主请求认证 hook，缺少 hook 时默认拒绝受保护 HTTP 路由。 */
 export async function checkJWordCollabRequestAuth(
   authHook: JWordCollabServerAuthHook | undefined,
   requestId: string,
@@ -22,7 +24,8 @@ export async function checkJWordCollabRequestAuth(
 ): Promise<JWordCollabServerAuthHookResult> {
   if (authHook === undefined) {
     return {
-      ok: true
+      ok: false,
+      diagnosticCode: authHookRequiredDiagnosticCode
     }
   }
 

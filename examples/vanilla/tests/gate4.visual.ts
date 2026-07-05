@@ -47,7 +47,7 @@ test('Gate 4 desktop visual baseline paints feature markup without blank canvas'
   expect(probe.revisionCount).toBe(1)
   expect(probe.headerFooterBoxCount).toBeGreaterThanOrEqual(2)
   expect(probe.visibleHeadingItems).toBeGreaterThan(0)
-  expect(probe.findStatusText).toBe('1 个结果')
+  expect(probe.findStatusText).toBe('1 / 1')
   expect(probe.visibleCommentCards).toBeGreaterThan(0)
   expect(probe.visibleRevisionItems).toBe(1)
   await expect(page.locator('.jw-demo__workspace')).toHaveScreenshot('gate4-desktop-feature-baseline.png', {
@@ -323,17 +323,23 @@ async function createFixtureRevision(page: Page): Promise<void> {
 
 /** 通过官方页眉页脚入口写入最小 section 字段。 */
 async function applyHeaderFooter(page: Page): Promise<void> {
+  await page.locator('[data-jword-toggle-header-footer]').click()
   await page.locator('[data-jword-header-id-input]').fill('visual-header')
+  await page.locator('[data-jword-toggle-footer]').click()
   await page.locator('[data-jword-footer-id-input]').fill('visual-footer')
+  await page.locator('[data-jword-toggle-page-number]').click()
   await page.locator('[data-jword-page-start-input]').fill('3')
+  await page.locator('[data-jword-toggle-header-footer]').click()
   await page.locator('[data-jword-section-break-next-page]').click()
+  await page.keyboard.press('Escape')
 }
 
 /** 通过官方查找面板创建一个可见查找状态。 */
 async function applyFindVisualState(page: Page): Promise<void> {
+  await page.locator('[data-jword-open-find-replace]').click()
   await page.locator('[data-jword-find-query-input]').fill('视觉表格')
   await page.locator('[data-jword-find-button]').click()
-  await expect(page.locator('[data-jword-find-status]')).toHaveText('1 个结果')
+  await expect(page.locator('[data-jword-find-status]')).toHaveText('1 / 1')
 }
 
 /** 采样 Gate 4 视觉 smoke 需要的 canvas 与 DOM 状态。 */

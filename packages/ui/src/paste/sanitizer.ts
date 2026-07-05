@@ -6,9 +6,23 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-415。
  */
 import DOMPurify from 'dompurify'
-import type { EditorRichTextFragment, EditorRichTextRun } from '@4xian/jword-core'
+import { isAllowedLinkUrl, type EditorRichTextFragment, type EditorRichTextRun } from '@4xian/jword-core'
 
 type RichTextProperties = NonNullable<EditorRichTextRun['properties']>
+
+export type PasteSanitizerWarningCode = 'PASTE_TABLE_FLATTENED'
+
+export interface PasteSanitizerWarning {
+  readonly code: PasteSanitizerWarningCode
+  readonly message: string
+  readonly fallback: 'tab-separated-text'
+  readonly recoverable: true
+}
+
+export interface PasteSanitizerResult {
+  readonly fragment: EditorRichTextFragment | null
+  readonly warnings: readonly PasteSanitizerWarning[]
+}
 
 interface InlineStyleState {
   readonly bold: boolean
@@ -20,9 +34,10 @@ interface InlineStyleState {
   readonly fontFamily?: string
   readonly fontSizeTwips?: number
   readonly fontSizePx?: number
+  readonly link?: Readonly<{ target: string }>
 }
 
-const BLOCK_SELECTOR = 'p, div, li'
+const BLOCK_SELECTOR = 'p, div, li, tr'
 const EMPTY_INLINE_STYLE: InlineStyleState = Object.freeze({
   bold: false,
   italic: false,
@@ -32,12 +47,28 @@ const EMPTY_INLINE_STYLE: InlineStyleState = Object.freeze({
 
 /** 把粘贴 HTML 清洗并转换成 core 富文本片段。 */
 export function sanitizePastedHtmlToRichTextFragment(html: string): EditorRichTextFragment | null {
+  return sanitizePastedHtmlToRichTextFragmentWithWarnings(html).fragment
+}
+
+/** 把粘贴 HTML 清洗为富文本片段，并返回降级警告。 */
+export function sanitizePastedHtmlToRichTextFragmentWithWarnings(html: string): PasteSanitizerResult {
   if (html.trim().length === 0) {
-    return null
+    return {
+      fragment: null,
+      warnings: []
+    }
+  }
+
+  if (shouldFallbackToPlainText(html)) {
+    return {
+      fragment: null,
+      warnings: []
+    }
   }
 
   const sanitized = DOMPurify(window).sanitize(html, {
     ALLOWED_TAGS: [
+      'a',
       'b',
       'br',
       'div',
@@ -50,30 +81,70 @@ export function sanitizePastedHtmlToRichTextFragment(html: string): EditorRichTe
       'span',
       'strike',
       'strong',
+      'table',
+      'tbody',
+      'td',
+      'tfoot',
+      'th',
+      'thead',
+      'tr',
       'u',
       'ul'
     ],
-    ALLOWED_ATTR: ['class', 'style'],
+    ALLOWED_ATTR: ['class', 'href', 'style'],
     ALLOW_DATA_ATTR: false,
-    FORBID_ATTR: ['onclick', 'onerror', 'onload', 'style-src'],
+    FORBID_ATTR: ['onclick', 'onerror', 'onload'],
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'img', 'svg', 'math']
   })
 
   if (typeof sanitized !== 'string' || sanitized.trim().length === 0) {
-    return null
+    return {
+      fragment: null,
+      warnings: []
+    }
   }
 
   const template = document.createElement('template')
 
   template.innerHTML = sanitized
 
+  const warnings = readPasteSanitizerWarnings(template.content)
   const paragraphs = collectRichTextParagraphs(template.content)
 
-  return paragraphs.length === 0
-    ? null
-    : {
-        paragraphs
-      }
+  return {
+    fragment: paragraphs.length === 0
+      ? null
+      : {
+          paragraphs
+        },
+    warnings
+  }
+}
+
+/** 判断输入 HTML 是否必须交还纯文本粘贴路径处理。 */
+function shouldFallbackToPlainText(html: string): boolean {
+  const template = document.createElement('template')
+
+  template.innerHTML = html
+
+  return template.content.querySelector('svg, math') !== null
+    || Array.from(template.content.querySelectorAll('img[src]')).some((image) => {
+      return (image.getAttribute('src') ?? '').trim().toLowerCase().startsWith('data:')
+    })
+}
+
+/** 读取清洗后 HTML 的结构降级 warning。 */
+function readPasteSanitizerWarnings(root: DocumentFragment): readonly PasteSanitizerWarning[] {
+  if (root.querySelector('table') === null) {
+    return []
+  }
+
+  return [Object.freeze({
+    code: 'PASTE_TABLE_FLATTENED' as const,
+    message: '粘贴表格结构暂按制表符文本降级。',
+    fallback: 'tab-separated-text' as const,
+    recoverable: true as const
+  })]
 }
 
 /** 收集清洗后片段中的段落结构。 */
@@ -115,12 +186,23 @@ function collectRichTextRuns(node: Node, inheritedStyle: InlineStyleState): read
   const nextStyle = node instanceof HTMLElement
     ? mergeInlineStyle(inheritedStyle, node)
     : inheritedStyle
+  const children = node instanceof HTMLTableRowElement
+    ? collectTableRowTextNodes(node)
+    : Array.from(node.childNodes)
   const runs: EditorRichTextRun[] = []
 
-  for (const child of Array.from(node.childNodes)) {
+  for (const child of children) {
     if (child instanceof HTMLBRElement) {
       runs.push({
         text: ' ',
+        properties: readInlineProperties(nextStyle)
+      })
+      continue
+    }
+
+    if (isTableCellSeparator(child)) {
+      runs.push({
+        text: '\t',
         properties: readInlineProperties(nextStyle)
       })
       continue
@@ -132,9 +214,30 @@ function collectRichTextRuns(node: Node, inheritedStyle: InlineStyleState): read
   return mergeAdjacentRuns(runs)
 }
 
+/** 收集简单表格行中的单元格文本节点，并用制表符分隔单元格。 */
+function collectTableRowTextNodes(row: HTMLTableRowElement): readonly Node[] {
+  const nodes: Node[] = []
+  const cells = Array.from(row.children).filter((child) => child instanceof HTMLTableCellElement)
+
+  cells.forEach((cell, index) => {
+    if (index > 0) {
+      nodes.push(document.createTextNode('\t'))
+    }
+
+    nodes.push(...Array.from(cell.childNodes))
+  })
+
+  return nodes
+}
+
+/** 判断节点是否是表格单元格分隔符。 */
+function isTableCellSeparator(node: Node): boolean {
+  return node.nodeType === Node.TEXT_NODE && node.textContent === '\t'
+}
+
 /** 基于继承格式创建文本 run。 */
 function createTextRun(text: string, style: InlineStyleState): readonly EditorRichTextRun[] {
-  const normalizedText = text.replace(/\s+/gu, ' ')
+  const normalizedText = text.replace(/[ \n\r\f\v]+/gu, ' ')
 
   if (normalizedText.trim().length === 0) {
     return []
@@ -212,6 +315,7 @@ function mergeInlineStyle(parent: InlineStyleState, element: HTMLElement): Inlin
     underline: parent.underline || readTextDecoration(element).includes('underline'),
     strike: parent.strike || isStrikeElement(element) || readTextDecoration(element).includes('line-through')
   }
+  const link = readSafeLink(element) ?? parent.link
 
   const color = readCssColor(element, ['color']) ?? parent.color
   const backgroundColor = readCssColor(element, ['background-color', 'background']) ?? parent.backgroundColor
@@ -237,6 +341,10 @@ function mergeInlineStyle(parent: InlineStyleState, element: HTMLElement): Inlin
 
   if (fontSizePx !== undefined) {
     nextStyle.fontSizePx = fontSizePx
+  }
+
+  if (link !== undefined) {
+    nextStyle.link = link
   }
 
   return Object.freeze(nextStyle)
@@ -282,6 +390,10 @@ function readInlineProperties(style: InlineStyleState): RichTextProperties {
     properties.fontSizeTwips = style.fontSizeTwips
   } else if (style.fontSizePx !== undefined) {
     properties.fontSizePx = style.fontSizePx
+  }
+
+  if (style.link !== undefined) {
+    properties.link = style.link
   }
 
   return Object.freeze(properties)
@@ -338,6 +450,21 @@ function isStrikeElement(element: HTMLElement): boolean {
   const tagName = element.tagName.toLowerCase()
 
   return tagName === 's' || tagName === 'strike'
+}
+
+/** 读取 allowlist 内的安全链接。 */
+function readSafeLink(element: HTMLElement): Readonly<{ target: string }> | undefined {
+  if (!(element instanceof HTMLAnchorElement)) {
+    return undefined
+  }
+
+  const target = element.getAttribute('href')?.trim()
+
+  if (target === undefined || !isAllowedLinkUrl(target)) {
+    return undefined
+  }
+
+  return Object.freeze({ target })
 }
 
 /** 读取 text-decoration 原始值。 */

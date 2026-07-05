@@ -28,6 +28,9 @@ import type {
   JWordCollabHistoryService
 } from './history-service.js'
 import {
+  isJWordCollabHistoryLockQueueExceededError
+} from './history-service.js'
+import {
   checkJWordCollabTenant
 } from './request-guards.js'
 import {
@@ -86,6 +89,7 @@ const licenseMetadataRequiredDiagnosticCode = 'JWORD_COLLAB_LICENSE_METADATA_REQ
 
 /** 处理 history 版本列表请求。 */
 export async function handleListHistoryVersions(
+  request: IncomingMessage,
   url: URL,
   response: ServerResponse,
   requestId: string,
@@ -94,6 +98,7 @@ export async function handleListHistoryVersions(
 ): Promise<void> {
   const documentId = url.searchParams.get('documentId')
   const tenantId = url.searchParams.get('tenantId') ?? undefined
+  const entitlement = readEntitlementMetadata(request, url)
 
   if (documentId === null || documentId.trim() === '') {
     writeJson(response, 400, {
@@ -118,7 +123,8 @@ export async function handleListHistoryVersions(
   const license = await checkHistoryLicense(options.licenseHook, {
     documentId,
     feature: GATE6_COLLAB_FEATURES.history,
-    ...(tenantId === undefined ? {} : { tenantId })
+    ...(tenantId === undefined ? {} : { tenantId }),
+    ...(entitlement === undefined ? {} : { entitlement })
   })
 
   if (!license.ok) {
@@ -139,7 +145,17 @@ export async function handleListHistoryVersions(
     return
   }
 
-  const versions = await options.historyService.listVersions(documentId)
+  let versions: readonly JWordVersionRecord[]
+
+  try {
+    versions = await options.historyService.listVersions(documentId)
+  } catch (error: unknown) {
+    if (writeHistoryServiceError(response, requestId, options, requestOrigin, error)) {
+      return
+    }
+
+    throw error
+  }
 
   writeJson(response, 200, {
     versions: versions.map(serializeVersionRecord),
@@ -203,7 +219,7 @@ export async function handleRecordHistoryVersion(
     return
   }
 
-  if (body.documentId !== metadata.documentId) {
+  if (body.documentId !== metadata.documentId || !isTenantMetadataMatched(body.tenantId, metadata.tenantId)) {
     writeJson(response, 400, {
       ok: false,
       diagnosticCode: 'JWORD_COLLAB_HISTORY_METADATA_MISMATCH',
@@ -221,17 +237,27 @@ export async function handleRecordHistoryVersion(
     return
   }
 
-  const recorded = await options.historyService.recordVersion({
-    documentId: body.documentId,
-    roomId: body.roomId,
-    clientId: body.clientId,
-    authorId: body.authorId,
-    origin: body.origin,
-    label: body.label,
-    update: decodeBase64(body.updateBase64),
-    ...(body.snapshotId === undefined ? {} : { snapshotId: body.snapshotId }),
-    ...(body.createdAt === undefined ? {} : { createdAt: body.createdAt })
-  })
+  let recorded: Awaited<ReturnType<JWordCollabHistoryService['recordVersion']>>
+
+  try {
+    recorded = await options.historyService.recordVersion({
+      documentId: body.documentId,
+      roomId: body.roomId,
+      clientId: body.clientId,
+      authorId: body.authorId,
+      origin: body.origin,
+      label: body.label,
+      update: decodeBase64(body.updateBase64),
+      ...(body.snapshotId === undefined ? {} : { snapshotId: body.snapshotId }),
+      ...(body.createdAt === undefined ? {} : { createdAt: body.createdAt })
+    })
+  } catch (error: unknown) {
+    if (writeHistoryServiceError(response, requestId, options, request.headers.origin, error)) {
+      return
+    }
+
+    throw error
+  }
 
   writeJson(response, 200, {
     version: serializeVersionRecord(recorded.version),
@@ -297,7 +323,11 @@ export async function handlePreviewHistoryVersion(
     return
   }
 
-  if (body.documentId !== metadata.documentId || body.versionId !== metadata.versionId) {
+  if (
+    body.documentId !== metadata.documentId ||
+    body.versionId !== metadata.versionId ||
+    !isTenantMetadataMatched(body.tenantId, metadata.tenantId)
+  ) {
     writeJson(response, 400, {
       ok: false,
       diagnosticCode: 'JWORD_COLLAB_HISTORY_METADATA_MISMATCH',
@@ -315,10 +345,20 @@ export async function handlePreviewHistoryVersion(
     return
   }
 
-  const preview = await options.historyService.createPreview({
-    documentId: body.documentId,
-    versionId: body.versionId
-  })
+  let preview: Awaited<ReturnType<JWordCollabHistoryService['createPreview']>>
+
+  try {
+    preview = await options.historyService.createPreview({
+      documentId: body.documentId,
+      versionId: body.versionId
+    })
+  } catch (error: unknown) {
+    if (writeHistoryServiceError(response, requestId, options, request.headers.origin, error)) {
+      return
+    }
+
+    throw error
+  }
 
   writeJson(response, 200, {
     ...(preview.version === undefined ? {} : { version: serializeVersionRecord(preview.version) }),
@@ -460,4 +500,33 @@ function serializeDiagnostic(diagnostic: JWordPersistenceDiagnostic): object {
   return {
     ...diagnostic
   }
+}
+
+/** 校验请求体 tenantId 与授权 metadata 一致。 */
+function isTenantMetadataMatched(
+  bodyTenantId: string | undefined,
+  metadataTenantId: string | undefined
+): boolean {
+  return bodyTenantId === undefined || bodyTenantId === metadataTenantId
+}
+
+/** 将 history service 的稳定业务错误写成 HTTP JSON 响应。 */
+function writeHistoryServiceError(
+  response: ServerResponse,
+  requestId: string,
+  options: HandleJWordHistoryRequestOptions,
+  requestOrigin: string | undefined,
+  error: unknown
+): boolean {
+  if (!isJWordCollabHistoryLockQueueExceededError(error)) {
+    return false
+  }
+
+  writeJson(response, 429, {
+    ok: false,
+    diagnosticCode: error.diagnosticCode,
+    requestId
+  }, options.allowedOrigins, requestOrigin)
+
+  return true
 }

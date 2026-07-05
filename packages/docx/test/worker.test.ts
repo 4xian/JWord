@@ -127,6 +127,41 @@ describe('@4xian/jword-docx worker runtime', () => {
     expect(posted).toEqual([event])
   })
 
+  it('keeps a cancel that arrives before the matching export is registered', async () => {
+    const posted: DocxWorkerEvent[] = []
+    const requestId = 'docx-worker-cancel-before-export-1'
+    const cancelEvent = await dispatchDocxWorkerRequest(
+      createCancelDocxRequest(requestId),
+      (response) => {
+        posted.push(response)
+      }
+    )
+    const exportEvent = await dispatchDocxWorkerRequest(
+      {
+        type: 'export',
+        requestId,
+        document: createWorkerProjection(),
+        options: {
+          requestId,
+          license: createWorkerLicense(['docx.export'])
+        }
+      },
+      (response) => {
+        posted.push(response)
+      }
+    )
+
+    expect(exportEvent).toMatchObject({
+      type: 'error',
+      requestId,
+      error: {
+        code: 'DOCX_WORKER_CANCELLED',
+        requestId
+      }
+    })
+    expect(posted).toEqual([cancelEvent])
+  })
+
   it('aborts an in-flight export with the same request id and does not post its stale result', async () => {
     const posted: DocxWorkerEvent[] = []
     const exportTask = dispatchDocxWorkerRequest(
@@ -169,7 +204,8 @@ describe('@4xian/jword-docx worker runtime', () => {
         requestId: 'docx-worker-cancel-running-1'
       }
     })
-    expect(posted).toEqual([cancelEvent])
+    expect(posted).toContainEqual(cancelEvent)
+    expect(posted.some((item) => item.type === 'export-result')).toBe(false)
   })
 
   it('aborts an in-flight inspect request with the same request id', async () => {
@@ -208,10 +244,11 @@ describe('@4xian/jword-docx worker runtime', () => {
         requestId: 'docx-worker-cancel-inspect-1'
       }
     })
-    expect(posted).toEqual([cancelEvent])
+    expect(posted).toContainEqual(cancelEvent)
+    expect(posted.some((item) => item.type === 'inspect-result')).toBe(false)
   })
 
-  it('dispatches export requests and posts the DOCX result response', async () => {
+  it('dispatches export requests with progress and posts the DOCX result response', async () => {
     const posted: DocxWorkerEvent[] = []
     const event = await dispatchDocxWorkerRequest(
       {
@@ -228,6 +265,7 @@ describe('@4xian/jword-docx worker runtime', () => {
       }
     )
 
+    expect(readPostedProgressStages(posted)).toEqual(['queued', 'writing', 'done'])
     expect(event).toMatchObject({
       type: 'export-result',
       requestId: 'docx-worker-export-1',
@@ -239,10 +277,10 @@ describe('@4xian/jword-docx worker runtime', () => {
         }
       }
     })
-    expect(posted).toEqual([event])
+    expect(posted.at(-1)).toEqual(event)
   })
 
-  it('dispatches import requests and posts the DOCX import response', async () => {
+  it('dispatches import requests with progress and posts the DOCX import response', async () => {
     const exportResult = await exportDocx(createWorkerProjection(), {
       requestId: 'docx-worker-import-source-1',
       license: createWorkerLicense(['docx.export'])
@@ -263,6 +301,7 @@ describe('@4xian/jword-docx worker runtime', () => {
       }
     )
 
+    expect(readPostedProgressStages(posted)).toEqual(['queued', 'reading', 'parsing', 'mapping', 'done'])
     expect(event).toMatchObject({
       type: 'import-result',
       requestId: 'docx-worker-import-1',
@@ -274,9 +313,16 @@ describe('@4xian/jword-docx worker runtime', () => {
         }
       }
     })
-    expect(posted).toEqual([event])
+    expect(posted.at(-1)).toEqual(event)
   })
 })
+
+/** 读取测试中已经投递的 DOCX worker 进度阶段。 */
+function readPostedProgressStages(events: readonly DocxWorkerEvent[]): readonly string[] {
+  return events
+    .filter((event) => event.type === 'progress')
+    .map((event) => event.stage)
+}
 
 /** 创建 DOCX worker 测试使用的有效授权。 */
 function createWorkerLicense(features: readonly string[]): JWordLicenseEntitlement {

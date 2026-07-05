@@ -107,7 +107,7 @@ export function createHistoryManager(
       readScopedHistoryManager(scopedHistories, scope).pendingMetadata.push(metadata)
     },
     discardNextTransactionMetadata(scope = 'user') {
-      readScopedHistoryManager(scopedHistories, scope).pendingMetadata.pop()
+      readScopedHistoryManager(scopedHistories, scope).pendingMetadata.shift()
     },
     undo(scope = 'user') {
       const scopedHistory = readScopedHistoryManager(scopedHistories, scope)

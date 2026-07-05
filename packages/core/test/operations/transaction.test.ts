@@ -138,4 +138,35 @@ describe('createTransactionPipeline', () => {
       )
     ).toThrow('事务 origin 不能为空')
   })
+
+  it('isolates listener errors and continues notifying later listeners', () => {
+    const store = createDocumentStore()
+    const pipeline = createTransactionPipeline(store.doc)
+    const observedEvents: string[] = []
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-1' as DocumentId)
+
+    pipeline.subscribe((event) => {
+      observedEvents.push(`before:${event.commandName}:${event.origin}`)
+    })
+    pipeline.subscribe(() => {
+      throw new Error('监听器失败')
+    })
+    pipeline.subscribe((event) => {
+      observedEvents.push(`after:${event.commandName}:${event.origin}`)
+    })
+
+    const result = pipeline.run(
+      {
+        name: 'noop',
+        operations: []
+      },
+      { origin: 'local-user' }
+    )
+
+    expect(result.commandName).toBe('noop')
+    expect(result.origin).toBe('local-user')
+    expect(result.operationKinds).toEqual([])
+    expect(observedEvents).toEqual(['before:noop:local-user', 'after:noop:local-user'])
+  })
 })

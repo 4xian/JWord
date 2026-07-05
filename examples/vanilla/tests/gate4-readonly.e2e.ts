@@ -58,12 +58,14 @@ test('Gate 4 global readonly blocks editing while keeping scroll and link open a
   const initialProjection = await readSerializedProjection(page)
 
   await dispatchReadonlyEditingEvents(page)
-  await selectFirstRunRange(page, 1, 3)
-  await clickReadonlyPage(page)
-
+  await dragSelectReadonlyRange(page, 0, 2)
+  expect(await dispatchReadonlyCopy(page)).toBe('默认')
   await expect(page.locator('[data-jword-floating-toolbar="true"]')).toBeHidden()
   await expect(page.locator('[data-jword-context-menu="true"]')).toBeHidden()
-  await expect(page.locator('[data-jword-hidden-textarea]')).not.toBeFocused()
+  await expect.poll(() => readReadonlySelectionSummary(page)).toContain('0→2')
+
+  await clickReadonlyPage(page)
+
   expect(await readSerializedProjection(page)).toBe(initialProjection)
 
   const scrollProbe = await scrollCanvas(page)
@@ -107,6 +109,117 @@ async function waitForReadonlyDemoReady(page: Page): Promise<void> {
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
   await expect(page.locator('[data-jword-find-replace]')).toHaveCount(1)
   await expect(page.locator('[data-jword-link-panel]')).toHaveCount(1)
+}
+
+/** 在只读页面上通过真实鼠标拖选文本。 */
+async function dragSelectReadonlyRange(page: Page, anchorGraphemeIndex: number, focusGraphemeIndex: number): Promise<void> {
+  const start = await readClientPointForReadonlyGrapheme(page, anchorGraphemeIndex)
+  const end = await readClientPointForReadonlyGrapheme(page, focusGraphemeIndex)
+
+  await page.mouse.move(start.clientX, start.clientY)
+  await page.mouse.down()
+  await page.mouse.move(end.clientX, end.clientY, { steps: 6 })
+  await page.mouse.up()
+}
+
+/** 读取只读样例中指定 grapheme 的可点击坐标。 */
+async function readClientPointForReadonlyGrapheme(page: Page, graphemeIndex: number): Promise<{
+  readonly clientX: number
+  readonly clientY: number
+}> {
+  return page.evaluate((index) => {
+    const demo = window.__jwordDemo
+    const section = demo?.editor.getProjection().document.sections[0]
+    const block = section?.blocks[0]
+    const run = block?.kind === 'paragraph' ? block.runs[0] : undefined
+    const canvasContainer = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
+
+    if (demo === undefined || section === undefined || block === undefined || block.kind !== 'paragraph' || run === undefined || canvasContainer === null) {
+      throw new Error('缺少只读鼠标选择坐标目标。')
+    }
+
+    const anchor = demo.editor.createTextAnchor({
+      sectionId: section.id,
+      blockId: block.id,
+      runId: run.id,
+      graphemeIndex: index
+    })
+    const caretRect = demo.editor.getCaretRect(anchor)
+    const scale = demo.editor.getPageConfig().scale
+
+    if (caretRect === undefined) {
+      throw new Error('缺少只读光标坐标。')
+    }
+
+    const pageElement = document.querySelector<HTMLElement>(`[data-jword-page="${caretRect.pageIndex}"]`)
+
+    if (pageElement === null) {
+      throw new Error('缺少只读页面节点。')
+    }
+
+    const pageRect = pageElement.getBoundingClientRect()
+    const layoutPage = demo.editor.getLayout().pages[caretRect.pageIndex]
+
+    if (layoutPage === undefined) {
+      throw new Error('缺少只读布局页面。')
+    }
+
+    return {
+      clientX: pageRect.left + ((caretRect.x - layoutPage.x) / 15) * scale,
+      clientY: pageRect.top + ((caretRect.y - layoutPage.y) / 15) * scale + 4
+    }
+  }, graphemeIndex)
+}
+
+/** 读取只读模式当前选区摘要。 */
+async function readReadonlySelectionSummary(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const demo = window.__jwordDemo
+    const selection = demo?.editor.getSelection() ?? null
+
+    if (demo === undefined || selection === null) {
+      return '无选区'
+    }
+
+    const anchor = demo.editor.resolveTextPosition(selection.anchor)
+    const focus = demo.editor.resolveTextPosition(selection.focus)
+
+    return `选区：${Math.min(anchor.graphemeIndex, focus.graphemeIndex)}→${Math.max(anchor.graphemeIndex, focus.graphemeIndex)}`
+  })
+}
+
+/** 分发只读 copy 事件并读取 core 写入的纯文本。 */
+async function dispatchReadonlyCopy(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const input = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
+
+    if (input === null) {
+      throw new Error('缺少只读 copy hidden textarea。')
+    }
+
+    let plainText = ''
+    const event = new Event('copy', {
+      bubbles: true,
+      cancelable: true
+    })
+
+    Object.defineProperty(event, 'clipboardData', {
+      value: {
+        getData(): string {
+          return ''
+        },
+        setData(targetType: string, value: string): void {
+          if (targetType === 'text/plain') {
+            plainText = value
+          }
+        }
+      }
+    })
+
+    input.dispatchEvent(event)
+
+    return plainText
+  })
 }
 
 /** 读取当前 projection 的稳定 JSON 字符串。 */

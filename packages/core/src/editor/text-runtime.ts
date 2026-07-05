@@ -23,6 +23,12 @@ export interface RunRuntimeContext {
   readonly graphemeLength: number
 }
 
+export interface WordBoundarySegment {
+  readonly start: number
+  readonly end: number
+  readonly isWordLike: boolean
+}
+
 export function readProjectionPlainText(projection: DocumentProjection): string {
   return collectParagraphRuntimeContexts(projection)
     .map((paragraph) => paragraph.runs.map((run) => readProjectionRunText(projection, paragraph.blockId, run.id)).join(''))
@@ -206,6 +212,50 @@ export function moveTextPosition(
   }
 }
 
+
+export function moveTextPositionByWord(
+  projection: DocumentProjection,
+  position: TextPosition,
+  direction: -1 | 1
+): TextPosition | undefined {
+  const text = readProjectionRunText(projection, position.blockId, position.runId)
+  const boundaries = collectWordBoundarySegments(text)
+
+  if (direction < 0) {
+    const previous = [...boundaries].reverse().find((segment) =>
+      segment.isWordLike && segment.start < position.graphemeIndex
+    )
+
+    return previous === undefined
+      ? moveTextPosition(projection, { ...position, graphemeIndex: 0 }, -1)
+      : { ...position, graphemeIndex: previous.start }
+  }
+
+  const next = boundaries.find((segment) =>
+    segment.isWordLike && segment.end > position.graphemeIndex
+  )
+
+  return next === undefined
+    ? moveTextPosition(projection, { ...position, graphemeIndex: countGraphemes(text) }, 1)
+    : { ...position, graphemeIndex: next.end }
+}
+
+/** 按 Intl.Segmenter 的 word 粒度收集 run 内边界。 */
+export function collectWordBoundarySegments(text: string): readonly WordBoundarySegment[] {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
+
+  return Object.freeze(Array.from(segmenter.segment(text)).map((segment) => {
+    const start = countGraphemes(text.slice(0, segment.index))
+    const end = start + countGraphemes(segment.segment)
+
+    return Object.freeze({
+      start,
+      end,
+      isWordLike: segment.isWordLike === true
+    })
+  }))
+}
+
 export function allocateParagraphSplitIds(
   projection: DocumentProjection,
   plannedOperations: readonly Operation[] = []
@@ -255,7 +305,18 @@ export function compareRuntimeTextPositions(
 }
 
 export function normalizePlainText(text: string): string {
-  return text.replace(/\r\n?/gu, '\n')
+  return text
+    .replace(/\r\n?/gu, '\n')
+    .split('')
+    .filter((character) => isAllowedPlainTextCharacter(character))
+    .join('')
+}
+
+/** 保留普通字符、换行和制表符，过滤其余 C0 控制字符。 */
+function isAllowedPlainTextCharacter(character: string): boolean {
+  const code = character.charCodeAt(0)
+
+  return code >= 32 || character === '\n' || character === '\t'
 }
 
 export function allocateSequentialIdentifier(ids: Set<string>, prefix: string): string {
@@ -332,7 +393,7 @@ export function readClipboardData(event: Event): {
     }
   }).clipboardData
 
-  return clipboardData === undefined ? undefined : clipboardData
+  return clipboardData == null ? undefined : clipboardData
 }
 
 export function isWordLikeGrapheme(grapheme: string): boolean {

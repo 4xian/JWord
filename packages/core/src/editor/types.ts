@@ -18,6 +18,7 @@ import type { Command, TextPosition, TextRange, TransactionEvent, TransactionMet
 import type { Resource, ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
 import type { CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 import type { EditorAnchorSnapshot, EditorLocationQuery, EditorLocationTarget, EditorRangeSnapshot, EditorRangeSnapshotInput, EditorResolvedLocation, EditorScrollToLocationOptions, EditorSelectionSnapshot, EditorTextQueryResult } from './location-types'
+import type { JWordErrorCode, JWordErrorDetails } from '../shared/errors'
 
 export type { HistoryScope } from '../operations/history'
 
@@ -265,6 +266,14 @@ export type EditorEvent =
       readonly kind: 'selectionChange'
       readonly selection: SelectionState | null
       readonly formattingState: SelectionFormattingState
+    }
+  | {
+      readonly kind: 'error'
+      readonly code: JWordErrorCode
+      readonly commandName: string
+      readonly message: string
+      readonly recoverable: boolean
+      readonly details?: JWordErrorDetails
     }
   | {
       readonly kind: 'destroyed'
@@ -863,6 +872,7 @@ export interface MountedEditorDom {
   readonly pageWrappers: Map<number, HTMLElement>
   readonly baseCanvases: Map<number, HTMLCanvasElement>
   readonly imageResourceResolver?: CanvasImageResourceResolver
+  commentPageIndexes: readonly number[]
   readonly inputState: {
     isComposing: boolean
     compositionText: string
@@ -872,6 +882,7 @@ export interface MountedEditorDom {
     anchor: AnchorRef | null
     pageMetrics: PointerPageMetrics | null
     paintedPageIndexes: readonly number[]
+    autoScrollDeltaY: number
   }
   canvases: Map<number, CanvasLike>
   deferredRender: {

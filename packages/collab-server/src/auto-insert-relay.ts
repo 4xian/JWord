@@ -108,7 +108,7 @@ export async function handleJWordAutoInsertRelayRequest(
     return
   }
 
-  if (body.documentId !== metadata.documentId) {
+  if (body.documentId !== metadata.documentId || !isTenantMetadataMatched(body.tenantId, metadata.tenantId)) {
     writeJson(response, 400, {
       ok: false,
       diagnosticCode: 'JWORD_COLLAB_AUTO_INSERT_RELAY_METADATA_MISMATCH',
@@ -187,4 +187,12 @@ function readAutoInsertRelayRequest(value: unknown): AutoInsertRelayRequest | nu
         ...(tenantId === undefined ? {} : { tenantId }),
         ...(entitlement === undefined ? {} : { entitlement })
       }
+}
+
+/** 校验请求体 tenantId 与授权 metadata 一致。 */
+function isTenantMetadataMatched(
+  bodyTenantId: string | undefined,
+  metadataTenantId: string | undefined
+): boolean {
+  return bodyTenantId === undefined || bodyTenantId === metadataTenantId
 }

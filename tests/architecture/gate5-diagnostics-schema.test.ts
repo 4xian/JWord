@@ -9,6 +9,7 @@
  */
 
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 
 import {
   createFontManager,
@@ -16,7 +17,6 @@ import {
   layoutDocument
 } from '@4xian/jword-core'
 import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
-import JSZip from 'jszip'
 import {
   DOCX_ERROR_CODE_METADATA,
   DOCX_WARNING_CODE_METADATA,
@@ -38,6 +38,18 @@ import type {
 import { describe, expect, it } from 'vitest'
 import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../fixtures/license/insecure-test-only-keys'
 
+const requireFromDocxPackage = createRequire(new URL('../../packages/docx/package.json', import.meta.url))
+const JSZip = requireFromDocxPackage('jszip') as JsZipConstructor
+
+interface JsZipConstructor {
+  new (): JsZipArchive
+}
+
+interface JsZipArchive {
+  file(path: string, content: string): void
+  generateAsync(options: { readonly type: 'uint8array', readonly compression: 'DEFLATE' }): Promise<Uint8Array>
+}
+
 describe('Gate 5 diagnostics schema', () => {
   it('registers every DOCX warning and error code used by package source', () => {
     const sourceCodes = readDiagnosticCodes('DOCX', [
@@ -48,6 +60,8 @@ describe('Gate 5 diagnostics schema', () => {
       'packages/docx/src/import-sections.ts',
       'packages/docx/src/messages.ts',
       'packages/docx/src/package.ts',
+      'packages/docx/src/package-part-graph.ts',
+      'packages/docx/src/package-xml-readers.ts',
       'packages/docx/src/worker.ts'
     ])
     const registryCodes = readRegistryCodes(DOCX_WARNING_CODE_METADATA, DOCX_ERROR_CODE_METADATA)
@@ -59,6 +73,7 @@ describe('Gate 5 diagnostics schema', () => {
 
   it('registers every PDF warning and error code used by package source', () => {
     const sourceCodes = readDiagnosticCodes('PDF', [
+      'packages/pdf/src/font-registry.ts',
       'packages/pdf/src/index.ts',
       'packages/pdf/src/image-assets.ts',
       'packages/pdf/src/worker-api.ts',

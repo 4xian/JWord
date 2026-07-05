@@ -7,25 +7,48 @@
  * 性能/安全约束：测试只运行在 jsdom，不访问网络或磁盘，不直接写 projection。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-3。
  */
-
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildInsertInlineImageCommand,
-  createEditor
-} from '../../src/index'
-import type { LineBox } from '../../src/layout/runtime'
-import { twipsToCssPx } from '../../src/layout/page-config'
+import { createEditor } from '../../src/index'
 import type { DocumentId, RunId, SectionId, BlockId } from '../../src/model/position'
 import { createAnchorRef, createGraphemeIndex } from '../../src/model/position'
 import { createSelectionState } from '../../src/model/selection'
-import type { Resource } from '../../src/resources/types'
+import {
+  captureTransactions,
+  createClipboardTransfer,
+  createResource,
+  dispatchClipboard,
+  dispatchCompositionEvent,
+  dispatchKey,
+  dispatchMouse,
+  dispatchTextInput,
+  expectSelectionIndexes,
+  findClosestLineGraphemeIndex,
+  findPointerPointForGrapheme,
+  findPointerPointForGraphemeBias,
+  findPointerPointForImageRun,
+  getHiddenTextarea,
+  getPageElement,
+  insertInlineImageAtSelection,
+  mockPageRect,
+  readInlineImageResourceIds,
+  readParagraphProperties,
+  readParagraphRunLinks,
+  readParagraphRunProperties,
+  readParagraphRunTexts,
+  readParagraphTailAnchor,
+  readParagraphTexts,
+  textareaFrom,
+  waitForDeferredSelectionTick
+} from './input-runtime-test-helpers'
 
-interface RecordedTransaction {
-  readonly commandName: string
-  readonly origin: string
-  readonly operationKinds: readonly string[]
-  readonly dirty: boolean
+
+interface RecordedEditorErrorEvent {
+  readonly kind: string
+  readonly code?: string
+  readonly commandName?: string
+  readonly message?: string
+  readonly recoverable?: boolean
 }
 
 describe('Editor input runtime', () => {
@@ -397,8 +420,16 @@ describe('Editor input runtime', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: 'abc' })
     const transactions = captureTransactions(editor)
+    const errors: RecordedEditorErrorEvent[] = []
 
     try {
+      editor.subscribe((event) => {
+        const recorded = event as RecordedEditorErrorEvent
+
+        if (recorded.kind === 'error') {
+          errors.push(recorded)
+        }
+      })
       editor.mount(host)
 
       const textarea = getHiddenTextarea(host)
@@ -469,6 +500,16 @@ describe('Editor input runtime', () => {
       dispatchTextInput(textarea, '坏')
       expect(readParagraphTexts(editor)).toEqual(['ab'])
       expect(transactions).toHaveLength(7)
+      expect(errors).toEqual([{
+        kind: 'error',
+        code: 'OPERATION_BLOCK_NOT_FOUND',
+        commandName: 'insertText',
+        message: '找不到块',
+        recoverable: true,
+        details: {
+          blockId: 'missing-paragraph'
+        }
+      }])
 
       const validAnchor = editor.createTextAnchor({
         sectionId: 'section-1',
@@ -1623,6 +1664,43 @@ describe('Editor input runtime', () => {
     }
   })
 
+  it('pastes sanitized rich text links through the transaction pipeline', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({ initialText: 'ab' })
+
+    try {
+      editor.mount(host)
+
+      const anchor = editor.createTextAnchor({
+        sectionId: 'section-1',
+        blockId: 'paragraph-1',
+        runId: 'run-1',
+        graphemeIndex: 1
+      })
+
+      editor.setSelection(createSelectionState(anchor, anchor))
+      editor.pasteRichTextFragment({
+        paragraphs: [{
+          runs: [{
+            text: 'docs',
+            properties: {
+              link: {
+                target: 'https://example.com/docs'
+              }
+            }
+          }]
+        }]
+      })
+
+      expect(readParagraphRunTexts(editor)).toEqual([['a', 'docs', 'b']])
+      expect(readParagraphRunLinks(editor)).toEqual([[undefined, {
+        target: 'https://example.com/docs'
+      }, undefined]])
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('supports cross-run plain text cut and paste through the transaction pipeline', () => {
     const host = document.createElement('div')
     const editor = createEditor({ initialText: 'abcdef' })
@@ -1766,422 +1844,3 @@ describe('Editor input runtime', () => {
     }
   })
 })
-
-function getHiddenTextarea(host: HTMLElement): HTMLTextAreaElement {
-  const textarea = host.querySelector('[data-jword-hidden-textarea]')
-
-  if (!(textarea instanceof HTMLTextAreaElement)) {
-    throw new Error('hidden textarea 未挂载')
-  }
-
-  return textarea
-}
-
-function textareaFrom(host: HTMLElement): HTMLTextAreaElement {
-  return getHiddenTextarea(host)
-}
-
-function dispatchTextInput(textarea: HTMLTextAreaElement, text: string) {
-  textarea.value = text
-  textarea.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }))
-}
-
-function dispatchCompositionEvent(
-  textarea: HTMLTextAreaElement,
-  type: 'compositionstart' | 'compositionupdate' | 'compositionend',
-  data: string
-) {
-  const event = new Event(type, { bubbles: true, cancelable: true })
-
-  Object.defineProperty(event, 'data', {
-    configurable: true,
-    value: data
-  })
-
-  textarea.dispatchEvent(event)
-}
-
-function dispatchKey(
-  textarea: HTMLTextAreaElement,
-  key: string,
-  options: Pick<KeyboardEventInit, 'metaKey' | 'ctrlKey' | 'shiftKey'> & {
-    isComposing?: boolean
-    keyCode?: number
-  } = {}
-) {
-  const init: KeyboardEventInit = {
-    key,
-    bubbles: true,
-    cancelable: true
-  }
-
-  if (options.metaKey !== undefined) {
-    init.metaKey = options.metaKey
-  }
-
-  if (options.ctrlKey !== undefined) {
-    init.ctrlKey = options.ctrlKey
-  }
-
-  if (options.shiftKey !== undefined) {
-    init.shiftKey = options.shiftKey
-  }
-
-  const event = new KeyboardEvent('keydown', init)
-
-  if (options.isComposing !== undefined) {
-    Object.defineProperty(event, 'isComposing', {
-      configurable: true,
-      value: options.isComposing
-    })
-  }
-
-  if (options.keyCode !== undefined) {
-    Object.defineProperty(event, 'keyCode', {
-      configurable: true,
-      value: options.keyCode
-    })
-  }
-
-  textarea.dispatchEvent(event)
-}
-
-function dispatchMouse(
-  target: HTMLElement,
-  type: 'mousedown' | 'mousemove' | 'mouseup' | 'dblclick',
-  clientX: number,
-  clientY: number
-) {
-  target.dispatchEvent(new MouseEvent(type, {
-    bubbles: true,
-    cancelable: true,
-    button: 0,
-    buttons: type === 'mouseup' ? 0 : 1,
-    clientX,
-    clientY
-  }))
-}
-
-function dispatchClipboard(
-  textarea: HTMLTextAreaElement,
-  type: 'copy' | 'cut' | 'paste',
-  clipboardData: ReturnType<typeof createClipboardTransfer>
-) {
-  const event = new Event(type, { bubbles: true, cancelable: true })
-
-  Object.defineProperty(event, 'clipboardData', {
-    configurable: true,
-    value: clipboardData
-  })
-
-  textarea.dispatchEvent(event)
-}
-
-function createClipboardTransfer(initialData: Record<string, string> = {}) {
-  const store = new Map(Object.entries(initialData))
-
-  return {
-    getData(type: string) {
-      return store.get(type) ?? ''
-    },
-    setData(type: string, value: string) {
-      store.set(type, value)
-    }
-  }
-}
-
-function getPageElement(host: HTMLElement, pageIndex: number): HTMLElement {
-  const page = host.querySelector(`[data-jword-page="${pageIndex}"]`)
-
-  if (!(page instanceof HTMLElement)) {
-    throw new Error(`page ${pageIndex} 未挂载`)
-  }
-
-  return page
-}
-
-function mockPageRect(page: HTMLElement) {
-  Object.defineProperty(page, 'getBoundingClientRect', {
-    configurable: true,
-    value: () => ({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: Number.parseFloat(page.style.width || '0'),
-      bottom: Number.parseFloat(page.style.height || '0'),
-      width: Number.parseFloat(page.style.width || '0'),
-      height: Number.parseFloat(page.style.height || '0'),
-      toJSON: () => ({})
-    })
-  })
-}
-
-function findPointerPointForGrapheme(
-  editor: ReturnType<typeof createEditor>,
-  pageIndex: number,
-  graphemeIndex: number
-) {
-  const layout = editor.getLayout()
-  const page = layout.pages[pageIndex]
-  const localY = (page?.lines[0]?.y ?? 0) - (page?.y ?? 0) + 1
-
-  if (page === undefined) {
-    throw new Error(`page ${pageIndex} 不存在`)
-  }
-
-  for (let x = 0; x < page.width; x += 1) {
-    const anchor = editor.hitTest({
-      pageIndex,
-      x,
-      y: localY
-    })
-
-    if (anchor === undefined) {
-      continue
-    }
-
-    if (editor.resolveTextPosition(anchor).graphemeIndex === graphemeIndex) {
-      return {
-        clientX: twipsToCssPx(x),
-        clientY: twipsToCssPx(localY)
-      }
-    }
-  }
-
-  throw new Error(`找不到 grapheme ${graphemeIndex} 的命中点`)
-}
-
-function findPointerPointForGraphemeBias(
-  editor: ReturnType<typeof createEditor>,
-  pageIndex: number,
-  graphemeIndex: number,
-  bias: 'left' | 'center' | 'right'
-) {
-  const layout = editor.getLayout()
-  const page = layout.pages[pageIndex]
-
-  if (page === undefined) {
-    throw new Error(`page ${pageIndex} 不存在`)
-  }
-
-  for (const line of page.lines) {
-    for (const fragment of line.fragments) {
-      if (
-        graphemeIndex < fragment.start.graphemeIndex
-        || graphemeIndex >= fragment.end.graphemeIndex
-      ) {
-        continue
-      }
-
-      const relativeIndex = graphemeIndex - fragment.start.graphemeIndex
-      const graphemeStart = fragment.advanceTwips[relativeIndex] ?? 0
-      const graphemeEnd = fragment.advanceTwips[relativeIndex + 1] ?? fragment.width
-      const relativeX = bias === 'left'
-        ? graphemeStart + ((graphemeEnd - graphemeStart) * 0.1)
-        : bias === 'right'
-          ? graphemeStart + ((graphemeEnd - graphemeStart) * 0.9)
-          : graphemeStart + ((graphemeEnd - graphemeStart) * 0.5)
-
-      return {
-        clientX: twipsToCssPx(fragment.x - page.x + relativeX),
-        clientY: twipsToCssPx(line.y - page.y + Math.max(1, line.height / 2))
-      }
-    }
-  }
-
-  throw new Error(`找不到 grapheme ${graphemeIndex} 的 ${bias} 命中点`)
-}
-
-function findPointerPointForImageRun(
-  editor: ReturnType<typeof createEditor>,
-  pageIndex: number,
-  runId: string
-) {
-  const page = editor.getLayout().pages[pageIndex]
-
-  if (page === undefined) {
-    throw new Error(`page ${pageIndex} 不存在`)
-  }
-
-  for (const line of page.lines) {
-    const inline = line.inlines.find((candidate) => candidate.runId === runId)
-
-    if (inline !== undefined) {
-      return {
-        clientX: twipsToCssPx((inline.x - page.x) + (inline.width / 2)),
-        clientY: twipsToCssPx((inline.y - page.y) + Math.max(1, inline.height / 2))
-      }
-    }
-  }
-
-  throw new Error(`找不到 image run ${runId} 的命中点`)
-}
-
-function readParagraphTexts(editor: ReturnType<typeof createEditor>) {
-  return editor.getProjection().document.sections.flatMap((section) =>
-    section.blocks.flatMap((block) => block.kind === 'paragraph'
-      ? [block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')).join('')]
-      : [])
-  )
-}
-
-function readParagraphRunTexts(editor: ReturnType<typeof createEditor>) {
-  return editor.getProjection().document.sections.flatMap((section) =>
-    section.blocks.flatMap((block) => block.kind === 'paragraph'
-      ? [block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join(''))]
-      : [])
-  )
-}
-
-function readParagraphRunProperties(editor: ReturnType<typeof createEditor>) {
-  return editor.getProjection().document.sections.flatMap((section) =>
-    section.blocks.flatMap((block) => block.kind === 'paragraph'
-      ? [block.runs.map((run) => run.properties ?? {})]
-      : [])
-  )
-}
-
-/** 读取段落属性，验证富文本粘贴是否把段落级格式落入 projection。 */
-function readParagraphProperties(editor: ReturnType<typeof createEditor>) {
-  return editor.getProjection().document.sections.flatMap((section) =>
-    section.blocks.flatMap((block) => block.kind === 'paragraph'
-      ? [block.properties ?? {}]
-      : [])
-  )
-}
-
-function readInlineImageResourceIds(editor: ReturnType<typeof createEditor>) {
-  return editor.getProjection().document.sections.flatMap((section) =>
-    section.blocks.flatMap((block) => block.kind === 'paragraph'
-      ? block.runs.flatMap((run) => run.inlines.flatMap((inline) => inline.kind === 'image' ? [inline.resourceId] : []))
-      : [])
-  )
-}
-
-function createResource(id: string): Resource {
-  return {
-    kind: 'resource',
-    id,
-    mime: 'image/png',
-    source: {
-      kind: 'dataUrl',
-      url: 'data:image/png;base64,AAAA'
-    },
-    status: 'success'
-  }
-}
-
-function insertInlineImageAtSelection(
-  editor: ReturnType<typeof createEditor>,
-  resource: Resource,
-  anchor: Readonly<{
-    sectionId: string
-    blockId: string
-    runId: string
-    graphemeIndex: number
-  }>
-) {
-  const runtimeAnchor = editor.createTextAnchor(anchor)
-  const selection = createSelectionState(runtimeAnchor, runtimeAnchor)
-  const command = buildInsertInlineImageCommand(editor.getProjection(), selection, resource, {
-    widthTwips: 1440,
-    heightTwips: 960
-  })
-
-  expect(command).not.toBeNull()
-  editor.executeCommand(command!)
-}
-
-function readParagraphTailAnchor(editor: ReturnType<typeof createEditor>) {
-  const paragraph = editor.getProjection().document.sections[0]?.blocks[0]
-
-  if (paragraph?.kind !== 'paragraph') {
-    throw new Error('expected paragraph block')
-  }
-
-  const tailRun = paragraph.runs[paragraph.runs.length - 1]
-
-  if (tailRun === undefined) {
-    throw new Error('expected tail run')
-  }
-
-  return {
-    sectionId: 'section-1',
-    blockId: paragraph.id,
-    runId: tailRun.id,
-    graphemeIndex: 0
-  }
-}
-
-function captureTransactions(editor: ReturnType<typeof createEditor>) {
-  const transactions: RecordedTransaction[] = []
-
-  editor.subscribe((event) => {
-    if (event.kind !== 'transaction') {
-      return
-    }
-
-    transactions.push({
-      commandName: event.transaction.commandName,
-      origin: event.transaction.origin,
-      operationKinds: [...event.transaction.operationKinds],
-      dirty: event.transaction.dirty
-    })
-  })
-
-  return transactions
-}
-
-function expectSelectionIndexes(
-  editor: ReturnType<typeof createEditor>,
-  selection: ReturnType<typeof createSelectionState> | null | undefined,
-  expected: readonly [number, number]
-) {
-  expect(selection).not.toBeNull()
-  expect(selection).toBeDefined()
-
-  if (selection === null || selection === undefined) {
-    return
-  }
-
-  expect([
-    editor.resolveTextPosition(selection.anchor).graphemeIndex,
-    editor.resolveTextPosition(selection.focus).graphemeIndex
-  ]).toEqual(expected)
-}
-
-async function waitForDeferredSelectionTick() {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 120)
-  })
-}
-
-function findClosestLineGraphemeIndex(
-  line: LineBox,
-  absoluteX: number
-) {
-  const firstFragment = line.fragments[0]
-
-  if (firstFragment === undefined) {
-    throw new Error('line 没有文本 fragment')
-  }
-
-  if (absoluteX <= firstFragment.x) {
-    return firstFragment.start.graphemeIndex
-  }
-
-  for (const fragment of line.fragments) {
-    const midpoint = fragment.x + fragment.width / 2
-
-    if (absoluteX < midpoint) {
-      return fragment.start.graphemeIndex
-    }
-
-    if (absoluteX <= fragment.x + fragment.width) {
-      return fragment.end.graphemeIndex
-    }
-  }
-
-  return line.fragments[line.fragments.length - 1]!.end.graphemeIndex
-}

@@ -10,17 +10,9 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { createServer } from 'node:http'
-import type {
-  IncomingHttpHeaders,
-  IncomingMessage,
-  ServerResponse
-} from 'node:http'
-import { Readable } from 'node:stream'
 import * as Y from 'yjs'
 import {
-  createVolatileHistoryStorage,
-  type JWordHistoryStorage,
-  type JWordHistoryStorageDocument
+  createVolatileHistoryStorage
 } from '@4xian/jword-persistence'
 import {
   createHocuspocusCollabProviderAdapter
@@ -36,6 +28,16 @@ import {
   type JWordCollabHocuspocusServer,
   type JWordCollabServer
 } from '../src/index'
+
+import {
+  BodyTrapRequest,
+  CapturedJsonResponse,
+  createCountingStorage,
+  encodeEmptyYDocUpdate,
+  fetchJson,
+  waitForProviderError,
+  waitForSynced
+} from './server-test-helpers'
 
 let server: JWordCollabServer | null = null
 let hocuspocusServer: JWordCollabHocuspocusServer | null = null
@@ -335,6 +337,7 @@ describe('@4xian/jword-collab-server', () => {
       port: 0,
       address: '127.0.0.1',
       historyStorage: createVolatileHistoryStorage(),
+      authHook: () => ({ ok: true }),
       licenseHook: () => ({ ok: true }),
       allowedOrigins: ['https://app.example.test']
     })
@@ -387,6 +390,7 @@ describe('@4xian/jword-collab-server', () => {
       port: 0,
       address: '127.0.0.1',
       historyStorage: storage,
+      authHook: () => ({ ok: true }),
       licenseHook: () => ({
         ok: false,
         diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
@@ -469,9 +473,40 @@ describe('@4xian/jword-collab-server', () => {
     expect(storage.loadCount).toBe(0)
   })
 
+  it('denies protected HTTP routes without auth hook before body or license', async () => {
+    const handler = createJWordCollabRequestHandler({
+      historyStorage: createCountingStorage(),
+      licenseHook: () => ({ ok: true })
+    })
+    const cases = [
+      '/history/versions?documentId=doc-auth-hook-missing',
+      '/history/preview?documentId=doc-auth-hook-missing&versionId=version-a',
+      '/license/status',
+      '/auto-insert/relay?documentId=doc-auth-hook-missing'
+    ] as const
+
+    for (const url of cases) {
+      const request = new BodyTrapRequest('POST', url, {
+        'content-type': 'application/json'
+      })
+      const response = new CapturedJsonResponse()
+
+      await handler(request.asIncomingMessage(), response.asServerResponse())
+
+      expect(response.statusCode).toBe(401)
+      expect(response.readJson()).toMatchObject({
+        ok: false,
+        diagnosticCode: 'JWORD_COLLAB_AUTH_HOOK_REQUIRED',
+        requestId: expect.any(String)
+      })
+      expect(request.bodyReadCount).toBe(0)
+    }
+  })
+
   it('denies paid body endpoints without license hook before reading request body', async () => {
     const handler = createJWordCollabRequestHandler({
-      historyStorage: createCountingStorage()
+      historyStorage: createCountingStorage(),
+      authHook: () => ({ ok: true })
     })
     const cases = [
       {
@@ -509,6 +544,7 @@ describe('@4xian/jword-collab-server', () => {
   it('does not consume request body when license hook denies paid endpoints', async () => {
     const handler = createJWordCollabRequestHandler({
       historyStorage: createCountingStorage(),
+      authHook: () => ({ ok: true }),
       licenseHook: () => ({
         ok: false,
         diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
@@ -541,6 +577,7 @@ describe('@4xian/jword-collab-server', () => {
   it('rejects body-only paid endpoint metadata before reading request body', async () => {
     const handler = createJWordCollabRequestHandler({
       historyStorage: createCountingStorage(),
+      authHook: () => ({ ok: true }),
       licenseHook: () => ({ ok: true })
     })
     const cases = [
@@ -577,6 +614,7 @@ describe('@4xian/jword-collab-server', () => {
     server = createJWordCollabServer({
       port: 0,
       address: '127.0.0.1',
+      authHook: () => ({ ok: true }),
       licenseHook: (input) => {
         licenseCalls.push({
           documentId: input.documentId,
@@ -621,6 +659,7 @@ describe('@4xian/jword-collab-server', () => {
     server = createJWordCollabServer({
       port: 0,
       address: '127.0.0.1',
+      authHook: () => ({ ok: true }),
       licenseHook: () => ({
         ok: false,
         diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
@@ -657,6 +696,7 @@ describe('@4xian/jword-collab-server', () => {
     server = createJWordCollabServer({
       port: 0,
       address: '127.0.0.1',
+      authHook: () => ({ ok: true }),
       tenantHook: () => ({
         ok: false,
         diagnosticCode: 'COLLAB_TENANT_DENIED'
@@ -698,6 +738,7 @@ describe('@4xian/jword-collab-server', () => {
       port: 0,
       address: '127.0.0.1',
       minimumServerVersion: '0.0.0',
+      authHook: () => ({ ok: true }),
       licenseHook: ({ feature }) => {
         if (feature === GATE6_COLLAB_FEATURES.server) {
           return { ok: true }
@@ -784,166 +825,3 @@ describe('@4xian/jword-collab-server', () => {
   }, 15000)
 })
 
-/** 构造一旦读取 body 就计数并报错的请求流。 */
-class BodyTrapRequest extends Readable {
-  readonly method: string
-  readonly url: string
-  readonly headers: IncomingHttpHeaders
-  private readCount = 0
-
-  constructor(method: string, url: string, headers: IncomingHttpHeaders) {
-    super()
-    this.method = method
-    this.url = url
-    this.headers = headers
-  }
-
-  /** 暴露 body 被消费次数。 */
-  get bodyReadCount(): number {
-    return this.readCount
-  }
-
-  /** 转成 handler 需要的 Node 请求类型。 */
-  asIncomingMessage(): IncomingMessage {
-    return this as unknown as IncomingMessage
-  }
-
-  /** 在 handler 尝试读取 body 时立即失败。 */
-  override _read(): void {
-    this.readCount += 1
-    this.destroy(new Error('request body must not be consumed before authorization'))
-  }
-}
-
-/** 收集 handler 写出的 JSON 响应。 */
-class CapturedJsonResponse {
-  statusCode = 200
-  private responseBody = ''
-
-  /** 兼容 Node ServerResponse 的 header 写入接口。 */
-  setHeader(_name: string, _value: number | string | readonly string[]): this {
-    return this
-  }
-
-  /** 收集响应 body。 */
-  end(chunk?: string | Uint8Array): this {
-    if (chunk !== undefined) {
-      this.responseBody += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
-    }
-
-    return this
-  }
-
-  /** 转成 handler 需要的 Node 响应类型。 */
-  asServerResponse(): ServerResponse {
-    return this as unknown as ServerResponse
-  }
-
-  /** 读取 JSON 响应。 */
-  readJson(): unknown {
-    return JSON.parse(this.responseBody) as unknown
-  }
-}
-
-/** 请求 JSON 响应。 */
-async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
-  return fetch(url, init).then((response) => response.json() as Promise<unknown>)
-}
-
-/** 等待 provider 完成首次同步。 */
-async function waitForSynced(adapter: {
-  readonly status: string
-  onSynced(listener: () => void): () => void
-}): Promise<void> {
-  if (adapter.status === 'synced') {
-    return
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      unsubscribe()
-      reject(new Error(`provider did not sync, current status: ${adapter.status}`))
-    }, 5000)
-    const unsubscribe = adapter.onSynced(() => {
-      clearTimeout(timeoutId)
-      unsubscribe()
-      resolve()
-    })
-  })
-}
-
-/** 等待 provider 报告错误。 */
-async function waitForProviderError(adapter: {
-  readonly error: {
-    readonly code: string
-    readonly recoverable: boolean
-  } | undefined
-  onError(listener: (error: {
-    readonly code: string
-    readonly recoverable: boolean
-  }) => void): () => void
-}): Promise<{
-  readonly code: string
-  readonly recoverable: boolean
-}> {
-  if (adapter.error !== undefined) {
-    return adapter.error
-  }
-
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      unsubscribe()
-      reject(new Error('provider did not report an error'))
-    }, 5000)
-    const unsubscribe = adapter.onError((error) => {
-      clearTimeout(timeoutId)
-      unsubscribe()
-      resolve(error)
-    })
-  })
-}
-
-/** 生成合法的空 Y.Doc update。 */
-function encodeEmptyYDocUpdate(): string {
-  const doc = new Y.Doc()
-  const update = Y.encodeStateAsUpdate(doc)
-
-  doc.destroy()
-
-  return Buffer.from(update).toString('base64')
-}
-
-/** 创建带调用计数的 history storage。 */
-function createCountingStorage(): JWordHistoryStorage & {
-  readonly loadCount: number
-  readonly saveCount: number
-} {
-  const documents = new Map<string, JWordHistoryStorageDocument>()
-  let loadCount = 0
-  let saveCount = 0
-
-  return {
-    /** 读取文档历史并增加计数。 */
-    get loadCount() {
-      return loadCount
-    },
-
-    /** 保存文档历史并增加计数。 */
-    get saveCount() {
-      return saveCount
-    },
-
-    /** 读取指定文档历史。 */
-    async loadDocument(documentId) {
-      loadCount += 1
-
-      return documents.get(documentId) ?? null
-    },
-
-    /** 保存指定文档历史。 */
-    async saveDocument(documentId, document) {
-      saveCount += 1
-      documents.set(documentId, document)
-    }
-  }
-}

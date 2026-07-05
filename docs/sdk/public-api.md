@@ -83,6 +83,7 @@ Stable：
 - `ImageInline`
 - command builder API：`buildSetBoldCommand()`、`buildSetItalicCommand()`、`buildSetUnderlineCommand()`、`buildSetTextColorCommand()`、`buildSetParagraphAlignmentCommand()`、`buildInsertTableCommand()`、`buildInsertInlineImageCommand()`、`buildInsertLinkCommand()`、`buildAddCommentThreadCommand()` 等根入口已导出的 command builders。
 - layout / render API：`layoutDocument()`、`renderPageCanvas()`、`syncPageCanvases()`、`hitTestDocumentLayout()`、`getCaretRect()`、`getSelectionRects()`、`createPageConfig()`、`computeViewportPages()`。
+- font measurement API：`createFontManager()`、`createCanvasTextMeasurer()`、`FontManager`、`FontManagerOptions`、`TextMeasurer`、`TextMeasurementMetrics`；core 默认保持无 DOM 近似测量，浏览器运行时只能在 mount 后由宿主 DOM 创建 canvas context 注入真实测量器。
 - resources API：`Resource`、`ResourceAdapter`、`ResourceUploadRequest`、`ResourceUploadResult`、`ResourceUrlPolicy`、`DEFAULT_RESOURCE_URL_POLICY`、`isAllowedResourceUrl()`。
 - diagnostics / error API：`JWordError`、`JWordErrorCode`、`JWordErrorDetails`、`TransactionDiagnostic`。
 
@@ -149,6 +150,9 @@ Stable：
 - `JWordPackageMetadata`
 - `JWordPackageChecksums`
 - `JWordPackageDiagnostic`
+- `JWordPackageDiagnosticCode`
+- `JWordPackageErrorCode`
+- `JWordPackageWarningCode`
 - `JWordPackageWarning`
 - `JWordPackageMigrationReport`
 - `JWORD_NATIVE_FORMAT_VERSION`
@@ -200,6 +204,12 @@ Stable：
 - `isDocxErrorCode()`
 - `GATE5_FORMAT_FEATURES` defines required paid format feature keys through `@4xian/jword-license`。
 - `./worker` is a public worker entry for DOCX import/export/inspect orchestration。
+
+Compatibility evidence：
+
+- 当前 `fixtures/docx/compatibility-results.json` 中 14 个 T1/T2 DOCX 导出 fixture 已通过自动 package graph、roundtrip diff 与 Open XML validator 检查。
+- 当前人工办公套件证据只覆盖 WPS；Microsoft Word 桌面版与 LibreOffice 仍为 `pending/not-run`，对外材料不得声明已完成 Word 桌面版兼容验证。
+- Word 桌面版补证必须按 `fixtures/docx/evidence-templates/manual-compatibility-results.template.json` 记录打开、编辑、保存、重开结果，并保留 export artifact 的 byteLength 与 SHA-256 绑定字段。
 
 Experimental：当前无。
 
@@ -374,6 +384,8 @@ Stable：
 - `JWORD_COLLAB_SERVER_PROTOCOL_VERSION`
 - `JWORD_COLLAB_SERVER_PACKAGE_VERSION`
 - `GATE6_COLLAB_FEATURES`
+
+Security defaults：`createJWordCollabServer()` and `createJWordCollabRequestHandler()` deny protected HTTP routes when `authHook` is omitted (`401` / `JWORD_COLLAB_AUTH_HOOK_REQUIRED`), and paid feature checks deny when `licenseHook` is omitted (`403` / `JWORD_COLLAB_LICENSE_HOOK_REQUIRED`). Hosts must pass explicit allow hooks for local demos or test-only deployments. Same-document history operations are serialized with bounded backpressure; `maxHistoryDocumentLockQueueDepth` controls the queue depth and overflow returns `429` / `JWORD_COLLAB_HISTORY_LOCK_QUEUE_EXCEEDED`. Configured `rateLimit` applies a per-client sliding window to protected business routes and returns `429` / `JWORD_COLLAB_SERVER_RATE_LIMITED` with `retryAfterMs` when exceeded.
 
 Experimental：当前无。
 

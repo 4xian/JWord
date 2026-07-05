@@ -4,6 +4,7 @@
 > 修复计划回答"修什么、按什么顺序"；本文档回答"怎么修"——把修复计划中工作量为 L/XL 的任务拆成可直接执行的子步骤，把设计类任务的方案定稿，把产品/商业类悬而未决的问题预先做出默认决策。
 > **优先级规则：凡本文档收录的任务，以本文档的拆解与决策为准；未收录的任务仍按修复计划条目执行。**
 > 决策标注"（可推翻）"的条目，如人工给出不同结论，以人工结论为准并回写本文档。
+> 2026-07-04 执行调整：后续修复不再因原"人工检查点"暂停；需人工复核的节点统一登记到 `2026-07-04-remediation-manual-verification-log.md`，并继续执行下一项。
 
 ## 任务映射表
 
@@ -36,7 +37,7 @@
 - **D3（页眉页脚富文本编辑）**：移入 post-1.0，本轮修复不实施。理由：工作量 L、复用主编辑管线涉及输入系统改造，且修复计划自己标注"先确认产品优先级"；页眉页脚当前的纯文本编辑能力满足 1.0 需求文档。（可推翻）
 - **D4（修订接受/拒绝）**：基础版（单条接受/拒绝）纳入 Phase 3B 末位，允许后置执行、不阻塞里程碑 B；"全部接受/拒绝"与嵌套修订保持 post-1.0。前置依赖：G3-20（修订标记覆盖全部 run）必须先完成。
 - **D5（Worker 不可用降级）**：不做同线程 fallback。实施内容收敛为三件事：环境能力检测 API、`WORKER_UNAVAILABLE` 类稳定诊断（失败可观测、不静默挂起）、文档声明 CSP 环境要求（`worker-src` / `blob:` 指令清单）。
-- **D6（浏览器支持矩阵，建议默认值，终值需人工确认）**：桌面编辑：Chrome/Edge ≥ 114、Firefox ≥ 115（ESR）、Safari ≥ 16.4；移动端仅承诺只读分页预览。构建 target 与该矩阵对齐（es2022 级），E2E 矩阵维持 Chromium/Firefox/WebKit 最新版 + 该承诺的回归说明。
+- **D6（浏览器支持矩阵，建议默认值，终值需登记人工验证点）**：桌面编辑：Chrome/Edge ≥ 114、Firefox ≥ 115（ESR）、Safari ≥ 16.4；移动端仅承诺只读分页预览。构建 target 与该矩阵对齐（es2022 级），E2E 矩阵维持 Chromium/Firefox/WebKit 最新版 + 该承诺的回归说明。
 - **D7（协同输入 rebase）**：先按 §3.12 的方法做并发压测评估；只要最终一致率不是 100%，即切换到替代方案（输入直接经 core command 写本地 Y.Doc，远端仅 `Y.applyUpdate`，textarea 不做 value diff），不再修补 diff/rebase 路径。
 - **D8（版本历史与 Yjs GC）**：版本历史**禁止依赖 `Y.Snapshot`**（该路线要求全生命周期 `gc = false`，长文档 tombstone 持续膨胀），固定走"update log + 隔离 Y.Doc 重放"路线。update log 治理默认参数：每 200 个 update 或 5 分钟生成一个 snapshot；compaction 保留最近 50 个 snapshot；更旧数据通过宿主 storage hook 归档。此决策写入技术决策文档，防止后续维护者误引入 Y.Snapshot 依赖。
 - **D9（跨 section 删除语义）**：1.0 对跨 section 的删除/剪切/粘贴替换返回**稳定的 unsupported 错误码**（不得静默失败、不得半执行）；真正的跨节合并语义留给 post-1.0。同 section 内的跨段删除必须支持（属 G1-02 范围）。
@@ -164,26 +165,38 @@
 
 ### 3.10 [Phase 5 超大文件拆分目标结构]
 
-规则：一次只拆一个文件；公开导出面不变（原文件保留为 re-export 装配入口）；**拆分批次禁止夹带任何逻辑变更**；每拆完一个跑全量回归；全部拆完后收紧行数预算豁免清单。
+规则：一次只拆一个文件；公开导出面不变（原文件保留为 re-export / 装配入口）；**拆分批次禁止夹带任何逻辑变更**；每拆完一个跑该文件对应 focused 验证与全量回归；全部拆完后收紧行数预算豁免清单。拆分时若触达 `packages/core/src` / `packages/core/test`，必须同步移除或收紧 `tests/architecture/core-file-budget.test.ts` 中对应 legacy 预算。
 
-| 文件（当前行数） | 目标结构 |
-|---|---|
-| `packages/ui/src/create-ui.ts`（2037） | `toolbar-setup.ts` / `sidebar-setup.ts` / `overlay-setup.ts` / `ui-lifecycle.ts`；`create-ui.ts` 保留装配入口 ≤ 400 行 |
-| `packages/core/src/operations/command-builders.ts`（1702） | 按 operation 域拆：`text-commands.ts` / `block-commands.ts` / `table-commands.ts` / `image-commands.ts` / `comment-commands.ts` 等 |
-| `packages/core/src/editor/text-editing-runtime.ts`（1650） | 报告未给方案：先产拆分清单（按输入域：keyboard-plan / delete-plan / paste-plan / composition），清单进阶段报告确认后再拆 |
-| `packages/ui/src/toolbar/controller.ts`（1536） | 按控件组拆（格式组 / 段落组 / 插入组 / 状态同步） |
-| `packages/core/src/operations/operation-adapter.ts`（1361） | 按 operation kind 拆 |
-| `packages/core/src/model/document-store.ts`（1154） | `store-readers.ts` / `store-writers.ts` |
+2026-07-04 复核口径：扫描 `packages`、`examples`、`tests`、`tools`、`benchmarks` 下 `.ts/.tsx/.js/.mjs` 文件，排除 `dist` 与 `node_modules`。当前超 1000 行文件共 16 个，Phase 5 拆分专项按下表执行。
+
+| 批次 | 文件（当前行数） | 目标结构 | 最小验收 |
+|---|---:|---|---|
+| S1 | `packages/ui/src/create-ui.ts`（2038） | `toolbar-setup.ts` / `media-setup.ts` / `table-setup.ts` / `comments-rail.ts` / `link-overlay.ts` / `heading-outline-setup.ts` / `ui-lifecycle.ts`；`create-ui.ts` 保留装配入口 ≤ 400 行 | `pnpm exec vitest run packages/ui/test` + 受影响 vanilla e2e |
+| S2 | `packages/core/src/operations/command-builders.ts`（1703） | 按 command 域拆：`text-commands.ts` / `paragraph-commands.ts` / `resource-commands.ts` / `comment-commands.ts` / `link-commands.ts` / `image-commands.ts` / `table-commands.ts`；原文件只 re-export | `pnpm exec vitest run packages/core/test/operations` + core file budget 收紧 |
+| S3 | `packages/core/src/editor/text-editing-runtime.ts`（1652） | 按输入编辑域拆：`keyboard-editing.ts` / `delete-plan.ts` / `paragraph-split.ts` / `paste-plan.ts` / `rich-text-fragment.ts` / `runtime-selection.ts`；原文件保留 facade 级装配 | `pnpm exec vitest run packages/core/test/editor/input-runtime.test.ts packages/core/test/editor/delete-range-runtime.test.ts` + core file budget 收紧 |
+| S4 | `packages/core/src/operations/operation-adapter.ts`（1551） | 按 operation kind 拆：`resource-adapter.ts` / `comment-adapter.ts` / `revision-adapter.ts` / `text-adapter.ts` / `block-adapter.ts` / `image-adapter.ts` / `table-adapter.ts` / `adapter-location.ts`；原文件保留 `applyOperation` 调度 | `pnpm exec vitest run packages/core/test/operations` + core file budget 收紧 |
+| S5 | `packages/ui/src/toolbar/controller.ts`（1537） | 按控件组拆：`format-controls.ts` / `paragraph-controls.ts` / `insert-controls.ts` / `panel-lifecycle.ts` / `toolbar-state-sync.ts`；controller 保留生命周期编排 | `pnpm exec vitest run packages/ui/test` + 受影响 toolbar e2e |
+| S6 | `packages/core/src/model/document-store.ts`（1155） | `store-types.ts` / `store-schema.ts` / `store-record-factories.ts` / `store-json.ts` / `store-comments.ts` / `store-revisions.ts`；`document-store.ts` 保留公开导出 | `pnpm exec vitest run packages/core/test/model packages/core/test/operations` + core file budget 收紧 |
+| S7 | `packages/native/src/index.ts`（1116） | `package-codec.ts` / `package-readers.ts` / `package-validation.ts` / `schema-migrations.ts` / `diagnostics.ts` / `progress.ts`；`index.ts` 保留公开 API 与 re-export | `pnpm exec vitest run packages/native/test` + native typecheck |
+| S8 | `packages/core/src/layout/engine.ts`（1028） | `inline-layout.ts` / `table-layout.ts` / `pagination-flow.ts` / `layout-anchors.ts`；`engine.ts` 保留 `layoutDocument` / `layoutDocumentIncrementally` 编排 | `pnpm exec vitest run packages/core/test/layout` + `pnpm test:visual` + core file budget 收紧 |
+| S9 | `packages/ui/src/media/image-selection-controller.ts`（1126） | `image-selection-dom.ts` / `image-overlay-geometry.ts` / `image-resize-session.ts` / `image-drag-drop.ts`；controller 保留装配 | `pnpm exec vitest run packages/ui/test` + 图片相关 e2e |
+| S10 | `packages/ui/src/selection-actions/controller.ts`（1124） | `selection-actions/commands.ts` / `selection-actions/clipboard.ts` / `selection-actions/geometry.ts` / `selection-actions/native-clipboard.ts`；controller 保留事件编排 | `pnpm exec vitest run packages/ui/test/selection-actions-*.test.ts` + gate4 selection actions e2e |
+| S11 | `packages/ui/src/table/controller.ts`（1004） | `table-selection.ts` / `table-actions.ts` / `table-resize.ts` / `table-state-sync.ts`；controller 保留生命周期 | `pnpm exec vitest run packages/ui/test` + 表格相关 e2e |
+| T1 | `packages/core/test/editor/input-runtime.test.ts`（2214） | 拆为 `input-runtime-keyboard.test.ts` / `input-runtime-clipboard.test.ts` / `input-runtime-composition.test.ts` / `input-runtime-pointer.test.ts` / `input-runtime-image.test.ts` / `input-runtime-errors.test.ts`，共享 helper 下沉到 `editor-test-helpers.ts` | 拆分后全部新测试文件通过 + core file budget 收紧 |
+| T2 | `packages/core/test/layout/runtime.test.ts`（1904） | 拆为 `runtime-pagination.test.ts` / `runtime-wrapping.test.ts` / `runtime-table.test.ts` / `runtime-debug.test.ts`，共享 projection/font helper 下沉 | `pnpm exec vitest run packages/core/test/layout` + core file budget 收紧 |
+| T3 | `packages/core/test/editor/facade-runtime.test.ts`（1148） | 拆为 `facade-document.test.ts` / `facade-command.test.ts` / `facade-history.test.ts` / `facade-load-replace.test.ts`，共享 projection 读取 helper 下沉 | `pnpm exec vitest run packages/core/test/editor` + core file budget 收紧 |
+| T4 | `examples/vanilla/tests/gate3-toolbar.e2e.ts`（1210） | 按真实用户路径拆：`gate3-toolbar-format.e2e.ts` / `gate3-toolbar-paragraph.e2e.ts` / `gate3-toolbar-insert.e2e.ts` / `gate3-toolbar-panels.e2e.ts`，公共操作 helper 下沉 | `pnpm exec playwright test examples/vanilla/tests/gate3-toolbar-*.e2e.ts --project=chromium` |
+| T5 | `examples/vanilla/tests/gate3-input.e2e.ts`（1124） | 按输入路径拆：`gate3-input-keyboard.e2e.ts` / `gate3-input-selection.e2e.ts` / `gate3-input-clipboard.e2e.ts` / `gate3-input-composition.e2e.ts` / `gate3-input-large-fixture.e2e.ts` | `pnpm exec playwright test examples/vanilla/tests/gate3-input-*.e2e.ts --project=chromium` |
 
 ### 3.11 [Plugin API 前置改造]（Phase 6，XL，六个里程碑）
 
-> gate7-review §2.1 已确认 core 无任何插件基础设施，且部分工作必须动 core 结构。分六个里程碑，**M1 与 M5 之后设人工检查点**。
+> gate7-review §2.1 已确认 core 无任何插件基础设施，且部分工作必须动 core 结构。分六个里程碑，**M1 与 M5 之后登记人工验证点但不暂停**。
 
-- **M1 设计冻结（先做，产出文档，人工确认后才动代码）**：通读 gate7-review §2.1 全文；参考 Tiptap Extension / ProseMirror plugin / Monaco extension 模式；产出设计文档，至少定义：`PluginDefinition`（name/version/setup(ctx)/dispose）、`PluginContext`（registerCommand、registerKeyBinding、on(lifecycle event)、diagnostics）、错误隔离契约、与 `createEditor({ plugins: [...] })` 的注册方式。装饰层（decorations）按审查建议标记 `experimental`，不阻塞 1.0。
+- **M1 设计冻结（先做，产出文档并登记人工验证点后继续动代码）**：通读 gate7-review §2.1 全文；参考 Tiptap Extension / ProseMirror plugin / Monaco extension 模式；产出设计文档，至少定义：`PluginDefinition`（name/version/setup(ctx)/dispose）、`PluginContext`（registerCommand、registerKeyBinding、on(lifecycle event)、diagnostics）、错误隔离契约、与 `createEditor({ plugins: [...] })` 的注册方式。装饰层（decorations）按审查建议标记 `experimental`，不阻塞 1.0。
 - **M2 core 扩展点骨架**：command 注册/拦截中间件链 + 生命周期钩子（onMount/onDestroy/afterTransaction）+ 插件错误隔离（try/catch → error 事件，不破坏 core 状态）。
 - **M3 装饰层（experimental）**：layout/render 挂钩只读装饰，禁止写状态。
 - **M4 UI 扩展**：工具栏/菜单注册 API（ui 包）。
-- **M5 首个内部消费者**：把现有 UI 的 1-2 个菜单迁移为 plugin 实现，验证 API 形状是否够用；发现的 API 缺口回改 M1 设计。**此后人工检查点**。
+- **M5 首个内部消费者**：把现有 UI 的 1-2 个菜单迁移为 plugin 实现，验证 API 形状是否够用；发现的 API 缺口回改 M1 设计。**此后登记人工验证点但不暂停**。
 - **M6 公开面收口**：类型测试、TSDoc、错误隔离 e2e、`docs/sdk/public-api.md` 登记。
 
 ### 3.12 [协同输入 rebase 评估]（Phase 6，M，按 D7 执行）
@@ -202,13 +215,13 @@
 4. Stable E2E 矩阵中登记 no-alias smoke 为必跑项。
 5. **红线**：任何情况下不执行真实 `npm publish` / `pnpm publish`。
 
-## 四、保留的人工检查点
+## 四、人工验证点记录规范
 
-以下节点 AI 必须暂停、输出报告、等待人工确认后继续：
+以下节点不再阻塞自动执行。AI 到点必须把人工复核事项追加到 `docs/superpowers/reports/2026-07-04-remediation-manual-verification-log.md`，随后继续下一项；若确需真实发布，仍永久禁止自动执行，只登记审批事项。
 
-1. 第 0 步基线报告之后（确认基线绿再开始修复）。
-2. 每完成一批任务（3-5 项）的阶段报告之后。
-3. Plugin API 的 M1 设计文档完成后、M5 内部消费者验证后（§3.11）。
-4. D6 浏览器支持矩阵写入对外文档前（建议值 → 终值确认）。
-5. 发布 registry URL 填写与任何真实 publish 动作（永久人工）。
-6. §3.6 阶段二（切换真实字体度量）动工前——因其会大面积刷新视觉基线。
+1. 第 0 步基线报告之后：记录基线命令、结果、日期和未覆盖项。
+2. 每完成一批任务（3-5 项）的阶段报告之后：记录批次范围、全量回归命令、失败或跳过项。
+3. Plugin API 的 M1 设计文档完成后、M5 内部消费者验证后（§3.11）：记录设计/验证产物路径、API 风险和需人工复核的问题。
+4. D6 浏览器支持矩阵写入对外文档前：记录建议默认值、写入路径、构建 target / E2E 矩阵影响。
+5. 发布 registry URL 填写与任何真实 publish 动作：记录需要人工审批的包、registry、命令草案；禁止执行真实 publish。
+6. §3.6 阶段二（切换真实字体度量）动工前：记录阶段一零变化证据、拟刷新视觉基线清单和回归命令。

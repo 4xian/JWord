@@ -8,7 +8,7 @@
  */
 
 import { createEditor, createSelectionState } from '@4xian/jword-core'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import type { LiveRegionController } from '../src/assistive/live-region'
 import { createToolbarController } from '../src/toolbar/controller'
 
@@ -179,6 +179,64 @@ describe('toolbar controller focus restore', () => {
       expect(backgroundColor.value).toBe('#6633ff')
 
       controller.destroy()
+    } finally {
+      editor.destroy()
+      editorHost.remove()
+      toolbarHost.remove()
+    }
+  })
+
+
+  test('destroy removes toolbar button listeners bound by the controller', () => {
+    const editorHost = document.createElement('div')
+    const toolbarHost = document.createElement('div')
+    const editor = createEditor({ initialText: 'abcdef' })
+
+    document.body.append(editorHost, toolbarHost)
+
+    try {
+      editor.mount(editorHost)
+      editor.focus()
+
+      const toggleFindReplace = vi.fn()
+      const controller = createToolbarController({
+        editor,
+        toolbarHost,
+        assistive: {
+          liveRegion: createStubLiveRegion(),
+          textMirror: null
+        },
+        panelActions: {
+          toggleFindReplace
+        }
+      })
+      editor.setSelection(createSelection(editor, 1, 4))
+
+      const findReplace = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-tool-id="document.findReplace"]')
+      const pagePreset = toolbarHost.querySelector<HTMLSelectElement>('[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select')
+      const textColor = toolbarHost.querySelector<HTMLInputElement>('[data-jword-tool-id="format.textColor"] .jw-toolbar__color')
+      const setPageConfigSpy = vi.spyOn(editor, 'setPageConfig')
+      const executeCommandSpy = vi.spyOn(editor, 'executeCommand')
+
+      expect(findReplace).toBeInstanceOf(HTMLButtonElement)
+      expect(findReplace?.disabled).toBe(false)
+      expect(pagePreset).toBeInstanceOf(HTMLSelectElement)
+      expect(textColor).toBeInstanceOf(HTMLInputElement)
+
+      controller.destroy()
+      findReplace?.click()
+      if (pagePreset !== null) {
+        pagePreset.value = 'a3'
+        pagePreset.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      if (textColor !== null) {
+        textColor.value = '#3366ff'
+        textColor.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+
+      expect(toggleFindReplace).not.toHaveBeenCalled()
+      expect(setPageConfigSpy).not.toHaveBeenCalled()
+      expect(executeCommandSpy).not.toHaveBeenCalled()
     } finally {
       editor.destroy()
       editorHost.remove()

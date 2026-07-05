@@ -1,8 +1,8 @@
 /**
- * 职责：提供 Gate 2 无 DOM 字体状态、fallback、文本度量和 度量缓存。
+ * 职责：提供 Gate 2 无 DOM 字体状态、fallback、可注入文本度量和 度量缓存。
  * 边界：不加载真实字体文件，不访问 画布、window 或 document，不做布局分页。
- * 协作模块：layout 使用 字体管理器 测量 文本片段，PDF 后续复用缺字体状态。
- * 性能/安全约束：缓存 key 只包含纯数据样式和文本，缺字体以可诊断状态返回。
+ * 协作模块：layout 使用 字体管理器 测量 文本片段，浏览器运行时后续可注入真实测量器。
+ * 性能/安全约束：缓存 key 只包含影响度量的纯数据样式和文本，缺字体以可诊断状态返回。
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
  */
 
@@ -33,12 +33,41 @@ export interface ResolvedFontStyle extends RunTextStyle {
   readonly status: FontAvailabilityStatus
 }
 
+export interface TextMeasurementMetrics {
+  readonly widthCssPx: number
+  readonly heightCssPx?: number
+  readonly baselineCssPx?: number
+  readonly baselineRatio?: number
+}
+
 export interface TextMeasurement {
   readonly widthCssPx: number
   readonly heightCssPx: number
   readonly baselineCssPx: number
   readonly graphemeCount: number
   readonly resolvedFont: ResolvedFontStyle
+}
+
+export interface TextMeasurer {
+  measureText(text: string, style: ResolvedFontStyle): TextMeasurementMetrics
+}
+
+export interface CanvasTextMetricsLike {
+  readonly width: number
+  readonly actualBoundingBoxAscent?: number
+  readonly actualBoundingBoxDescent?: number
+  readonly fontBoundingBoxAscent?: number
+  readonly fontBoundingBoxDescent?: number
+}
+
+export interface CanvasTextMeasurerContext {
+  font: unknown
+  measureText(text: string): CanvasTextMetricsLike
+}
+
+interface CachedTextMeasurementMetrics {
+  readonly widthCssPx: number
+  readonly baselineRatio: number
 }
 
 export interface FontCacheStats {
@@ -50,6 +79,8 @@ export interface FontCacheStats {
 export interface FontManagerOptions {
   readonly fallbackFontFamily?: string
   readonly availableFontFamilies?: readonly string[]
+  readonly textMeasurer?: TextMeasurer
+  readonly measurementCacheLimit?: number
 }
 
 export interface FontManager {
@@ -65,8 +96,11 @@ export interface FontManager {
 
 const DEFAULT_FONT_SIZE_PX = 16
 const DEFAULT_FALLBACK_FONT = 'Arial'
+const DEFAULT_MEASUREMENT_CACHE_LIMIT = 4096
 export const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1.25
 export const SCRIPT_FONT_SCALE = 0.65
+export const SUPERSCRIPT_BASELINE_SHIFT_RATIO = 0.35
+export const SUBSCRIPT_BASELINE_SHIFT_RATIO = 0.15
 
 /**
  * 创建无 DOM 字体管理器。
@@ -77,9 +111,11 @@ export const SCRIPT_FONT_SCALE = 0.65
 export function createFontManager(options: FontManagerOptions = {}): FontManager {
   const fallbackFontFamily = options.fallbackFontFamily ?? DEFAULT_FALLBACK_FONT
   const availableFontFamilies = new Set(options.availableFontFamilies ?? [fallbackFontFamily])
+  const textMeasurer = options.textMeasurer ?? createApproximateTextMeasurer()
+  const measurementCacheLimit = Math.max(0, Math.floor(options.measurementCacheLimit ?? DEFAULT_MEASUREMENT_CACHE_LIMIT))
   const loadingFontFamilies = new Set<string>()
   const missingFontFamilies = new Set<string>()
-  const cache = new Map<string, TextMeasurement>()
+  const cache = new Map<string, CachedTextMeasurementMetrics>()
   let hits = 0
   let misses = 0
 
@@ -140,30 +176,27 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
     measureText(text: string, style: RunTextStyle = {}): TextMeasurement {
       const resolvedFont = this.resolveFont(style)
       const key = createMeasurementCacheKey(text, resolvedFont)
-      const cached = cache.get(key)
+      let metrics = cache.get(key)
 
-      if (cached !== undefined) {
+      if (metrics !== undefined) {
         hits += 1
-        return cached
+        cache.delete(key)
+        cache.set(key, metrics)
+      } else {
+        misses += 1
+        metrics = normalizeTextMeasurementMetrics(textMeasurer.measureText(text, resolvedFont))
+        setCachedMeasurementMetrics(cache, key, metrics, measurementCacheLimit)
       }
 
-      misses += 1
-
       const graphemes = splitGraphemes(text)
-      const widthCssPx = graphemes.reduce(
-        (total, grapheme) => total + measureGraphemeWidth(grapheme, resolvedFont),
-        0
-      )
       const heightCssPx = resolveLineHeightCssPx(resolvedFont)
       const measurement = Object.freeze({
-        widthCssPx,
+        widthCssPx: metrics.widthCssPx,
         heightCssPx,
-        baselineCssPx: heightCssPx * 0.78,
+        baselineCssPx: heightCssPx * metrics.baselineRatio,
         graphemeCount: graphemes.length,
         resolvedFont
       })
-
-      cache.set(key, measurement)
 
       return measurement
     },
@@ -203,6 +236,107 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
       resetCache()
     }
   }
+}
+
+/**
+ * 创建基于 CanvasRenderingContext2D.measureText 的浏览器文本测量器。
+ *
+ * @param context mount 后创建的 2D canvas 上下文。
+ * @returns 可注入 FontManager 的真实文本测量器。
+ */
+export function createCanvasTextMeasurer(context: CanvasTextMeasurerContext): TextMeasurer {
+  return {
+    measureText(text, style) {
+      context.font = formatCanvasMeasurementFont(style)
+
+      const metrics = context.measureText(text)
+      const ascent = readFiniteMetric(metrics.actualBoundingBoxAscent) ?? readFiniteMetric(metrics.fontBoundingBoxAscent)
+      const descent = readFiniteMetric(metrics.actualBoundingBoxDescent) ?? readFiniteMetric(metrics.fontBoundingBoxDescent)
+
+      return {
+        widthCssPx: metrics.width,
+        ...(ascent === undefined || descent === undefined || ascent + descent <= 0
+          ? {}
+          : { baselineRatio: ascent / (ascent + descent) })
+      }
+    }
+  }
+}
+
+function setCachedMeasurementMetrics(
+  cache: Map<string, CachedTextMeasurementMetrics>,
+  key: string,
+  metrics: CachedTextMeasurementMetrics,
+  limit: number
+): void {
+  if (limit === 0) {
+    return
+  }
+
+  cache.set(key, metrics)
+
+  if (cache.size <= limit) {
+    return
+  }
+
+  const oldestKey = cache.keys().next().value
+
+  if (oldestKey !== undefined) {
+    cache.delete(oldestKey)
+  }
+}
+
+function normalizeTextMeasurementMetrics(metrics: TextMeasurementMetrics): CachedTextMeasurementMetrics {
+  return Object.freeze({
+    widthCssPx: metrics.widthCssPx,
+    baselineRatio: resolveBaselineRatio(metrics)
+  })
+}
+
+function resolveBaselineRatio(metrics: TextMeasurementMetrics): number {
+  if (metrics.heightCssPx !== undefined && metrics.heightCssPx !== 0 && metrics.baselineCssPx !== undefined) {
+    return metrics.baselineCssPx / metrics.heightCssPx
+  }
+
+  return metrics.baselineRatio ?? 0.78
+}
+
+function createApproximateTextMeasurer(): TextMeasurer {
+  return {
+    measureText(text, style) {
+      const graphemes = splitGraphemes(text)
+      const widthCssPx = graphemes.reduce(
+        (total, grapheme) => total + measureGraphemeWidth(grapheme, style),
+        0
+      )
+
+      return {
+        widthCssPx,
+        baselineRatio: 0.78
+      }
+    }
+  }
+}
+
+function formatCanvasMeasurementFont(style: ResolvedFontStyle): string {
+  const traits = [
+    style.italic === true ? 'italic' : '',
+    style.bold === true ? '700' : ''
+  ].filter((trait) => trait.length > 0)
+
+  return [...traits, `${Math.max(1, style.fontSizePx)}px`, formatCanvasFontFamily(style.fontFamily)].join(' ')
+}
+
+function formatCanvasFontFamily(fontFamily: string): string {
+  if (/^[a-zA-Z0-9_-]+$/u.test(fontFamily)) {
+    return fontFamily
+  }
+
+  return `"${fontFamily.replace(/"/g, '\\"')}"`
+}
+
+function readFiniteMetric(value: number | undefined): number | undefined {
+  return value === undefined || !Number.isFinite(value) ? undefined : value
 }
 
 function normalizeFontSizePx(style: RunTextStyle): number {
@@ -432,18 +566,8 @@ function createMeasurementCacheKey(text: string, style: ResolvedFontStyle): stri
   return [
     text,
     style.fontFamily,
-    style.requestedFontFamily ?? '',
     style.fontSizePx,
-    style.baseFontSizePx ?? '',
     style.bold === true ? 'bold' : 'normal',
-    style.italic === true ? 'italic' : 'upright',
-    style.underline === true ? 'underline' : 'no-underline',
-    style.strike === true ? 'strike' : 'no-strike',
-    style.superscript === true ? 'superscript' : 'baseline',
-    style.subscript === true ? 'subscript' : 'baseline',
-    style.color ?? '',
-    style.backgroundColor ?? '',
-    style.lineHeight ?? '',
-    style.status
+    style.italic === true ? 'italic' : 'upright'
   ].join('\u0000')
 }

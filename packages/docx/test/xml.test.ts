@@ -91,6 +91,43 @@ describe('docx xml helper', () => {
     expect(serializeXml(document)).toBe(xml)
   })
 
+
+  it('decodes numeric character references and CDATA text', () => {
+    const xml = [
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+      '<w:body>',
+      '<w:p w:hint="A &#x26; B &#38; C">',
+      '<w:r><w:t>Alpha &#x1F600; &#169;</w:t><![CDATA[<raw>&text]]></w:r>',
+      '</w:p>',
+      '</w:body>',
+      '</w:document>'
+    ].join('')
+
+    const document = parseXml(xml)
+    const paragraph = readXmlElementsByLocalName(document.root, 'p')[0]
+    const run = readXmlElementsByLocalName(document.root, 'r')[0]
+
+    expect(readXmlAttribute(paragraph!, 'w:hint')).toBe('A & B & C')
+    expect(readXmlText(run!)).toBe('Alpha 😀 ©<raw>&text')
+  })
+
+  it('inherits namespace declarations from ancestor elements', () => {
+    const xml = [
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+      '<w:body>',
+      '<w:p r:id="rId1"><w:r><w:t>Hello</w:t></w:r></w:p>',
+      '</w:body>',
+      '</w:document>'
+    ].join('')
+
+    const document = parseXml(xml)
+    const paragraph = readXmlElementsByLocalName(document.root, 'p')[0]
+    const relationshipId = paragraph!.attributes.find((attribute) => attribute.name === 'r:id')
+
+    expect(paragraph!.namespaceUri).toBe('http://schemas.openxmlformats.org/wordprocessingml/2006/main')
+    expect(relationshipId?.namespaceUri).toBe('http://schemas.openxmlformats.org/officeDocument/2006/relationships')
+  })
+
   it('throws a structured parse error for malformed XML', () => {
     expect(() => parseXml('<w:document><w:body></w:document>')).toThrowError(expect.objectContaining({
       name: 'XmlParseError',

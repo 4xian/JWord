@@ -21,6 +21,12 @@ interface MobileViewportProbe {
   readonly firstParagraphText: string
 }
 
+interface LinkTablePasteProbe {
+  readonly paragraphTexts: readonly string[]
+  readonly docsLinkTarget: string | null
+  readonly serializedProjection: string
+}
+
 test('Gate 4 paste sanitizer keeps safe Word-like formats and falls back to plain text', async ({ page }) => {
   await page.goto('/')
   await waitForPasteMobileDemoReady(page)
@@ -54,6 +60,28 @@ test('Gate 4 paste sanitizer keeps safe Word-like formats and falls back to plai
 
   expect(fallbackProbe.firstParagraphText).toContain('默Wordfallback认混排样例')
   expect(fallbackProbe.serializedProjection).not.toContain('alert')
+})
+
+test('Gate 4 paste sanitizer keeps safe links and flattens simple tables', async ({ page }) => {
+  await page.goto('/')
+  await waitForPasteMobileDemoReady(page)
+  await collapseAtFirstParagraphIndex(page, 1)
+
+  await dispatchPaste(page, {
+    html: [
+      '<p>Before <a href="https://example.com/docs">docs</a> <a href="javascript:alert(1)">bad</a></p>',
+      '<table><tr><th>Head</th><td><b>Value</b></td></tr><tr><td>A</td><td>B</td></tr></table>'
+    ].join(''),
+    text: 'Before docs bad\nHead\tValue\nA\tB'
+  })
+
+  const probe = await readLinkTablePasteProbe(page)
+
+  expect(probe.paragraphTexts[0]).toBe('默Before docsbad')
+  expect(probe.paragraphTexts[1]).toBe('Head\tValue')
+  expect(probe.paragraphTexts[2]).toContain('A\tB认混排样例')
+  expect(probe.docsLinkTarget).toBe('https://example.com/docs')
+  expect(probe.serializedProjection).not.toContain('javascript:')
 })
 
 test('Gate 4 mobile viewport keeps paged canvas scrollable without implicit readonly mode', async ({ page }) => {
@@ -189,6 +217,34 @@ async function readMobileViewportProbe(page: Page): Promise<MobileViewportProbe>
       textareaReadonly: textarea.readOnly,
       canvasOverflow: canvasContainer.style.overflow,
       firstParagraphText
+    }
+  })
+}
+
+/** 读取链接和简单表格粘贴后的 projection 证据。 */
+async function readLinkTablePasteProbe(page: Page): Promise<LinkTablePasteProbe> {
+  return page.evaluate(() => {
+    const projection = window.__jwordDemo?.editor.getProjection()
+
+    if (projection === undefined) {
+      throw new Error('缺少 editor projection。')
+    }
+
+    const paragraphTexts = projection.document.sections.flatMap((section) =>
+      section.blocks.flatMap((block) => block.kind === 'paragraph'
+        ? [block.runs.map((run) => run.inlines.map((inline) => inline.kind === 'text' ? inline.text : '').join('')).join('')]
+        : [])
+    )
+    const docsRun = projection.document.sections.flatMap((section) =>
+      section.blocks.flatMap((block) => block.kind === 'paragraph'
+        ? block.runs
+        : [])
+    ).find((run) => run.inlines.some((inline) => inline.kind === 'text' && inline.text === 'docs'))
+
+    return {
+      paragraphTexts: paragraphTexts.slice(0, 3),
+      docsLinkTarget: docsRun?.link?.target ?? null,
+      serializedProjection: JSON.stringify(projection)
     }
   })
 }

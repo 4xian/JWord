@@ -89,11 +89,83 @@ describe('readonly interaction guard', () => {
     expect(harness.findReplace.disabled).toBe(false)
     expect(harness.headingOutline.disabled).toBe(false)
   })
+
+  test('只读模式允许选择和复制类事件继续到达编辑器输入层', () => {
+    const harness = createHarness()
+    const liveRegion: JWordUiLiveRegionController = {
+      announce: vi.fn(),
+      destroy(): void {}
+    }
+    const pointerSpy = vi.fn()
+    const copyKeySpy = vi.fn()
+    const backspaceSpy = vi.fn()
+
+    harness.canvasContainer.addEventListener('mousedown', pointerSpy)
+    harness.textarea.addEventListener('keydown', (event) => {
+      if (event.ctrlKey && event.key.toLowerCase() === 'c') {
+        copyKeySpy()
+      }
+
+      if (event.key === 'Backspace') {
+        backspaceSpy()
+      }
+    })
+
+    const guard = createJWordInteractionGuard({
+      editorHost: harness.editorHost,
+      toolbarHost: harness.toolbarHost,
+      controls: harness.controls,
+      readonly: {
+        enabled: true
+      },
+      assistive: {
+        liveRegion
+      }
+    })
+    const mouseDown = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true
+    })
+    const copyKey = new KeyboardEvent('keydown', {
+      key: 'c',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    const arrowRight = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    const backspace = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      bubbles: true,
+      cancelable: true
+    })
+
+    harness.canvasContainer.dispatchEvent(mouseDown)
+    harness.textarea.dispatchEvent(copyKey)
+    harness.textarea.dispatchEvent(arrowRight)
+    harness.textarea.dispatchEvent(backspace)
+
+    expect(pointerSpy).toHaveBeenCalledTimes(1)
+    expect(copyKeySpy).toHaveBeenCalledTimes(1)
+    expect(mouseDown.defaultPrevented).toBe(false)
+    expect(copyKey.defaultPrevented).toBe(false)
+    expect(arrowRight.defaultPrevented).toBe(false)
+    expect(backspaceSpy).not.toHaveBeenCalled()
+    expect(backspace.defaultPrevented).toBe(true)
+    expect(liveRegion.announce).toHaveBeenCalledTimes(1)
+
+    guard.destroy()
+  })
 })
 
 interface Harness {
   readonly editorHost: HTMLElement
   readonly toolbarHost: HTMLElement
+  readonly canvasContainer: HTMLElement
   readonly textarea: HTMLTextAreaElement
   readonly bold: HTMLButtonElement
   readonly findReplace: HTMLButtonElement
@@ -107,6 +179,7 @@ interface Harness {
 function createHarness(): Harness {
   const editorHost = document.createElement('div')
   const toolbarHost = document.createElement('div')
+  const canvasContainer = document.createElement('div')
   const textarea = document.createElement('textarea')
   const bold = document.createElement('button')
   const findReplace = document.createElement('button')
@@ -115,14 +188,16 @@ function createHarness(): Harness {
   const textColor = document.createElement('input')
 
   textarea.setAttribute('data-jword-hidden-textarea', 'true')
+  canvasContainer.setAttribute('data-jword-canvas-container', 'true')
   textColor.type = 'color'
-  editorHost.append(textarea)
+  editorHost.append(canvasContainer, textarea)
   toolbarHost.append(bold, findReplace, headingOutline, fontFamily, textColor)
   document.body.append(editorHost, toolbarHost)
 
   return {
     editorHost,
     toolbarHost,
+    canvasContainer,
     textarea,
     bold,
     findReplace,

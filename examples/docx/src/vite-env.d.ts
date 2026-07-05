@@ -18,10 +18,12 @@ declare global {
       exportDocx(): Promise<ArrayBuffer>
       exportPdf(): Promise<ArrayBuffer>
       cancelActiveTask(): boolean
+      cancelWorkerProbe(requestId: string): Promise<unknown>
       readActiveTask(): DocxDemoTaskSnapshot | null
       readStatus(): string
       readWarningsText(): string
       readRoundtripText(): string
+      readWorkerEvents(): readonly string[]
     }>
   }
 }

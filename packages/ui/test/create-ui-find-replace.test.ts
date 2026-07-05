@@ -8,7 +8,7 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.12。
  */
 
-import { createEditor, type Editor } from '@4xian/jword-core'
+import { createEditor, createSelectionState, type Editor } from '@4xian/jword-core'
 import { describe, expect, test } from 'vitest'
 
 import { createJWordUi } from '../src/create-ui'
@@ -146,6 +146,51 @@ describe('createJWordUi find replace integration', () => {
     }
   })
 
+  test('可配置大小写不敏感搜索以匹配格式拆分后的跨 run 文本', () => {
+    const harness = createHarness({
+      initialText: 'AlphaBeta',
+      caseSensitive: false
+    })
+
+    try {
+      applyBoldRange(harness.editor, 3, 8)
+
+      harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-open-find-replace]')?.click()
+      fillInput(harness.ui.elements.findReplacePanel!.queryInput, 'alphabeta')
+      harness.ui.elements.findReplacePanel!.findButton.click()
+
+      expect(readDocumentRunTexts(harness.editor)).toEqual(['Alp', 'haBet', 'a'])
+      expect(harness.ui.elements.findReplacePanel!.status.textContent).toBe('1 / 1')
+      expect(readActiveOverlayIndexes(harness.editorHost)).toEqual(['0'])
+
+      fillInput(harness.ui.elements.findReplacePanel!.replacementInput, 'X')
+      harness.ui.elements.findReplacePanel!.replaceAllButton.click()
+
+      expect(readDocumentText(harness.editor)).toBe('X')
+    } finally {
+      harness.destroy()
+    }
+  })
+
+  test('默认保留大小写敏感搜索', () => {
+    const harness = createHarness({
+      initialText: 'AlphaBeta'
+    })
+
+    try {
+      applyBoldRange(harness.editor, 3, 8)
+
+      harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-open-find-replace]')?.click()
+      fillInput(harness.ui.elements.findReplacePanel!.queryInput, 'alphabeta')
+      harness.ui.elements.findReplacePanel!.findButton.click()
+
+      expect(harness.ui.elements.findReplacePanel!.status.hidden).toBe(true)
+      expect(harness.ui.elements.findReplacePanel!.status.textContent).toBe('')
+    } finally {
+      harness.destroy()
+    }
+  })
+
   test('外部点击和工具栏再次关闭都会清空查找替换草稿', () => {
     const harness = createHarness()
     const outsideTarget = document.createElement('button')
@@ -184,6 +229,66 @@ describe('createJWordUi find replace integration', () => {
       harness.destroy()
     }
   })
+
+  test('Ctrl 或 Meta 查找替换快捷键会打开面板并阻止浏览器默认查找', () => {
+    const harness = createHarness()
+
+    try {
+      const hiddenTextarea = readHiddenTextarea(harness.editorHost)
+      const ctrlFindEvent = new KeyboardEvent('keydown', {
+        key: 'f',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+      const metaReplaceEvent = new KeyboardEvent('keydown', {
+        key: 'h',
+        metaKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+
+      expect(harness.ui.elements.findReplacePanel!.root.hidden).toBe(true)
+
+      hiddenTextarea.dispatchEvent(ctrlFindEvent)
+
+      expect(ctrlFindEvent.defaultPrevented).toBe(true)
+      expect(harness.ui.elements.findReplacePanel!.root.hidden).toBe(false)
+      expect(document.activeElement).toBe(harness.ui.elements.findReplacePanel!.queryInput)
+
+      harness.ui.elements.findReplacePanel!.closeButton.click()
+      hiddenTextarea.dispatchEvent(metaReplaceEvent)
+
+      expect(metaReplaceEvent.defaultPrevented).toBe(true)
+      expect(harness.ui.elements.findReplacePanel!.root.hidden).toBe(false)
+      expect(document.activeElement).toBe(harness.ui.elements.findReplacePanel!.replacementInput)
+    } finally {
+      harness.destroy()
+    }
+  })
+
+  test('宿主禁用查找替换快捷键后不拦截 Ctrl+F', () => {
+    const harness = createHarness({
+      keyboardShortcuts: false
+    })
+
+    try {
+      const hiddenTextarea = readHiddenTextarea(harness.editorHost)
+      const event = new KeyboardEvent('keydown', {
+        key: 'f',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+
+      hiddenTextarea.dispatchEvent(event)
+
+      expect(event.defaultPrevented).toBe(false)
+      expect(harness.ui.elements.findReplacePanel!.root.hidden).toBe(true)
+    } finally {
+      harness.destroy()
+    }
+  })
 })
 
 interface Harness {
@@ -196,12 +301,17 @@ interface Harness {
 }
 
 /** 创建入口级 UI 测试环境。 */
-function createHarness(options: { readonly?: boolean } = {}): Harness {
+function createHarness(options: {
+  readonly?: boolean
+  keyboardShortcuts?: boolean
+  initialText?: string
+  caseSensitive?: boolean
+} = {}): Harness {
   const editorHost = document.createElement('div')
   const toolbarHost = document.createElement('div')
   const liveRegionHost = document.createElement('div')
   const findReplaceHost = document.createElement('div')
-  const editor = createEditor({ initialText: 'alpha beta alpha' })
+  const editor = createEditor({ initialText: options.initialText ?? 'alpha beta alpha' })
 
   document.body.append(editorHost, toolbarHost, liveRegionHost, findReplaceHost)
   editor.mount(editorHost)
@@ -212,7 +322,9 @@ function createHarness(options: { readonly?: boolean } = {}): Harness {
     liveRegionHost,
     ...(options.readonly === undefined ? {} : { readonly: options.readonly }),
     findReplace: {
-      host: findReplaceHost
+      host: findReplaceHost,
+      ...(options.keyboardShortcuts === undefined ? {} : { keyboardShortcuts: options.keyboardShortcuts }),
+      ...(options.caseSensitive === undefined ? {} : { caseSensitive: options.caseSensitive })
     }
   })
 
@@ -232,6 +344,36 @@ function createHarness(options: { readonly?: boolean } = {}): Harness {
   }
 }
 
+/** 对第一段应用粗体以制造跨 run 搜索场景。 */
+function applyBoldRange(editor: Editor, anchorGraphemeIndex: number, focusGraphemeIndex: number): void {
+  editor.setSelection(createSelectionState(
+    editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: anchorGraphemeIndex
+    }),
+    editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: focusGraphemeIndex
+    })
+  ))
+  editor.toggleBold()
+}
+
+/** 读取 editor mount 后的隐藏输入框。 */
+function readHiddenTextarea(editorHost: HTMLElement): HTMLTextAreaElement {
+  const hiddenTextarea = editorHost.querySelector('[data-jword-hidden-textarea]')
+
+  if (!(hiddenTextarea instanceof HTMLTextAreaElement)) {
+    throw new Error('缺少 JWord hidden textarea。')
+  }
+
+  return hiddenTextarea
+}
+
 /** 读取测试文档第一节的段落纯文本。 */
 function readDocumentText(editor: Editor): string {
   const blocks = editor.getProjection().document.sections[0]?.blocks ?? []
@@ -241,6 +383,15 @@ function readDocumentText(editor: Editor): string {
       ? [block.runs.flatMap((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : [])).join('')]
       : [])
     .join('\n\n')
+}
+
+/** 读取测试文档第一段按 run 切开的纯文本。 */
+function readDocumentRunTexts(editor: Editor): readonly string[] {
+  const block = editor.getProjection().document.sections[0]?.blocks[0]
+
+  return block?.kind === 'paragraph'
+    ? block.runs.map((run) => run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join(''))
+    : []
 }
 
 /** 按真实输入事件路径更新测试输入框。 */

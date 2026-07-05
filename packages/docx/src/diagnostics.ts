@@ -64,6 +64,12 @@ export const DOCX_WARNING_CODE_METADATA = {
     recoverable: true,
     fallback: 'preserve-run-text'
   },
+  DOCX_COMMENT_ID_MISSING: {
+    severity: 'warning',
+    description: '发现缺少 w:id 的 DOCX 批注。',
+    recoverable: true,
+    fallback: 'skip-comment'
+  },
   DOCX_PARAGRAPH_PROPERTY_UNSUPPORTED: {
     severity: 'warning',
     description: '发现暂未映射的段落属性。',
@@ -142,6 +148,18 @@ export const DOCX_WARNING_CODE_METADATA = {
     recoverable: true,
     fallback: 'preserve-relationship-metadata'
   },
+  DOCX_RELATIONSHIP_TARGET_TRAVERSAL_UNSUPPORTED: {
+    severity: 'warning',
+    description: 'relationship target 使用多余 .. 越过 OPC package 根。',
+    recoverable: true,
+    fallback: 'preserve-relationship-metadata'
+  },
+  DOCX_IMAGE_EXPORT_MIME_UNSUPPORTED: {
+    severity: 'warning',
+    description: 'DOCX 导出暂不支持该图片 MIME。',
+    recoverable: true,
+    fallback: 'omit-image'
+  },
   DOCX_HEADER_FOOTER_EXPORT_UNSUPPORTED: {
     severity: 'warning',
     description: 'DOCX 导出暂不写入页眉页脚内容。',
@@ -184,6 +202,11 @@ export const DOCX_ERROR_CODE_METADATA = {
   DOCX_PACKAGE_INVALID: {
     severity: 'error',
     description: '输入不是可读取的 DOCX zip package。',
+    recoverable: false
+  },
+  DOCX_PACKAGE_RESOURCE_LIMIT_EXCEEDED: {
+    severity: 'error',
+    description: 'DOCX package 超出资源安全上限。',
     recoverable: false
   },
   DOCX_CONTENT_TYPES_MISSING: {

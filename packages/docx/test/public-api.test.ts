@@ -37,6 +37,7 @@ import {
 } from '../src/index'
 import {
   createDocxPublicApiLicense,
+  createMultiSectionProjection,
   createProjection,
   createProjectionWithPngResource,
   createSha256Hex,
@@ -123,6 +124,93 @@ describe('@4xian/jword-docx public API basics', () => {
       media: ['word/media/image1.png']
     })
     expect(packageGraph.warnings).toEqual([])
+  })
+
+  it('warns when export omits image resources with unsupported MIME types', async () => {
+    const result = await exportDocx({
+      document: {
+        kind: 'document',
+        id: 'document-export-unsupported-image',
+        resources: [
+          {
+            kind: 'resource',
+            id: 'resource-gif-1',
+            mime: 'image/gif',
+            source: {
+              kind: 'dataUrl',
+              url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+            },
+            status: 'success'
+          }
+        ],
+        sections: [
+          {
+            kind: 'section',
+            id: 'section-1',
+            blocks: [
+              {
+                kind: 'paragraph',
+                id: 'paragraph-1',
+                runs: [
+                  {
+                    kind: 'run',
+                    id: 'run-1',
+                    inlines: [
+                      {
+                        kind: 'image',
+                        resourceId: 'resource-gif-1',
+                        alt: 'Unsupported image',
+                        display: 'inline',
+                        widthTwips: 1440,
+                        heightTwips: 1440
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }, {
+      requestId: 'docx-export-unsupported-image-1'
+    })
+    const zip = await JSZip.loadAsync(result.bytes)
+    const documentXml = await zip.file('word/document.xml')?.async('string')
+
+    expect(result.warnings).toContainEqual({
+      code: 'DOCX_IMAGE_EXPORT_MIME_UNSUPPORTED',
+      severity: 'warning',
+      part: 'word/document.xml',
+      path: 'resource:resource-gif-1',
+      message: 'DOCX export does not support image MIME type: image/gif',
+      fallback: 'omit-image',
+      recoverable: true
+    })
+    expect(documentXml).not.toContain('<w:drawing>')
+    expect(zip.file('word/media/image1.gif')).toBeNull()
+  })
+
+  it('exports multi section documents with paragraph and body section properties', async () => {
+    const result = await exportDocx(createMultiSectionProjection(), {
+      requestId: 'docx-export-multi-section-1'
+    })
+    const packageGraph = await inspectDocxPackage(result.bytes, {
+      requestId: 'docx-export-multi-section-inspect-1',
+      license: createDocxPublicApiLicense(['docx.import'])
+    })
+    const zip = await JSZip.loadAsync(result.bytes)
+    const documentXml = await zip.file('word/document.xml')?.async('string')
+
+    expect(result.warnings).toEqual([])
+    expect(packageGraph.parts).toContain('word/document.xml')
+    expect(documentXml?.match(/<w:sectPr/g)).toHaveLength(2)
+    expect(documentXml).toContain(
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="10000" w:h="12000"/><w:pgMar w:top="111" w:right="222" w:bottom="333" w:left="444"/></w:sectPr></w:pPr><w:r><w:t>First section</w:t></w:r></w:p>'
+    )
+    expect(documentXml).toContain(
+      '<w:p><w:r><w:t>Second section</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="20000" w:h="22000"/><w:pgMar w:top="555" w:right="666" w:bottom="777" w:left="888"/></w:sectPr>'
+    )
   })
 
   it('exports deterministic bytes for the same projection across system time changes', async () => {
@@ -222,10 +310,16 @@ describe('@4xian/jword-docx public API basics', () => {
     const exportResult = await exportDocx(createStyledTextProjection(), {
       requestId: 'docx-export-t1-1'
     })
+    const zip = await JSZip.loadAsync(exportResult.bytes)
+    const documentXml = await zip.file('word/document.xml')?.async('string')
     const importResult = await importDocx(exportResult.bytes, {
       requestId: 'docx-import-t1-1'
     })
 
+    expect(documentXml).toContain('<w:u w:val="single"/>')
+    expect(documentXml).toContain('<w:shd w:val="clear" w:color="auto" w:fill="FFF59D"/>')
+    expect(documentXml).not.toContain('<w:u/>')
+    expect(documentXml).not.toContain('<w:shd w:fill="FFF59D"/>')
     expect(exportResult.warnings).toEqual([])
     expect(importResult.warnings).toEqual([])
     expect(importResult.document.metadata.styleIds).toEqual(['Normal', 'Heading1', 'Heading2', 'Heading3'])

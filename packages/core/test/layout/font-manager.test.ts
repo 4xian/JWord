@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { createFontManager } from '../../src/layout/font-manager'
+import { createCanvasTextMeasurer, createFontManager, type CanvasTextMeasurerContext, type TextMeasurer } from '../../src/layout/font-manager'
 
 describe('Gate 2 字体管理器', () => {
   it('resolves available fonts and caches repeated measurements', () => {
@@ -35,6 +35,161 @@ describe('Gate 2 字体管理器', () => {
       hits: 1,
       misses: 1
     })
+  })
+
+  it('uses injected text measurer before wrapping line height and grapheme metadata', () => {
+    const calls: string[] = []
+    const textMeasurer: TextMeasurer = {
+      measureText(text, style) {
+        calls.push(`${text}:${style.fontFamily}:${style.fontSizePx}`)
+
+        return {
+          widthCssPx: 42,
+          baselineRatio: 0.8
+        }
+      }
+    }
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial'],
+      textMeasurer
+    })
+
+    const measurement = manager.measureText('áb', {
+      fontSizePx: 20,
+      lineHeight: 2
+    })
+
+    expect(calls).toEqual(['áb:Arial:20'])
+    expect(measurement.widthCssPx).toBe(42)
+    expect(measurement.heightCssPx).toBe(40)
+    expect(measurement.baselineCssPx).toBe(32)
+    expect(measurement.graphemeCount).toBe(2)
+  })
+
+  it('reuses cached metrics when only paint and decoration properties change', () => {
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+
+    const first = manager.measureText('abc', {
+      fontSizePx: 16,
+      color: '#ff0000',
+      backgroundColor: '#ffffff',
+      underline: true
+    })
+    const second = manager.measureText('abc', {
+      fontSizePx: 16,
+      color: '#00ff00',
+      backgroundColor: '#000000',
+      strike: true
+    })
+
+    expect(second.widthCssPx).toBe(first.widthCssPx)
+    expect(manager.getCacheStats()).toEqual({
+      size: 1,
+      hits: 1,
+      misses: 1
+    })
+  })
+
+  it('evicts least recently used measurements when cache reaches configured limit', () => {
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial'],
+      measurementCacheLimit: 2
+    })
+
+    manager.measureText('a', { fontSizePx: 16 })
+    manager.measureText('b', { fontSizePx: 16 })
+    manager.measureText('a', { fontSizePx: 16 })
+    manager.measureText('c', { fontSizePx: 16 })
+
+    expect(manager.getCacheStats()).toEqual({
+      size: 2,
+      hits: 1,
+      misses: 3
+    })
+
+    manager.measureText('b', { fontSizePx: 16 })
+
+    expect(manager.getCacheStats()).toEqual({
+      size: 2,
+      hits: 1,
+      misses: 4
+    })
+  })
+
+
+
+  it('accepts browser canvas metrics for non Arial fonts through injected measurer', () => {
+    const calls: string[] = []
+    const textMeasurer: TextMeasurer = {
+      measureText(text, style) {
+        calls.push(`${style.fontFamily}:${style.bold === true}:${style.italic === true}:${text}`)
+
+        return {
+          widthCssPx: 123,
+          heightCssPx: 12,
+          baselineCssPx: 9
+        }
+      }
+    }
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial', 'Times New Roman'],
+      textMeasurer
+    })
+
+    const measurement = manager.measureText('Canvas text', {
+      fontFamily: 'Times New Roman',
+      fontSizePx: 18,
+      bold: true,
+      italic: true
+    })
+
+    expect(calls).toEqual(['Times New Roman:true:true:Canvas text'])
+    expect(measurement.widthCssPx).toBe(123)
+    expect(measurement.baselineCssPx).toBe(16.875)
+    expect(measurement.resolvedFont.fontFamily).toBe('Times New Roman')
+  })
+
+  it('creates canvas text measurer from runtime 2d context without touching DOM itself', () => {
+    const calls: string[] = []
+    const context: CanvasTextMeasurerContext = {
+      set font(value: unknown) {
+        calls.push(`font:${String(value)}`)
+      },
+      measureText(text) {
+        calls.push(`measure:${text}`)
+
+        return {
+          width: 96,
+          actualBoundingBoxAscent: 15,
+          actualBoundingBoxDescent: 5
+        }
+      }
+    }
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial', 'Times New Roman'],
+      textMeasurer: createCanvasTextMeasurer(context)
+    })
+
+    const measurement = manager.measureText('abc', {
+      fontFamily: 'Times New Roman',
+      fontSizePx: 20,
+      bold: true,
+      italic: true
+    })
+
+    expect(calls).toEqual([
+      'font:italic 700 20px "Times New Roman"',
+      'measure:abc'
+    ])
+    expect(measurement.widthCssPx).toBe(96)
+    expect(measurement.baselineCssPx).toBe(18.75)
   })
 
   it('falls back and records missing font family without touching DOM', () => {

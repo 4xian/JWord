@@ -81,12 +81,14 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
       viewport.retainedPageIndexes,
       scheduledImmediatePageIndexes,
       selectionRender.pageIndexes,
+      mountedDom.commentPageIndexes,
       this.selectionPageIndexes
     )
     const rerenderPageIndexes = mergePageIndexes(
       reason === 'mount' || reason === 'resource' ? viewport.retainedPageIndexes : [],
       scheduledImmediatePageIndexes,
       selectionRender.pageIndexes,
+      mountedDom.commentPageIndexes,
       this.selectionPageIndexes
     )
 
@@ -113,6 +115,9 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
     }
 
     mountedDom.canvasContainer.setAttribute('data-jword-layout-rerender-pages', rerenderPageIndexes.join(','))
+    mountedDom.commentPageIndexes = selectionRender.commentRects === undefined
+      ? []
+      : mergePageIndexes(selectionRender.commentRects.map((rect) => rect.pageIndex))
     this.pageStartKeys = nextPageStartKeys
     this.selectionPageIndexes = selectionRender.pageIndexes
     if (reason === 'document') {
@@ -486,12 +491,17 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
 
   protected createSelectionRenderState(layout: DocumentLayout): Readonly<{
     selectionRects?: readonly LayoutRect[]
+    commentRects?: readonly LayoutRect[]
     caretRect?: LayoutRect
     pageIndexes: readonly number[]
   }> {
+    const commentRects = this.collectCommentRects(layout)
+    const commentPageIndexes = commentRects.map((rect) => rect.pageIndex)
+
     if (this.currentSelection === null) {
       return {
-        pageIndexes: []
+        ...(commentRects.length === 0 ? {} : { commentRects }),
+        pageIndexes: mergePageIndexes(commentPageIndexes)
       }
     }
 
@@ -506,19 +516,50 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
         : undefined
       const pageIndexes = mergePageIndexes(
         selectionRects.map((rect) => rect.pageIndex),
+        commentPageIndexes,
         caretRect === undefined ? [] : [caretRect.pageIndex]
       )
 
       return {
         ...(selectionRects.length === 0 ? {} : { selectionRects }),
+        ...(commentRects.length === 0 ? {} : { commentRects }),
         ...(caretRect === undefined ? {} : { caretRect }),
         pageIndexes
       }
     } catch {
       return {
-        pageIndexes: []
+        ...(commentRects.length === 0 ? {} : { commentRects }),
+        pageIndexes: mergePageIndexes(commentPageIndexes)
       }
     }
+  }
+
+  /** 汇总未解决批注范围的 canvas 高亮矩形。 */
+  protected collectCommentRects(layout: DocumentLayout): readonly LayoutRect[] {
+    const rects: LayoutRect[] = []
+
+    for (const thread of this.currentProjection.document.comments ?? []) {
+      if (thread.resolved) {
+        continue
+      }
+
+      try {
+        const range = this.locateCommentThread(thread.id)
+
+        if (range === null) {
+          continue
+        }
+
+        rects.push(...getLayoutSelectionRects(layout, {
+          anchor: this.resolveTextPosition(range.anchor),
+          focus: this.resolveTextPosition(range.focus)
+        }))
+      } catch {
+        continue
+      }
+    }
+
+    return Object.freeze(rects)
   }
 
   protected abstract override cancelDeferredRender(): void

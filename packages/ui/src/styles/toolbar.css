@@ -443,20 +443,32 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  min-height: 56px;
   padding: 8px;
   border: 1px solid #d9e1eb;
   border-radius: 6px;
   background: #ffffff;
   color: inherit;
+}
+
+.jw-revisions-panel__summary-button {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.jw-revisions-panel__item:hover,
-.jw-revisions-panel__item[aria-pressed='true'] {
+.jw-revisions-panel__item:hover {
   border-color: #7c94bd;
   background: #f7f9fd;
+}
+
+.jw-revisions-panel__summary-button[aria-pressed='true'] {
+  color: #1f4e8c;
 }
 
 .jw-revisions-panel__type {
@@ -478,6 +490,22 @@
   color: #6b7280;
   font-size: 11px;
   line-height: 1.35;
+}
+
+.jw-revisions-panel__actions {
+  display: flex;
+  margin-top: 8px;
+}
+
+.jw-revisions-panel__action {
+  min-width: 52px;
+  margin-right: 6px;
+  padding: 4px 8px;
+  border: 1px solid #c7d2e3;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #243447;
+  cursor: pointer;
 }
 
 .jw-revisions-panel__empty {

@@ -8,6 +8,7 @@
 
 export interface LiveRegionAnnounceOptions {
   readonly force?: boolean
+  readonly priority?: 'polite' | 'assertive'
 }
 
 export interface LiveRegionController {
@@ -45,6 +46,7 @@ export function createLiveRegion(options: CreateLiveRegionOptions): LiveRegionCo
     lastMessage = message
 
     if (options.host !== null) {
+      options.host.setAttribute('aria-live', resolveLiveRegionPriority(message, announceOptions))
       options.host.textContent = message
     }
   }
@@ -61,6 +63,11 @@ export function createLiveRegion(options: CreateLiveRegionOptions): LiveRegionCo
    */
   function destroy(): void {
     destroyed = true
+    lastMessage = ''
+
+    if (options.host !== null) {
+      options.host.textContent = ''
+    }
   }
 
   return {
@@ -82,4 +89,19 @@ function configureLiveRegionHost(host: HTMLElement | null): void {
   host.setAttribute('data-jword-live-region', 'true')
   host.setAttribute('aria-live', 'polite')
   host.setAttribute('role', 'status')
+}
+
+
+/** 推断公告优先级，阻断和错误类文案默认走 assertive。 */
+function resolveLiveRegionPriority(
+  message: string,
+  options: LiveRegionAnnounceOptions
+): 'polite' | 'assertive' {
+  if (options.priority !== undefined) {
+    return options.priority
+  }
+
+  return message.startsWith('BLOCKED:') || message.includes('失败') || message.includes('错误')
+    ? 'assertive'
+    : 'polite'
 }

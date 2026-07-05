@@ -265,6 +265,13 @@ function readOpenXmlValidationCommandResult(command, result) {
   const payload = readJsonObjectFromCommandOutput(result.stdout) ??
     readJsonObjectFromCommandOutput(result.stderr)
 
+  if (isOoxmlValidatorCommandResult(payload)) {
+    return {
+      evidence: formatCommandEvidence(command, result),
+      diagnostics: payload.errors.map(normalizeOoxmlValidatorError)
+    }
+  }
+
   if (!isOpenXmlValidationCommandResult(payload)) {
     return null
   }
@@ -299,6 +306,27 @@ function isOpenXmlValidationCommandResult(value) {
     isOptionalStringField(value, 'evidence') &&
     Array.isArray(value.diagnostics) &&
     value.diagnostics.every(isOpenXmlValidationDiagnostic)
+}
+
+/** 判断命令输出是否是 @xarsh/ooxml-validator JSON 结果。 */
+function isOoxmlValidatorCommandResult(value) {
+  return typeof value === 'object' &&
+    value !== null &&
+    isOptionalStringField(value, 'file') &&
+    typeof value.ok === 'boolean' &&
+    Array.isArray(value.errors) &&
+    value.errors.every(isOoxmlValidatorError)
+}
+
+/** 判断 @xarsh/ooxml-validator 错误对象是否具备可转换字段。 */
+function isOoxmlValidatorError(value) {
+  return typeof value === 'object' &&
+    value !== null &&
+    isStringField(value, 'description') &&
+    isOptionalStringField(value, 'path') &&
+    isOptionalStringField(value, 'xPath') &&
+    isOptionalStringField(value, 'id') &&
+    isOptionalStringField(value, 'errorType')
 }
 
 /** 运行 Word/WPS/LibreOffice 兼容检查，缺工具或只能人工时保留 pending。 */
@@ -768,6 +796,22 @@ function normalizeOpenXmlValidationDiagnostic(diagnostic) {
   }
 }
 
+/** 把 @xarsh/ooxml-validator 错误对象转换为兼容报告诊断。 */
+function normalizeOoxmlValidatorError(error) {
+  return {
+    severity: 'error',
+    message: error.description,
+    ...(error.id === undefined ? {} : { code: error.id }),
+    ...(error.path === undefined ? {} : { part: normalizeOoxmlValidatorPartPath(error.path) }),
+    ...(error.xPath === undefined ? {} : { path: error.xPath })
+  }
+}
+
+/** 把 validator 文件路径转换为 OOXML part 路径。 */
+function normalizeOoxmlValidatorPartPath(path) {
+  return path.replace(/^\/+/, '')
+}
+
 /** 判断未知值是否包含指定字符串字段。 */
 
 /** 读取当前本机可选外部工具状态。 */
@@ -807,7 +851,18 @@ function findOpenXmlValidator() {
     }
   }
 
-  return findCommandTool('Open XML validator', ['openxml'])
+  if (process.env.GATE5_DISABLE_DEFAULT_OPENXML_VALIDATOR === '1') {
+    return {
+      status: 'missing',
+      evidence: 'Open XML validator auto-discovery is disabled for this run.'
+    }
+  }
+
+  return findCommandTool('Open XML validator', [
+    'node_modules/.bin/ooxml-validator',
+    'ooxml-validator',
+    'openxml'
+  ])
 }
 
 /** 从候选命令中找到第一个可执行工具。 */

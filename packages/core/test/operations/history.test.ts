@@ -122,6 +122,52 @@ describe('createHistoryManager', () => {
     expect(history.undo().stackItem).toBeNull()
     expect(getRunText(run).toString()).toBe('远端X')
   })
+
+  it('discards pending transaction metadata in FIFO order', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-discard' as SectionId)
+    const paragraph = createParagraphRecord('paragraph-discard' as BlockId)
+    const run = createRunRecord('run-discard' as RunId, '元数据')
+    const pipeline = createTransactionPipeline(store.doc)
+    const history = createHistoryManager(store)
+    const position = createPosition(
+      'paragraph-discard' as BlockId,
+      'run-discard' as RunId,
+      3,
+      'section-discard' as SectionId
+    )
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-discard' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([paragraph])
+    getParagraphRuns(paragraph).push([run])
+
+    history.captureNextTransaction({
+      commandName: 'first-command',
+      origin: DEFAULT_HISTORY_ORIGIN
+    })
+    history.captureNextTransaction({
+      commandName: 'second-command',
+      origin: DEFAULT_HISTORY_ORIGIN
+    })
+    history.discardNextTransactionMetadata()
+
+    pipeline.run(
+      {
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: position,
+            text: 'B'
+          }
+        ]
+      },
+      { origin: DEFAULT_HISTORY_ORIGIN }
+    )
+
+    expect(history.undo().metadata?.commandName).toBe('second-command')
+  })
 })
 
 function createAnchor(

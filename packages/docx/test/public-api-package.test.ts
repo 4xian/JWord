@@ -85,6 +85,31 @@ describe('@4xian/jword-docx public API package graph', () => {
     })
   })
 
+  it('rejects DOCX packages that exceed zip resource limits', async () => {
+    const tooManyParts = await createZip({
+      ...createMinimalDocxParts(),
+      ...Object.fromEntries(Array.from({ length: 2001 }, (_, index) => [`word/extra-${index}.xml`, '<w:p/>']))
+    })
+    const oversizedPackage = patchDeclaredUncompressedSize(await createZip(createMinimalDocxParts()), 300 * 1024 * 1024)
+
+    await expect(inspectDocxPackage(tooManyParts, {
+      requestId: 'docx-too-many-parts',
+      license: createDocxPublicApiLicense(['docx.import'])
+    })).rejects.toMatchObject({
+      name: 'DocxPackageError',
+      code: 'DOCX_PACKAGE_RESOURCE_LIMIT_EXCEEDED',
+      requestId: 'docx-too-many-parts'
+    })
+    await expect(inspectDocxPackage(oversizedPackage, {
+      requestId: 'docx-too-large',
+      license: createDocxPublicApiLicense(['docx.import'])
+    })).rejects.toMatchObject({
+      name: 'DocxPackageError',
+      code: 'DOCX_PACKAGE_RESOURCE_LIMIT_EXCEEDED',
+      requestId: 'docx-too-large'
+    })
+  })
+
   it('reports broken optional document relationships as recoverable warnings', async () => {
     const bytes = await createZip({
       '[Content_Types].xml': [
@@ -123,6 +148,46 @@ describe('@4xian/jword-docx public API package graph', () => {
         recoverable: true
       }
     ])
+  })
+
+  it('reports relationship targets that traverse above the package root', async () => {
+    const bytes = await createZip({
+      '[Content_Types].xml': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
+        '</Types>'
+      ].join(''),
+      '_rels/.rels': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>',
+        '</Relationships>'
+      ].join(''),
+      'word/document.xml': '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
+      'word/_rels/document.xml.rels': [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        '<Relationship Id="rIdEscape" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="../../styles.xml"/>',
+        '</Relationships>'
+      ].join(''),
+      'word/styles.xml': '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>'
+    })
+    const result = await inspectDocxPackage(bytes, {
+      requestId: 'docx-rel-traversal-1',
+      license: createDocxPublicApiLicense(['docx.import'])
+    })
+
+    expect(result.warnings).toContainEqual({
+      code: 'DOCX_RELATIONSHIP_TARGET_TRAVERSAL_UNSUPPORTED',
+      severity: 'warning',
+      part: 'word/_rels/document.xml.rels',
+      path: '../../styles.xml',
+      message: 'DOCX relationship target traverses above the package root: ../../styles.xml',
+      fallback: 'preserve-relationship-metadata',
+      recoverable: true
+    })
   })
 
   it('builds OOXML indexes from the package graph without rescanning consumers', async () => {
@@ -259,3 +324,47 @@ describe('@4xian/jword-docx public API package graph', () => {
     })
   })
 })
+
+/** 创建最小 DOCX part map，便于资源限制测试追加异常条目。 */
+function createMinimalDocxParts(): Readonly<Record<string, string>> {
+  return {
+    '[Content_Types].xml': [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+      '</Types>'
+    ].join(''),
+    '_rels/.rels': [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>',
+      '</Relationships>'
+    ].join(''),
+    'word/document.xml': [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+      '<w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body>',
+      '</w:document>'
+    ].join('')
+  }
+}
+
+/** 修改 zip 中央目录声明尺寸，避免测试真正分配大内存。 */
+function patchDeclaredUncompressedSize(input: ArrayBuffer, size: number): ArrayBuffer {
+  const bytes = new Uint8Array(input.byteLength)
+  bytes.set(new Uint8Array(input))
+  const view = new DataView(bytes.buffer)
+
+  for (let offset = 0; offset <= bytes.byteLength - 4; offset += 1) {
+    const signature = view.getUint32(offset, true)
+
+    if (signature === 0x04034b50) {
+      view.setUint32(offset + 22, size, true)
+    }
+    if (signature === 0x02014b50) {
+      view.setUint32(offset + 24, size, true)
+    }
+  }
+
+  return bytes.buffer
+}

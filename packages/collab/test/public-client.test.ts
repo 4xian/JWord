@@ -225,6 +225,34 @@ describe('@4xian/jword-collab public client SDK', () => {
       diagnosticCode: 'COLLAB_CLIENT_TOO_OLD'
     },
     {
+      name: 'server prerelease package is below stable minimum',
+      serverVersion: {
+        protocolVersion: JWORD_COLLAB_CLIENT_PROTOCOL_VERSION,
+        packageVersion: '1.0.0-beta.1',
+        featureFlags: Object.values(GATE6_COLLAB_FEATURES),
+        minimumClientVersion: '0.0.0',
+        minimumServerVersion: '0.0.0'
+      },
+      options: {
+        minimumServerVersion: '1.0.0'
+      },
+      diagnosticCode: 'COLLAB_SERVER_TOO_OLD'
+    },
+    {
+      name: 'client prerelease package is below stable server minimum',
+      serverVersion: {
+        protocolVersion: JWORD_COLLAB_CLIENT_PROTOCOL_VERSION,
+        packageVersion: '1.0.0',
+        featureFlags: Object.values(GATE6_COLLAB_FEATURES),
+        minimumClientVersion: '1.0.0',
+        minimumServerVersion: '0.0.0'
+      },
+      options: {
+        clientPackageVersion: '1.0.0-beta.1'
+      },
+      diagnosticCode: 'COLLAB_CLIENT_TOO_OLD'
+    },
+    {
       name: 'server feature flags are missing',
       serverVersion: {
         protocolVersion: JWORD_COLLAB_CLIENT_PROTOCOL_VERSION,

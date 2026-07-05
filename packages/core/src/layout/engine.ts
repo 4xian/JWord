@@ -8,7 +8,7 @@
 
 import { cssPxToTwips } from './page-config'
 import { measureLayoutTextSegment, measureTextSegmentForLayout, segmentTextForLayout } from './text-segments'
-import type { Block, Inline, Paragraph, Run, Section, Table, TableCell } from '../model/types'
+import type { Block, Inline, Paragraph, Run, Section, Table } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { TextPosition } from '../operations/transaction'
 import type { Resource } from '../resources/types'
@@ -28,12 +28,14 @@ import {
 import {
   applyParagraphSpacingAfter,
   applyParagraphSpacingBefore,
+  applyParagraphWidowControl,
   appendEmptyTextAnchor,
   appendNonTextInlineBox,
   appendTextFragment,
   ensureLine,
   ensureLineFits,
   flushLine,
+  resolveInlineObjectGeometry,
   startNewPage,
   startParagraph
 } from './paragraph-flow'
@@ -45,15 +47,9 @@ import type {
   LayoutInput,
   LayoutSectionContext,
   MutablePageBox,
-  PageBreakBox,
-  TableBox,
-  TextFragment
+  PageBreakBox
 } from './types'
-
-const DEFAULT_TABLE_COLUMN_WIDTH_TWIPS = 1500
-const DEFAULT_TABLE_ROW_HEIGHT_TWIPS = 600
-const TABLE_CELL_PADDING_X_TWIPS = 120
-const TABLE_CELL_PADDING_Y_TWIPS = 90
+import { createTableBox, createTableRowLayoutPlan, resolveTableGrid, resolveTableRowHeight } from './table-layout'
 
 /**
  * 从只读投影生成分页布局。
@@ -201,6 +197,7 @@ function layoutBlock(
 
   ensureEmptyParagraphVisible(block, section, input, cursor, pages)
   flushLine(cursor)
+  applyParagraphWidowControl(cursor, pages)
   applyParagraphSpacingAfter(cursor)
 
   return false
@@ -289,6 +286,19 @@ function layoutRun(
         runGraphemeIndex = segment.endGraphemeIndex
       }
     } else {
+      if (inline.kind !== 'break') {
+        const geometry = resolveInlineObjectGeometry(inline, input.pageConfig, 0)
+
+        ensureLineFits(
+          Math.min(geometry.width, input.pageConfig.contentWidthTwips),
+          geometry.height,
+          cursor,
+          pages,
+          input.pageConfig,
+          section,
+          paragraph
+        )
+      }
       layoutInlineBoundary(inline, section, paragraph, run.id, runGraphemeIndex, cursor, pages, input.pageConfig, resourceById)
     }
   }
@@ -414,7 +424,7 @@ function flushLineBeforeWrappedWordSegment(input: Readonly<{
   const contentRight = input.cursor.page.contentRect.x + input.cursor.page.contentRect.width
 
   if (input.cursor.x + measured.width > contentRight) {
-    flushLine(input.cursor)
+    flushLine(input.cursor, { justify: true })
   }
 }
 
@@ -556,386 +566,81 @@ function layoutTable(
 
   const grid = resolveTableGrid(table, pageConfig)
   const rowPlans = table.rows.map((row) => createTableRowLayoutPlan(row, section, grid, input))
-  const rowHeights = table.rows.map((row, rowIndex) => {
-    return Math.max(resolveTableRowHeight(row), rowPlans[rowIndex]?.height ?? 0)
-  })
-  const tableHeight = rowHeights.reduce((sum, height) => sum + height, 0)
-
-  if (cursor.y + tableHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
-    startNewPage(cursor, pages, pageConfig)
-    assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
-  }
-
-  const tableX = cursor.page.contentRect.x
-  const tableY = cursor.y
+  const rowHeights = table.rows.map((row, rowIndex) =>
+    Math.max(resolveTableRowHeight(row), rowPlans[rowIndex]?.height ?? 0)
+  )
   const tableWidth = grid.reduce((sum, width) => sum + width, 0)
 
-  const tableBox: TableBox = Object.freeze({
-    kind: 'table',
-    pageIndex: cursor.page.pageIndex,
-    sectionId: section.id,
-    tableId: table.id,
-    grid: Object.freeze(grid),
-    ...(table.border === undefined ? {} : { border: table.border }),
-    rowCount: table.rows.length,
-    cellCount: table.rows.reduce((count, row) => count + row.cells.length, 0),
-    rows: Object.freeze(table.rows.map((row, rowIndex) => {
-      let cellX = tableX
-      let gridIndex = 0
-      const rowY = tableY + sumRowHeights(rowHeights, rowIndex)
-      const rowHeight = rowHeights[rowIndex] ?? resolveTableRowHeight(row)
+  if (table.rows.length === 0) {
+    cursor.page.blocks.push(createTableBox({
+      table,
+      section,
+      grid,
+      rowPlans,
+      rowHeights,
+      tableX: cursor.page.contentRect.x,
+      tableY: cursor.y,
+      tableWidth,
+      startRowIndex: 0,
+      endRowIndex: 0,
+      pageIndex: cursor.page.pageIndex
+    }))
+    cursor.x = cursor.page.contentRect.x
+    return
+  }
 
-      return Object.freeze({
-        rowId: row.id,
-        pageIndex: cursor.page.pageIndex,
-        x: tableX,
-        y: rowY,
-        width: tableWidth,
-        height: rowHeight,
-        cells: Object.freeze(row.cells.map((cell, cellIndex) => {
-          const gridSpan = cell.gridSpan ?? 1
-          const width = sumGridWidth(grid, gridIndex, gridSpan)
-          const text = readTableCellText(cell)
-          const textPosition = readTableCellTextPosition(section.id, cell)
-          const fragments = createPositionedTableCellFragments(
-            rowPlans[rowIndex]?.cells[cellIndex]?.fragments ?? [],
-            cursor.page.pageIndex,
-            cellX,
-            rowY,
-            rowHeight
-          )
-          const cellBox = Object.freeze({
-            cellId: cell.id,
-            pageIndex: cursor.page.pageIndex,
-            x: cellX,
-            y: rowY,
-            width,
-            height: rowHeight,
-            gridSpan,
-            ...(cell.border === undefined ? {} : { border: cell.border }),
-            blockIds: Object.freeze(cell.blocks.map((block) => block.id)),
-            text,
-            fragments,
-            ...(textPosition === undefined ? {} : { textPosition })
-          })
+  let rowIndex = 0
 
-          cellX += width
-          gridIndex += gridSpan
+  while (rowIndex < table.rows.length) {
+    const pageBottom = cursor.page.contentRect.y + cursor.page.contentRect.height
+    const firstRowHeight = rowHeights[rowIndex] ?? resolveTableRowHeight(table.rows[rowIndex]!)
 
-          return cellBox
-        }))
-      })
-    })),
-    x: tableX,
-    y: tableY,
-    width: tableWidth,
-    height: tableHeight
-  })
-
-  cursor.page.blocks.push(tableBox)
-  cursor.y += tableHeight
-  cursor.x = cursor.page.contentRect.x
-}
-
-/** 创建单行表格的单元格文本布局计划。 */
-function createTableRowLayoutPlan(
-  row: Table['rows'][number],
-  section: Section,
-  grid: readonly number[],
-  input: LayoutInput
-): Readonly<{
-  height: number
-  cells: readonly Readonly<{
-    fragments: readonly TextFragment[]
-  }>[]
-}> {
-  let gridIndex = 0
-  const cells = row.cells.map((cell) => {
-    const gridSpan = cell.gridSpan ?? 1
-    const width = sumGridWidth(grid, gridIndex, gridSpan)
-    const fragments = layoutTableCellTextFragments(cell, section, input, width)
-
-    gridIndex += gridSpan
-
-    return Object.freeze({
-      fragments
-    })
-  })
-  const height = cells.reduce((value, cell) => {
-    const lastFragment = cell.fragments[cell.fragments.length - 1]
-
-    return Math.max(
-      value,
-      lastFragment === undefined
-        ? 0
-        : lastFragment.y + lastFragment.height + TABLE_CELL_PADDING_Y_TWIPS
-    )
-  }, DEFAULT_TABLE_ROW_HEIGHT_TWIPS)
-
-  return Object.freeze({
-    height,
-    cells: Object.freeze(cells)
-  })
-}
-
-/** 生成单元格内相对坐标的文本片段，宽度按单元格内容区约束换行。 */
-function layoutTableCellTextFragments(
-  cell: TableCell,
-  section: Section,
-  input: LayoutInput,
-  cellWidth: number
-): readonly TextFragment[] {
-  const maxTextWidth = Math.max(1, cellWidth - (TABLE_CELL_PADDING_X_TWIPS * 2))
-  const fragments: TextFragment[] = []
-  let lineY = TABLE_CELL_PADDING_Y_TWIPS
-  let lineX = TABLE_CELL_PADDING_X_TWIPS
-  let lineHeight = 0
-
-  for (const block of cell.blocks) {
-    if (block.kind !== 'paragraph') {
+    if (cursor.y + firstRowHeight > pageBottom && cursor.y > cursor.page.contentRect.y) {
+      startNewPage(cursor, pages, pageConfig)
+      assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
       continue
     }
 
-    const blockFragmentStartIndex = fragments.length
+    const startRowIndex = rowIndex
+    const tableY = cursor.y
+    let tableHeight = 0
 
-    for (const run of block.runs) {
-      const style = readRunStyle(block, run.properties)
-      let runGraphemeIndex = 0
+    while (rowIndex < table.rows.length) {
+      const rowHeight = rowHeights[rowIndex] ?? resolveTableRowHeight(table.rows[rowIndex]!)
+      const nextHeight = tableHeight + rowHeight
+      const rowFitsCurrentPage = tableY + nextHeight <= pageBottom
 
-      for (const inline of run.inlines) {
-        if (inline.kind !== 'text') {
-          continue
-        }
+      if (!rowFitsCurrentPage && rowIndex > startRowIndex) {
+        break
+      }
 
-        for (const segment of segmentTextForLayout(inline.text, runGraphemeIndex)) {
-          const measuredSegments = measureTextSegmentForLayout({
-            fontManager: input.fontManager,
-            segment,
-            style,
-            maxWidth: maxTextWidth
-          })
+      tableHeight = nextHeight
+      rowIndex += 1
 
-          for (const measured of measuredSegments) {
-            if (lineX > TABLE_CELL_PADDING_X_TWIPS && lineX + measured.width > TABLE_CELL_PADDING_X_TWIPS + maxTextWidth) {
-              lineY += Math.max(lineHeight, measured.height, 1)
-              lineX = TABLE_CELL_PADDING_X_TWIPS
-              lineHeight = 0
-            }
-
-            const fragment: TextFragment = Object.freeze({
-              kind: 'textFragment',
-              pageIndex: 0,
-              sectionId: section.id,
-              blockId: block.id,
-              runId: run.id,
-              text: measured.text,
-              start: {
-                sectionId: section.id,
-                blockId: block.id,
-                runId: run.id,
-                graphemeIndex: measured.startGraphemeIndex
-              },
-              end: {
-                sectionId: section.id,
-                blockId: block.id,
-                runId: run.id,
-                graphemeIndex: measured.endGraphemeIndex
-              },
-              style: measured.style,
-              x: lineX,
-              y: lineY,
-              width: measured.width,
-              height: measured.height,
-              baseline: lineY + measured.baseline,
-              advanceTwips: measured.advanceTwips
-            })
-
-            fragments.push(fragment)
-            lineX += measured.width
-            lineHeight = Math.max(lineHeight, measured.height)
-          }
-
-          runGraphemeIndex = segment.endGraphemeIndex
-        }
+      if (!rowFitsCurrentPage) {
+        break
       }
     }
 
-    if (fragments.length === blockFragmentStartIndex) {
-      const emptyFragment = createEmptyTableCellFragment(block, section, input, lineX, lineY)
+    cursor.page.blocks.push(createTableBox({
+      table,
+      section,
+      grid,
+      rowPlans,
+      rowHeights,
+      tableX: cursor.page.contentRect.x,
+      tableY,
+      tableWidth,
+      startRowIndex,
+      endRowIndex: rowIndex,
+      pageIndex: cursor.page.pageIndex
+    }))
+    cursor.y = tableY + tableHeight
+    cursor.x = cursor.page.contentRect.x
 
-      if (emptyFragment !== undefined) {
-        fragments.push(emptyFragment)
-        lineHeight = Math.max(lineHeight, emptyFragment.height)
-      }
-    }
-
-    if (fragments.length > blockFragmentStartIndex) {
-      lineY += Math.max(lineHeight, cssPxToTwips(16))
-      lineX = TABLE_CELL_PADDING_X_TWIPS
-      lineHeight = 0
-    }
-  }
-
-  return Object.freeze(fragments)
-}
-
-/** 把单元格相对文本片段平移到页面绝对坐标。 */
-function createPositionedTableCellFragments(
-  fragments: readonly TextFragment[],
-  pageIndex: number,
-  cellX: number,
-  cellY: number,
-  cellHeight: number
-): readonly TextFragment[] {
-  const verticalOffset = resolveTableCellContentVerticalOffset(fragments, cellHeight)
-
-  return Object.freeze(fragments.map((fragment) => Object.freeze({
-    ...fragment,
-    pageIndex,
-    x: cellX + fragment.x,
-    y: cellY + fragment.y + verticalOffset,
-    baseline: cellY + fragment.baseline + verticalOffset
-  })))
-}
-
-/** 为纯空表格段落补一个零宽文本锚点，保证 Enter 后空行可见且可定位。 */
-function createEmptyTableCellFragment(
-  paragraph: Paragraph,
-  section: Section,
-  input: LayoutInput,
-  x: number,
-  y: number
-): TextFragment | undefined {
-  if (!isVisuallyEmptyParagraph(paragraph)) {
-    return undefined
-  }
-
-  const firstRun = paragraph.runs[0]
-
-  if (firstRun === undefined) {
-    return undefined
-  }
-
-  const measured = input.fontManager.measureText('', readRunStyle(paragraph, firstRun.properties))
-  const height = cssPxToTwips(measured.heightCssPx)
-  const baseline = cssPxToTwips(measured.baselineCssPx)
-
-  return Object.freeze({
-    kind: 'textFragment',
-    pageIndex: 0,
-    sectionId: section.id,
-    blockId: paragraph.id,
-    runId: firstRun.id,
-    text: '',
-    start: {
-      sectionId: section.id,
-      blockId: paragraph.id,
-      runId: firstRun.id,
-      graphemeIndex: 0
-    },
-    end: {
-      sectionId: section.id,
-      blockId: paragraph.id,
-      runId: firstRun.id,
-      graphemeIndex: 0
-    },
-    style: measured.resolvedFont,
-    x,
-    y,
-    width: 0,
-    height,
-    baseline: y + baseline,
-    advanceTwips: Object.freeze([0])
-  })
-}
-
-/** 计算单元格内容块的竖向居中偏移；自适应高度时保持原有 padding 语义。 */
-function resolveTableCellContentVerticalOffset(
-  fragments: readonly TextFragment[],
-  cellHeight: number
-): number {
-  const firstFragment = fragments[0]
-  const lastFragment = fragments[fragments.length - 1]
-
-  if (firstFragment === undefined || lastFragment === undefined) {
-    return 0
-  }
-
-  const contentTop = Math.min(...fragments.map((fragment) => fragment.y))
-  const contentBottom = Math.max(...fragments.map((fragment) => fragment.y + fragment.height))
-  const contentHeight = contentBottom - contentTop
-  const centeredTop = Math.max(0, Math.round((cellHeight - contentHeight) / 2))
-
-  return centeredTop - contentTop
-}
-
-/** 读取表格列宽，未声明时平均分配正文宽度。 */
-function resolveTableGrid(table: Table, pageConfig: PageConfig): readonly number[] {
-  if (table.grid !== undefined && table.grid.length > 0) {
-    return table.grid
-  }
-
-  const columnCount = Math.max(1, table.rows[0]?.cells.reduce((count, cell) => count + (cell.gridSpan ?? 1), 0) ?? 1)
-  const columnWidth = Math.min(DEFAULT_TABLE_COLUMN_WIDTH_TWIPS, Math.floor(pageConfig.contentWidthTwips / columnCount))
-
-  return Array.from({ length: columnCount }, () => columnWidth)
-}
-
-/** 按列索引和 span 计算单元格宽度。 */
-function sumGridWidth(grid: readonly number[], startIndex: number, gridSpan: number): number {
-  return grid.slice(startIndex, startIndex + gridSpan).reduce((sum, width) => sum + width, 0)
-    || grid[startIndex]
-    || cssPxToTwips(96)
-}
-
-/** 读取表格行高，缺失时回退到更高的默认行高。 */
-function resolveTableRowHeight(row: Table['rows'][number]): number {
-  const value = row.properties?.heightTwips
-
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? Math.round(value)
-    : DEFAULT_TABLE_ROW_HEIGHT_TWIPS
-}
-
-function sumRowHeights(rowHeights: readonly number[], endExclusive: number): number {
-  return rowHeights.slice(0, endExclusive).reduce((sum, height) => sum + height, 0)
-}
-
-/** 读取单元格纯文本。 */
-function readTableCellText(cell: TableCell): string {
-  return cell.blocks
-    .flatMap((block) => block.kind === 'paragraph' ? block.runs : [])
-    .flatMap((run) => run.inlines)
-    .filter((inline): inline is Extract<Inline, { kind: 'text' }> => inline.kind === 'text')
-    .map((inline) => inline.text)
-    .join('')
-}
-
-/** 读取单元格首个可编辑文本位置。 */
-function readTableCellTextPosition(sectionId: string, cell: TableCell): TextPosition | undefined {
-  for (const block of cell.blocks) {
-    if (block.kind !== 'paragraph') {
-      continue
-    }
-
-    for (const run of block.runs) {
-      if (run.inlines.some((inline) => inline.kind === 'text')) {
-        return {
-          sectionId,
-          blockId: block.id,
-          runId: run.id,
-          graphemeIndex: 0
-        }
-      }
-
-      return {
-        sectionId,
-        blockId: block.id,
-        runId: run.id,
-        graphemeIndex: 0
-      }
+    if (rowIndex < table.rows.length) {
+      startNewPage(cursor, pages, pageConfig)
+      assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
     }
   }
-
-  return undefined
 }

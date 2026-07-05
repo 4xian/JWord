@@ -20,6 +20,7 @@ import {
   getRunInlines,
   getRunLink,
   projectCommentRecord,
+  projectRevisionRecord,
   readCommentRangeRecord,
   getRunRevisionId,
   getParagraphRuns,
@@ -52,7 +53,7 @@ import type {
   SectionRecord,
   StyleId
 } from '../model/document-store'
-import type { Block, Run } from '../model/types'
+import type { Block, RevisionFormatSnapshot, RevisionMetadata, Run } from '../model/types'
 import type { BlockInsertPlacement, Operation, TextPosition } from './transaction'
 import {
   migrateTextAnchorsAfterSplit,
@@ -60,7 +61,7 @@ import {
   migrateTextRangeRecordAfterSplit,
   migrateTextRangeRecordToText
 } from '../model/position'
-import type { BlockId, CommentId, GraphemeIndex, RevisionId, RunId, SectionId } from '../model/position'
+import type { BlockId, CommentId, GraphemeIndex, RevisionId, RunId, SectionId, TextAnchorMigrationTarget } from '../model/position'
 import { createGraphemeIndex } from '../model/position'
 import type { ResourceUrlPolicy } from '../resources/types'
 import {
@@ -72,6 +73,18 @@ import {
   syncRunResourceIds
 } from './block-record-factory'
 import { applyTableOperation } from './table-operation-adapter'
+import {
+  appendIdIfMissing,
+  assertBlockKind,
+  copyProperties,
+  readPropertyMap,
+  readRequiredArray,
+  readRequiredString,
+  removeId,
+  replaceProperties,
+  replaceStringArray,
+  setProperties
+} from './operation-record-utils'
 
 /**
  * Operation 到 Y.Doc 的最小 adapter。
@@ -224,6 +237,12 @@ export function applyOperation(
       break
     case 'addRevisionMetadata':
       addRevisionMetadata(store, operation)
+      break
+    case 'acceptRevision':
+      resolveRevision(store, operation)
+      break
+    case 'rejectRevision':
+      resolveRevision(store, operation)
       break
   }
 }
@@ -483,22 +502,160 @@ function addRevisionMetadata(
 ): void {
   const revisionId = operation.revision.id as RevisionId
   const runLocation = findRunLocation(store, operation.runId as RunId)
-  const blockLocation = findBlockLocation(store, runLocation.blockId)
+  const range = operation.range
+  let revision = operation.revision
+  let revisionRunLocation = runLocation
 
-  store.revisions.set(revisionId, createRevisionRecord(operation.revision))
-  runLocation.run.set(DOCUMENT_STORE_FIELDS.run.revisionId, revisionId)
+  if (range !== undefined) {
+    const runText = getRunText(runLocation.run).toString()
+    const graphemeLength = countGraphemes(runText)
+
+    assertRunPropertyRange(range.startGraphemeIndex, range.endGraphemeIndex, graphemeLength)
+
+    if (range.startGraphemeIndex > 0) {
+      if (range.revisedRunId === undefined) {
+        throw createJWordError('OPERATION_RUN_FORMAT_RANGE_INVALID', '局部 run 修订缺少 revisedRunId', {
+          runId: operation.runId
+        })
+      }
+
+      assertRunIdUnused(store, range.revisedRunId as RunId)
+      revisionRunLocation = splitRunAtGraphemeIndex(
+        store,
+        runLocation,
+        range.startGraphemeIndex,
+        range.revisedRunId as RunId,
+        (sourceText, boundaryUtf16Index, target) => {
+          revision = migrateRevisionRangeAfterSplit(revision, store, sourceText, boundaryUtf16Index, target)
+        }
+      )
+    }
+
+    if (range.endGraphemeIndex < graphemeLength) {
+      if (range.trailingRunId === undefined) {
+        throw createJWordError('OPERATION_RUN_FORMAT_RANGE_INVALID', '局部 run 修订缺少 trailingRunId', {
+          runId: operation.runId
+        })
+      }
+
+      assertRunIdUnused(store, range.trailingRunId as RunId)
+      splitRunAtGraphemeIndex(
+        store,
+        revisionRunLocation,
+        range.endGraphemeIndex - range.startGraphemeIndex,
+        range.trailingRunId as RunId,
+        (sourceText, boundaryUtf16Index, target) => {
+          revision = migrateRevisionRangeAfterSplit(revision, store, sourceText, boundaryUtf16Index, target)
+        }
+      )
+    }
+  }
+
+  const blockLocation = findBlockLocation(store, revisionRunLocation.blockId)
+
+  store.revisions.set(revisionId, createRevisionRecord(revision))
+  revisionRunLocation.run.set(DOCUMENT_STORE_FIELDS.run.revisionId, revisionId)
   appendIdIfMissing(
     readRequiredArray<RevisionId>(store.document, DOCUMENT_STORE_FIELDS.document.revisionIds, 'document revisionIds'),
     revisionId
   )
   appendIdIfMissing(
-    readRequiredArray<RevisionId>(runLocation.run, DOCUMENT_STORE_FIELDS.run.revisionIds, 'run revisionIds'),
+    readRequiredArray<RevisionId>(revisionRunLocation.run, DOCUMENT_STORE_FIELDS.run.revisionIds, 'run revisionIds'),
     revisionId
   )
   appendIdIfMissing(
     readRequiredArray<RevisionId>(blockLocation.block, DOCUMENT_STORE_FIELDS.block.revisionIds, 'block revisionIds'),
     revisionId
   )
+}
+
+function resolveRevision(
+  store: DocumentStore,
+  operation: Extract<Operation, { kind: 'acceptRevision' | 'rejectRevision' }>
+): void {
+  const revision = findRevisionMetadata(store, operation.revisionId)
+
+  if (
+    revision.type === 'delete' && operation.kind === 'acceptRevision'
+    || revision.type === 'insert' && operation.kind === 'rejectRevision'
+  ) {
+    deleteRange(store, operation.range.anchor, operation.range.focus)
+  }
+
+  if (revision.type === 'format' && operation.kind === 'rejectRevision') {
+    for (const target of operation.formatTargets) {
+      restoreRevisionFormatTarget(store, target)
+    }
+  }
+
+  clearRevisionMarkup(store, operation.revisionId as RevisionId)
+}
+
+/** 查找修订 metadata，供接受/拒绝流程使用。 */
+function findRevisionMetadata(store: DocumentStore, revisionId: string): RevisionMetadata {
+  const record = store.revisions.get(revisionId as RevisionId)
+
+  if (record === undefined) {
+    throw createJWordError('OPERATION_REVISION_NOT_FOUND', '找不到目标修订', {
+      revisionId
+    })
+  }
+
+  return projectRevisionRecord(record)
+}
+
+/** 恢复格式修订记录的原始 run 属性。 */
+function restoreRevisionFormatTarget(store: DocumentStore, target: RevisionFormatSnapshot): void {
+  const runLocation = findRunLocation(store, target.runId as RunId)
+
+  replaceProperties(runLocation.run, DOCUMENT_STORE_FIELDS.run.properties, target.previousProperties)
+}
+
+/** 清除修订 metadata、run 标记和引用索引。 */
+function clearRevisionMarkup(store: DocumentStore, revisionId: RevisionId): void {
+  store.revisions.delete(revisionId)
+  removeId(
+    readRequiredArray<RevisionId>(store.document, DOCUMENT_STORE_FIELDS.document.revisionIds, 'document revisionIds'),
+    revisionId
+  )
+
+  for (const section of store.sections.toArray()) {
+    removeId(
+      readRequiredArray<RevisionId>(section, DOCUMENT_STORE_FIELDS.section.revisionIds, 'section revisionIds'),
+      revisionId
+    )
+    clearRevisionMarkupInBlocks(getSectionBlocks(section), revisionId)
+  }
+}
+
+/** 清除块容器中的修订引用。 */
+function clearRevisionMarkupInBlocks(blocks: BlockContainer, revisionId: RevisionId): void {
+  for (const block of blocks.toArray()) {
+    removeId(
+      readRequiredArray<RevisionId>(block, DOCUMENT_STORE_FIELDS.block.revisionIds, 'block revisionIds'),
+      revisionId
+    )
+
+    if (block.get(DOCUMENT_STORE_FIELDS.block.kind) === 'paragraph') {
+      for (const run of getParagraphRuns(block).toArray()) {
+        if (run.get(DOCUMENT_STORE_FIELDS.run.revisionId) === revisionId) {
+          run.delete(DOCUMENT_STORE_FIELDS.run.revisionId)
+        }
+        removeId(
+          readRequiredArray<RevisionId>(run, DOCUMENT_STORE_FIELDS.run.revisionIds, 'run revisionIds'),
+          revisionId
+        )
+      }
+
+      continue
+    }
+
+    for (const row of getTableRows(block).toArray()) {
+      for (const cell of getTableRowCells(row).toArray()) {
+        clearRevisionMarkupInBlocks(getTableCellBlocks(cell), revisionId)
+      }
+    }
+  }
 }
 
 function insertText(store: DocumentStore, position: TextPosition, text: string): void {
@@ -1148,7 +1305,12 @@ function splitRunAtGraphemeIndex(
   store: DocumentStore,
   runLocation: RunLocation,
   graphemeIndex: number,
-  newRunId: RunId
+  newRunId: RunId,
+  beforeSourceTailDelete?: (
+    sourceText: Y.Text,
+    boundaryUtf16Index: number,
+    target: TextAnchorMigrationTarget
+  ) => void
 ): RunLocation {
   const sharedText = getRunText(runLocation.run)
   const utf16Index = graphemeIndexToUtf16Index(sharedText.toString(), graphemeIndex)
@@ -1156,16 +1318,16 @@ function splitRunAtGraphemeIndex(
   const splitRun = createSplitRunRecord(newRunId, tailText, runLocation.run)
 
   runLocation.container.insert(runLocation.index + 1, [splitRun])
-  migrateTextAnchorsAfterSplit(sharedText, store.doc, utf16Index, {
+
+  const target = {
     blockId: runLocation.blockId,
     runId: newRunId,
     text: getRunText(splitRun)
-  })
-  migrateCommentRangesAfterSplit(store, sharedText, utf16Index, {
-    blockId: runLocation.blockId,
-    runId: newRunId,
-    text: getRunText(splitRun)
-  })
+  }
+
+  migrateTextAnchorsAfterSplit(sharedText, store.doc, utf16Index, target)
+  migrateCommentRangesAfterSplit(store, sharedText, utf16Index, target)
+  beforeSourceTailDelete?.(sharedText, utf16Index, target)
 
   if (tailText.length > 0) {
     sharedText.delete(utf16Index, tailText.length)
@@ -1248,6 +1410,26 @@ function migrateCommentRangesAfterSplit(
   }
 }
 
+/** 同步迁移本次写入的修订范围快照，避免局部拆分后定位收缩。 */
+function migrateRevisionRangeAfterSplit(
+  revision: RevisionMetadata,
+  store: DocumentStore,
+  sourceText: Y.Text,
+  boundaryUtf16Index: number,
+  target: TextAnchorMigrationTarget
+): RevisionMetadata {
+  return {
+    ...revision,
+    rangeSnapshot: migrateTextRangeRecordAfterSplit(
+      revision.rangeSnapshot,
+      store.doc,
+      sourceText,
+      boundaryUtf16Index,
+      target
+    )
+  }
+}
+
 function migrateCommentRangesToText(
   store: DocumentStore,
   sourceText: Y.Text,
@@ -1320,139 +1502,6 @@ function runContainsSingleImage(run: RunRecord): boolean {
   return inlines !== undefined
     && inlines.length === 1
     && inlines[0]?.kind === 'image'
-}
-
-interface SharedMapReader {
-  get(fieldName: string): unknown
-}
-
-function setProperties(record: SharedMapReader, fieldName: string, properties: Readonly<Record<string, unknown>>): void {
-  const target = readPropertyMap(record, fieldName)
-
-  for (const [key, value] of Object.entries(properties)) {
-    target.set(key, toDocumentStoreJson(value))
-  }
-}
-
-function copyProperties(source: SharedMapReader, target: SharedMapReader, fieldName: string): void {
-  const sourceProperties = readPropertyMap(source, fieldName)
-  const targetProperties = readPropertyMap(target, fieldName)
-
-  for (const [key, value] of sourceProperties.entries()) {
-    targetProperties.set(key, value)
-  }
-}
-
-function createPropertyMap(properties: Readonly<Record<string, unknown>>): Y.Map<DocumentStoreJson> {
-  const map = new Y.Map<DocumentStoreJson>()
-
-  for (const [key, value] of Object.entries(properties)) {
-    map.set(key, toDocumentStoreJson(value))
-  }
-
-  return map
-}
-
-function readRequiredArray<Item>(record: SharedMapReader, fieldName: string, label: string): Y.Array<Item> {
-  const value = record.get(fieldName)
-
-  if (value instanceof Y.Array) {
-    return value as Y.Array<Item>
-  }
-
-  throw createJWordError('DOCUMENT_STORE_ARRAY_CONTAINER_MISSING', `${label} 缺失`, {
-    label
-  })
-}
-
-function appendIdIfMissing<Id extends string>(array: Y.Array<Id>, id: Id): void {
-  if (!array.toArray().includes(id)) {
-    array.push([id])
-  }
-}
-
-function removeId<Id extends string>(array: Y.Array<Id>, id: Id): void {
-  const index = array.toArray().indexOf(id)
-
-  if (index >= 0) {
-    array.delete(index, 1)
-  }
-}
-
-function replaceStringArray(array: Y.Array<string>, values: readonly string[]): void {
-  if (array.length > 0) {
-    array.delete(0, array.length)
-  }
-
-  if (values.length > 0) {
-    array.push([...values])
-  }
-}
-
-function clonePropertyMap(properties: Y.Map<DocumentStoreJson>): Y.Map<DocumentStoreJson> {
-  const map = new Y.Map<DocumentStoreJson>()
-
-  for (const [key, value] of properties.entries()) {
-    map.set(key, value)
-  }
-
-  return map
-}
-
-function readPropertyMap(record: SharedMapReader, fieldName: string): Y.Map<DocumentStoreJson> {
-  const value = record.get(fieldName)
-
-  if (value instanceof Y.Map) {
-    return value as Y.Map<DocumentStoreJson>
-  }
-
-  throw createJWordError('OPERATION_PROPERTY_CONTAINER_MISSING', '属性容器缺失')
-}
-
-function readRequiredString(record: SharedMapReader, fieldName: string): string {
-  const value = record.get(fieldName)
-
-  if (typeof value === 'string') {
-    return value
-  }
-
-  throw createJWordError('OPERATION_STRING_FIELD_MISSING', '字符串字段缺失', {
-    fieldName
-  })
-}
-
-function assertBlockKind(block: BlockRecord, kind: 'paragraph' | 'table'): void {
-  if (block.get(DOCUMENT_STORE_FIELDS.block.kind) !== kind) {
-    throw createJWordError('OPERATION_BLOCK_KIND_MISMATCH', `块类型不是 ${kind}`, {
-      expectedKind: kind
-    })
-  }
-}
-
-function toDocumentStoreJson(value: unknown): DocumentStoreJson {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(toDocumentStoreJson)
-  }
-
-  if (typeof value === 'object' && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, nestedValue]) => [
-        key,
-        toDocumentStoreJson(nestedValue)
-      ])
-    )
-  }
-
-  throw createJWordError('OPERATION_PROPERTY_VALUE_INVALID', '属性值必须是 JSON 兼容数据')
 }
 
 function assertRunPropertyRange(

@@ -100,6 +100,9 @@ export interface TableBox extends LayoutRect {
   readonly tableId: string
   readonly grid: readonly number[]
   readonly border?: TableBorder
+  readonly startRowIndex: number
+  readonly continuesFromPreviousPage: boolean
+  readonly continuesOnNextPage: boolean
   readonly rowCount: number
   readonly cellCount: number
   readonly rows: readonly TableRowBox[]
@@ -119,6 +122,7 @@ export interface TableCellBox extends LayoutRect {
   readonly blockIds: readonly string[]
   readonly text: string
   readonly fragments: readonly TextFragment[]
+  readonly inlines: readonly InlineBox[]
   readonly textPosition?: TextPosition
 }
 

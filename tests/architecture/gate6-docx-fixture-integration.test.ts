@@ -8,7 +8,6 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-6--collaborationauto-insert。
  */
 import { readFileSync } from 'node:fs'
-import * as Y from 'yjs'
 
 import {
   createEditor,
@@ -282,12 +281,16 @@ function readProjectionParagraphTexts(projection: ReturnType<Editor['getProjecti
 
 /** 从 state update 读取隔离 Y.Doc 投影文本。 */
 function readStateUpdateText(update: Uint8Array): string {
-  const doc = new Y.Doc()
+  const editor = createEditor()
 
   try {
-    Y.applyUpdate(doc, update)
-    return readProjectionText(createDocumentProjection(doc))
+    editor.replaceSyncUpdate(update, {
+      origin: 'version-restore',
+      requestId: 'gate6-fixture-state-update-read'
+    })
+
+    return readDocumentText(editor)
   } finally {
-    doc.destroy()
+    editor.destroy()
   }
 }

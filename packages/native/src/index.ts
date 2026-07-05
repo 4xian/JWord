@@ -118,6 +118,22 @@ interface PackedResource {
   readonly warning?: JWordPackageWarning
 }
 
+interface SchemaMigrationStep {
+  readonly id: string
+  readonly from: number
+  readonly to: number
+  readonly migrate: (document: Document) => Document
+}
+
+const SCHEMA_MIGRATION_STEPS: readonly SchemaMigrationStep[] = [
+  {
+    id: 'schema-0-to-1',
+    from: 0,
+    to: 1,
+    migrate: migrateSchema0To1
+  }
+]
+
 /** 保存 Editor、projection 或 canonical document 为 .jword zip package。 */
 export async function saveJWordDocument(
   editorOrModel: Editor | DocumentProjection | Document,
@@ -521,6 +537,7 @@ async function readPackageParts(
       })
 
       diagnostics.push(...integrity.diagnostics)
+      inspectSchemaMigrationSupport(manifest.schemaVersion, diagnostics, options.requestId)
     }
 
     const resources = manifest === undefined || checksums === undefined
@@ -625,9 +642,9 @@ async function readMetadata(
   }
 
   try {
-    return parseJsonRecord(await file.async('string'), 'metadata.json', requestId)
+    return parseJsonRecord(await file.async('string'), 'metadata.json', requestId, 'JWORD_NATIVE_METADATA_INVALID')
   } catch (error) {
-    diagnostics.push(readErrorDiagnostic(error, 'JWORD_NATIVE_MANIFEST_INVALID', 'metadata.json', requestId))
+    diagnostics.push(readErrorDiagnostic(error, 'JWORD_NATIVE_METADATA_INVALID', 'metadata.json', requestId))
 
     return undefined
   }
@@ -801,11 +818,16 @@ function readResourceEntries(input: unknown): readonly JWordPackageResourceEntry
 }
 
 /** 解析 JSON 对象。 */
-function parseJsonRecord(text: string, entry: string, requestId?: string): JsonRecord {
+function parseJsonRecord(
+  text: string,
+  entry: string,
+  requestId?: string,
+  invalidCode: JWordPackageErrorCode = 'JWORD_NATIVE_MANIFEST_INVALID'
+): JsonRecord {
   const parsed = JSON.parse(text) as unknown
 
   if (!isRecord(parsed)) {
-    throw createPackageError('JWORD_NATIVE_MANIFEST_INVALID', `${entry} 必须是 JSON 对象`, requestId, entry)
+    throw createPackageError(invalidCode, `${entry} 必须是 JSON 对象`, requestId, entry)
   }
 
   return parsed
@@ -853,43 +875,104 @@ function migrateDocument(
   readonly document: Document
   readonly report: JWordPackageMigrationReport
 } {
-  if (sourceVersion === JWORD_NATIVE_SCHEMA_VERSION) {
-    return {
-      document,
-      report: {
-        sourceVersion,
-        targetVersion: JWORD_NATIVE_SCHEMA_VERSION,
-        appliedSteps: [],
-        warnings: []
-      }
+  const appliedSteps: string[] = []
+  let currentDocument = document
+  let currentVersion = sourceVersion
+
+  while (currentVersion !== JWORD_NATIVE_SCHEMA_VERSION) {
+    const step = findSchemaMigrationStep(currentVersion)
+
+    if (step === undefined) {
+      throw createPackageError(
+        currentVersion > JWORD_NATIVE_SCHEMA_VERSION ? 'JWORD_NATIVE_SCHEMA_FUTURE' : 'JWORD_NATIVE_SCHEMA_UNSUPPORTED',
+        `schemaVersion ${sourceVersion} 无法迁移到当前 schema ${JWORD_NATIVE_SCHEMA_VERSION}`,
+        requestId,
+        'manifest.json'
+      )
     }
+
+    if (step.to <= currentVersion || step.to > JWORD_NATIVE_SCHEMA_VERSION) {
+      throw createPackageError(
+        'JWORD_NATIVE_SCHEMA_UNSUPPORTED',
+        `schema migration ${step.id} 目标版本无效`,
+        requestId,
+        'manifest.json'
+      )
+    }
+
+    currentDocument = step.migrate(currentDocument)
+    currentVersion = step.to
+    appliedSteps.push(step.id)
   }
 
-  if (sourceVersion === 0) {
-    const warning = createWarning(
-      'JWORD_NATIVE_OLD_SCHEMA_MIGRATED',
-      '旧 schemaVersion 0 已迁移到当前 schema。',
-      requestId,
-      'manifest.json'
-    )
+  const warnings = appliedSteps.length === 0
+    ? []
+    : [
+        createWarning(
+          'JWORD_NATIVE_OLD_SCHEMA_MIGRATED',
+          `旧 schemaVersion ${sourceVersion} 已迁移到当前 schema。`,
+          requestId,
+          'manifest.json'
+        )
+      ]
 
-    return {
-      document,
-      report: {
-        sourceVersion,
-        targetVersion: JWORD_NATIVE_SCHEMA_VERSION,
-        appliedSteps: ['schema-0-to-1'],
-        warnings: [warning]
-      }
+  return {
+    document: currentDocument,
+    report: {
+      sourceVersion,
+      targetVersion: JWORD_NATIVE_SCHEMA_VERSION,
+      appliedSteps,
+      warnings
     }
   }
+}
 
-  throw createPackageError(
-    'JWORD_NATIVE_SCHEMA_FUTURE',
-    `schemaVersion ${sourceVersion} 不受当前 reader 支持`,
-    requestId,
-    'manifest.json'
-  )
+/** 检查 schema migration 是否存在可达路径。 */
+function inspectSchemaMigrationSupport(
+  sourceVersion: number,
+  diagnostics: JWordPackageDiagnostic[],
+  requestId?: string
+): void {
+  if (sourceVersion >= JWORD_NATIVE_SCHEMA_VERSION || hasSchemaMigrationPath(sourceVersion)) {
+    return
+  }
+
+  diagnostics.push(createDiagnostic({
+    code: 'JWORD_NATIVE_SCHEMA_UNSUPPORTED',
+    severity: 'error',
+    recoverable: false,
+    message: `schemaVersion ${sourceVersion} 无法迁移到当前 schema ${JWORD_NATIVE_SCHEMA_VERSION}`,
+    entry: 'manifest.json',
+    requestId
+  }))
+}
+
+/** 判断 schema migration 是否可达当前版本。 */
+function hasSchemaMigrationPath(sourceVersion: number): boolean {
+  let currentVersion = sourceVersion
+
+  while (currentVersion !== JWORD_NATIVE_SCHEMA_VERSION) {
+    const step = findSchemaMigrationStep(currentVersion)
+
+    if (step === undefined || step.to <= currentVersion || step.to > JWORD_NATIVE_SCHEMA_VERSION) {
+      return false
+    }
+
+    currentVersion = step.to
+  }
+
+  return true
+}
+
+/** 查找从指定 schema 版本出发的迁移步骤。 */
+function findSchemaMigrationStep(sourceVersion: number): SchemaMigrationStep | undefined {
+  return SCHEMA_MIGRATION_STEPS.find((step) => step.from === sourceVersion)
+}
+
+/** 执行 schema 0 到 1 的显式空迁移。 */
+function migrateSchema0To1(document: Document): Document {
+  // schema 0 与 1 的 canonical document 结构一致，此步骤仅冻结迁移链语义。
+  return document
 }
 
 /** 汇总资源打包状态。 */

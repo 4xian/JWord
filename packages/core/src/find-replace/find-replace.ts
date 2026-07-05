@@ -24,25 +24,47 @@ export interface FindTextMatch {
   readonly rangeSnapshot: TextRangeRecord
 }
 
+export interface FindTextOptions {
+  readonly caseSensitive?: boolean
+}
+
 export interface ReplaceAllMatchesResult {
   readonly replacedCount: number
   readonly commandNames: readonly string[]
 }
 
+interface ResolvedFindTextOptions {
+  readonly query: string
+  readonly queryGraphemes: readonly string[]
+  readonly searchQueryGraphemes: readonly string[]
+  readonly caseSensitive: boolean
+}
+
+interface ParagraphSearchGrapheme {
+  readonly grapheme: string
+  readonly searchGrapheme: string
+  readonly run: Run
+  readonly runGraphemeIndex: number
+}
+
 /**
  * 在当前 editor projection 中查找文本，结果用稳定 range 快照保存位置。
  */
-export function findTextMatches(editor: Editor, query: string): readonly FindTextMatch[] {
-  const normalizedQuery = query.trim()
+export function findTextMatches(
+  editor: Editor,
+  query: string,
+  options: FindTextOptions = {}
+): readonly FindTextMatch[] {
+  const resolvedOptions = resolveFindTextOptions(query, options)
 
-  if (normalizedQuery.length === 0) {
+  if (resolvedOptions.query.length === 0) {
     return []
   }
 
   const matches: FindTextMatch[] = []
 
   for (const section of editor.getProjection().document.sections) {
-    collectMatchesFromBlocks(editor, section, section.blocks, normalizedQuery, matches)
+    collectMatchesFromBlocks(editor, section, section.blocks, resolvedOptions, matches)
   }
 
   return Object.freeze(matches)
@@ -91,9 +113,10 @@ export function buildReplaceMatchCommand(
 export function replaceAllMatches(
   editor: Editor,
   query: string,
-  replacement: string
+  replacement: string,
+  options: FindTextOptions = {}
 ): ReplaceAllMatchesResult {
-  const matches = [...findTextMatches(editor, query)].reverse()
+  const matches = [...findTextMatches(editor, query, options)].reverse()
   const commandNames: string[] = []
 
   for (const match of matches) {
@@ -121,59 +144,49 @@ function collectMatchesFromBlocks(
   editor: Editor,
   section: Section,
   blocks: readonly Block[],
-  query: string,
+  options: ResolvedFindTextOptions,
   matches: FindTextMatch[]
 ): void {
   for (const block of blocks) {
     if (block.kind === 'paragraph') {
-      collectMatchesFromParagraph(editor, section, block, query, matches)
+      collectMatchesFromParagraph(editor, section, block, options, matches)
       continue
     }
 
     for (const row of block.rows) {
       for (const cell of row.cells) {
-        collectMatchesFromBlocks(editor, section, cell.blocks, query, matches)
+        collectMatchesFromBlocks(editor, section, cell.blocks, options, matches)
       }
     }
   }
 }
 
 /**
- * 从段落 run 内收集同一 run 的基础文本匹配结果。
+ * 从段落聚合文本中收集可跨 run 的匹配结果。
  */
 function collectMatchesFromParagraph(
   editor: Editor,
   section: Section,
   paragraph: Paragraph,
-  query: string,
+  options: ResolvedFindTextOptions,
   matches: FindTextMatch[]
 ): void {
-  for (const run of paragraph.runs) {
-    collectMatchesFromRun(editor, section, paragraph, run, query, matches)
-  }
-}
+  const graphemes = collectParagraphSearchGraphemes(paragraph, options.caseSensitive)
+  const queryLength = options.searchQueryGraphemes.length
 
-/**
- * 从单个 run 的文本 inline 中收集匹配结果。
- */
-function collectMatchesFromRun(
-  editor: Editor,
-  section: Section,
-  paragraph: Paragraph,
-  run: Run,
-  query: string,
-  matches: FindTextMatch[]
-): void {
-  const text = run.inlines.flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')
-  const textGraphemes = splitGraphemes(text)
-  const queryGraphemes = splitGraphemes(query)
-
-  if (queryGraphemes.length === 0 || textGraphemes.length < queryGraphemes.length) {
+  if (queryLength === 0 || graphemes.length < queryLength) {
     return
   }
 
-  for (let index = 0; index <= textGraphemes.length - queryGraphemes.length; index += 1) {
-    if (!matchesAt(textGraphemes, queryGraphemes, index)) {
+  for (let index = 0; index <= graphemes.length - queryLength; index += 1) {
+    if (!matchesAt(graphemes, options.searchQueryGraphemes, index)) {
+      continue
+    }
+
+    const start = graphemes[index]
+    const end = resolveParagraphSearchEnd(graphemes, index + queryLength)
+
+    if (start === undefined || end === undefined) {
       continue
     }
 
@@ -181,13 +194,44 @@ function collectMatchesFromRun(
       editor,
       section,
       paragraph,
-      run,
-      query,
-      index,
-      index + queryGraphemes.length,
+      start,
+      end,
+      graphemes.slice(index, index + queryLength).map((entry) => entry.grapheme).join(''),
       matches.length
     ))
   }
+}
+
+/**
+ * 收集段落内可搜索的文本 grapheme 与 run 边界映射。
+ */
+function collectParagraphSearchGraphemes(
+  paragraph: Paragraph,
+  caseSensitive: boolean
+): readonly ParagraphSearchGrapheme[] {
+  const entries: ParagraphSearchGrapheme[] = []
+
+  for (const run of paragraph.runs) {
+    let runGraphemeIndex = 0
+
+    for (const inline of run.inlines) {
+      if (inline.kind !== 'text') {
+        continue
+      }
+
+      for (const grapheme of splitGraphemes(inline.text)) {
+        entries.push({
+          grapheme,
+          searchGrapheme: normalizeSearchGrapheme(grapheme, caseSensitive),
+          run,
+          runGraphemeIndex
+        })
+        runGraphemeIndex += 1
+      }
+    }
+  }
+
+  return entries
 }
 
 /**
@@ -197,36 +241,35 @@ function createFindTextMatch(
   editor: Editor,
   section: Section,
   paragraph: Paragraph,
-  run: Run,
-  query: string,
-  startGraphemeIndex: number,
-  endGraphemeIndex: number,
+  start: ParagraphSearchGrapheme,
+  end: ParagraphSearchGrapheme,
+  text: string,
   index: number
 ): FindTextMatch {
   const anchor = editor.createTextAnchor({
     sectionId: section.id,
     blockId: paragraph.id,
-    runId: run.id,
-    graphemeIndex: startGraphemeIndex,
+    runId: start.run.id,
+    graphemeIndex: start.runGraphemeIndex,
     assoc: 1
   })
   const focus = editor.createTextAnchor({
     sectionId: section.id,
     blockId: paragraph.id,
-    runId: run.id,
-    graphemeIndex: endGraphemeIndex,
+    runId: end.run.id,
+    graphemeIndex: end.runGraphemeIndex,
     assoc: 1
   })
   const range = createSelectionState(anchor, focus).range
 
   return Object.freeze({
-    id: `${paragraph.id}:${run.id}:${startGraphemeIndex}:${index}`,
-    text: query,
+    id: `${paragraph.id}:${start.run.id}:${start.runGraphemeIndex}:${end.run.id}:${end.runGraphemeIndex}:${index}`,
+    text,
     sectionId: section.id,
     blockId: paragraph.id,
-    runId: run.id,
-    startGraphemeIndex,
-    endGraphemeIndex,
+    runId: start.run.id,
+    startGraphemeIndex: start.runGraphemeIndex,
+    endGraphemeIndex: end.runGraphemeIndex,
     rangeSnapshot: editor.captureRangeSnapshot(range)
   })
 }
@@ -247,11 +290,55 @@ function normalizeTextPosition(position: TextPosition): TextPosition {
  * 判断 grapheme 序列在指定下标是否完整匹配查询。
  */
 function matchesAt(
-  textGraphemes: readonly string[],
+  textGraphemes: readonly ParagraphSearchGrapheme[],
   queryGraphemes: readonly string[],
   startIndex: number
 ): boolean {
-  return queryGraphemes.every((grapheme, offset) => textGraphemes[startIndex + offset] === grapheme)
+  return queryGraphemes.every((grapheme, offset) => textGraphemes[startIndex + offset]?.searchGrapheme === grapheme)
+}
+
+/** 解析查找选项并预先计算 query grapheme。 */
+function resolveFindTextOptions(query: string, options: FindTextOptions): ResolvedFindTextOptions {
+  const normalizedQuery = query.trim()
+  const caseSensitive = options.caseSensitive !== false
+  const queryGraphemes = splitGraphemes(normalizedQuery)
+
+  return Object.freeze({
+    query: normalizedQuery,
+    queryGraphemes,
+    searchQueryGraphemes: queryGraphemes.map((grapheme) => normalizeSearchGrapheme(grapheme, caseSensitive)),
+    caseSensitive
+  })
+}
+
+/** 归一化单个搜索 grapheme。 */
+function normalizeSearchGrapheme(grapheme: string, caseSensitive: boolean): string {
+  return caseSensitive ? grapheme : grapheme.toLocaleLowerCase()
+}
+
+/** 把段落聚合边界映射回 run 内结束位置。 */
+function resolveParagraphSearchEnd(
+  graphemes: readonly ParagraphSearchGrapheme[],
+  endIndex: number
+): ParagraphSearchGrapheme | undefined {
+  const next = graphemes[endIndex]
+
+  if (next !== undefined) {
+    return next
+  }
+
+  const last = graphemes[endIndex - 1]
+
+  if (last === undefined) {
+    return undefined
+  }
+
+  return {
+    grapheme: '',
+    searchGrapheme: '',
+    run: last.run,
+    runGraphemeIndex: last.runGraphemeIndex + 1
+  }
 }
 
 /**

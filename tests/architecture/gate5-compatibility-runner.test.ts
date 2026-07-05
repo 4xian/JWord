@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { readFreshRunStylesArtifactEvidence } from './gate5-compatibility-runner-helpers'
+import { createRunnerTestEnv, readFreshRunStylesArtifactEvidence } from './gate5-compatibility-runner-helpers'
 import type { Gate5CompatibilityManualTemplateFile, Gate5CompatibilityOpenXmlTemplateFile, Gate5CompatibilityRunnerDryRunReport, Gate5CompatibilityRunnerResultDocument } from './gate5-compatibility-runner-helpers'
 
 describe('Gate 5 DOCX compatibility runner', () => {
@@ -45,14 +45,20 @@ describe('Gate 5 DOCX compatibility runner', () => {
   })
 
   it('records verifiable artifact evidence for generated DOCX exports', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jword-gate5-artifact-evidence-'))
+    const outputPath = join(tempDir, 'compatibility-results.json')
+
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
+      env: createRunnerTestEnv({
+        GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath
+      }),
       encoding: 'utf8'
     })
 
     const report = JSON.parse(
-      readFileSync('fixtures/docx/compatibility-results.json', 'utf8')
+      readFileSync(outputPath, 'utf8')
     ) as Gate5CompatibilityRunnerResultDocument
     const reportedResults = report.results.filter((result) => result.status === 'reported')
 
@@ -84,15 +90,16 @@ describe('Gate 5 DOCX compatibility runner', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'jword-gate5-evidence-requests-'))
     const outputPath = join(tempDir, 'compatibility-results.json')
     const missingManualResultsPath = join(tempDir, 'missing-manual-results.json')
+    const missingOpenXmlResultsPath = join(tempDir, 'missing-openxml-validation-results.json')
 
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
-        GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: missingManualResultsPath
-      },
+        GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: missingManualResultsPath,
+        GATE5_DOCX_OPENXML_VALIDATION_RESULTS: missingOpenXmlResultsPath
+      }),
       encoding: 'utf8'
     })
 
@@ -144,19 +151,43 @@ describe('Gate 5 DOCX compatibility runner', () => {
     expect('compatibilityPercent' in report).toBe(false)
   })
 
+  it('keeps Microsoft Word desktop compatibility pending until artifact-bound manual evidence exists', () => {
+    const report = JSON.parse(
+      readFileSync('fixtures/docx/compatibility-results.json', 'utf8')
+    ) as Gate5CompatibilityRunnerResultDocument
+    const publicApiDocument = readFileSync('docs/sdk/public-api.md', 'utf8')
+
+    for (const result of report.results) {
+      const wordResult = result.report.appResults.find((appResult) => appResult.app === 'Word')
+
+      expect(wordResult, result.fixtureId).toMatchObject({
+        app: 'Word',
+        result: 'pending',
+        editable: 'pending',
+        repairPrompt: 'pending',
+        mainVisualDifference: 'pending',
+        evidence: 'not-run'
+      })
+    }
+
+    expect(publicApiDocument).toContain('Microsoft Word 桌面版与 LibreOffice 仍为 `pending/not-run`')
+    expect(publicApiDocument).toContain('不得声明已完成 Word 桌面版兼容验证')
+  })
+
   it('emits artifact-bound templates for manual compatibility and validator evidence', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'jword-gate5-evidence-templates-'))
     const outputPath = join(tempDir, 'compatibility-results.json')
     const missingManualResultsPath = join(tempDir, 'missing-manual-results.json')
+    const missingOpenXmlResultsPath = join(tempDir, 'missing-openxml-validation-results.json')
 
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
-        GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: missingManualResultsPath
-      },
+        GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: missingManualResultsPath,
+        GATE5_DOCX_OPENXML_VALIDATION_RESULTS: missingOpenXmlResultsPath
+      }),
       encoding: 'utf8'
     })
 
@@ -189,7 +220,7 @@ describe('Gate 5 DOCX compatibility runner', () => {
       evidence: 'TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes.'
     })
     expect(report.evidenceTemplates.openXmlValidationResults).toMatchObject({
-      path: 'fixtures/docx/openxml-validation-results.json',
+      path: missingOpenXmlResultsPath,
       schemaVersion: 1,
       scope: 'docx-openxml-validation-results'
     })
@@ -215,11 +246,12 @@ describe('Gate 5 DOCX compatibility runner', () => {
       'tools/compat/run-gate5-docx-compatibility.mjs',
       '--write-evidence-templates'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
-        GATE5_DOCX_EVIDENCE_TEMPLATE_OUTPUT_DIR: templateDir
-      },
+        GATE5_DOCX_EVIDENCE_TEMPLATE_OUTPUT_DIR: templateDir,
+        GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: 'fixtures/docx/manual-compatibility-results.json',
+        GATE5_DOCX_OPENXML_VALIDATION_RESULTS: 'fixtures/docx/openxml-validation-results.json'
+      }),
       encoding: 'utf8'
     })
 
@@ -255,10 +287,9 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -312,11 +343,10 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: manualResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -359,11 +389,10 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: manualResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -418,11 +447,10 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: manualResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -472,11 +500,10 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: manualResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -534,11 +561,10 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_OPENXML_VALIDATION_RESULTS: validationResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -582,11 +608,10 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_OPENXML_VALIDATION_RESULTS: validationResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -638,11 +663,10 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_OPENXML_VALIDATION_RESULTS: validationResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 
@@ -681,11 +705,10 @@ describe('Gate 5 DOCX compatibility runner', () => {
     execFileSync(process.execPath, [
       'tools/compat/run-gate5-docx-compatibility.mjs'
     ], {
-      env: {
-        ...process.env,
+      env: createRunnerTestEnv({
         GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
         GATE5_DOCX_OPENXML_VALIDATION_RESULTS: validationResultsPath
-      },
+      }),
       encoding: 'utf8'
     })
 

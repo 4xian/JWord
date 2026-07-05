@@ -7,6 +7,10 @@
  */
 
 import type { CanvasLike, CanvasPool } from './pool'
+import {
+  SUBSCRIPT_BASELINE_SHIFT_RATIO,
+  SUPERSCRIPT_BASELINE_SHIFT_RATIO
+} from '../layout/font-manager'
 import { twipsToCssPx } from '../layout/page-config'
 import type { ImageInlineLayoutPayload, InlineBox, LayoutBox, LayoutRect, TableBox, TextFragment } from '../layout/runtime'
 import type { CanvasImageResourceResolution, CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
@@ -15,9 +19,11 @@ export interface RenderPageInput {
   readonly canvas: CanvasLike
   readonly page: LayoutBox
   readonly selectionRects?: readonly LayoutRect[]
+  readonly commentRects?: readonly LayoutRect[]
   readonly caretRect?: LayoutRect
   readonly backgroundColor?: string
   readonly selectionColor?: string
+  readonly commentColor?: string
   readonly caretColor?: string
   readonly scale?: number
   readonly pixelRatio?: number
@@ -31,6 +37,7 @@ export interface SyncPageCanvasesInput {
   readonly canvases: ReadonlyMap<number, CanvasLike>
   readonly pool: CanvasPool
   readonly selectionRects?: readonly LayoutRect[]
+  readonly commentRects?: readonly LayoutRect[]
   readonly caretRect?: LayoutRect
   readonly scale?: number
   readonly pixelRatio?: number
@@ -41,8 +48,7 @@ const MAX_CANVAS_SIDE_PX = 4096
 const MAX_CANVAS_AREA_PX = 16777216
 const DEFAULT_CANVAS_TEXT_COLOR = '#374151'
 const DEFAULT_CANVAS_CARET_COLOR = '#111827'
-const SUPERSCRIPT_BASELINE_SHIFT_RATIO = 0.35
-const SUBSCRIPT_BASELINE_SHIFT_RATIO = 0.15
+const DEFAULT_CANVAS_COMMENT_COLOR = '#fff3bf'
 const IMAGE_STATUS_COLORS = Object.freeze({
   pending: { fill: '#fff7ed', border: '#f59e0b', text: '#92400e' },
   success: { fill: '#eff6ff', border: '#2563eb', text: '#1d4ed8' },
@@ -79,8 +85,9 @@ export function renderPageCanvas(input: RenderPageInput): void {
   context.fillStyle = input.backgroundColor ?? '#ffffff'
   context.fillRect(0, 0, supportsTransform ? cssWidth : canvasWidth, supportsTransform ? cssHeight : canvasHeight)
 
-  renderSelectionRects(context, input, drawingScale)
   renderTextBackgrounds(context, input.page, drawingScale)
+  renderCommentRects(context, input, drawingScale)
+  renderSelectionRects(context, input, drawingScale)
   renderTables(context, input.page, drawingScale)
   renderHeaderFooterBoxes(context, input.page, drawingScale)
   renderParagraphListMarkers(context, input.page, drawingScale)
@@ -182,6 +189,28 @@ function renderRectBorder(
   context.fillRect(x, y + height - borderWidth, width, borderWidth)
   context.fillRect(x, y, borderWidth, height)
   context.fillRect(x + width - borderWidth, y, borderWidth, height)
+}
+
+
+/** 绘制批注锚点范围底色，层级保持在选区高亮之下。 */
+function renderCommentRects(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  input: RenderPageInput,
+  drawingScale: number
+): void {
+  for (const rect of input.commentRects ?? []) {
+    if (rect.pageIndex !== input.page.pageIndex) {
+      continue
+    }
+
+    context.fillStyle = input.commentColor ?? DEFAULT_CANVAS_COMMENT_COLOR
+    context.fillRect(
+      toCanvasX(input.page, rect.x, drawingScale),
+      toCanvasY(input.page, rect.y, drawingScale),
+      twipsToCssPx(rect.width, drawingScale),
+      twipsToCssPx(rect.height, drawingScale)
+    )
+  }
 }
 
 function renderSelectionRects(
@@ -387,13 +416,34 @@ function renderInlineObjects(
   drawingScale: number,
   imageResourceResolver?: CanvasImageResourceResolver
 ): void {
+  for (const inline of iteratePageInlineObjects(page)) {
+    if (inline.kind !== 'inlineObject' || inline.inlineKind !== 'image') {
+      continue
+    }
+
+    renderImageInlineBox(context, page, inline, drawingScale, imageResourceResolver)
+  }
+}
+
+/** 统一遍历正文与表格中的行内对象，避免 table cell inline image 丢失渲染。 */
+function* iteratePageInlineObjects(page: LayoutBox): Iterable<InlineBox> {
   for (const line of page.lines) {
     for (const inline of line.inlines) {
-      if (inline.kind !== 'inlineObject' || inline.inlineKind !== 'image') {
-        continue
-      }
+      yield inline
+    }
+  }
 
-      renderImageInlineBox(context, page, inline, drawingScale, imageResourceResolver)
+  for (const block of page.blocks) {
+    if (block.kind !== 'table') {
+      continue
+    }
+
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        for (const inline of cell.inlines) {
+          yield inline
+        }
+      }
     }
   }
 }
@@ -610,6 +660,7 @@ export function syncPageCanvases(input: SyncPageCanvasesInput): Map<number, Canv
         canvas,
         page,
         ...(input.selectionRects === undefined ? {} : { selectionRects: input.selectionRects }),
+        ...(input.commentRects === undefined ? {} : { commentRects: input.commentRects }),
         ...(input.caretRect === undefined ? {} : { caretRect: input.caretRect }),
         ...(input.scale === undefined ? {} : { scale: input.scale }),
         ...(input.pixelRatio === undefined ? {} : { pixelRatio: input.pixelRatio }),

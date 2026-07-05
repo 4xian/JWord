@@ -457,6 +457,18 @@
       ]
     },
     {
+      "code": "JWORD_COLLAB_HISTORY_LOCK_QUEUE_EXCEEDED",
+      "owner": "history",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "reject-history-operation-with-backpressure",
+      "description": "History document lock queue exceeded the configured depth and the request must be retried later.",
+      "domains": [
+        "history",
+        "server"
+      ]
+    },
+    {
       "code": "COLLAB_AUTO_INSERTER_ANCHOR_REBASED",
       "owner": "auto-inserter",
       "severity": "warning",

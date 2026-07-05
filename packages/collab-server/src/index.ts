@@ -101,6 +101,7 @@ export interface CreateJWordCollabServerOptions {
   readonly tenantHook?: JWordCollabServerTenantHook
   readonly licenseHook?: JWordCollabServerLicenseHook
   readonly historyStorage?: JWordHistoryStorage
+  readonly maxHistoryDocumentLockQueueDepth?: number
   readonly snapshotStorage?: unknown
   readonly rateLimit?: JWordCollabServerRateLimitOptions
   readonly maxPayloadBytes?: number
@@ -153,6 +154,15 @@ export type JWordCollabServerTenantHook = (
 export interface JWordCollabServerRateLimitOptions {
   readonly windowMs: number
   readonly maxRequests: number
+}
+
+interface JWordCollabRateLimitDecision {
+  readonly ok: boolean
+  readonly retryAfterMs?: number
+}
+
+interface JWordCollabRateLimiter {
+  check(key: string, now: number): JWordCollabRateLimitDecision
 }
 
 export interface JWordCollabServerLogger {
@@ -323,6 +333,18 @@ async function handleServerRequest(
     return
   }
 
+  const rateLimit = options.rateLimiter?.check(readRateLimitKey(request), Date.now())
+
+  if (rateLimit !== undefined && !rateLimit.ok) {
+    writeJson(response, 429, {
+      ok: false,
+      diagnosticCode: 'JWORD_COLLAB_SERVER_RATE_LIMITED',
+      retryAfterMs: rateLimit.retryAfterMs ?? 0,
+      requestId
+    }, options.allowedOrigins, request.headers.origin)
+    return
+  }
+
   if (shouldAuthorizeJWordCollabRequest(request.method ?? 'GET', url.pathname)) {
     const auth = await checkJWordCollabRequestAuth(options.authHook, requestId, request.method ?? 'GET', url.pathname)
 
@@ -347,12 +369,12 @@ async function handleServerRequest(
   }
 
   if (request.method === 'GET' && url.pathname === '/history/versions') {
-    await handleListHistoryVersions(url, response, requestId, options, request.headers.origin)
+    await handleListHistoryVersions(request, url, response, requestId, options, request.headers.origin)
     return
   }
 
   if (request.method === 'GET' && url.pathname === '/jword-history/versions') {
-    await handleListHistoryVersions(url, response, requestId, options, request.headers.origin)
+    await handleListHistoryVersions(request, url, response, requestId, options, request.headers.origin)
     return
   }
 
@@ -370,6 +392,49 @@ async function handleServerRequest(
     error: 'JWORD_COLLAB_SERVER_NOT_FOUND',
     requestId
   }, options.allowedOrigins, request.headers.origin)
+}
+
+class SlidingWindowRateLimiter implements JWordCollabRateLimiter {
+  private readonly windowMs: number
+  private readonly maxRequests: number
+  private readonly requestTimesByKey = new Map<string, number[]>()
+
+  /** 绑定滑窗限流参数。 */
+  constructor(options: JWordCollabServerRateLimitOptions) {
+    this.windowMs = Math.max(1, Math.floor(options.windowMs))
+    this.maxRequests = Math.max(1, Math.floor(options.maxRequests))
+  }
+
+  /** 判断当前 key 在滑窗内是否仍可接受请求。 */
+  check(key: string, now: number): JWordCollabRateLimitDecision {
+    const windowStart = now - this.windowMs
+    const requestTimes = (this.requestTimesByKey.get(key) ?? []).filter((time) => time > windowStart)
+
+    if (requestTimes.length >= this.maxRequests) {
+      this.requestTimesByKey.set(key, requestTimes)
+      const firstRequestTime = requestTimes[0] ?? now
+
+      return {
+        ok: false,
+        retryAfterMs: Math.max(1, this.windowMs - (now - firstRequestTime))
+      }
+    }
+
+    requestTimes.push(now)
+    this.requestTimesByKey.set(key, requestTimes)
+
+    return { ok: true }
+  }
+}
+
+/** 创建请求处理器共享的滑窗限流器。 */
+function createRateLimiter(options: JWordCollabServerRateLimitOptions): JWordCollabRateLimiter {
+  return new SlidingWindowRateLimiter(options)
+}
+
+/** 读取最小限流维度，默认按远端地址隔离。 */
+function readRateLimitKey(request: IncomingMessage): string {
+  return request.socket.remoteAddress ?? 'unknown-client'
 }
 
 /** 监听 Node HTTP server。 */
@@ -419,7 +484,9 @@ interface RequestHandlerOptions extends Required<Pick<
 >> {
   readonly licenseHook?: JWordCollabServerLicenseHook
   readonly historyStorage?: JWordHistoryStorage
+  readonly maxHistoryDocumentLockQueueDepth?: number
   readonly historyService?: JWordCollabHistoryService
+  readonly rateLimiter?: JWordCollabRateLimiter
   readonly authHook?: JWordCollabServerAuthHook
   readonly tenantHook?: JWordCollabServerTenantHook
   readonly allowedOrigins?: readonly string[]
@@ -435,13 +502,20 @@ function createRequestHandlerOptions(options: CreateJWordCollabServerOptions): R
     minimumClientVersion: options.minimumClientVersion ?? defaultMinimumClientVersion,
     minimumServerVersion: options.minimumServerVersion ?? defaultMinimumServerVersion,
     maxPayloadBytes: options.maxPayloadBytes ?? defaultMaxPayloadBytes,
+    ...(options.rateLimit === undefined ? {} : { rateLimiter: createRateLimiter(options.rateLimit) }),
     ...(options.authHook === undefined ? {} : { authHook: options.authHook }),
     ...(options.tenantHook === undefined ? {} : { tenantHook: options.tenantHook }),
     ...(options.licenseHook === undefined ? {} : { licenseHook: options.licenseHook }),
     ...(options.historyStorage === undefined ? {} : { historyStorage: options.historyStorage }),
+    ...(options.maxHistoryDocumentLockQueueDepth === undefined ? {} : {
+      maxHistoryDocumentLockQueueDepth: options.maxHistoryDocumentLockQueueDepth
+    }),
     ...(options.historyStorage === undefined ? {} : {
       historyService: createJWordCollabHistoryService({
-        storage: options.historyStorage
+        storage: options.historyStorage,
+        ...(options.maxHistoryDocumentLockQueueDepth === undefined ? {} : {
+          maxDocumentLockQueueDepth: options.maxHistoryDocumentLockQueueDepth
+        })
       })
     }),
     ...(options.allowedOrigins === undefined ? {} : { allowedOrigins: options.allowedOrigins }),

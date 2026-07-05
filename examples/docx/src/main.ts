@@ -30,12 +30,14 @@ import {
   isDocxDemoTaskCancelled,
   type DocxDemoTaskSession
 } from './task-session'
+import { createDocxWorkerHost, type DocxWorkerHost } from './docx-worker-host'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
 import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 type DocxRuntime = typeof import('@4xian/jword-docx')
 type PdfRuntime = typeof import('@4xian/jword-pdf')
+type DocxDemoRuntimeMode = 'worker' | 'main-thread'
 
 interface DocxDemoIntegrationRuntime {
   assertFeature(feature: JWordLicenseFeatureKey): void
@@ -96,6 +98,7 @@ let currentDocxUrl: string | null = null
 let currentPdfUrl: string | null = null
 let docxRuntimePromise: Promise<DocxRuntime> | null = null
 let pdfRuntimePromise: Promise<PdfRuntime> | null = null
+const docxWorkerHost = createDocxWorkerHost()
 const builtInFixtureLicense = createSignedDocxDemoLicense({
   customerId: 'customer-docx-demo-fixture',
   licenseToken: 'token-docx-demo-fixture',
@@ -169,10 +172,12 @@ window.__jwordDocxDemo = Object.freeze({
   exportDocx: runDocxExport,
   exportPdf: runPdfExport,
   cancelActiveTask: cancelActiveDemoTask,
+  cancelWorkerProbe: (requestId: string) => docxWorkerHost.cancelProbe(requestId),
   readActiveTask: () => taskController.readActiveTask(),
   readStatus: () => statusHost.textContent ?? '',
   readWarningsText: () => warningsHost.textContent ?? '',
-  readRoundtripText: () => roundtripHost.textContent ?? ''
+  readRoundtripText: () => roundtripHost.textContent ?? '',
+  readWorkerEvents: () => docxWorkerHost.readEvents()
 })
 
 setWarnings([])
@@ -180,6 +185,7 @@ setStatus('DOCX demo ready. 请选择文件或使用内置 fixture。')
 
 window.addEventListener('beforeunload', () => {
   revokeCurrentUrls()
+  docxWorkerHost.destroy()
   jwordUi.destroy()
   editor.destroy()
 })
@@ -607,6 +613,10 @@ function readErrorMessage(error: unknown): string {
 function createDocxDemoIntegrationRuntime(
   options: DocxDemoIntegrationOptions
 ): DocxDemoIntegrationRuntime {
+  if (readDocxRuntimeMode() === 'worker') {
+    return createDocxDemoWorkerIntegrationRuntime(options, docxWorkerHost)
+  }
+
   return {
     assertFeature(feature) {
       assertJWordFeatureEntitled(options.license, feature)
@@ -663,6 +673,82 @@ function createDocxDemoIntegrationRuntime(
       return convertDocxImportDocumentToCoreDocument(document)
     }
   }
+}
+
+/** 创建默认走真实 Worker 的 DOCX 集成 runtime。 */
+function createDocxDemoWorkerIntegrationRuntime(
+  options: DocxDemoIntegrationOptions,
+  workerHost: DocxWorkerHost
+): DocxDemoIntegrationRuntime {
+  return {
+    assertFeature(feature) {
+      assertJWordFeatureEntitled(options.license, feature)
+    },
+    async importDocx(input, taskOptions) {
+      assertJWordFeatureEntitled(options.license, taskOptions.feature)
+
+      return workerHost.importDocx(input, {
+        requestId: taskOptions.requestId,
+        ...(taskOptions.signal === undefined ? {} : { signal: taskOptions.signal }),
+        license: options.license,
+        onProgress(event) {
+          if (event.stage === 'queued' || event.stage === 'reading' || event.stage === 'parsing' || event.stage === 'mapping') {
+            setStatus(`DOCX worker ${event.stage}`)
+          }
+        }
+      })
+    },
+    async exportDocx(document, taskOptions) {
+      assertJWordFeatureEntitled(options.license, taskOptions.feature)
+
+      return workerHost.exportDocx(document, {
+        requestId: taskOptions.requestId,
+        ...(taskOptions.signal === undefined ? {} : { signal: taskOptions.signal }),
+        license: options.license,
+        onProgress(event) {
+          if (event.stage === 'queued' || event.stage === 'writing') {
+            setStatus(`DOCX worker ${event.stage}`)
+          }
+        }
+      })
+    },
+    async exportPdf(layout, taskOptions) {
+      assertJWordFeatureEntitled(options.license, taskOptions.feature)
+
+      const { exportPdfFromLayout } = await loadPdfRuntime()
+
+      return exportPdfFromLayout(layout, {
+        requestId: taskOptions.requestId,
+        ...(taskOptions.signal === undefined ? {} : { signal: taskOptions.signal }),
+        license: options.license,
+        ...(taskOptions.onProgress === undefined ? {} : { onProgress: taskOptions.onProgress }),
+        ...(taskOptions.onWarning === undefined ? {} : { onWarning: taskOptions.onWarning })
+      })
+    },
+    async diffDocxRoundtrip(bytes, taskOptions) {
+      assertJWordFeatureEntitled(options.license, taskOptions.feature)
+
+      const { diffDocxRoundtrip } = await loadDocxRuntime()
+
+      return diffDocxRoundtrip(bytes, {
+        requestId: taskOptions.requestId,
+        ...(taskOptions.signal === undefined ? {} : { signal: taskOptions.signal }),
+        license: options.license
+      })
+    },
+    async convertDocxImportDocumentToCoreDocument(document) {
+      const { convertDocxImportDocumentToCoreDocument } = await loadDocxRuntime()
+
+      return convertDocxImportDocumentToCoreDocument(document)
+    }
+  }
+}
+
+/** 读取 demo DOCX runtime 模式；默认真实 Worker，查询参数保留主线程对照路径。 */
+function readDocxRuntimeMode(): DocxDemoRuntimeMode {
+  return new URLSearchParams(window.location.search).get('docxRuntime') === 'main-thread'
+    ? 'main-thread'
+    : 'worker'
 }
 
 /** 读取 demo 查询参数里的授权状态。 */

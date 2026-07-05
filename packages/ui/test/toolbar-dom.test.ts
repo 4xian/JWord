@@ -79,6 +79,106 @@ describe('toolbar select dom', () => {
     }
   })
 
+
+  test('exposes toolbar role and roving tabindex keyboard navigation', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.bold', 'format.italic', 'format.fontFamily', 'format.textColor']
+    }))
+
+    document.body.append(host)
+
+    try {
+      renderToolbarState(dom, createToolbarState())
+
+      const bold = host.querySelector<HTMLButtonElement>('[data-jword-tool-id="format.bold"]')
+      const italic = host.querySelector<HTMLButtonElement>('[data-jword-tool-id="format.italic"]')
+      const fontTrigger = host.querySelector<HTMLButtonElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger')
+      const colorInput = host.querySelector<HTMLInputElement>('[data-jword-tool-id="format.textColor"] .jw-toolbar__color')
+      const nativeSelect = host.querySelector<HTMLSelectElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select')
+
+      expect(host.getAttribute('role')).toBe('toolbar')
+      expect(bold?.tabIndex).toBe(0)
+      expect(italic?.tabIndex).toBe(-1)
+      expect(fontTrigger?.tabIndex).toBe(-1)
+      expect(nativeSelect?.tabIndex).toBe(-1)
+      expect(colorInput?.tabIndex).toBe(-1)
+
+      bold?.focus()
+      bold?.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        bubbles: true
+      }))
+
+      expect(document.activeElement).toBe(italic)
+      expect(bold?.tabIndex).toBe(-1)
+      expect(italic?.tabIndex).toBe(0)
+
+      italic?.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'End',
+        bubbles: true
+      }))
+
+      expect(document.activeElement).toBe(colorInput)
+      expect(colorInput?.tabIndex).toBe(0)
+    } finally {
+      destroyToolbarDom(dom)
+      host.remove()
+    }
+  })
+
+  test('adds listbox option semantics to custom select menus', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.fontFamily']
+    }))
+
+    try {
+      renderToolbarState(dom, createToolbarState({
+        fontFamilyValue: 'Arial'
+      }))
+
+      const menu = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-menu')
+      const trigger = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger')
+      const arialOption = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-option[data-jword-option-value="Arial"]')
+      const simsunOption = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-option[data-jword-option-value="SimSun"]')
+
+      expect(menu?.getAttribute('role')).toBe('listbox')
+      expect(menu?.id).not.toBe('')
+      expect(trigger?.getAttribute('aria-controls')).toBe(menu?.id)
+      expect(arialOption?.getAttribute('role')).toBe('option')
+      expect(arialOption?.getAttribute('aria-selected')).toBe('true')
+      expect(simsunOption?.getAttribute('aria-selected')).toBe('false')
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
+  test('links tooltip ids to focusable toolbar controls', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.bold', 'format.fontFamily', 'format.textColor']
+    }))
+
+    try {
+      const bold = host.querySelector<HTMLElement>('[data-jword-tool-id="format.bold"]')
+      const fontTrigger = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger')
+      const colorInput = host.querySelector<HTMLElement>('[data-jword-tool-id="format.textColor"] .jw-toolbar__color')
+      const boldTooltip = bold?.closest('.jw-toolbar__tooltip-anchor')?.querySelector<HTMLElement>('[role="tooltip"]')
+      const fontTooltip = fontTrigger?.closest('.jw-toolbar__tooltip-anchor')?.querySelector<HTMLElement>('[role="tooltip"]')
+      const colorTooltip = colorInput?.closest('.jw-toolbar__tooltip-anchor')?.querySelector<HTMLElement>('[role="tooltip"]')
+
+      expect(boldTooltip?.id).not.toBe('')
+      expect(fontTooltip?.id).not.toBe('')
+      expect(colorTooltip?.id).not.toBe('')
+      expect(bold?.getAttribute('aria-describedby')).toBe(boldTooltip?.id)
+      expect(fontTrigger?.getAttribute('aria-describedby')).toBe(fontTooltip?.id)
+      expect(colorInput?.getAttribute('aria-describedby')).toBe(colorTooltip?.id)
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
   test('renders text menus without a leading icon slot and keeps icon menus explicit', () => {
     const host = document.createElement('div')
     const dom = createToolbarDom(host, resolveToolbarConfig({

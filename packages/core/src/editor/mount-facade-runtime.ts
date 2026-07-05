@@ -7,6 +7,7 @@
  */
 
 import { createCanvasPool } from '../canvas/pool'
+import { createCanvasTextMeasurer, createFontManager, type CanvasTextMeasurerContext } from '../layout/font-manager'
 import { createMountedCanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 import { createJWordError } from '../shared/errors'
 import { createSelectionState } from '../model/selection'
@@ -15,6 +16,21 @@ import { createCanvasElement } from './rendering'
 import { createHiddenTextareaElement, createLiveRegionElement, createTextMirrorElement, focusHiddenTextarea } from './dom'
 import { JWordEditorLocationRuntime } from './location-runtime'
 import type { EditorLocationTarget, EditorScrollToLocationOptions } from './location-types'
+
+const BROWSER_MEASURABLE_FONT_FAMILIES = Object.freeze([
+  'Arial',
+  'Helvetica',
+  'Helvetica Neue',
+  'Times New Roman',
+  'Courier New',
+  'SimSun',
+  'KaiTi',
+  'Microsoft YaHei',
+  'PingFang SC',
+  'serif',
+  'sans-serif',
+  'monospace'
+])
 
 export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationRuntime {
   /** 聚焦已挂载编辑器输入层。 */
@@ -117,6 +133,18 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
     }
 
     const ownerDocument = host.ownerDocument
+    const canvasTextMeasurerContext = createRuntimeCanvasTextMeasurerContext(ownerDocument)
+
+    if (canvasTextMeasurerContext !== null) {
+      this.fontManager = createFontManager({
+        availableFontFamilies: BROWSER_MEASURABLE_FONT_FAMILIES,
+        textMeasurer: createCanvasTextMeasurer(canvasTextMeasurerContext)
+      })
+      this.layoutNeedsRefresh = true
+      this.cachedLayout = undefined
+      this.pendingLayoutContinuation = undefined
+    }
+
     const eventAbortController = new (ownerDocument.defaultView?.AbortController ?? AbortController)()
     const eventListenerOptions = { signal: eventAbortController.signal }
     const shell = ownerDocument.createElement('div')
@@ -246,6 +274,7 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
           this.renderMountedLayout('resource')
         }
       }),
+      commentPageIndexes: [],
       inputState: {
         isComposing: false,
         compositionText: '',
@@ -254,7 +283,8 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
       pointerState: {
         anchor: null,
         pageMetrics: null,
-        paintedPageIndexes: []
+        paintedPageIndexes: [],
+        autoScrollDeltaY: 0
       },
       canvases: new Map(),
       deferredRender: undefined,
@@ -310,4 +340,16 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
   protected abstract cancelDeferredRender(): void
   protected abstract cancelDeferredTextMirrorSync(): void
   protected abstract stopCaretBlink(): void
+}
+
+/** 创建 mount 期专用的 canvas 文本度量上下文。 */
+function createRuntimeCanvasTextMeasurerContext(ownerDocument: Document): CanvasTextMeasurerContext | null {
+  const canvas = ownerDocument.createElement('canvas')
+  const context = canvas.getContext('2d')
+
+  if (context === null || typeof context.measureText !== 'function') {
+    return null
+  }
+
+  return context
 }

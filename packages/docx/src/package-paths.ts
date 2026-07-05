@@ -29,7 +29,18 @@ export function resolvePartTarget(sourcePart: string, target: string): string {
 
 /** 规范化 OPC part 路径中的简单相对片段。 */
 export function normalizePartPath(path: string): string {
+  return normalizePartPathWithDiagnostics(path).path
+}
+
+export interface NormalizePartPathDiagnostics {
+  readonly path: string
+  readonly traversalOverflow: boolean
+}
+
+/** 规范化 OPC part 路径并标记是否向上越过 package 根。 */
+export function normalizePartPathWithDiagnostics(path: string): NormalizePartPathDiagnostics {
   const segments: string[] = []
+  let traversalOverflow = false
 
   for (const segment of path.split('/')) {
     if (segment === '' || segment === '.') {
@@ -37,14 +48,21 @@ export function normalizePartPath(path: string): string {
     }
 
     if (segment === '..') {
-      segments.pop()
+      if (segments.length === 0) {
+        traversalOverflow = true
+      } else {
+        segments.pop()
+      }
       continue
     }
 
     segments.push(segment)
   }
 
-  return segments.join('/')
+  return {
+    path: segments.join('/'),
+    traversalOverflow
+  }
 }
 /** 生成当前作用域下稳定的 DOCX id。 */
 export function readScopedDocxId(scope: string, kind: 'paragraph' | 'table' | 'run' | 'row' | 'cell', index: number): string {

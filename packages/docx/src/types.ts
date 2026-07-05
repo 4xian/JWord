@@ -52,6 +52,7 @@ export type DocxPackageErrorCode =
   Extract<
     DocxErrorCode,
     | 'DOCX_PACKAGE_INVALID'
+    | 'DOCX_PACKAGE_RESOURCE_LIMIT_EXCEEDED'
     | 'DOCX_CONTENT_TYPES_MISSING'
     | 'DOCX_ROOT_RELS_MISSING'
     | 'DOCX_MAIN_DOCUMENT_MISSING'
@@ -406,6 +407,7 @@ export interface DocxMediaItem {
 
 export interface DocxCommentsIndex {
   readonly comments: readonly DocxImportComment[]
+  readonly warnings: readonly DocxWarning[]
 }
 
 export interface DocxHeaderFooterIndex {
