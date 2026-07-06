@@ -62,6 +62,7 @@ describe('Gate 5 diagnostics schema', () => {
       'packages/docx/src/package.ts',
       'packages/docx/src/package-part-graph.ts',
       'packages/docx/src/package-xml-readers.ts',
+      'packages/docx/src/worker-capability.ts',
       'packages/docx/src/worker.ts'
     ])
     const registryCodes = readRegistryCodes(DOCX_WARNING_CODE_METADATA, DOCX_ERROR_CODE_METADATA)

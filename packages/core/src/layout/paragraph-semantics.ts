@@ -31,6 +31,7 @@ const LIST_BASE_INDENT_TWIPS = 720
 const LIST_LEVEL_OFFSET_TWIPS = 360
 const LIST_MARKER_GAP_TWIPS = 120
 const BULLET_MARKERS = Object.freeze(['•', '◦', '▪'])
+const BULLET_NUMBERING_IDS = new Set(['jword-list-bullet', 'paste-bullet'])
 const HEADING_DEFAULTS: Readonly<Record<string, HeadingStyleDefaults>> = Object.freeze({
   Heading1: Object.freeze({
     runStyle: Object.freeze({
@@ -126,7 +127,7 @@ export function resolveParagraphList(paragraph: Paragraph): ParagraphList | unde
  * 归一化列表类型，当前只区分 ordered / bullet。
  */
 export function resolveParagraphListKind(list: ParagraphList): 'bullet' | 'ordered' {
-  return list.numberingId.toLowerCase().includes('bullet') ? 'bullet' : 'ordered'
+  return BULLET_NUMBERING_IDS.has(list.numberingId) ? 'bullet' : 'ordered'
 }
 
 /**

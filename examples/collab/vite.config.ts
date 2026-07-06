@@ -12,6 +12,9 @@ import { defineConfig } from 'vite'
 /** 创建协同 demo 的 Vite 配置。 */
 export function createCollabDemoViteConfig() {
   return {
+    build: {
+      target: 'es2022'
+    },
     resolve: {
       alias: [
         {

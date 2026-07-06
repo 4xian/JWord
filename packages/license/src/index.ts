@@ -31,10 +31,12 @@ export const GATE6_COLLAB_FEATURES = {
   autoInsert: 'automation.autoInsert'
 } as const
 
+/** 所有商业高级能力使用的稳定 feature key union。 */
 export type JWordLicenseFeatureKey =
   | typeof GATE5_FORMAT_FEATURES[keyof typeof GATE5_FORMAT_FEATURES]
   | typeof GATE6_COLLAB_FEATURES[keyof typeof GATE6_COLLAB_FEATURES]
 
+/** 授权模块对外返回的稳定诊断码。 */
 export type JWordLicenseDiagnosticCode =
   | 'JWORD_LICENSE_MISSING'
   | 'JWORD_LICENSE_EXPIRED'
@@ -57,6 +59,7 @@ export interface JWordLicenseWarning {
   readonly message: string
 }
 
+/** 宿主传入的商业授权 entitlement，不包含用户文档内容。 */
 export interface JWordLicenseEntitlement {
   readonly customerId: string
   readonly licenseToken: string

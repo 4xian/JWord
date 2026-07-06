@@ -234,6 +234,11 @@ export const DOCX_ERROR_CODE_METADATA = {
     description: 'worker 收到取消当前 DOCX 任务的请求。',
     recoverable: true
   },
+  DOCX_WORKER_UNAVAILABLE: {
+    severity: 'error',
+    description: '当前环境缺少 DOCX worker 运行所需基础能力。',
+    recoverable: false
+  },
   DOCX_WORKER_ERROR: {
     severity: 'error',
     description: 'DOCX worker 捕获未知异常。',

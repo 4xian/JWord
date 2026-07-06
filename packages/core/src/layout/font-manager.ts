@@ -97,10 +97,23 @@ export interface FontManager {
 const DEFAULT_FONT_SIZE_PX = 16
 const DEFAULT_FALLBACK_FONT = 'Arial'
 const DEFAULT_MEASUREMENT_CACHE_LIMIT = 4096
+const FONT_MANAGER_COMPATIBILITY_SIGNATURES = new WeakMap<FontManager, string>()
+const TEXT_MEASURER_COMPATIBILITY_SIGNATURES = new WeakMap<TextMeasurer, string>()
+let nextTextMeasurerCompatibilityId = 1
 export const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1.25
 export const SCRIPT_FONT_SCALE = 0.65
 export const SUPERSCRIPT_BASELINE_SHIFT_RATIO = 0.35
 export const SUBSCRIPT_BASELINE_SHIFT_RATIO = 0.15
+
+/**
+ * 读取内置字体管理器的兼容性签名。
+ *
+ * @param fontManager layout 使用的字体管理器。
+ * @returns 可安全跳过 probe 的稳定签名；自定义管理器返回 undefined。
+ */
+export function readFontManagerCompatibilitySignature(fontManager: FontManager): string | undefined {
+  return FONT_MANAGER_COMPATIBILITY_SIGNATURES.get(fontManager)
+}
 
 /**
  * 创建无 DOM 字体管理器。
@@ -116,6 +129,9 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
   const loadingFontFamilies = new Set<string>()
   const missingFontFamilies = new Set<string>()
   const cache = new Map<string, CachedTextMeasurementMetrics>()
+  const textMeasurerCompatibilitySignature = options.textMeasurer === undefined
+    ? 'approximate-v1'
+    : readTextMeasurerCompatibilitySignature(textMeasurer)
   let hits = 0
   let misses = 0
 
@@ -125,7 +141,19 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
     misses = 0
   }
 
-  return {
+  const updateCompatibilitySignature = (manager: FontManager): void => {
+    FONT_MANAGER_COMPATIBILITY_SIGNATURES.set(
+      manager,
+      createFontManagerCompatibilitySignature({
+        fallbackFontFamily,
+        availableFontFamilies,
+        loadingFontFamilies,
+        textMeasurerCompatibilitySignature
+      })
+    )
+  }
+
+  const manager: FontManager = {
     resolveFont(style: RunTextStyle = {}): ResolvedFontStyle {
       const requestedFontFamily = style.fontFamily
       const baseFontSizePx = normalizeFontSizePx(style)
@@ -208,6 +236,7 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
       missingFontFamilies.delete(fontFamily)
       loadingFontFamilies.add(fontFamily)
       resetCache()
+      updateCompatibilitySignature(this)
     },
     markFontFamilyAvailable(fontFamily: string): void {
       if (fontFamily.length === 0 || availableFontFamilies.has(fontFamily)) {
@@ -218,6 +247,7 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
       missingFontFamilies.delete(fontFamily)
       availableFontFamilies.add(fontFamily)
       resetCache()
+      updateCompatibilitySignature(this)
     },
     getLoadingFontFamilies(): readonly string[] {
       return Object.freeze([...loadingFontFamilies])
@@ -236,6 +266,40 @@ export function createFontManager(options: FontManagerOptions = {}): FontManager
       resetCache()
     }
   }
+
+  updateCompatibilitySignature(manager)
+
+  return manager
+}
+
+/** 为自定义文本测量器分配按对象稳定的兼容性签名。 */
+function readTextMeasurerCompatibilitySignature(textMeasurer: TextMeasurer): string {
+  const existing = TEXT_MEASURER_COMPATIBILITY_SIGNATURES.get(textMeasurer)
+
+  if (existing !== undefined) {
+    return existing
+  }
+
+  const signature = `custom-${nextTextMeasurerCompatibilityId}`
+  nextTextMeasurerCompatibilityId += 1
+  TEXT_MEASURER_COMPATIBILITY_SIGNATURES.set(textMeasurer, signature)
+
+  return signature
+}
+
+/** 创建字体管理器兼容性签名，字体集合排序后保证确定性。 */
+function createFontManagerCompatibilitySignature(input: Readonly<{
+  fallbackFontFamily: string
+  availableFontFamilies: ReadonlySet<string>
+  loadingFontFamilies: ReadonlySet<string>
+  textMeasurerCompatibilitySignature: string
+}>): string {
+  return JSON.stringify({
+    fallbackFontFamily: input.fallbackFontFamily,
+    availableFontFamilies: [...input.availableFontFamilies].sort(),
+    loadingFontFamilies: [...input.loadingFontFamilies].sort(),
+    textMeasurerCompatibilitySignature: input.textMeasurerCompatibilitySignature
+  })
 }
 
 /**

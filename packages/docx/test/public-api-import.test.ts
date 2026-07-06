@@ -169,7 +169,7 @@ describe('@4xian/jword-docx public API import mapping', () => {
           mimeType: 'image/png',
           extension: 'png',
           targetPart: 'word/media/image1.png',
-          bytes: [137, 80, 78, 71]
+          bytes: expect.any(Uint8Array)
         }
       ],
       comments: [
@@ -192,6 +192,8 @@ describe('@4xian/jword-docx public API import mapping', () => {
     expect(Array.isArray(result.document.sections)).toBe(true)
     expect(Array.isArray(result.document.resources)).toBe(true)
     expect(Array.isArray(result.document.comments)).toBe(true)
+    expect(result.document.resources[0]?.bytes).toBeInstanceOf(Uint8Array)
+    expect(Array.from(result.document.resources[0]?.bytes ?? [])).toEqual([137, 80, 78, 71])
     expect(JSON.parse(JSON.stringify(result.document))).toMatchObject({
       kind: 'docx-import-document'
     })
@@ -793,8 +795,9 @@ describe('@4xian/jword-docx public API import mapping', () => {
       mimeType: 'image/png',
       extension: 'png',
       targetPart: 'word/media/image1.png',
-      bytes: [137, 80, 78, 71]
+      bytes: expect.any(Uint8Array)
     })
+    expect(Array.from(result.document.resources[0]?.bytes ?? [])).toEqual([137, 80, 78, 71])
     expect(result.document.sections[0]?.blocks[0]).toMatchObject({
       kind: 'paragraph',
       runs: [

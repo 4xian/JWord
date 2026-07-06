@@ -75,38 +75,86 @@ export function collectSelectionTargets(
     return EMPTY_TARGETS
   }
 
-  const index = createProjectionIndex(projection)
-
   if (isSelectionCollapsed(selection)) {
-    return collectCollapsedTargets(index, selection)
+    return collectCollapsedTargetsFromProjection(projection, selection)
   }
 
+  const index = createProjectionIndex(projection)
   const rangeTargets = collectRangeTargets(index, selection)
 
   return rangeTargets ?? EMPTY_TARGETS
 }
 
-function collectCollapsedTargets(
-  index: ProjectionIndex,
+/** 折叠选区只定位命中的段落和 run，避免为工具栏状态全量索引大文档。 */
+function collectCollapsedTargetsFromProjection(
+  projection: DocumentProjection,
   selection: SelectionState
 ): SelectionTargets {
   const snapshot = readAnchorRefSnapshot(selection.anchor)
-  const paragraph = index.paragraphById.get(String(snapshot.blockId))
-  const matchedRun = index.runById.get(String(snapshot.runId))
-  const run = paragraph !== undefined && matchedRun?.paragraphId === paragraph.paragraph.id
-    ? matchedRun
-    : undefined
+  let paragraphOrder = 0
+  let runOrder = 0
 
-  return Object.freeze({
-    paragraphs: Object.freeze(paragraph === undefined ? [] : [paragraph]),
-    runs: Object.freeze(run === undefined ? [] : [
-      {
-        ...run,
-        selectedStartGraphemeIndex: 0,
-        selectedEndGraphemeIndex: run.graphemeLength
+  for (const section of projection.document.sections) {
+    const targets = visitBlocks(section.blocks)
+
+    if (targets !== undefined) {
+      return targets
+    }
+  }
+
+  return EMPTY_TARGETS
+
+  function visitBlocks(blocks: readonly import('./types').Block[]): SelectionTargets | undefined {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        const firstRunOrder = runOrder
+
+        if (block.id === String(snapshot.blockId)) {
+          const paragraphTarget = createSelectedParagraphTarget(block, paragraphOrder, firstRunOrder)
+          let runTarget: SelectedRunTarget | undefined
+
+          for (const run of block.runs) {
+            if (run.id === String(snapshot.runId)) {
+              const graphemeLength = countGraphemes(readRunText(run))
+
+              runTarget = {
+                run,
+                paragraphId: block.id,
+                order: runOrder,
+                paragraphOrder,
+                graphemeLength,
+                selectedStartGraphemeIndex: 0,
+                selectedEndGraphemeIndex: graphemeLength
+              }
+            }
+
+            runOrder += 1
+          }
+
+          return Object.freeze({
+            paragraphs: Object.freeze([paragraphTarget]),
+            runs: Object.freeze(runTarget === undefined ? [] : [runTarget])
+          })
+        }
+
+        paragraphOrder += 1
+        runOrder += block.runs.length
+        continue
       }
-    ])
-  })
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          const targets = visitBlocks(cell.blocks)
+
+          if (targets !== undefined) {
+            return targets
+          }
+        }
+      }
+    }
+
+    return undefined
+  }
 }
 
 function collectRangeTargets(
@@ -164,32 +212,30 @@ function createProjectionIndex(projection: DocumentProjection): ProjectionIndex 
     for (const block of blocks) {
       if (block.kind === 'paragraph') {
         const firstRunOrder = runOrder
-        const paragraphTarget = {
-          paragraph: block,
-          order: paragraphOrder++,
-          firstRunOrder,
-          lastRunOrder: firstRunOrder,
-          lastRunGraphemeLength: 0
-        }
-
-        paragraphs.push(paragraphTarget)
-        paragraphById.set(block.id, paragraphTarget)
+        const currentParagraphOrder = paragraphOrder++
+        const paragraphRunTargets: SelectedRunTarget[] = []
 
         for (const run of block.runs) {
           const runTarget: SelectedRunTarget = {
             run,
             paragraphId: block.id,
             order: runOrder++,
-            paragraphOrder: paragraphTarget.order,
+            paragraphOrder: currentParagraphOrder,
             graphemeLength: countGraphemes(readRunText(run)),
             selectedStartGraphemeIndex: 0,
             selectedEndGraphemeIndex: 0
           }
 
+          paragraphRunTargets.push(runTarget)
+        }
+
+        const paragraphTarget = createSelectedParagraphTarget(block, currentParagraphOrder, firstRunOrder)
+
+        paragraphs.push(paragraphTarget)
+        paragraphById.set(block.id, paragraphTarget)
+        for (const runTarget of paragraphRunTargets) {
           runs.push(runTarget)
-          runById.set(run.id, runTarget)
-          paragraphTarget.lastRunOrder = runTarget.order
-          paragraphTarget.lastRunGraphemeLength = runTarget.graphemeLength
+          runById.set(runTarget.run.id, runTarget)
         }
 
         continue
@@ -310,6 +356,23 @@ function comparePositions(left: ComparablePosition, right: ComparablePosition): 
   }
 
   return left.graphemeIndex - right.graphemeIndex
+}
+
+/** 创建不可变段落目标，避免发布后再修改 readonly 字段。 */
+function createSelectedParagraphTarget(
+  paragraph: Paragraph,
+  order: number,
+  firstRunOrder: number
+): SelectedParagraphTarget {
+  const lastRun = paragraph.runs[paragraph.runs.length - 1]
+
+  return {
+    paragraph,
+    order,
+    firstRunOrder,
+    lastRunOrder: lastRun === undefined ? firstRunOrder : firstRunOrder + paragraph.runs.length - 1,
+    lastRunGraphemeLength: lastRun === undefined ? 0 : countGraphemes(readRunText(lastRun))
+  }
 }
 
 function readRunText(run: Run): string {

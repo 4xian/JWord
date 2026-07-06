@@ -9,7 +9,8 @@ import {
   buildAddRevisionMetadataCommand,
   buildInsertLinkCommand,
   createEditor,
-  createSelectionState
+  createSelectionState,
+  type PluginDefinition
 } from '@4xian/jword-core'
 import { createJWordUi } from '@4xian/jword-ui'
 
@@ -33,10 +34,12 @@ const assistiveMirrorHost = requireElement<HTMLElement>(
   'JWord vanilla demo requires #jword-assistive-mirror.'
 )
 const readonlyMode = new URLSearchParams(window.location.search).get('readonly') === 'true'
+const demoPluginDefinitions = createDemoPluginDefinitions()
 
 const initialDemoText = await loadInitialDemoText()
 const editor = createEditor({
   initialText: initialDemoText,
+  plugins: demoPluginDefinitions,
   currentUser: {
     id: 'demo-user',
     displayName: 'Demo User',
@@ -126,6 +129,7 @@ const nativePersistence = createNativeDemoPersistence({
 
 window.__jwordDemo = Object.freeze({
   readonly: readonlyMode,
+  destroy: destroyDemo,
   editor,
   selectTextRange: demoControls.selectTextRange,
   selectImageByResourceId: (resourceId: string) => {
@@ -223,17 +227,49 @@ if (!readonlyMode) {
 
 window.addEventListener(
   'beforeunload',
-  () => {
-    // demoControls.destroy()
-    nativePersistence.destroy()
-    demoMedia.destroy()
-    demoTable.destroy()
-    jwordUi.destroy()
-    delete window.__jwordDemo
-    editor.destroy()
-  },
+  destroyDemo,
   { once: true }
 )
+
+let demoDestroyed = false
+
+/** 销毁 vanilla demo 持有的 editor、UI 和 demo-only 资源，供页面卸载与内存门禁复用。 */
+function destroyDemo(): void {
+  if (demoDestroyed) {
+    return
+  }
+
+  demoDestroyed = true
+  demoControls.destroy()
+  nativePersistence.destroy()
+  demoMedia.destroy()
+  demoTable.destroy()
+  jwordUi.destroy()
+  delete window.__jwordDemo
+  editor.destroy()
+}
+
+/** 创建 demo-only 插件测试钩子，默认不启用且不影响普通示例。 */
+function createDemoPluginDefinitions(): readonly PluginDefinition[] {
+  const params = new URLSearchParams(window.location.search)
+
+  if (params.get('pluginError') !== 'throwing-command') {
+    return []
+  }
+
+  return [{
+    name: 'demo.throwingPlugin',
+    version: '0.0.0-test',
+    setup(context) {
+      context.registerCommand({
+        name: 'demo.throwingPlugin.throw',
+        execute() {
+          throw new Error('demo plugin command failed')
+        }
+      })
+    }
+  }]
+}
 
 /**
  * 职责：按宿主选择器读取必需节点，避免入口逻辑反复写空值分支。

@@ -21,6 +21,7 @@ import {
   getSectionBlocks
 } from '../../src/model/document-store'
 import type { BlockId, DocumentId, RunId, SectionId } from '../../src/model/position'
+import type { Paragraph } from '../../src/model/types'
 import { createTransactionPipeline } from '../../src/operations/transaction'
 import type { Operation, TextPosition } from '../../src/operations/transaction'
 
@@ -123,6 +124,100 @@ describe('createTransactionPipeline', () => {
     expect(result.projection.document.sections[0]?.blocks[0]?.kind).toBe('paragraph')
     expect(observedEvents).toEqual([['local-user', true]])
     expect(observedOrigins).toContain('local-user')
+  })
+
+  it('输入事务只重建变更段落的 projection 快照', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-1' as SectionId)
+    const firstParagraph = createParagraphRecord('paragraph-1' as BlockId)
+    const secondParagraph = createParagraphRecord('paragraph-2' as BlockId)
+    const thirdParagraph = createParagraphRecord('paragraph-3' as BlockId)
+    const firstRun = createRunRecord('run-1' as RunId, '第一段')
+    const secondRun = createRunRecord('run-2' as RunId, '第二段')
+    const thirdRun = createRunRecord('run-3' as RunId, '第三段')
+    const pipeline = createTransactionPipeline(store.doc)
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-incremental' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([firstParagraph, secondParagraph, thirdParagraph])
+    getParagraphRuns(firstParagraph).push([firstRun])
+    getParagraphRuns(secondParagraph).push([secondRun])
+    getParagraphRuns(thirdParagraph).push([thirdRun])
+
+    const baseline = pipeline.run(
+      {
+        name: 'seedProjection',
+        operations: []
+      },
+      { origin: 'local-user' }
+    ).projection
+
+    const result = pipeline.run(
+      {
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: {
+              sectionId: 'section-1',
+              blockId: 'paragraph-2',
+              runId: 'run-2',
+              graphemeIndex: 3
+            },
+            text: '更新'
+          }
+        ]
+      },
+      { origin: 'local-user' }
+    )
+
+    const previousSection = baseline.document.sections[0]
+    const nextSection = result.projection.document.sections[0]
+    const previousBlocks = previousSection?.blocks ?? []
+    const nextBlocks = nextSection?.blocks ?? []
+    const nextSecondParagraph = nextBlocks[1] as Paragraph | undefined
+
+    expect(nextSection).not.toBe(previousSection)
+    expect(nextBlocks[0]).toBe(previousBlocks[0])
+    expect(nextBlocks[1]).not.toBe(previousBlocks[1])
+    expect(nextBlocks[2]).toBe(previousBlocks[2])
+    expect(nextSecondParagraph?.runs[0]?.inlines).toEqual([
+      {
+        kind: 'text',
+        text: '第二段更新'
+      }
+    ])
+  })
+
+  it('默认本地事务不编码 update byte length 诊断', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-1' as SectionId)
+    const paragraph = createParagraphRecord('paragraph-1' as BlockId)
+    const run = createRunRecord('run-1' as RunId, '诊断')
+    const pipeline = createTransactionPipeline(store.doc)
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-diagnostic' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([paragraph])
+    getParagraphRuns(paragraph).push([run])
+
+    const result = pipeline.run(
+      {
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: createTestPosition(2),
+            text: '跳过'
+          }
+        ]
+      },
+      { origin: 'local-user' }
+    )
+
+    expect(getRunText(run).toString()).toBe('诊断跳过')
+    expect(result.dirty).toBe(true)
+    expect(result.diagnostic.updateByteLength).toBe(0)
   })
 
   it('rejects blank origin before running a transaction', () => {

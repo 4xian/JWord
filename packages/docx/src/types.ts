@@ -258,7 +258,7 @@ export interface DocxImportResource {
   readonly mimeType: string
   readonly extension: string
   readonly targetPart: string
-  readonly bytes: readonly number[]
+  readonly bytes: Uint8Array
 }
 
 export interface DocxImportComment {
@@ -275,6 +275,7 @@ export interface ImportDocxOptions {
   readonly license?: JWordLicenseEntitlement | null
 }
 
+/** DOCX 导入结果，包含中间文档模型、warning 和稳定 diagnostics。 */
 export interface ImportDocxResult {
   readonly document: DocxImportDocument
   readonly warnings: readonly DocxWarning[]
@@ -288,6 +289,7 @@ export interface ExportDocxOptions {
   readonly license?: JWordLicenseEntitlement | null
 }
 
+/** DOCX 导出结果，包含二进制 package、warning 和稳定 diagnostics。 */
 export interface ExportDocxResult {
   readonly bytes: ArrayBuffer
   readonly warnings: readonly DocxWarning[]
@@ -402,7 +404,7 @@ export interface DocxMediaItem {
   readonly targetPart: string
   readonly mimeType: string
   readonly extension: string
-  readonly bytes: readonly number[]
+  readonly bytes: Uint8Array
 }
 
 export interface DocxCommentsIndex {

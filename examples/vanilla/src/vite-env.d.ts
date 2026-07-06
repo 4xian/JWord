@@ -53,6 +53,7 @@ declare global {
   interface Window {
     __jwordDemo?: Readonly<{
       readonly readonly: boolean
+      readonly destroy: () => void
       readonly editor: Editor
       readonly selectTextRange: (input: JWordDemoSelectionInput) => SelectionState
       readonly selectImageByResourceId: (resourceId: string) => void

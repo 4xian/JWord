@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["./gate7-public-api-entrypoints.ts", "./gate7-public-api-examples.ts", "./gate7-free-quickstart.ts"]
+}

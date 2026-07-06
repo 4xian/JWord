@@ -270,6 +270,15 @@ describe('Editor mount/destroy lifecycle', () => {
     const calls: string[] = []
     const originalUserAgent = window.navigator.userAgent
     const originalGetContext = HTMLCanvasElement.prototype.getContext
+    const originalRequestAnimationFrame = window.requestAnimationFrame
+    const originalCancelAnimationFrame = window.cancelAnimationFrame
+    const frameCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+
+      return frameCallbacks.length
+    })
+    const cancelAnimationFrame = vi.fn()
     const context = {
       set fillStyle(value: string) {
         calls.push(`fillStyle:${value}`)
@@ -306,6 +315,16 @@ describe('Editor mount/destroy lifecycle', () => {
       configurable: true,
       value: getContext
     })
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: requestAnimationFrame
+    })
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: cancelAnimationFrame
+    })
 
     try {
       editor.mount(host)
@@ -339,8 +358,10 @@ describe('Editor mount/destroy lifecycle', () => {
       expect(canvasContainer?.getAttribute('data-jword-layout-deferred-chunks')).not.toBe('')
       expect(canvasContainer?.getAttribute('data-jword-layout-rerender-pages')).toBe('0')
       expect(immediateClears).toHaveLength(1)
+      expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
+      expect(frameCallbacks).toHaveLength(1)
 
-      vi.runOnlyPendingTimers()
+      frameCallbacks.shift()?.(0)
 
       const totalClears = calls.filter((call) => call.startsWith('clearRect:'))
 
@@ -356,6 +377,16 @@ describe('Editor mount/destroy lifecycle', () => {
       Object.defineProperty(window.navigator, 'userAgent', {
         configurable: true,
         value: originalUserAgent
+      })
+      Object.defineProperty(window, 'requestAnimationFrame', {
+        configurable: true,
+        writable: true,
+        value: originalRequestAnimationFrame
+      })
+      Object.defineProperty(window, 'cancelAnimationFrame', {
+        configurable: true,
+        writable: true,
+        value: originalCancelAnimationFrame
       })
     }
   })

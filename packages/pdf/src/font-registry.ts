@@ -313,21 +313,28 @@ async function readPdfFontBytes(source: PdfFontSource): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer())
 }
 
-/** 建立字体覆盖检测对象，字体集合只使用第一张具体字体。 */
+/** 建立字体覆盖检测对象，TTC 字体集合按所有子字体合并覆盖范围。 */
 function readPdfFontCoverage(fontkitModule: PdfFontkitModule, bytes: Uint8Array): PdfFontkitFont {
   const font = fontkitModule.create(bytes)
 
   if (isPdfFontkitCollection(font)) {
-    const firstFont = font.fonts[0]
-
-    if (firstFont === undefined) {
+    if (font.fonts.length === 0) {
       throw new Error('PDF_FONT_MISSING')
     }
 
-    return firstFont
+    return createPdfFontCollectionCoverage(font.fonts)
   }
 
   return font
+}
+
+/** 创建覆盖所有 TTC 子字体的轻量检测对象。 */
+function createPdfFontCollectionCoverage(fonts: readonly PdfFontkitFont[]): PdfFontkitFont {
+  return {
+    hasGlyphForCodePoint(codePoint) {
+      return fonts.some((font) => font.hasGlyphForCodePoint(codePoint))
+    }
+  }
 }
 
 /** 判断 fontkit 结果是否是字体集合。 */

@@ -64,6 +64,8 @@ Expose `/health` for health check and route `/version`, `/history/versions` and 
 
 Protected HTTP routes use default-deny semantics. If `authHook` is omitted, `/license/status`, `/history/versions`, `/history/preview` and `/auto-insert/relay` return `401` with `JWORD_COLLAB_AUTH_HOOK_REQUIRED` before reading request bodies. If `licenseHook` is omitted, paid feature checks return `403` with `JWORD_COLLAB_LICENSE_HOOK_REQUIRED`. Local demos and tests that intentionally allow access must pass explicit allow hooks. When `rateLimit` is configured, protected HTTP business routes use a per-client sliding window and overflow returns `429` with `JWORD_COLLAB_SERVER_RATE_LIMITED` and `retryAfterMs`; `/health` and `/version` remain public readiness endpoints.
 
+Formal Hocuspocus WebSocket connections use tenant-scoped document names and per-user `read` / `comment` / `write` roles from `authHook`. Only `write` can submit Yjs updates; `read` and `comment` are rejected in `beforeSync` with `COLLAB_PERMISSION_DENIED`. The `comment` role is reserved for post-1.0 comment-specific enforcement because comments are still Yjs updates at the server boundary. Client-side `readonly` only hides UI editing affordances and is not a security boundary.
+
 ## History And License
 
 `historyStorage` is supplied by the host so production deployments can use their own database. The service checks `authHook` and then `licenseHook` before reading or writing history storage; client-side license checks are only UX hints. History operations for the same document are serialized with a bounded lock queue. Hosts can set `maxHistoryDocumentLockQueueDepth` to tune backpressure; overflow returns HTTP 429 with `JWORD_COLLAB_HISTORY_LOCK_QUEUE_EXCEEDED`.

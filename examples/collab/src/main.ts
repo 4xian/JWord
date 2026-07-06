@@ -311,20 +311,77 @@ function renderRemotePresence(awarenessState: ReturnType<CollabDemoRuntime['read
 
     item.className = 'jw-collab-demo__presence-item'
     item.title = user.name
+    item.setAttribute('role', 'listitem')
     cursor.className = 'jw-collab-demo__presence-cursor'
     cursor.dataset.jwordRemoteCursor = user.clientId
     cursor.style.borderColor = user.color
     cursor.style.transform = `translateX(${user.cursorOffsetPx}px)`
     cursor.title = user.cursorLabel
+    cursor.setAttribute('aria-label', user.cursorLabel)
     cursor.textContent = user.cursorLabel
     selection.className = 'jw-collab-demo__presence-selection'
     selection.dataset.jwordRemoteSelection = user.clientId
     selection.style.backgroundColor = user.color
+    selection.style.color = resolveReadableTextColor(user.color)
     selection.title = user.name
+    selection.setAttribute('aria-label', `${user.name} 远端选区 ${selectionText}`)
     selection.textContent = `${user.name} selection ${selectionText}`
     item.append(cursor, selection)
     return item
   }))
+}
+
+/** 按背景色选择黑/白文字，保证远端选区标签尽量满足 WCAG AA。 */
+function resolveReadableTextColor(backgroundColor: string): string {
+  const background = parseHexColor(backgroundColor)
+
+  if (background === null) {
+    return '#ffffff'
+  }
+
+  const whiteContrast = calculateContrastRatio([255, 255, 255], background)
+  const blackContrast = calculateContrastRatio([0, 0, 0], background)
+
+  return blackContrast > whiteContrast ? '#000000' : '#ffffff'
+}
+
+/** 解析 demo 当前使用的十六进制色值。 */
+function parseHexColor(color: string): readonly [number, number, number] | null {
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return null
+  }
+
+  return [
+    Number.parseInt(color.slice(1, 3), 16),
+    Number.parseInt(color.slice(3, 5), 16),
+    Number.parseInt(color.slice(5, 7), 16)
+  ]
+}
+
+/** 计算两个 sRGB 颜色之间的 WCAG 对比度。 */
+function calculateContrastRatio(
+  foreground: readonly [number, number, number],
+  background: readonly [number, number, number]
+): number {
+  const foregroundLuminance = calculateRelativeLuminance(foreground)
+  const backgroundLuminance = calculateRelativeLuminance(background)
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance)
+  const darker = Math.min(foregroundLuminance, backgroundLuminance)
+
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/** 计算 WCAG 相对亮度。 */
+function calculateRelativeLuminance(color: readonly [number, number, number]): number {
+  const [red, green, blue] = color.map((channel) => {
+    const value = channel / 255
+
+    return value <= 0.03928
+      ? value / 12.92
+      : ((value + 0.055) / 1.055) ** 2.4
+  }) as [number, number, number]
+
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722
 }
 
 /** 安排 typing 过期后的轻量重绘，避免 presence label 长时间停留。 */

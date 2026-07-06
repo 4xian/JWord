@@ -18,15 +18,7 @@ const coreRoots = [
   'packages/core/test'
 ] as const
 const maxLinesPerFile = 1000
-const legacyCoreFileLineBudgets = {
-  'packages/core/src/editor/text-editing-runtime.ts': 1652,
-  'packages/core/src/model/document-store.ts': 1155,
-  'packages/core/src/operations/command-builders.ts': 1703,
-  'packages/core/src/operations/operation-adapter.ts': 1551,
-  'packages/core/test/editor/facade-runtime.test.ts': 1148,
-  'packages/core/test/editor/input-runtime.test.ts': 2214,
-  'packages/core/test/layout/runtime.test.ts': 1904
-} as const
+const legacyCoreFileLineBudgets = {} as const
 
 describe('Gate 0 core file budget', () => {
   it('keeps core source and focused tests below the per-file line budget', () => {

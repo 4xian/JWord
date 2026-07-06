@@ -7,6 +7,7 @@
  */
 import type { Document } from '@4xian/jword-core'
 
+/** 当前 `.jword` package manifest 的公开格式版本。 */
 export const JWORD_NATIVE_FORMAT_VERSION = 1
 export const JWORD_NATIVE_SCHEMA_VERSION = 1
 export const JWORD_NATIVE_CREATED_BY = '@4xian/jword-native'
@@ -41,6 +42,7 @@ export type JWordPackageErrorCode =
   | 'JWORD_NATIVE_PACKAGE_INVALID'
   | 'JWORD_NATIVE_USER_CANCELLED'
   | 'JWORD_NATIVE_WORKER_CANCELLED'
+  | 'JWORD_NATIVE_WORKER_UNAVAILABLE'
   | 'JWORD_NATIVE_WORKER_ERROR'
 
 export type JWordPackageDiagnosticCode = JWordPackageWarningCode | JWordPackageErrorCode
@@ -132,6 +134,7 @@ export interface ValidateJWordPackageOptions {
   readonly onProgress?: (event: JWordNativeProgressEvent) => void
 }
 
+/** 保存 `.jword` package 后返回的二进制、manifest、checksum 和诊断摘要。 */
 export interface SaveJWordDocumentResult {
   readonly bytes: Uint8Array
   readonly blob: Blob
@@ -143,6 +146,7 @@ export interface SaveJWordDocumentResult {
   readonly resources: readonly JWordPackageResourceSummary[]
 }
 
+/** 加载 `.jword` package 后返回的 canonical 文档、metadata、迁移报告和诊断摘要。 */
 export interface LoadJWordDocumentResult {
   readonly document: Document
   readonly metadata: JWordPackageMetadata

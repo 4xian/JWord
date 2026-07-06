@@ -47,6 +47,7 @@ export type {
   JWordSerializedUpdateLogRecord
 } from './storage-history-adapter.js'
 
+/** persistence 与版本历史公开诊断载荷。 */
 export interface JWordPersistenceDiagnostic {
   readonly code: JWordPersistenceDiagnosticCode
   readonly severity: JWordPersistenceDiagnosticSeverity
@@ -102,6 +103,7 @@ export interface JWordSnapshotRecord {
   readonly documentSummary: JWordSnapshotDocumentSummary
 }
 
+/** 对外展示的版本历史记录元数据，不携带完整 update 内容。 */
 export interface JWordVersionRecord {
   readonly versionId: string
   readonly documentId: string
@@ -199,6 +201,7 @@ export interface CompactJWordVersionResult {
   readonly diagnostics: readonly JWordPersistenceDiagnostic[]
 }
 
+/** 宿主侧版本历史、预览、恢复和压缩的公开 adapter contract。 */
 export interface JWordPersistenceSnapshotAdapter {
   /** 追加一条 Yjs update 并生成版本记录。 */
   appendUpdate(input: AppendJWordUpdateInput): Promise<AppendJWordUpdateResult>

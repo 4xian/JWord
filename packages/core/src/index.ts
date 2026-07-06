@@ -38,6 +38,13 @@ export type {
   EditorRangeSnapshotInput,
   EditorResolvedLocation,
   EditorScrollToLocationOptions,
+  JWordDiagnosticsPluginEntry,
+  JWordDiagnosticsPrivacySummary,
+  JWordDiagnosticsSnapshot,
+  JWordPluginDiagnosticTelemetryEvent,
+  JWordTelemetryEvent,
+  JWordTelemetryOptions,
+  JWordTelemetrySink,
   EditorApplyUpdateOptions,
   EditorRichTextFragment,
   EditorRichTextParagraph,
@@ -49,7 +56,34 @@ export type {
   EditorUser,
   EditorUserInput,
   HistoryScope,
-  InitialFocusPosition
+  InitialFocusPosition,
+  PluginCommandContext,
+  PluginCommandDefinition,
+  PluginCommandMiddleware,
+  PluginCommandMiddlewareInput,
+  PluginCommandNext,
+  PluginContext,
+  PluginDecoration,
+  PluginDecorationReadInput,
+  PluginDecorationReadReason,
+  PluginDefinition,
+  PluginDiagnostic,
+  PluginDiagnosticCode,
+  PluginDiagnosticInput,
+  PluginDiagnosticsReporter,
+  PluginDisposable,
+  PluginPageOverlayDecoration,
+  PluginResolvedDecoration,
+  PluginResolvedPageOverlayDecoration,
+  PluginResolvedTextHighlightDecoration,
+  PluginTextHighlightDecoration,
+  ExperimentalDecorationProvider,
+  PluginKeyBindingContext,
+  PluginKeyBindingDefinition,
+  PluginKeyBindingPredicate,
+  PluginLifecycleEventMap,
+  PluginLifecycleEventName,
+  PluginLifecycleListener
 } from './editor/runtime'
 export { createEditor } from './editor/runtime'
 export { createTextInserter } from './collaboration/inserter'
@@ -78,6 +112,7 @@ export type {
 } from './editor/collaboration-document'
 export { JWordError } from './shared/errors'
 export type { JWordErrorCode, JWordErrorDetails } from './shared/errors'
+export { countGraphemes, splitGraphemes } from './shared/grapheme'
 export {
   buildDeleteResourceCommand,
   buildDeleteSelectedImageCommand,

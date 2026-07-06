@@ -22,6 +22,7 @@ import type {
   DocxWarning,
   ImportDocxOptions
 } from './index.js'
+import { readNumberProperty, readStringProperty } from './export-utils.js'
 import { convertDocxImportDocumentToCoreDocument } from './model.js'
 
 export interface DocxRoundtripDiffOptions extends ImportDocxOptions {}
@@ -61,10 +62,25 @@ export interface DocxRoundtripParagraphSnapshot {
   readonly text: string
   readonly styleId?: string
   readonly properties?: Readonly<Record<string, unknown>>
+  readonly tabs?: readonly number[]
   readonly listNumberingId?: string
   readonly listLevel?: number
   readonly runProperties: readonly Readonly<Record<string, unknown>>[]
+  readonly runLinks: readonly DocxRoundtripRunLinkSnapshot[]
+  readonly bookmarks: readonly DocxRoundtripBookmarkSnapshot[]
   readonly images: readonly DocxRoundtripImageSnapshot[]
+}
+
+export interface DocxRoundtripRunLinkSnapshot {
+  readonly text: string
+  readonly target: string
+  readonly tooltip?: string
+}
+
+export interface DocxRoundtripBookmarkSnapshot {
+  readonly id: string
+  readonly name: string
+  readonly edge: 'start' | 'end'
 }
 
 export interface DocxRoundtripImageSnapshot {
@@ -170,9 +186,12 @@ function createImportParagraphSnapshot(paragraph: DocxImportParagraph): DocxRoun
     text: paragraph.runs.map(readRunText).join(''),
     ...(paragraph.styleId === undefined ? {} : { styleId: paragraph.styleId }),
     ...(paragraph.properties === undefined ? {} : { properties: paragraph.properties }),
+    ...(paragraph.tabs === undefined ? {} : { tabs: paragraph.tabs }),
     ...(listNumberingId === undefined ? {} : { listNumberingId }),
     ...(listLevel === undefined ? {} : { listLevel }),
     runProperties: paragraph.runs.map((run) => run.properties ?? {}),
+    runLinks: paragraph.runs.flatMap(readRunLinkSnapshot),
+    bookmarks: paragraph.runs.flatMap((run) => run.inlines.flatMap(readBookmarkSnapshot)),
     images: paragraph.runs.flatMap((run) => run.inlines.flatMap(readImageSnapshot))
   }
 }
@@ -203,6 +222,32 @@ function readRunText(run: DocxImportRun): string {
 
     return ''
   }).join('')
+}
+
+/** 读取 run hyperlink snapshot。 */
+function readRunLinkSnapshot(run: DocxImportRun): readonly DocxRoundtripRunLinkSnapshot[] {
+  if (run.link === undefined) {
+    return []
+  }
+
+  return [{
+    text: readRunText(run),
+    target: run.link.target,
+    ...(run.link.tooltip === undefined ? {} : { tooltip: run.link.tooltip })
+  }]
+}
+
+/** 读取 bookmark snapshot。 */
+function readBookmarkSnapshot(inline: DocxImportInline): readonly DocxRoundtripBookmarkSnapshot[] {
+  if (inline.kind !== 'bookmark') {
+    return []
+  }
+
+  return [{
+    id: inline.id,
+    name: inline.name,
+    edge: inline.edge
+  }]
 }
 
 /** 读取图片 snapshot。 */
@@ -270,20 +315,6 @@ function diffRecord(
   }
 
   return differences
-}
-
-/** 读取字符串属性。 */
-function readStringProperty(properties: Readonly<Record<string, unknown>> | undefined, key: string): string | undefined {
-  const value = properties?.[key]
-
-  return typeof value === 'string' ? value : undefined
-}
-
-/** 读取数字属性。 */
-function readNumberProperty(properties: Readonly<Record<string, unknown>> | undefined, key: string): number | undefined {
-  const value = properties?.[key]
-
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 /** 判断值是否为对象记录。 */

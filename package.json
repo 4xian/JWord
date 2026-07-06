@@ -21,7 +21,8 @@
     "build": "rollup -c && node tools/release/normalize-dist-relative-imports.mjs",
     "dev": "node tools/dev/run-dev.mjs",
     "bench": "node tools/bench/run-bench.mjs",
-    "size": "pnpm build && pnpm --filter @4xian/jword-example-vanilla build && node tools/size/check-size.mjs"
+    "size": "pnpm build && pnpm --filter @4xian/jword-example-vanilla build && node tools/size/check-size.mjs",
+    "test:types": "tsc -p tests/types/tsconfig.gate7-public-api.json --noEmit"
   },
   "devDependencies": {
     "@commitlint/cli": "21.0.0",
@@ -34,6 +35,7 @@
     "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "25.6.2",
     "@xarsh/ooxml-validator": "0.3.0",
+    "axe-core": "4.12.1",
     "eslint": "10.3.0",
     "globals": "17.6.0",
     "husky": "9.1.7",

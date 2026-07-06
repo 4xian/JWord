@@ -5,33 +5,13 @@
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
  * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
  */
-import {
-  buildSetBackgroundColorCommand,
-  buildSetBoldCommand,
-  buildSetFontFamilyCommand,
-  buildSetFontSizeCommand,
-  buildSetItalicCommand,
-  buildSetParagraphAlignmentCommand,
-  buildSetParagraphIndentCommand,
-  buildSetParagraphFirstLineIndentCommand,
-  buildSetParagraphHangingIndentCommand,
-  buildSetParagraphLineHeightCommand,
-  buildSetParagraphListCommand,
-  buildSetParagraphSpacingAfterCommand,
-  buildSetParagraphSpacingBeforeCommand,
-  buildSetParagraphStyleCommand,
-  buildSetSubscriptCommand,
-  buildSetSuperscriptCommand,
-  buildSetStrikeCommand,
-  buildSetTextColorCommand,
-  buildSetUnderlineCommand
-} from '../operations/command-builders'
+import * as Y from 'yjs'
 import { createDocumentProjection } from '../model/projection'
-import { countGraphemes } from '../shared/grapheme'
+import { countGraphemes, utf16IndexToGraphemeIndex } from '../shared/grapheme'
 import { createJWordError } from '../shared/errors'
 import { createSelectionFormattingState } from '../model/formatting-state'
-import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
-import type { Block, ParagraphList, Run } from '../model/types'
+import type { SelectionFormattingState } from '../model/formatting-types'
+import type { Block, Run } from '../model/types'
 import { DEFAULT_HISTORY_ORIGIN, readHistoryScopeTransactionOrigin } from '../operations/history'
 import type { HistoryOperationResult, HistoryScope } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
@@ -41,16 +21,17 @@ import { createAnchorRef, createGraphemeIndex, createTextAnchorRef, createTextRa
 import type { AnchorRef, BlockId, RangeRef, RunId, SectionId, TextRangeRecord } from '../model/position'
 import type { DocumentProjection } from '../model/projection'
 import { createSelectionRestoreSnapshot, createSelectionState, isSelectionCollapsed, restoreSelection } from '../model/selection'
-import type { SelectionState } from '../model/selection'
-import { collectSelectionTargets } from '../model/selection-targets'
+import type { SelectionRestoreSnapshot, SelectionState } from '../model/selection'
 import type { Command, TextPosition, TransactionMetadata, TransactionResult } from '../operations/transaction'
 import { DOCUMENT_CREATE_ORIGIN, DOCUMENT_MODEL_LOAD_ORIGIN, FIXTURE_LOAD_ORIGIN } from './constants'
 import { findRunText, locateCommentThreadRange, readCurrentDocumentId, replaceStoreDocument, replaceStoreDocumentModel, restoreTextRangeRecord } from './document'
-import { JWordEditorState } from './state'
+import { JWordEditorFormattingFacadeRuntime } from './formatting-facade-runtime'
 import { resolveCommandDirtyRange } from './rendering'
 import type { EditorCommandOptions, EditorDocumentInput, EditorDocumentModelInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
+import type { PluginDiagnostic } from '../plugins/types'
+import type { JWordDiagnosticsSnapshot } from './observability'
 
-export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
+export abstract class JWordEditorFacadeRuntime extends JWordEditorFormattingFacadeRuntime {
   /** 粘贴已清洗的富文本片段，具体 command 生成由输入运行时实现。 */
   abstract pasteRichTextFragment(fragment: EditorRichTextFragment): boolean
 
@@ -242,258 +223,17 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
     })
   }
 
-  toggleBold(): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetBoldCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.bold.value !== true
-    ))
-  }
-
-  toggleItalic(): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetItalicCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.italic.value !== true
-    ))
-  }
-
-  toggleUnderline(): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetUnderlineCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.underline.value !== true
-    ))
-  }
-
-  toggleStrike(): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetStrikeCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.strike.value !== true
-    ))
-  }
-
-  /**
-   * 切换当前选择区的上标状态。
-   */
-  toggleSuperscript(): void {
-    this.assertActive()
-    if (this.currentSelection !== null && isSelectionCollapsed(this.currentSelection)) {
-      this.toggleCollapsedScriptFormatting('superscript')
-      return
-    }
-
-    this.executeFacadeFormattingCommand(buildSetSuperscriptCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.superscript.value !== true
-    ))
-  }
-
-  /**
-   * 切换当前选择区的下标状态。
-   */
-  toggleSubscript(): void {
-    this.assertActive()
-    if (this.currentSelection !== null && isSelectionCollapsed(this.currentSelection)) {
-      this.toggleCollapsedScriptFormatting('subscript')
-      return
-    }
-
-    this.executeFacadeFormattingCommand(buildSetSubscriptCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.subscript.value !== true
-    ))
-  }
-
-  setFontFamily(value: string): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetFontFamilyCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  setFontSize(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetFontSizeCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  setTextColor(value: string): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetTextColorCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  setBackgroundColor(value: string): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetBackgroundColorCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  setParagraphAlignment(value: ParagraphAlignment): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphAlignmentCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的左缩进。
-   */
-  setParagraphIndent(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphIndentCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的行距。
-   */
-  setParagraphLineHeight(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphLineHeightCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的段前距。
-   */
-  setParagraphSpacingBefore(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphSpacingBeforeCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的段后距。
-   */
-  setParagraphSpacingAfter(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphSpacingAfterCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的首行缩进。
-   */
-  setParagraphFirstLineIndent(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphFirstLineIndentCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的悬挂缩进。
-   */
-  setParagraphHangingIndent(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphHangingIndentCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的稳定样式语义。
-   */
-  setParagraphStyle(value: string): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphStyleCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的稳定列表语义。
-   */
-  setParagraphList(value: ParagraphList | null): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphListCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  adjustParagraphIndent(deltaTwips: number): void {
-    this.assertActive()
-
-    if (deltaTwips === 0) {
-      return
-    }
-
-    const targets = collectSelectionTargets(this.currentProjection, this.currentSelection)
-
-    if (targets.paragraphs.length === 0) {
-      return
-    }
-
-    const command = {
-      name: 'adjustParagraphIndent',
-      operations: targets.paragraphs.flatMap((target) => {
-        const currentIndent = typeof target.paragraph.properties?.indentLeftTwips === 'number'
-          ? target.paragraph.properties.indentLeftTwips
-          : 0
-        const nextIndent = currentIndent + deltaTwips
-
-        return currentIndent === nextIndent
-          ? []
-          : [{
-              kind: 'setParagraphProperties' as const,
-              paragraphId: target.paragraph.id,
-              properties: { indentLeftTwips: nextIndent }
-            }]
-      })
-    }
-
-    if (command.operations.length === 0) {
-      return
-    }
-
-    this.executeCommand(command, {
-      selectionAfter: this.currentSelection
-    })
-  }
 
   executeCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
+    this.assertActive()
+
+    return this.pluginHost.runCommandMiddleware({ command, options }, (nextCommand, nextOptions) =>
+      this.executePipelineCommand(nextCommand, nextOptions)
+    )
+  }
+
+  /** 执行已经通过插件中间件的命令。 */
+  protected executePipelineCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
     this.assertActive()
 
     const origin = options.origin ?? DEFAULT_HISTORY_ORIGIN
@@ -556,6 +296,27 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
     }
   }
 
+  /** 执行已注册插件命令。 */
+  executePluginCommand(commandName: string, input?: unknown): TransactionResult | undefined {
+    this.assertActive()
+
+    return this.pluginHost.executePluginCommand(commandName, input)
+  }
+
+  /** 读取插件诊断快照。 */
+  getPluginDiagnostics(): readonly PluginDiagnostic[] {
+    this.assertActive()
+
+    return this.pluginHost.getDiagnostics()
+  }
+
+  /** 导出隐私裁剪后的 diagnostics 快照。 */
+  exportDiagnostics(): JWordDiagnosticsSnapshot {
+    this.assertActive()
+
+    return this.pluginHost.exportDiagnostics()
+  }
+
   undo(scope?: HistoryScope): HistoryOperationResult {
     this.assertActive()
 
@@ -571,7 +332,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
     }
 
     if (result.metadata?.selectionBefore !== undefined) {
-      this.commitSelection(restoreSelection(result.metadata.selectionBefore), {
+      this.commitSelection(this.restoreHistorySelection(result.metadata.selectionBefore), {
         source: 'history',
         render: false,
         emit: false
@@ -579,7 +340,12 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
     }
 
     if (result.stackItem !== null) {
-      this.renderMountedLayout('document')
+      this.cancelDeferredDocumentRender()
+      if (this.shouldRenderMountedDocumentImmediately('undo')) {
+        this.renderMountedLayout('document')
+      } else {
+        this.scheduleDeferredDocumentRender()
+      }
     }
     this.emitSelectionChange()
 
@@ -601,7 +367,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
     }
 
     if (result.metadata?.selectionAfter !== undefined) {
-      this.commitSelection(restoreSelection(result.metadata.selectionAfter), {
+      this.commitSelection(this.restoreHistorySelection(result.metadata.selectionAfter), {
         source: 'history',
         render: false,
         emit: false
@@ -609,7 +375,12 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
     }
 
     if (result.stackItem !== null) {
-      this.renderMountedLayout('document')
+      this.cancelDeferredDocumentRender()
+      if (this.shouldRenderMountedDocumentImmediately('redo')) {
+        this.renderMountedLayout('document')
+      } else {
+        this.scheduleDeferredDocumentRender()
+      }
     }
     this.emitSelectionChange()
 
@@ -835,6 +606,192 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState {
   /** 判断 run 是否可承载文本光标。 */
   protected isFocusableRun(run: Run): boolean {
     return run.inlines.some((inline) => inline.kind === 'text')
+  }
+
+  /** 恢复历史选择区，并在锚点已失效时回退到当前文档开头。 */
+  protected restoreHistorySelection(snapshot: SelectionRestoreSnapshot): SelectionState | null {
+    const restoredSelection = restoreSelection(snapshot)
+
+    if (restoredSelection === null) {
+      return null
+    }
+
+    const anchor = this.restoreHistoryAnchor(restoredSelection.anchor)
+    const focus = this.restoreHistoryAnchor(restoredSelection.focus)
+
+    if (anchor !== undefined && focus !== undefined) {
+      if (anchor === restoredSelection.anchor && focus === restoredSelection.focus) {
+        return restoredSelection
+      }
+
+      return createSelectionState(anchor, focus, {
+        direction: restoredSelection.direction,
+        affinity: restoredSelection.affinity
+      })
+    }
+
+    const fallbackAnchor = this.resolveInitialStartFocusAnchor()
+
+    return fallbackAnchor === undefined ? null : createSelectionState(fallbackAnchor, fallbackAnchor)
+  }
+
+  /** 恢复单个历史锚点，优先用 Y.RelativePosition 找回当前 run。 */
+  protected restoreHistoryAnchor(anchor: AnchorRef): AnchorRef | undefined {
+    const snapshot = readAnchorRefSnapshot(anchor)
+    const relativePosition = snapshot.relativePosition
+
+    if (relativePosition !== undefined) {
+      const absolute = Y.createAbsolutePositionFromRelativePosition(relativePosition, this.store.doc)
+
+      if (absolute === null || !(absolute.type instanceof Y.Text)) {
+        return undefined
+      }
+
+      const graphemeIndex = utf16IndexToGraphemeIndex(absolute.type.toString(), absolute.index)
+      const locatedAnchor = this.locateHistoryAnchorByText(absolute.type, graphemeIndex, snapshot.assoc)
+
+      if (locatedAnchor === undefined) {
+        return undefined
+      }
+
+      return this.areHistoryAnchorsAtSameResolvedPosition(anchor, locatedAnchor) ? anchor : locatedAnchor
+    }
+
+    return this.hasTextPositionInCurrentProjection({
+      sectionId: String(snapshot.sectionId),
+      blockId: String(snapshot.blockId),
+      runId: String(snapshot.runId),
+      graphemeIndex: Number(snapshot.graphemeIndex),
+      ...(snapshot.assoc === undefined ? {} : { assoc: snapshot.assoc })
+    }) ? anchor : undefined
+  }
+
+  /** 判断两个历史锚点解析后是否仍指向同一文本位置。 */
+  protected areHistoryAnchorsAtSameResolvedPosition(left: AnchorRef, right: AnchorRef): boolean {
+    const leftPosition = this.tryResolveHistorySelectionPosition(left)
+    const rightPosition = this.tryResolveHistorySelectionPosition(right)
+
+    return leftPosition !== undefined &&
+      rightPosition !== undefined &&
+      leftPosition.sectionId === rightPosition.sectionId &&
+      leftPosition.blockId === rightPosition.blockId &&
+      leftPosition.runId === rightPosition.runId &&
+      leftPosition.graphemeIndex === rightPosition.graphemeIndex
+  }
+
+  /** 根据解析出的 Y.Text 句柄在当前投影中找回可用锚点。 */
+  protected locateHistoryAnchorByText(
+    text: Y.Text,
+    graphemeIndex: number,
+    assoc: number | undefined
+  ): AnchorRef | undefined {
+    for (const section of this.currentProjection.document.sections) {
+      const anchor = this.locateHistoryAnchorByTextInBlocks(section.id, section.blocks, text, graphemeIndex, assoc)
+
+      if (anchor !== undefined) {
+        return anchor
+      }
+    }
+
+    return undefined
+  }
+
+  /** 在 block 树中根据 Y.Text 句柄找回历史锚点。 */
+  protected locateHistoryAnchorByTextInBlocks(
+    sectionId: string,
+    blocks: readonly Block[],
+    text: Y.Text,
+    graphemeIndex: number,
+    assoc: number | undefined
+  ): AnchorRef | undefined {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        for (const run of block.runs) {
+          const runText = findRunText(this.store, {
+            sectionId,
+            blockId: block.id,
+            runId: run.id,
+            graphemeIndex: 0
+          })
+
+          if (runText === text) {
+            return this.createTextAnchor({
+              sectionId,
+              blockId: block.id,
+              runId: run.id,
+              graphemeIndex,
+              ...(assoc === undefined ? {} : { assoc })
+            })
+          }
+        }
+
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          const anchor = this.locateHistoryAnchorByTextInBlocks(sectionId, cell.blocks, text, graphemeIndex, assoc)
+
+          if (anchor !== undefined) {
+            return anchor
+          }
+        }
+      }
+    }
+
+    return undefined
+  }
+
+  /** 判断选择区两端是否仍能解析到当前投影里的文本位置。 */
+  protected isSelectionValidInCurrentProjection(selection: SelectionState): boolean {
+    const anchor = this.tryResolveHistorySelectionPosition(selection.anchor)
+    const focus = this.tryResolveHistorySelectionPosition(selection.focus)
+
+    return anchor !== undefined &&
+      focus !== undefined &&
+      this.hasTextPositionInCurrentProjection(anchor) &&
+      this.hasTextPositionInCurrentProjection(focus)
+  }
+
+  /** 尝试解析历史选择锚点，失败时返回 undefined 供回退逻辑处理。 */
+  protected tryResolveHistorySelectionPosition(anchor: AnchorRef): TextPosition | undefined {
+    try {
+      return this.resolveTextPosition(anchor)
+    } catch {
+      return undefined
+    }
+  }
+
+  /** 判断文本位置是否仍存在于当前文档投影中。 */
+  protected hasTextPositionInCurrentProjection(position: TextPosition): boolean {
+    const section = this.currentProjection.document.sections.find((candidate) => candidate.id === position.sectionId)
+
+    return section === undefined ? false : this.hasTextPositionInBlocks(section.blocks, position)
+  }
+
+  /** 在 block 树中递归查找文本位置。 */
+  protected hasTextPositionInBlocks(blocks: readonly Block[], position: TextPosition): boolean {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        const run = block.id === position.blockId
+          ? block.runs.find((candidate) => candidate.id === position.runId)
+          : undefined
+
+        if (run !== undefined) {
+          return position.graphemeIndex >= 0 && position.graphemeIndex <= countGraphemes(this.readRunText(run))
+        }
+
+        continue
+      }
+
+      if (block.rows.some((row) =>
+        row.cells.some((cell) => this.hasTextPositionInBlocks(cell.blocks, position))
+      )) {
+        return true
+      }
+    }
+
+    return false
   }
 
   /** 读取 run 中所有文本 inline 的纯文本。 */

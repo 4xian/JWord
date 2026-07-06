@@ -332,6 +332,54 @@ describe('@4xian/jword-collab-server', () => {
     }
   }, 15000)
 
+  it('treats comment-only Hocuspocus clients as non-writers until comment updates are server-classifiable', async () => {
+    hocuspocusServer = createJWordCollabHocuspocusServer({
+      port: 0,
+      address: '127.0.0.1',
+      roomPrefix: 'tenant-comment',
+      requiredToken: 'comment-token',
+      authHook: () => ({
+        allow: true,
+        role: 'comment'
+      }),
+      licenseHook: () => ({ ok: true })
+    })
+    const state = await hocuspocusServer.start()
+    const document = new Y.Doc()
+    const adapter = createHocuspocusCollabProviderAdapter({
+      document,
+      documentId: 'doc-comment-only',
+      roomId: 'tenant-comment/doc-comment-only',
+      clientId: 'client-comment',
+      webSocketUrl: state.webSocketUrl,
+      token: 'comment-token'
+    })
+    const updateDoc = new Y.Doc()
+
+    try {
+      await waitForSynced(adapter)
+      updateDoc.getText('content').insert(0, 'comment update is still a yjs write')
+      const errorPromise = waitForProviderError(adapter)
+
+      await adapter.sendUpdate(Y.encodeStateAsUpdate(updateDoc), {
+        documentId: 'doc-comment-only',
+        roomId: 'tenant-comment/doc-comment-only',
+        clientId: 'client-comment',
+        updateId: 'comment-update-1',
+        origin: 'local'
+      })
+
+      await expect(errorPromise).resolves.toMatchObject({
+        code: 'COLLAB_PERMISSION_DENIED',
+        recoverable: true
+      })
+    } finally {
+      await adapter.destroy()
+      document.destroy()
+      updateDoc.destroy()
+    }
+  }, 15000)
+
   it('serves history API through formal package storage and public JSON endpoints', async () => {
     server = createJWordCollabServer({
       port: 0,
@@ -824,4 +872,3 @@ describe('@4xian/jword-collab-server', () => {
     }
   }, 15000)
 })
-

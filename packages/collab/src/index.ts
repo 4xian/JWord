@@ -120,6 +120,7 @@ export interface JWordCollabAwarenessAdapter {
   onChange(listener: JWordAwarenessChangeListener): JWordCollabUnsubscribe
 }
 
+/** JWord 协同 client 接入任意 provider 的公开 adapter contract。 */
 export interface JWordCollabProviderAdapter {
   readonly status: JWordCollabProviderStatus
   readonly error: JWordCollabProviderError | undefined
@@ -128,6 +129,7 @@ export interface JWordCollabProviderAdapter {
   connect(): Promise<void>
   disconnect(): Promise<void>
   destroy(): Promise<void>
+  /** 将外部 Yjs update 写入目标 Y.Doc；调用方必须保证 update 与目标文档匹配。 */
   sendUpdate(update: Uint8Array, metadata: JWordCollabUpdateMetadata): Promise<void>
   onStatus(listener: JWordCollabStatusListener): JWordCollabUnsubscribe
   onStatusChange(listener: JWordCollabStatusListener): JWordCollabUnsubscribe
@@ -280,7 +282,7 @@ export function createJWordCollabFeatureGate(
   }
 }
 
-// 创建一个只在内存中派发协作事件的测试 adapter。
+/** 创建一个只在内存中派发协作事件的轻量 provider adapter。 */
 export function createMemoryCollabProviderAdapter(
   options: CreateMemoryCollabProviderAdapterOptions
 ): JWordCollabProviderAdapter {
@@ -749,4 +751,3 @@ function maybeDowngradeInvalidRangeAwareness(value: unknown): ParseAwarenessStat
     diagnostics: [result.diagnostic]
   }
 }
-

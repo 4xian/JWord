@@ -45,6 +45,11 @@ export const PDF_ERROR_CODE_METADATA = {
     description: 'PDF 图片 MIME 类型暂不支持。',
     recoverable: true
   },
+  PDF_PAGE_SIZE_EXCEEDED: {
+    severity: 'error',
+    description: 'PDF 页面宽高超过 14400 points 的规范上限。',
+    recoverable: true
+  },
   PDF_WORKER_UNAVAILABLE: {
     severity: 'error',
     description: 'PDF worker 捕获未知异常或无法完成请求。',

@@ -6,6 +6,7 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区格式化闭环。
  */
 import {
+  countGraphemes,
   createSelectionState,
   type Block,
   type DocumentProjection,
@@ -173,6 +174,6 @@ function findParagraphInBlocks(blocks: readonly Block[], blockId: string): Parag
 /** 读取 run 内文本 grapheme 长度。 */
 function readRunGraphemeLength(run: Run): number {
   return run.inlines.reduce((length, inline) => {
-    return inline.kind === 'text' ? length + Array.from(inline.text).length : length
+    return inline.kind === 'text' ? length + countGraphemes(inline.text) : length
   }, 0)
 }

@@ -18,5 +18,5 @@
     "examples/*/tests/**/*.ts",
     "benchmarks/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist", "coverage", "playwright-report"]
+  "exclude": ["node_modules", "dist", "coverage", "playwright-report", "tests/types/**/*.ts"]
 }

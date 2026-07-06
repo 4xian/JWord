@@ -288,7 +288,7 @@ function syncOverlay(
 
   const canvasContainer = resolveCanvasContainer(options)
 
-  if (canvasContainer === null) {
+  if (canvasContainer === null || matches.length === 0) {
     clearOverlay(overlayState)
     return
   }

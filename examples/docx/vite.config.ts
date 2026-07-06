@@ -11,6 +11,9 @@ import { defineConfig } from 'vite'
 
 export function createDocxDemoViteConfig() {
   return {
+    build: {
+      target: 'es2022'
+    },
     resolve: {
       alias: [
         {

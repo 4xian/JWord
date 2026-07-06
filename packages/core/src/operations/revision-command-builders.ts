@@ -14,10 +14,6 @@ import type { SelectionState } from '../model/selection'
 import type { Block, RevisionFormatSnapshot, RevisionMetadata, Run } from '../model/types'
 import type { Command, Operation } from './transaction'
 
-let revisionSequence = 0
-let revisionRangeSequence = 0
-
-
 export interface AddRevisionMetadataInput {
   readonly authorId: string
   readonly createdAt: string
@@ -46,8 +42,8 @@ export function buildAddRevisionMetadataCommand(
   const usedRevisionIds = collectRevisionIds(projection)
   const usedRangeIds = collectRevisionRangeIds(projection)
   const usedRunIds = collectRunIds(projection)
-  const revisionId = allocateRevisionId(usedRevisionIds, 'revision', () => ++revisionSequence)
-  const rangeId = allocateRevisionId(usedRangeIds, 'revision-range', () => ++revisionRangeSequence)
+  const revisionId = allocateRevisionId(usedRevisionIds, 'revision')
+  const rangeId = allocateRevisionId(usedRangeIds, 'revision-range')
   const rangeSnapshot = createTextRangeRecord(rangeId, selection.range)
   const formatSnapshots: RevisionFormatSnapshot[] = []
   const revision: RevisionMetadata = {
@@ -206,15 +202,13 @@ function collectRunIds(projection: DocumentProjection): Set<string> {
 /**
  * 分配当前 projection 内唯一的 revision 相关 ID。
  */
-function allocateRevisionId(
-  usedIds: Set<string>,
-  prefix: string,
-  nextSequence: () => number
-): string {
-  let candidate = `${prefix}-${nextSequence()}`
+function allocateRevisionId(usedIds: Set<string>, prefix: string): string {
+  let sequence = 1
+  let candidate = `${prefix}-${sequence}`
 
   while (usedIds.has(candidate)) {
-    candidate = `${prefix}-${nextSequence()}`
+    sequence += 1
+    candidate = `${prefix}-${sequence}`
   }
 
   usedIds.add(candidate)

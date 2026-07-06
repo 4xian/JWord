@@ -15,8 +15,13 @@ import {
 } from '../packages/docx/dist/index.js'
 import { createEditor } from '../packages/core/dist/index.js'
 import { exportPdfFromLayout } from '../packages/pdf/dist/index.js'
+import {
+  GATE5_FORMAT_FEATURES,
+  createInsecureTestOnlyJWordLicenseSignature
+} from '../packages/license/dist/index.js'
 
 // 这里用脚本级 fixture 保持 benchmark 可重复，不依赖外部二进制样本。
+const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
 const fixtures = [
   {
     id: 'gate5-small-text',
@@ -215,6 +220,7 @@ async function sampleWorkerMemoryBenchmark(inputFixtures) {
 /** 在线程内运行单个 fixture 并返回该时刻 worker heap 峰值。 */
 async function runWorkerMemoryFixture(fixture, heapSamples) {
   const editor = createEditor()
+  const license = createBenchmarkLicense()
 
   try {
     const projection = editor.loadDocumentModel({
@@ -225,13 +231,15 @@ async function runWorkerMemoryFixture(fixture, heapSamples) {
     recordHeapSample(heapSamples)
 
     const exportResult = await exportDocx(projection, {
-      requestId: `${fixture.id}-worker-export`
+      requestId: `${fixture.id}-worker-export`,
+      license
     })
 
     recordHeapSample(heapSamples)
 
     const importResult = await importDocx(exportResult.bytes, {
-      requestId: `${fixture.id}-worker-import`
+      requestId: `${fixture.id}-worker-import`,
+      license
     })
     const importedDocument = convertDocxImportDocumentToCoreDocument(importResult.document)
     const importedEditor = createEditor()
@@ -244,7 +252,8 @@ async function runWorkerMemoryFixture(fixture, heapSamples) {
       })
       const pdfResult = await exportPdfFromLayout(importedEditor.getLayout(), {
         requestId: `${fixture.id}-worker-pdf`,
-        images: imageInputs
+        images: imageInputs,
+        license
       })
 
       recordHeapSample(heapSamples)
@@ -265,6 +274,7 @@ async function runWorkerMemoryFixture(fixture, heapSamples) {
 /** 运行单个 Gate 5 fixture 的 DOCX 导出、导入和 PDF 导出 benchmark。 */
 async function runFixtureBenchmark(fixture, heapSamples, workerMetric) {
   const editor = createEditor()
+  const license = createBenchmarkLicense()
 
   try {
     const projection = editor.loadDocumentModel({
@@ -273,7 +283,8 @@ async function runFixtureBenchmark(fixture, heapSamples, workerMetric) {
     const imageInputs = collectPdfImageInputs(fixture.document)
     const docxExportStart = performance.now()
     const exportResult = await exportDocx(projection, {
-      requestId: `${fixture.id}-export`
+      requestId: `${fixture.id}-export`,
+      license
     })
     const docxExportDurationMs = roundMetric(performance.now() - docxExportStart)
 
@@ -281,7 +292,8 @@ async function runFixtureBenchmark(fixture, heapSamples, workerMetric) {
 
     const docxImportStart = performance.now()
     const importResult = await importDocx(exportResult.bytes, {
-      requestId: `${fixture.id}-import`
+      requestId: `${fixture.id}-import`,
+      license
     })
     const importedDocument = convertDocxImportDocumentToCoreDocument(importResult.document)
     const docxImportDurationMs = roundMetric(performance.now() - docxImportStart)
@@ -296,7 +308,8 @@ async function runFixtureBenchmark(fixture, heapSamples, workerMetric) {
       const pdfExportStart = performance.now()
       const pdfResult = await exportPdfFromLayout(importedEditor.getLayout(), {
         requestId: `${fixture.id}-pdf`,
-        images: imageInputs
+        images: imageInputs,
+        license
       })
       const pdfExportDurationMs = roundMetric(performance.now() - pdfExportStart)
 
@@ -496,6 +509,23 @@ function countBlockImages(block) {
     (total, run) => total + run.inlines.filter((inline) => inline.kind === 'image').length,
     0
   )
+}
+
+/** 创建覆盖 Gate 5 DOCX/PDF 高级格式能力的本地 benchmark 授权。 */
+function createBenchmarkLicense() {
+  const entitlement = {
+    customerId: 'gate5-benchmark',
+    licenseToken: 'gate5-benchmark-token',
+    issuer: 'jword-benchmark',
+    issuedAt: '2026-05-27T00:00:00.000Z',
+    features: Object.values(GATE5_FORMAT_FEATURES),
+    expiresAt: '2999-01-01T00:00:00.000Z'
+  }
+
+  return {
+    ...entitlement,
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+  }
 }
 
 /** 校验 benchmark 产物和指标完整性。 */

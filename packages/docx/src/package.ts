@@ -740,7 +740,7 @@ function buildRelationshipIndex(context: DocxPackageContext): DocxRelationshipIn
   }
 }
 
-/** 建立 media index，把二进制转换为 JSON-friendly byte array。 */
+/** 建立 media index，保留 Uint8Array 以避免大图导入时放大内存。 */
 async function buildMediaIndex(
   context: DocxPackageContext,
   images: readonly DocxImageRelationshipRecord[]
@@ -749,7 +749,7 @@ async function buildMediaIndex(
     targetPart: image.targetPart,
     mimeType: image.mimeType,
     extension: image.extension,
-    bytes: Array.from(await readPartBytes(context.zip, image.targetPart, context.requestId))
+    bytes: await readPartBytes(context.zip, image.targetPart, context.requestId)
   })))
 
   return { items }

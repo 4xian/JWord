@@ -257,7 +257,7 @@ describe('Gate 5 T1 DOCX fixtures', () => {
         mimeType: 'image/png',
         extension: 'png',
         targetPart: 'word/media/image1.png',
-        bytes: expect.any(Array)
+        bytes: expect.any(Uint8Array)
       }
     ])
     expect(result.document.resources[0]?.bytes.length).toBeGreaterThan(0)

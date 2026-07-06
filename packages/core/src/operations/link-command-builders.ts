@@ -16,8 +16,6 @@ import type { Block, Run, RunLink, Section } from '../model/types'
 import type { Command, Operation, TextPosition } from './transaction'
 import { countGraphemes } from '../shared/grapheme'
 
-let generatedLinkRunSequence = 0
-
 export interface SetLinkInput {
   readonly target: string
   readonly tooltip?: string
@@ -363,10 +361,12 @@ function allocateGeneratedRunId(
   runId: string,
   suffix: 'link' | 'tail'
 ): string {
-  let candidate = `${runId}__${suffix}-${++generatedLinkRunSequence}`
+  let sequence = 1
+  let candidate = `${runId}__${suffix}-${sequence}`
 
   while (usedRunIds.has(candidate)) {
-    candidate = `${runId}__${suffix}-${++generatedLinkRunSequence}`
+    sequence += 1
+    candidate = `${runId}__${suffix}-${sequence}`
   }
 
   usedRunIds.add(candidate)

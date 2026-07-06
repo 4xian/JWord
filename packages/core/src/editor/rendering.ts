@@ -8,10 +8,13 @@
 import type { CanvasLike } from '../canvas/pool'
 import { renderPageCanvas, syncPageCanvases } from '../canvas/renderer'
 import type { Command, Operation, TextPosition } from '../operations/transaction'
-import { getCaretRect as getLayoutCaretRect, hitTestDocumentLayout } from '../layout/runtime'
+import { hitTestDocumentLayout } from '../layout/runtime'
 import type { DocumentLayout, LayoutBox, LayoutDirtyRange, LayoutRect, LineBox, PageBox } from '../layout/runtime'
 import { cssPxToTwips, twipsToCssPx } from '../layout/page-config'
+import type { PluginResolvedDecoration } from '../plugins/types'
 import type { EditorPageElement, MountedEditorDom } from './types'
+
+const LAYOUT_LINE_MATCH_TOLERANCE_TWIPS = 1
 
 export function createPageElement(mountedDom: MountedEditorDom, layoutPage: LayoutBox, scale: number) {
   const page = mountedDom.canvasContainer.ownerDocument.createElement('div')
@@ -22,6 +25,13 @@ export function createPageElement(mountedDom: MountedEditorDom, layoutPage: Layo
 
 export function flattenLayoutLines(layout: DocumentLayout): readonly LineBox[] {
   return Object.freeze(layout.pages.flatMap((page) => page.lines))
+}
+
+/** 按页号和容差匹配当前 caret 所在 layout 行，避免浮点抖动导致键盘导航失效。 */
+export function isLayoutLineMatchingCaret(line: LineBox, caretRect: LayoutRect): boolean {
+  return line.pageIndex === caretRect.pageIndex
+    && Math.abs(line.y - caretRect.y) <= LAYOUT_LINE_MATCH_TOLERANCE_TWIPS
+    && Math.abs(line.height - caretRect.height) <= LAYOUT_LINE_MATCH_TOLERANCE_TWIPS
 }
 
 export function resolveLineBoundaryPosition(
@@ -212,6 +222,7 @@ export function renderPageBatch(input: Readonly<{
     commentRects?: readonly LayoutRect[]
     caretRect?: LayoutRect
   }>
+  experimentalDecorations?: readonly PluginResolvedDecoration[]
   scale: number
   pixelRatio: number
 }>): Map<number, CanvasLike> {
@@ -227,6 +238,9 @@ export function renderPageBatch(input: Readonly<{
     ...(input.selectionRender.commentRects === undefined
       ? {}
       : { commentRects: input.selectionRender.commentRects }),
+    ...(input.experimentalDecorations === undefined
+      ? {}
+      : { experimentalDecorations: input.experimentalDecorations }),
     ...(input.selectionRender.caretRect === undefined
       ? {}
       : { caretRect: input.selectionRender.caretRect }),
@@ -408,9 +422,22 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
 }
 
 export function findTextPositionPageIndexes(layout: DocumentLayout, position: TextPosition): readonly number[] {
-  const caretRect = getLayoutCaretRect(layout, position)
+  const pageIndexes: number[] = []
+  let foundPosition = false
 
-  return caretRect === undefined ? [] : [caretRect.pageIndex]
+  for (const page of layout.pages) {
+    if (pageContainsTextPosition(page, position)) {
+      pageIndexes.push(page.pageIndex)
+      foundPosition = true
+      continue
+    }
+
+    if (foundPosition) {
+      break
+    }
+  }
+
+  return mergePageIndexes(pageIndexes)
 }
 
 export function isSameTextPosition(left: TextPosition, right: TextPosition): boolean {
@@ -418,6 +445,56 @@ export function isSameTextPosition(left: TextPosition, right: TextPosition): boo
     && left.blockId === right.blockId
     && left.runId === right.runId
     && left.graphemeIndex === right.graphemeIndex
+}
+
+/** 判断页面是否包含目标文本位置，避免 dirty page 推导构建全布局查询缓存。 */
+function pageContainsTextPosition(page: PageBox, position: TextPosition): boolean {
+  for (const line of page.lines) {
+    if (
+      line.fragments.some((fragment) => fragmentContainsTextPosition(fragment, position))
+      || line.inlines.some((inline) => isSameTextPosition(inline.at, position))
+    ) {
+      return true
+    }
+  }
+
+  for (const block of page.blocks) {
+    if (block.kind !== 'table') {
+      continue
+    }
+
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        if (
+          (cell.textPosition !== undefined && isSameTextPosition(cell.textPosition, position))
+          || cell.fragments.some((fragment) => fragmentContainsTextPosition(fragment, position))
+          || cell.inlines.some((inline) => isSameTextPosition(inline.at, position))
+        ) {
+          return true
+        }
+      }
+    }
+  }
+
+  return false
+}
+
+/** 判断文本片段是否覆盖目标文本位置。 */
+function fragmentContainsTextPosition(
+  fragment: Readonly<{
+    sectionId: string
+    blockId: string
+    runId: string
+    start: TextPosition
+    end: TextPosition
+  }>,
+  position: TextPosition
+): boolean {
+  return fragment.sectionId === position.sectionId
+    && fragment.blockId === position.blockId
+    && fragment.runId === position.runId
+    && position.graphemeIndex >= fragment.start.graphemeIndex
+    && position.graphemeIndex <= fragment.end.graphemeIndex
 }
 
 export function findRunPageIndexes(layout: DocumentLayout, runId: string): readonly number[] {

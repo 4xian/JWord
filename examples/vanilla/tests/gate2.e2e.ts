@@ -56,7 +56,7 @@ interface MountedViewportProbe {
   readonly afterMountedHasCanvas: boolean | null
 }
 
-const expectedGate2PageCount = 53
+const expectedGate2PageCount = 67
 
 test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', async ({ page }) => {
   await page.goto('/?fixture=gate2')

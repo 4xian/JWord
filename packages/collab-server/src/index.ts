@@ -66,10 +66,15 @@ export type {
 } from './history-service.js'
 export type {
   CreateJWordCollabHocuspocusServerOptions,
+  JWordCollabHocuspocusAuthHook,
+  JWordCollabHocuspocusAuthHookInput,
+  JWordCollabHocuspocusAuthHookResult,
+  JWordCollabHocuspocusRole,
   JWordCollabHocuspocusServer,
   JWordCollabHocuspocusServerState
 } from './hocuspocus-server.js'
 
+/** self-host 协同服务端公开协议版本。 */
 export const JWORD_COLLAB_SERVER_PROTOCOL_VERSION = 'gate6-collab-v1'
 export const JWORD_COLLAB_SERVER_PACKAGE_VERSION = '0.0.0'
 
@@ -91,6 +96,7 @@ export type JWordCollabServerLicenseHook = (
   input: JWordCollabServerLicenseHookInput
 ) => Promise<JWordCollabServerLicenseHookResult> | JWordCollabServerLicenseHookResult
 
+/** 创建 self-host 协同 HTTP 服务时的公开配置。 */
 export interface CreateJWordCollabServerOptions {
   readonly port?: number
   readonly address?: string
@@ -109,6 +115,7 @@ export interface CreateJWordCollabServerOptions {
   readonly logger?: JWordCollabServerLogger
 }
 
+/** self-host 协同服务启动后的公开运行状态。 */
 export interface JWordCollabServerState {
   readonly address: string
   readonly port: number

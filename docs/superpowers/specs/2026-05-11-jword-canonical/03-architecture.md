@@ -87,6 +87,10 @@ Operation 是可序列化、可审计、可测试的编辑意图。
 - `resolveComment`
 - `setRevisionState`
 
+约束：
+
+- `mergeBlock` 仅支持同一容器中的相邻段落；不满足时必须返回 `OPERATION_MERGE_BLOCK_NOT_ADJACENT`，跨容器、跨表格单元格或非相邻合并需要由 command 层拆解为其他 operation，不能让 adapter 猜测结构语义。
+
 每类 operation 必须有：
 
 - schema。

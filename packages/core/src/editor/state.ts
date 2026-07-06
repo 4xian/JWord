@@ -21,9 +21,11 @@ import type { SelectionState } from '../model/selection'
 import { createTransactionPipeline } from '../operations/transaction'
 import type { TextPosition, TransactionEvent } from '../operations/transaction'
 import type { ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
+import { createPluginHost, type PluginHost } from '../plugins/host'
+import type { PluginDiagnostic } from '../plugins/types'
 import { DEFAULT_EDITOR_LABEL, DOCUMENT_CREATE_ORIGIN } from './constants'
 import { normalizeEditorUser } from './current-user'
-import type { EditorDocumentInput, EditorEvent, EditorEventListener, EditorOptions, MountedEditorDom, RenderReason } from './types'
+import type { Editor, EditorDocumentInput, EditorEvent, EditorEventListener, EditorOptions, MountedEditorDom, RenderReason } from './types'
 import type { EditorUser } from './types'
 import type { InitialFocusPosition } from './types'
 import type * as Y from 'yjs'
@@ -42,6 +44,7 @@ export abstract class JWordEditorState {
   protected readonly resourceAdapter: ResourceAdapter | undefined
   protected readonly resourceUrlPolicy: ResourceUrlPolicy | undefined
   protected readonly currentUser: EditorUser
+  protected readonly pluginHost: PluginHost
   protected readonly initialFocusPosition: InitialFocusPosition
   protected pageConfig: PageConfig
   protected fontManager: FontManager = createFontManager()
@@ -84,6 +87,14 @@ export abstract class JWordEditorState {
     this.pageConfig = createPageConfig(options?.page)
     this.resourceAdapter = options?.resourceAdapter
     this.resourceUrlPolicy = options?.resourceUrlPolicy
+    this.pluginHost = createPluginHost({
+      plugins: options?.plugins,
+      readProjection: () => this.currentProjection,
+      emitDiagnostic: (diagnostic) => {
+        this.emitPluginDiagnostic(diagnostic)
+      },
+      emitTelemetry: options?.telemetry?.sink
+    })
     this.layoutOptions = Object.freeze({
       keepLatinWordWholeOnWrap: options?.layout?.keepLatinWordWholeOnWrap ?? false
     })
@@ -111,10 +122,17 @@ export abstract class JWordEditorState {
   }
 
   protected abstract cancelDeferredDocumentRender(): void
+  protected abstract scheduleDeferredDocumentRender(): void
+  protected abstract shouldRenderMountedDocumentImmediately(commandName: string): boolean
   protected abstract renderMountedLayout(reason: RenderReason): void
   protected abstract emit(event: EditorEvent): void
   protected abstract replaceDocument(input: EditorDocumentInput, commandName: string, origin: string): DocumentProjection
   protected abstract refreshSelectionAfterSharedTransaction(previousSelection: SelectionState | null): void
+
+  /** 在完整 editor 实例构造后初始化插件宿主。 */
+  protected initializePluginHost(editor: Editor): void {
+    this.pluginHost.initialize(editor)
+  }
 
   /** 设置共享协同文档的内部事务广播器。 */
   setSharedTransactionDispatcher(dispatcher: EditorSharedTransactionDispatcher | undefined): void {
@@ -139,9 +157,27 @@ export abstract class JWordEditorState {
     this.layoutNeedsRefresh = true
     this.mountedTextMirrorNeedsRefresh = true
     this.cancelDeferredDocumentRender()
-    this.renderMountedLayout('document')
+
+    if (this.shouldRenderMountedDocumentImmediately(event.commandName)) {
+      this.renderMountedLayout('document')
+    } else {
+      this.scheduleDeferredDocumentRender()
+    }
 
     this.emit({ kind: 'transaction', transaction: event })
+    this.pluginHost.dispatchAfterTransaction(event)
+  }
+
+  /** 将插件诊断转发为 editor error 事件。 */
+  protected emitPluginDiagnostic(diagnostic: PluginDiagnostic): void {
+    this.emit({
+      kind: 'error',
+      code: diagnostic.code,
+      commandName: diagnostic.commandName ?? diagnostic.lifecycle ?? 'plugin',
+      message: diagnostic.message,
+      recoverable: diagnostic.recoverable,
+      details: createPluginErrorDetails(diagnostic)
+    })
   }
 
   /**
@@ -174,6 +210,15 @@ export abstract class JWordEditorState {
     if (this.isDestroyed) {
       throw createJWordError('EDITOR_DESTROYED', 'JWord editor has been destroyed.')
     }
+  }
+}
+
+function createPluginErrorDetails(diagnostic: PluginDiagnostic) {
+  return {
+    pluginName: diagnostic.pluginName,
+    ...(diagnostic.lifecycle === undefined ? {} : { lifecycle: diagnostic.lifecycle }),
+    ...(diagnostic.reasonCode === undefined ? {} : { reasonCode: diagnostic.reasonCode }),
+    ...(diagnostic.details === undefined ? {} : { details: diagnostic.details })
   }
 }
 

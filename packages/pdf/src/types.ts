@@ -52,6 +52,7 @@ export interface PdfProgressEvent {
   readonly requestId?: string
 }
 
+/** PDF 导出过程中可恢复的公开 warning 载荷。 */
 export interface PdfWarning {
   readonly code: PdfWarningCode
   readonly severity: PdfWarningSeverity
@@ -69,6 +70,8 @@ export interface PdfError {
   readonly cancelled?: boolean
   readonly fontFamily?: string
   readonly missingTextSample?: string
+  readonly widthTwips?: number
+  readonly heightTwips?: number
   readonly recoverable?: boolean
   readonly feature?: JWordLicenseFeatureKey
   readonly customerId?: string
@@ -85,6 +88,7 @@ export interface ExportPdfOptions {
   readonly onError?: (error: PdfError) => void
 }
 
+/** PDF 导出结果，包含二进制、warning、progress 和页面几何摘要。 */
 export interface ExportPdfResult {
   readonly bytes: ArrayBuffer
   readonly warnings: readonly PdfWarning[]

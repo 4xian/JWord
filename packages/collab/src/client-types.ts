@@ -72,6 +72,7 @@ export interface JWordCollaborationUser extends JWordAwarenessUser {
   readonly avatarUrl?: string
 }
 
+/** 连接 JWord 协同 client 所需的公开握手、授权和 provider 配置。 */
 export interface ConnectJWordCollaborationOptions {
   readonly serverUrl: string
   readonly documentId: string
@@ -86,6 +87,7 @@ export interface ConnectJWordCollaborationOptions {
   readonly clientPackageVersion?: string
 }
 
+/** client 与 server 握手后冻结的版本、feature flag 和兼容窗口载荷。 */
 export interface JWordCollaborationHandshake {
   readonly protocolVersion: string
   readonly clientPackageVersion: string
@@ -224,6 +226,7 @@ export interface JWordCollaborationAutoInsertSession {
   abort(reason?: unknown): void
 }
 
+/** 协同连接对外暴露的 awareness、history、offline 和自动插入 handle。 */
 export interface JWordCollaborationConnection {
   readonly status: JWordCollaborationStatus
   readonly diagnostics: readonly JWordCollabDiagnostic[]

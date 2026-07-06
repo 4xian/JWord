@@ -1,0 +1,106 @@
+# JWord Public API Examples
+
+Gate 7 Step 7.3 最小公开接口示例。所有示例只从 package 入口导入，不依赖 monorepo 内部路径、provider 内部类型、worker helper 或 demo runtime。可编译版本见 `tests/types/gate7-public-api-examples.ts`，并由 `pnpm test:types` 验收。
+
+## 免费基础版：editor、UI、原生保存
+
+```ts
+import { createEditor, createEditorSharedDocument, createTextInserter } from '@4xian/jword-core'
+import { createJWordUi } from '@4xian/jword-ui'
+import { saveJWordDocument, loadJWordDocument } from '@4xian/jword-native'
+import { createMemoryPersistenceAdapter, createStoragePersistenceAdapter } from '@4xian/jword-persistence'
+
+const editor = createEditor({ initialText: 'Hello JWord' })
+createJWordUi({ editor, editorHost: document.querySelector('#editor') as HTMLElement })
+
+const saved = await saveJWordDocument(editor, { requestId: 'save-1' })
+await loadJWordDocument(saved.blob, { requestId: 'load-1' })
+
+const sharedDocument = createEditorSharedDocument()
+const storage = createStoragePersistenceAdapter(createMemoryPersistenceAdapter())
+const inserter = createTextInserter(createEditor(), { requestId: 'insert-1' })
+inserter.abort('example-finished')
+await storage.listVersions(sharedDocument.toString())
+```
+
+## Gate 5 高级格式：DOCX 和 PDF
+
+```ts
+import type { DocumentProjection } from '@4xian/jword-core'
+import { importDocx, exportDocx } from '@4xian/jword-docx'
+import { exportPdfFromLayout } from '@4xian/jword-pdf'
+import { GATE5_FORMAT_FEATURES, assertJWordFeatureEntitled, type JWordLicenseEntitlement } from '@4xian/jword-license'
+
+declare const entitlement: JWordLicenseEntitlement
+declare const binaryInput: Blob
+declare const projection: DocumentProjection
+declare const layout: Parameters<typeof exportPdfFromLayout>[0]
+
+assertJWordFeatureEntitled(entitlement, GATE5_FORMAT_FEATURES.docxImport)
+const imported = await importDocx(binaryInput, { license: entitlement })
+const exported = await exportDocx(projection, { license: entitlement })
+const pdf = await exportPdfFromLayout(layout, { license: entitlement })
+console.log(imported.warnings.length, exported.bytes.byteLength, pdf.bytes.byteLength)
+```
+
+## Gate 6 高级协同：client 和 self-host server
+
+```ts
+import { connectJWordCollaboration, createMemoryCollabProviderAdapter, GATE6_COLLAB_FEATURES } from '@4xian/jword-collab'
+import { createJWordCollabRequestHandler, createJWordCollabServer } from '@4xian/jword-collab-server'
+import type { JWordLicenseEntitlement } from '@4xian/jword-license'
+
+declare const entitlement: JWordLicenseEntitlement
+
+const server = createJWordCollabServer({
+  authHook: () => ({ ok: true, userId: 'user-1' }),
+  licenseHook: () => ({ ok: true })
+})
+const state = await server.start()
+const provider = createMemoryCollabProviderAdapter({
+  documentId: 'doc-1',
+  roomId: 'room-1',
+  clientId: 'client-1'
+})
+
+const connection = await connectJWordCollaboration({
+  serverUrl: state.httpUrl,
+  documentId: 'doc-1',
+  roomId: 'room-1',
+  user: { id: 'user-1', name: 'User 1' },
+  token: 'demo-token',
+  license: entitlement,
+  features: [GATE6_COLLAB_FEATURES.multiplayer],
+  provider
+})
+
+createJWordCollabRequestHandler({
+  authHook: () => ({ ok: true, userId: 'user-1' }),
+  licenseHook: () => ({ ok: true })
+})
+await connection.destroy()
+await server.stop()
+```
+
+## Diagnostics payload contract
+
+公开诊断载荷的稳定字段来自 `docs/sdk/diagnostic-codes.md` 与 `JWordDiagnosticsSnapshot`：
+
+- `code`：稳定诊断码，必须能在 `diagnostic-codes.md` 找到。
+- `severity`：`warning` 或 `error`。
+- `recoverable`：宿主是否可以通过重试、降级、重新授权或缩小 payload 恢复。
+- `recommendedAction`：面向宿主的动作短语，不包含用户文档内容。
+- `metadataTags`：诊断分类标签，例如 `authorization`、`worker`、`payload-limit`。
+- `JWordDiagnosticsSnapshot.registry`：生成快照时使用的 registry 摘要。
+- `JWordDiagnosticsSnapshot.privacy`：固定说明正文、字符串 details 和 details key 已裁剪。
+- `JWordDiagnosticsSnapshot.plugins`：插件诊断只保留 `pluginName`、`code`、`lifecycle`、`commandName`、`reasonCode` 与 `recoverable`。
+
+```ts
+import type { JWordDiagnosticsSnapshot } from '@4xian/jword-core'
+
+function readDiagnostics(snapshot: JWordDiagnosticsSnapshot): readonly string[] {
+  return snapshot.plugins.map((entry) => `${entry.pluginName}:${entry.code}`)
+}
+```
+
+Feature key handoff：Gate 5 使用 `GATE5_FORMAT_FEATURES`，Gate 6 使用 `GATE6_COLLAB_FEATURES`。授权失败时只返回 feature key、customer id 和稳定诊断码，不携带用户文档内容。

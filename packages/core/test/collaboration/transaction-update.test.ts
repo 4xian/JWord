@@ -29,7 +29,9 @@ describe('Gate 6 transaction update hook', () => {
     const source = createInitializedStore('源文档')
     const target = createDocumentStore()
     const sourcePipeline = createTransactionPipeline(source.doc)
-    const targetPipeline = createTransactionPipeline(target.doc)
+    const targetPipeline = createTransactionPipeline(target.doc, {
+      updateByteLengthDiagnostics: true
+    })
     const events: string[] = []
     const update = Y.encodeStateAsUpdate(source.doc)
 
@@ -74,7 +76,9 @@ describe('Gate 6 transaction update hook', () => {
 
   it('records update byte length for local command transactions', () => {
     const store = createInitializedStore('本地')
-    const pipeline = createTransactionPipeline(store.doc)
+    const pipeline = createTransactionPipeline(store.doc, {
+      updateByteLengthDiagnostics: true
+    })
     const result = pipeline.run(
       {
         name: 'insertText',

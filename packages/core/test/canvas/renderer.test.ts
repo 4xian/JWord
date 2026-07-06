@@ -123,6 +123,71 @@ describe('renderPageCanvas', () => {
     expect(canvas.calls.indexOf('fillStyle:#cfe3ff')).toBeLessThan(canvas.calls.indexOf('fillText:批注文本,72,110'))
   })
 
+  it('绘制 experimental 插件装饰且不把装饰画到错误页面', () => {
+    const canvas = createMockCanvas()
+    const page = createPageLayout(0, '插件装饰') satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page,
+      experimentalDecorations: [
+        {
+          kind: 'textHighlight',
+          pluginName: 'review.decorations',
+          providerName: 'highlights',
+          id: 'range-1',
+          pageIndex: 0,
+          rects: [{
+            pageIndex: 0,
+            x: cssPxToTwips(72),
+            y: cssPxToTwips(96),
+            width: cssPxToTwips(48),
+            height: cssPxToTwips(18)
+          }],
+          color: '#fde68a'
+        },
+        {
+          kind: 'pageOverlay',
+          pluginName: 'review.decorations',
+          providerName: 'markers',
+          id: 'marker-1',
+          pageIndex: 0,
+          rect: {
+            pageIndex: 0,
+            x: cssPxToTwips(180),
+            y: cssPxToTwips(120),
+            width: cssPxToTwips(60),
+            height: cssPxToTwips(18)
+          },
+          color: '#bfdbfe',
+          label: '审阅'
+        },
+        {
+          kind: 'pageOverlay',
+          pluginName: 'review.decorations',
+          providerName: 'markers',
+          id: 'marker-2',
+          pageIndex: 1,
+          rect: {
+            pageIndex: 1,
+            x: cssPxToTwips(180),
+            y: cssPxToTwips(940),
+            width: cssPxToTwips(60),
+            height: cssPxToTwips(18)
+          }
+        }
+      ]
+    })
+
+    expect(canvas.calls).toContain('fillStyle:#fde68a')
+    expect(canvas.calls).toContain('fillRect:72,96,48,18')
+    expect(canvas.calls.indexOf('fillStyle:#fde68a')).toBeLessThan(canvas.calls.indexOf('fillText:插件装饰,72,110'))
+    expect(canvas.calls).toContain('fillStyle:#bfdbfe')
+    expect(canvas.calls).toContain('fillRect:180,120,60,18')
+    expect(canvas.calls.some((call) => call.startsWith('fillText:审阅,'))).toBe(true)
+    expect(canvas.calls).not.toContain('fillRect:180,940,60,18')
+  })
+
   it('在高 DPR 屏幕上放大 backing store，但保持页面 CSS 尺寸不变', () => {
     const canvas = createMockCanvas()
     const page = createPageLayout(0, '高清文本') satisfies LayoutBox
@@ -703,7 +768,8 @@ function createHeaderFooterPageLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(20),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(32)
       },
       {
         kind: 'headerFooter',
@@ -715,7 +781,8 @@ function createHeaderFooterPageLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(760),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(772)
       }
     ]
   }
@@ -741,7 +808,8 @@ function createHeaderFooterPageNumberLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(20),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(32)
       },
       {
         kind: 'headerFooter',
@@ -753,7 +821,8 @@ function createHeaderFooterPageNumberLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(20),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(32)
       },
       {
         kind: 'headerFooter',
@@ -765,7 +834,8 @@ function createHeaderFooterPageNumberLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(760),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(772)
       }
     ]
   }

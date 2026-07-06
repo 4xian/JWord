@@ -91,7 +91,7 @@ export function sanitizePastedHtmlToRichTextFragmentWithWarnings(html: string): 
       'u',
       'ul'
     ],
-    ALLOWED_ATTR: ['class', 'href', 'style'],
+    ALLOWED_ATTR: ['class', 'href'],
     ALLOW_DATA_ATTR: false,
     FORBID_ATTR: ['onclick', 'onerror', 'onload'],
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'img', 'svg', 'math']
@@ -194,7 +194,7 @@ function collectRichTextRuns(node: Node, inheritedStyle: InlineStyleState): read
   for (const child of children) {
     if (child instanceof HTMLBRElement) {
       runs.push({
-        text: ' ',
+        text: '\n',
         properties: readInlineProperties(nextStyle)
       })
       continue
@@ -312,7 +312,7 @@ function mergeInlineStyle(parent: InlineStyleState, element: HTMLElement): Inlin
   const nextStyle: MutableInlineStyleState = {
     bold: parent.bold || isBoldElement(element),
     italic: parent.italic || isItalicElement(element),
-    underline: parent.underline || readTextDecoration(element).includes('underline'),
+    underline: parent.underline || isUnderlineElement(element) || readTextDecoration(element).includes('underline'),
     strike: parent.strike || isStrikeElement(element) || readTextDecoration(element).includes('line-through')
   }
   const link = readSafeLink(element) ?? parent.link
@@ -450,6 +450,11 @@ function isStrikeElement(element: HTMLElement): boolean {
   const tagName = element.tagName.toLowerCase()
 
   return tagName === 's' || tagName === 'strike'
+}
+
+/** 判断元素是否代表下划线。 */
+function isUnderlineElement(element: HTMLElement): boolean {
+  return element.tagName.toLowerCase() === 'u'
 }
 
 /** 读取 allowlist 内的安全链接。 */

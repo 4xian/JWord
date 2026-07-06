@@ -15,12 +15,12 @@ import {
 } from '../src/paste/sanitizer'
 
 describe('paste sanitizer', () => {
-  test('keeps Word-like run and paragraph formats while removing active content', () => {
+  test('keeps semantic run formats while removing style attributes and active content', () => {
     const fragment = sanitizePastedHtmlToRichTextFragment(`
       <!--StartFragment-->
       <p class="MsoNormal" style="text-align:center;margin:0">
         <b><i><span style="color:#C00000;background-color:#FFF2CC" onclick="alert(1)">Word</span></i></b>
-        <span style="text-decoration:underline;font-size:14pt"> 片段</span>
+        <u><span style="font-size:14pt"> 片段</span></u>
         <script>alert('xss')</script>
       </p>
       <ul>
@@ -31,22 +31,16 @@ describe('paste sanitizer', () => {
 
     expect(fragment).toMatchObject({
       paragraphs: [{
-        properties: {
-          alignment: 'center'
-        },
         runs: [{
           text: 'Word',
           properties: {
             bold: true,
-            italic: true,
-            color: '#c00000',
-            backgroundColor: '#fff2cc'
+            italic: true
           }
         }, {
           text: ' 片段',
           properties: {
-            underline: true,
-            fontSizeTwips: 280
+            underline: true
           }
         }]
       }, {
@@ -55,15 +49,21 @@ describe('paste sanitizer', () => {
           listLevel: 0
         },
         runs: [{
-          text: '列表',
-          properties: {
-            fontFamily: 'Calibri'
-          }
+          text: '列表'
         }]
       }]
     })
     expect(JSON.stringify(fragment)).not.toContain('alert')
     expect(JSON.stringify(fragment)).not.toContain('onerror')
+    expect(JSON.stringify(fragment)).not.toContain('#c00000')
+    expect(JSON.stringify(fragment)).not.toContain('Calibri')
+  })
+
+
+  test('preserves br as an explicit line break instead of a space', () => {
+    const fragment = sanitizePastedHtmlToRichTextFragment('<p>Alpha<br>Beta</p>')
+
+    expect(fragment?.paragraphs[0]?.runs.map((run) => run.text).join('')).toBe('Alpha\nBeta')
   })
 
   test('returns null for empty html so callers can fall back to plain text', () => {

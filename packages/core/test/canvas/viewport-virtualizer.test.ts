@@ -49,6 +49,21 @@ describe('computeViewportPages', () => {
     expect(result.visiblePageIndexes).toEqual([3])
     expect(result.retainedPageIndexes).toEqual([2, 3])
   })
+
+  it('大文档视口查找不会线性读取全部页面', () => {
+    const probe = createMeasuredPages(1000)
+    const result = computeViewportPages({
+      pages: probe.pages,
+      scrollTop: 500 * 1100 + 100,
+      viewportHeight: 700,
+      bufferPages: 2
+    })
+
+    expect(result.visiblePageIndexes).toEqual([500])
+    expect(result.retainedPageIndexes).toEqual([498, 499, 500, 501, 502])
+    expect(probe.readGeometryCount()).toBeLessThan(120)
+    expect(probe.readPageIndexCount()).toBeLessThan(40)
+  })
 })
 
 function createPages(count: number): readonly VirtualizerPageBox[] {
@@ -57,4 +72,37 @@ function createPages(count: number): readonly VirtualizerPageBox[] {
     top: pageIndex * 1100,
     height: 1000
   }))
+}
+
+/** 创建带读取计数的页面序列，用来验证大文档查找不是线性扫描。 */
+function createMeasuredPages(count: number): {
+  readonly pages: readonly VirtualizerPageBox[]
+  readonly readGeometryCount: () => number
+  readonly readPageIndexCount: () => number
+} {
+  let geometryReads = 0
+  let pageIndexReads = 0
+  const pages = Array.from({ length: count }, (_, pageIndex) => ({
+    get pageIndex() {
+      pageIndexReads += 1
+
+      return pageIndex
+    },
+    get top() {
+      geometryReads += 1
+
+      return pageIndex * 1100
+    },
+    get height() {
+      geometryReads += 1
+
+      return 1000
+    }
+  }))
+
+  return {
+    pages,
+    readGeometryCount: () => geometryReads,
+    readPageIndexCount: () => pageIndexReads
+  }
 }

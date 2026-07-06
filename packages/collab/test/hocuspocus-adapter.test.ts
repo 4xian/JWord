@@ -182,6 +182,39 @@ describe('@4xian/jword-collab hocuspocus adapter', () => {
     await adapter.destroy()
     document.destroy()
   })
+
+  it('applies updates without metadata origin as local-user in the core origin matrix', async () => {
+    const document = new Y.Doc()
+    const source = new Y.Doc()
+    const origins: string[] = []
+    const adapter = createHocuspocusCollabProviderAdapter({
+      document,
+      documentId: 'doc-hocuspocus-origin',
+      roomId: 'room-hocuspocus-origin',
+      clientId: 'client-a',
+      webSocketUrl: 'ws://127.0.0.1:1'
+    })
+
+    document.on('afterTransaction', (transaction) => {
+      origins.push(String(transaction.origin))
+    })
+    source.getText('body').insert(0, 'origin')
+    await adapter.connect()
+    await adapter.sendUpdate(Y.encodeStateAsUpdate(source), {
+      documentId: 'doc-hocuspocus-origin',
+      roomId: 'room-hocuspocus-origin',
+      clientId: 'client-a',
+      updateId: 'update-origin-1'
+    })
+
+    expect(origins).toContain('local-user')
+    expect(origins).not.toContain('local')
+
+    await adapter.destroy()
+    document.destroy()
+    source.destroy()
+  })
+
 })
 
 /** 读取本测试创建的唯一模拟 provider 实例。 */

@@ -11,6 +11,7 @@ import * as Y from 'yjs'
 import type { Block, Comment, CommentMessage, ImageInline, ModelProperties, RevisionFormatSnapshot, RevisionMetadata, RunLink, TableBorder } from '../model/types'
 import { createDocumentProjection } from '../model/projection'
 import { createOperationAdapter } from './operation-adapter'
+import { createProjectionAfterOperationTransaction, readProjectionBeforeTransaction } from './projection-dirty-scope'
 import { createJWordError } from '../shared/errors'
 import type { DocumentProjection } from '../model/projection'
 import type { TextRangeRecord } from '../model/position'
@@ -547,6 +548,7 @@ export interface TransactionPipeline {
 
 export interface TransactionPipelineOptions {
   readonly resourceUrlPolicy?: ResourceUrlPolicy
+  readonly updateByteLengthDiagnostics?: boolean
 }
 
 /**
@@ -572,6 +574,15 @@ export function createTransactionPipeline(
     ...(options.resourceUrlPolicy === undefined ? {} : { resourceUrlPolicy: options.resourceUrlPolicy })
   })
   const listeners = new Set<TransactionListener>()
+  const updateByteLengthDiagnostics = options.updateByteLengthDiagnostics === true
+  let currentProjection: DocumentProjection | undefined
+  let internalTransactionDepth = 0
+
+  doc.on('afterTransaction', () => {
+    if (internalTransactionDepth === 0) {
+      currentProjection = undefined
+    }
+  })
 
   return {
     doc,
@@ -588,20 +599,27 @@ export function createTransactionPipeline(
       const operations = [...command.operations]
       const operationKinds = operations.map((operation) => operation.kind)
       const metadataSnapshot = { ...metadata }
-      const stateBefore = Y.encodeStateVector(doc)
+      const stateBefore = readStateVectorForUpdateByteLength(doc, updateByteLengthDiagnostics)
+      const previousProjection = readProjectionBeforeTransaction(doc, currentProjection)
 
-      doc.transact(() => {
-        adapter.applyAll(operations)
-      }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+      internalTransactionDepth += 1
+      try {
+        doc.transact(() => {
+          adapter.applyAll(operations)
+        }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+      } finally {
+        internalTransactionDepth -= 1
+      }
 
       const updateByteLength = readUpdateByteLength(doc, stateBefore)
+      currentProjection = createProjectionAfterOperationTransaction(doc, previousProjection, operations)
       const result = {
         commandName: command.name,
         origin: metadataSnapshot.origin,
         metadata: metadataSnapshot,
         operations,
         operationKinds,
-        projection: createDocumentProjection(doc),
+        projection: currentProjection,
         dirty: operations.length > 0,
         diagnostic: createTransactionDiagnostic(command.name, operationKinds, metadataSnapshot, updateByteLength)
       }
@@ -615,18 +633,30 @@ export function createTransactionPipeline(
 
       const metadataSnapshot = { ...metadata }
       const stateBefore = Y.encodeStateVector(doc)
+      const previousProjection = readProjectionBeforeTransaction(doc, currentProjection)
 
-      Y.applyUpdate(doc, update, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+      internalTransactionDepth += 1
+      try {
+        Y.applyUpdate(doc, update, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+      } finally {
+        internalTransactionDepth -= 1
+      }
 
-      const updateByteLength = readUpdateByteLength(doc, stateBefore)
+      const dirty = hasDocumentStateChanged(doc, stateBefore)
+      const updateByteLength = updateByteLengthDiagnostics && dirty
+        ? Y.encodeStateAsUpdate(doc, stateBefore).byteLength
+        : 0
+      currentProjection = dirty === false && previousProjection !== undefined
+        ? previousProjection
+        : createDocumentProjection(doc)
       const result = {
         commandName: 'applySyncUpdate',
         origin: metadataSnapshot.origin,
         metadata: metadataSnapshot,
         operations: [],
         operationKinds: [],
-        projection: createDocumentProjection(doc),
-        dirty: updateByteLength > 0,
+        projection: currentProjection,
+        dirty,
         diagnostic: createTransactionDiagnostic('applySyncUpdate', [], metadataSnapshot, updateByteLength)
       }
 
@@ -638,20 +668,26 @@ export function createTransactionPipeline(
       validateTransactionName(commandName, metadata)
 
       const metadataSnapshot = { ...metadata }
-      const stateBefore = Y.encodeStateVector(doc)
+      const stateBefore = readStateVectorForUpdateByteLength(doc, updateByteLengthDiagnostics)
 
-      doc.transact(() => {
-        mutation()
-      }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+      internalTransactionDepth += 1
+      try {
+        doc.transact(() => {
+          mutation()
+        }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+      } finally {
+        internalTransactionDepth -= 1
+      }
 
       const updateByteLength = readUpdateByteLength(doc, stateBefore)
+      currentProjection = createDocumentProjection(doc)
       const result = {
         commandName,
         origin: metadataSnapshot.origin,
         metadata: metadataSnapshot,
         operations: [],
         operationKinds: [],
-        projection: createDocumentProjection(doc),
+        projection: currentProjection,
         dirty: true,
         diagnostic: createTransactionDiagnostic(commandName, [], metadataSnapshot, updateByteLength)
       }
@@ -663,16 +699,37 @@ export function createTransactionPipeline(
   }
 }
 
-function readUpdateByteLength(doc: Y.Doc, stateBefore: Uint8Array): number {
-  const stateAfter = Y.encodeStateVector(doc)
 
-  if (areUint8ArraysEqual(stateBefore, stateAfter)) {
+/** 仅在显式开启 update 长度诊断时读取事务前状态。 */
+function readStateVectorForUpdateByteLength(doc: Y.Doc, enabled: boolean): Uint8Array | undefined {
+  return enabled ? Y.encodeStateVector(doc) : undefined
+}
+
+/** 在诊断模式下计算本次事务实际产生的 update 长度。 */
+function readUpdateByteLength(doc: Y.Doc, stateBefore: Uint8Array | undefined): number {
+  if (stateBefore === undefined) {
+    return 0
+  }
+
+  if (hasDocumentStateChanged(doc, stateBefore) === false) {
     return 0
   }
 
   return Y.encodeStateAsUpdate(doc, stateBefore).byteLength
 }
 
+/** 比较事务前后的 Y.Doc state vector，避免默认路径编码完整 update。 */
+function hasDocumentStateChanged(doc: Y.Doc, stateBefore: Uint8Array): boolean {
+  const stateAfter = Y.encodeStateVector(doc)
+
+  if (areUint8ArraysEqual(stateBefore, stateAfter)) {
+    return false
+  }
+
+  return true
+}
+
+/** 对比两个 Yjs state vector 是否完全一致。 */
 function areUint8ArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
   if (left.byteLength !== right.byteLength) {
     return false

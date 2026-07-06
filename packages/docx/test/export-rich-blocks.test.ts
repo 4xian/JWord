@@ -35,9 +35,10 @@ describe('@4xian/jword-docx rich block export', () => {
         mimeType: 'image/png',
         extension: 'png',
         targetPart: 'word/media/image1.png',
-        bytes: [137, 80, 78, 71, 13, 10, 26, 10]
+        bytes: expect.any(Uint8Array)
       }
     ])
+    expect(Array.from(importResult.document.resources[0]?.bytes ?? [])).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
     expect(importResult.document.sections[0]?.blocks).toMatchObject([
       {
         kind: 'paragraph',

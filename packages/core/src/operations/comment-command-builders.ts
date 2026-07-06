@@ -13,10 +13,6 @@ import type { SelectionState } from '../model/selection'
 import type { Comment, CommentMessage } from '../model/types'
 import type { Command } from './transaction'
 
-let commentThreadSequence = 0
-let commentMessageSequence = 0
-let commentRangeSequence = 0
-
 export interface AddCommentThreadInput {
   readonly authorId: string
   readonly createdAt: string
@@ -49,9 +45,9 @@ export function buildAddCommentThreadCommand(
   const usedThreadIds = collectCommentThreadIds(projection)
   const usedMessageIds = collectCommentMessageIds(projection)
   const usedRangeIds = collectCommentRangeIds(projection)
-  const threadId = allocateCommentId(usedThreadIds, 'comment-thread', () => ++commentThreadSequence)
-  const messageId = allocateCommentId(usedMessageIds, 'comment-message', () => ++commentMessageSequence)
-  const anchorRangeId = allocateCommentId(usedRangeIds, 'comment-range', () => ++commentRangeSequence)
+  const threadId = allocateCommentId(usedThreadIds, 'comment-thread')
+  const messageId = allocateCommentId(usedMessageIds, 'comment-message')
+  const anchorRangeId = allocateCommentId(usedRangeIds, 'comment-range')
   const rangeSnapshot = createTextRangeRecord(anchorRangeId, selection.range)
   const message = createCommentMessage(messageId, anchorRangeId, input)
   const thread: Comment = {
@@ -90,7 +86,7 @@ export function buildReplyCommentThreadCommand(
   }
 
   const usedMessageIds = collectCommentMessageIds(projection)
-  const messageId = allocateCommentId(usedMessageIds, 'comment-message', () => ++commentMessageSequence)
+  const messageId = allocateCommentId(usedMessageIds, 'comment-message')
 
   return {
     name: 'replyCommentThread',
@@ -246,15 +242,13 @@ function collectCommentRangeIds(projection: DocumentProjection): Set<string> {
 /**
  * 分配当前 projection 内唯一的批注相关 ID。
  */
-function allocateCommentId(
-  usedIds: Set<string>,
-  prefix: string,
-  nextSequence: () => number
-): string {
-  let candidate = `${prefix}-${nextSequence()}`
+function allocateCommentId(usedIds: Set<string>, prefix: string): string {
+  let sequence = 1
+  let candidate = `${prefix}-${sequence}`
 
   while (usedIds.has(candidate)) {
-    candidate = `${prefix}-${nextSequence()}`
+    sequence += 1
+    candidate = `${prefix}-${sequence}`
   }
 
   usedIds.add(candidate)

@@ -13,7 +13,7 @@ import { collectSelectionTargets } from '../model/selection-targets'
 import type { Block, TableCell } from '../model/types'
 import { buildSetParagraphIndentCommand } from '../operations/command-builders'
 import type { TextPosition } from '../operations/transaction'
-import { flattenLayoutLines, hitTestLineAtAbsoluteX } from './rendering'
+import { flattenLayoutLines, hitTestLineAtAbsoluteX, isLayoutLineMatchingCaret } from './rendering'
 import { JWordEditorTextEditingRuntime } from './text-editing-runtime'
 import { compareRuntimeTextPositions, createRuntimeAnchor, moveTextPositionByWord } from './text-runtime'
 
@@ -98,9 +98,7 @@ export abstract class JWordEditorKeyboardTextRuntime extends JWordEditorTextEdit
     }
 
     const lines = flattenLayoutLines(layout)
-    const currentLineIndex = lines.findIndex((line) =>
-      line.pageIndex === caretRect.pageIndex && line.y === caretRect.y && line.height === caretRect.height
-    )
+    const currentLineIndex = lines.findIndex((line) => isLayoutLineMatchingCaret(line, caretRect))
     const targetLine = lines[Math.max(0, Math.min(lines.length - 1, currentLineIndex + lineOffset))]
     const targetPosition = targetLine === undefined ? undefined : hitTestLineAtAbsoluteX(layout, targetLine, caretRect.x)
 

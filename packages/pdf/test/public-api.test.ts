@@ -8,11 +8,6 @@
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-23---实现-pdf-中文字体图片表格线和页眉页脚。
  */
 
-import {
-  createFontManager,
-  createPageConfig,
-  layoutDocument
-} from '@4xian/jword-core'
 import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 
@@ -36,9 +31,20 @@ import {
   createPdfPublicApiLicense,
   readChineseFontFixture,
   readFixtureBytes,
-  readTestFontBytes,
-  type PdfChineseFontFixture
+  readTestFontBytes
 } from './public-api-fixtures'
+import {
+  createAccentedTextLayout,
+  createChineseFixtureTextLayout,
+  createChineseTextLayout,
+  createEmptyLayout,
+  createHeaderFooterLayout,
+  createJpegImageLayout,
+  createOversizedPageLayout,
+  createTableImageLayout,
+  createTextLayout,
+  createTwoPageLayout
+} from './public-api-layout-fixtures'
 import {
   countPdfStrokeOperations,
   createStyledTextLayout,
@@ -94,6 +100,17 @@ describe('@4xian/jword-pdf public API', () => {
     expect(streams.some((stream) => stream.includes(' 24 Tf'))).toBe(true)
     expect(streams.some((stream) => stream.includes('1 0 0 1 36 444.6 Tm'))).toBe(true)
     expect(streams.some((stream) => stream.includes('0.7529411764705882 0 0 rg'))).toBe(true)
+  })
+
+
+  it('rejects pages beyond the PDF 14400 point size limit', async () => {
+    await expect(exportPdfFromLayout(createOversizedPageLayout(), {
+      requestId: 'pdf-page-size-limit-1'
+    })).rejects.toMatchObject({
+      code: 'PDF_PAGE_SIZE_EXCEEDED',
+      requestId: 'pdf-page-size-limit-1',
+      recoverable: true
+    })
   })
 
   it('reports page margin and content rect geometry in PDF points', async () => {
@@ -177,14 +194,18 @@ describe('@4xian/jword-pdf public API', () => {
     expect(streams.some((stream) => stream.includes(' Do'))).toBe(true)
   })
 
-  it('exports header footer text and page numbers from layout', async () => {
-    const result = await exportPdfFromLayout(createHeaderFooterLayout())
+  it('exports header footer text and page numbers from layout baselines', async () => {
+    const layout = createHeaderFooterLayout()
+    const headerBox = layout.pages[0]?.headerFooterBoxes.find((box) => box.sourceId === 'Company Header')
+    const result = await exportPdfFromLayout(layout)
     const streams = readInflatedPdfStreams(result.bytes)
 
     expect(streams.some((stream) => stream.includes('<436F6D70616E7920486561646572> Tj'))).toBe(true)
     expect(streams.some((stream) => stream.includes('<436F6E666964656E7469616C20466F6F746572> Tj'))).toBe(true)
     expect(streams.some((stream) => stream.includes('<37> Tj'))).toBe(true)
     expect(streams.some((stream) => stream.includes('page-number-'))).toBe(false)
+    expect(headerBox?.baseline).toEqual(expect.any(Number))
+    expect(readTextMatrixYForText(streams, 'Company Header')).toBeCloseTo((layout.pages[0]!.height - headerBox!.baseline) / 20, 3)
   })
 
   it('returns a stable missing font error before exporting Chinese text without a configured font', async () => {
@@ -553,419 +574,3 @@ describe('@4xian/jword-pdf public API', () => {
   })
 
 })
-
-/** 创建最小空 layout，测试只验证 PDF 包入口契约，不依赖实际分页内容。 */
-function createEmptyLayout(): Parameters<typeof exportPdfFromLayout>[0] {
-  return layoutDocument({
-    projection: {
-      document: {
-        kind: 'document',
-        id: 'document-empty',
-        sections: []
-      }
-    },
-    pageConfig: createPageConfig(),
-    fontManager: createFontManager()
-  })
-}
-
-/** 创建只包含 JPEG inline 图片的 layout。 */
-function createJpegImageLayout(): Parameters<typeof exportPdfFromLayout>[0] {
-  return layoutDocument({
-    projection: {
-      document: {
-        kind: 'document',
-        id: 'document-pdf-jpeg-image',
-        resourceIds: ['image-pdf-jpeg-1'],
-        resources: [{
-          kind: 'resource',
-          id: 'image-pdf-jpeg-1',
-          mime: 'image/jpeg',
-          source: {
-            kind: 'dataUrl',
-            url: ONE_PIXEL_JPEG_DATA_URL
-          },
-          status: 'success'
-        }],
-        sections: [
-          {
-            kind: 'section',
-            id: 'section-pdf-jpeg-image',
-            blocks: [
-              {
-                kind: 'paragraph',
-                id: 'paragraph-pdf-jpeg-image',
-                runs: [
-                  {
-                    kind: 'run',
-                    id: 'run-pdf-jpeg-image',
-                    inlines: [
-                      {
-                        kind: 'image',
-                        resourceId: 'image-pdf-jpeg-1',
-                        widthTwips: 720,
-                        heightTwips: 720
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    pageConfig: createPageConfig(),
-    fontManager: createFontManager()
-  })
-}
-
-/** 创建含 inline 图片和表格边框的 layout。 */
-function createTableImageLayout(): Parameters<typeof exportPdfFromLayout>[0] {
-  return layoutDocument({
-    projection: {
-      document: {
-        kind: 'document',
-        id: 'document-pdf-table-image',
-        resourceIds: ['image-pdf-inline-1'],
-        resources: [{
-          kind: 'resource',
-          id: 'image-pdf-inline-1',
-          mime: 'image/png',
-          source: {
-            kind: 'dataUrl',
-            url: ONE_PIXEL_PNG_DATA_URL
-          },
-          status: 'success'
-        }],
-        sections: [
-          {
-            kind: 'section',
-            id: 'section-pdf-table-image',
-            blocks: [
-              {
-                kind: 'paragraph',
-                id: 'paragraph-pdf-image',
-                runs: [
-                  {
-                    kind: 'run',
-                    id: 'run-pdf-image',
-                    inlines: [
-                      {
-                        kind: 'image',
-                        resourceId: 'image-pdf-inline-1',
-                        widthTwips: 720,
-                        heightTwips: 720
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                kind: 'table',
-                id: 'table-pdf-border',
-                grid: [1440, 1440],
-                border: {
-                  color: '#336699',
-                  widthTwips: 20
-                },
-                rows: [
-                  {
-                    id: 'row-pdf-border-1',
-                    cells: [
-                      {
-                        id: 'cell-pdf-border-1',
-                        blocks: [createTableCellParagraph('A1')]
-                      },
-                      {
-                        id: 'cell-pdf-border-2',
-                        blocks: [createTableCellParagraph('B1')]
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    pageConfig: createPageConfig({
-      widthTwips: 7200,
-      heightTwips: 10080,
-      marginTwips: {
-        top: 720,
-        right: 720,
-        bottom: 720,
-        left: 720
-      }
-    }),
-    fontManager: createFontManager()
-  })
-}
-
-/** 创建含页眉、页脚和页码的 layout。 */
-function createHeaderFooterLayout(): Parameters<typeof exportPdfFromLayout>[0] {
-  return layoutDocument({
-    projection: {
-      document: {
-        kind: 'document',
-        id: 'document-pdf-header-footer',
-        sections: [
-          {
-            kind: 'section',
-            id: 'section-pdf-header-footer',
-            headerIds: ['Company Header', 'page-number-top-right'],
-            footerIds: ['Confidential Footer'],
-            pageNumbering: {
-              mode: 'restart',
-              start: 7
-            },
-            blocks: [
-              {
-                kind: 'paragraph',
-                id: 'paragraph-pdf-header-footer',
-                runs: [
-                  {
-                    kind: 'run',
-                    id: 'run-pdf-header-footer',
-                    inlines: [
-                      {
-                        kind: 'text',
-                        text: 'Header footer body'
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    pageConfig: createPageConfig({
-      widthTwips: 7200,
-      heightTwips: 10080,
-      marginTwips: {
-        top: 720,
-        right: 720,
-        bottom: 720,
-        left: 720
-      }
-    }),
-    fontManager: createFontManager()
-  })
-}
-
-/** 创建包含中文文本但未配置 PDF 字体的 layout。 */
-function createChineseTextLayout(): Parameters<typeof exportPdfFromLayout>[0] {
-  return layoutDocument({
-    projection: {
-      document: {
-        kind: 'document',
-        id: 'document-pdf-chinese-text',
-        sections: [
-          {
-            kind: 'section',
-            id: 'section-pdf-chinese-text',
-            blocks: [
-              {
-                kind: 'paragraph',
-                id: 'paragraph-pdf-chinese-text',
-                runs: [
-                  {
-                    kind: 'run',
-                    id: 'run-pdf-chinese-text',
-                    inlines: [
-                      {
-                        kind: 'text',
-                        text: '中文 PDF'
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    pageConfig: createPageConfig(),
-    fontManager: createFontManager()
-  })
-}
-
-/** 创建由便携中文字体 fixture 覆盖的 PDF layout。 */
-function createChineseFixtureTextLayout(fixture: PdfChineseFontFixture): Parameters<typeof exportPdfFromLayout>[0] {
-  return layoutDocument({
-    projection: {
-      document: {
-        kind: 'document',
-        id: fixture.document.id,
-        sections: [
-          {
-            kind: 'section',
-            id: fixture.document.sectionId,
-            blocks: [
-              {
-                kind: 'paragraph',
-                id: fixture.document.paragraphId,
-                runs: [
-                  {
-                    kind: 'run',
-                    id: fixture.document.runId,
-                    inlines: [
-                      {
-                        kind: 'text',
-                        text: fixture.document.text
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    pageConfig: createPageConfig(fixture.pageConfig),
-    fontManager: createFontManager({
-      fallbackFontFamily: fixture.font.family,
-      availableFontFamilies: [fixture.font.family]
-    })
-  })
-}
-
-/** 创建包含可由 PDF 标准字体或测试字体覆盖的拉丁扩展文本 layout。 */
-function createAccentedTextLayout(text = 'Café PDF'): Parameters<typeof exportPdfFromLayout>[0] {
-  return layoutDocument({
-    projection: {
-      document: {
-        kind: 'document',
-        id: 'document-pdf-accented-text',
-        sections: [
-          {
-            kind: 'section',
-            id: 'section-pdf-accented-text',
-            blocks: [
-              {
-                kind: 'paragraph',
-                id: 'paragraph-pdf-accented-text',
-                runs: [
-                  {
-                    kind: 'run',
-                    id: 'run-pdf-accented-text',
-                    inlines: [
-                      {
-                        kind: 'text',
-                        text
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    pageConfig: createPageConfig(),
-    fontManager: createFontManager()
-  })
-}
-
-/** 创建基础 PDF 输出测试使用的单页英文文本 layout。 */
-function createTextLayout(): Parameters<typeof exportPdfFromLayout>[0] {
-  return layoutDocument({
-    projection: {
-      document: {
-        kind: 'document',
-        id: 'document-pdf-basic-text',
-        sections: [
-          {
-            kind: 'section',
-            id: 'section-pdf-basic-text',
-            blocks: [
-              {
-                kind: 'paragraph',
-                id: 'paragraph-pdf-basic-text',
-                runs: [
-                  {
-                    kind: 'run',
-                    id: 'run-pdf-basic-text',
-                    properties: {
-                      fontSizeTwips: 480,
-                      color: '#c00000'
-                    },
-                    inlines: [
-                      {
-                        kind: 'text',
-                        text: 'Hello PDF'
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    pageConfig: createPageConfig({
-      widthTwips: 7200,
-      heightTwips: 10080,
-      marginTwips: {
-        top: 720,
-        right: 720,
-        bottom: 720,
-        left: 720
-      }
-    }),
-    fontManager: createFontManager({
-      fallbackFontFamily: 'Arial',
-      availableFontFamilies: ['Arial']
-    })
-  })
-}
-
-/** 创建双页 layout，隔离验证 PDF page count 映射。 */
-function createTwoPageLayout(): Parameters<typeof exportPdfFromLayout>[0] {
-  const layout = createTextLayout()
-  const firstPage = layout.pages[0]
-
-  if (firstPage === undefined) {
-    return layout
-  }
-
-  return {
-    ...layout,
-    pages: [
-      firstPage,
-      {
-        ...firstPage,
-        pageIndex: 1,
-        y: firstPage.y + firstPage.height
-      }
-    ]
-  }
-}
-
-/** 创建表格单元格段落。 */
-function createTableCellParagraph(text: string) {
-  return {
-    kind: 'paragraph',
-    id: `paragraph-${text}`,
-    runs: [
-      {
-        kind: 'run',
-        id: `run-${text}`,
-        inlines: [
-          {
-            kind: 'text',
-            text
-          }
-        ]
-      }
-    ]
-  } as const
-}

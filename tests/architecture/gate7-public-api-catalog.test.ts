@@ -21,11 +21,20 @@ const packageCatalogExpectations = [
     catalogTokens: [
       'Edition：free',
       'Stable',
-      'Experimental：当前无',
+      'Experimental：',
       'Internal',
       'createEditor',
       'EditorSyncUpdateInput',
       'EditorApplyUpdateOptions',
+      'PluginDefinition',
+      'PluginContext',
+      'PluginCommandMiddleware',
+      'PluginKeyBindingDefinition',
+      'PluginDiagnostic',
+      'ExperimentalDecorationProvider',
+      'PluginDecoration',
+      'JWordTelemetryOptions',
+      'JWordDiagnosticsSnapshot',
       'createTextInserter',
       'TextInserterRetryInput',
       'createRangeRef',
@@ -48,7 +57,16 @@ const packageCatalogExpectations = [
       'createEditorWithSharedDocument',
       'readEditorSharedDocument',
       'refreshEditorSharedDocument',
-      'EditorSharedDocument'
+      'EditorSharedDocument',
+      'PluginDefinition',
+      'PluginContext',
+      'PluginCommandMiddleware',
+      'PluginKeyBindingDefinition',
+      'PluginDiagnostic',
+      'ExperimentalDecorationProvider',
+      'PluginDecoration',
+      'JWordTelemetryOptions',
+      'JWordDiagnosticsSnapshot'
     ]
   },
   {
@@ -61,13 +79,21 @@ const packageCatalogExpectations = [
       'createCoreMediaCommandAdapter',
       'createCoreTableCommandAdapter',
       'BUILTIN_JWORD_TOOL_IDS',
+      'JWordUiPluginExtension',
+      'JWordToolbarPluginItem',
+      'JWordMenuPluginAction',
+      'JWordUiPluginRenderContext',
       'Internal'
     ],
     sourceTokens: [
       'createJWordUi',
       'createCoreMediaCommandAdapter',
       'createCoreTableCommandAdapter',
-      'BUILTIN_JWORD_TOOL_IDS'
+      'BUILTIN_JWORD_TOOL_IDS',
+      'JWordUiPluginExtension',
+      'JWordToolbarPluginItem',
+      'JWordMenuPluginAction',
+      'JWordUiPluginRenderContext'
     ]
   },
   {
@@ -78,12 +104,17 @@ const packageCatalogExpectations = [
       'saveJWordDocument',
       'loadJWordDocument',
       'validateJWordPackage',
+      'detectJWordNativeWorkerCapability',
+      'JWORD_NATIVE_WORKER_CSP_DIRECTIVES',
+      'JWORD_NATIVE_WORKER_UNAVAILABLE',
       './worker'
     ],
     sourceTokens: [
       'saveJWordDocument',
       'loadJWordDocument',
-      'validateJWordPackage'
+      'validateJWordPackage',
+      'detectJWordNativeWorkerCapability',
+      'JWORD_NATIVE_WORKER_CSP_DIRECTIVES'
     ]
   },
   {
@@ -94,13 +125,18 @@ const packageCatalogExpectations = [
       'importDocx',
       'exportDocx',
       'inspectDocxPackage',
+      'detectDocxWorkerCapability',
+      'DOCX_WORKER_CSP_DIRECTIVES',
+      'DOCX_WORKER_UNAVAILABLE',
       'GATE5_FORMAT_FEATURES',
       './worker'
     ],
     sourceTokens: [
       'importDocx',
       'exportDocx',
-      'inspectDocxPackage'
+      'inspectDocxPackage',
+      'detectDocxWorkerCapability',
+      'DOCX_WORKER_CSP_DIRECTIVES'
     ]
   },
   {
@@ -109,11 +145,16 @@ const packageCatalogExpectations = [
     catalogTokens: [
       'Edition：paid format',
       'exportPdfFromLayout',
+      'detectPdfWorkerCapability',
+      'PDF_WORKER_CSP_DIRECTIVES',
+      'PDF_WORKER_UNAVAILABLE',
       'GATE5_FORMAT_FEATURES',
       './worker'
     ],
     sourceTokens: [
-      'exportPdfFromLayout'
+      'exportPdfFromLayout',
+      'detectPdfWorkerCapability',
+      'PDF_WORKER_CSP_DIRECTIVES'
     ]
   },
   {
@@ -175,7 +216,10 @@ const packageCatalogExpectations = [
       'createJWordCollabHistoryService',
       'createJWordCollabHocuspocusServer',
       'CreateJWordCollabServerOptions',
-      'JWordCollabServerState'
+      'JWordCollabServerState',
+      'JWordCollabHocuspocusRole',
+      'JWordCollabHocuspocusAuthHook',
+      'read/comment/write'
     ],
     sourceTokens: [
       'createJWordCollabServer',
@@ -184,7 +228,9 @@ const packageCatalogExpectations = [
       'createJWordCollabHistoryService',
       'createJWordCollabHocuspocusServer',
       'CreateJWordCollabServerOptions',
-      'JWordCollabServerState'
+      'JWordCollabServerState',
+      'JWordCollabHocuspocusRole',
+      'JWordCollabHocuspocusAuthHook'
     ]
   },
   {

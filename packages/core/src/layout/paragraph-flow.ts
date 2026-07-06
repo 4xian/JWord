@@ -182,9 +182,7 @@ export function startParagraph(
     pageBreakPolicy: resolveParagraphPageBreakPolicy(paragraph)
   }
 
-  if (resolveParagraphList(paragraph) === undefined) {
-    delete cursor.listCounters
-  } else if (readParagraphLineCount(cursor, paragraph.id) === 0) {
+  if (resolveParagraphList(paragraph) !== undefined && readParagraphLineCount(cursor, paragraph.id) === 0) {
     const listMarker = resolveParagraphListMarker(cursor, paragraph, layoutProperties.markerGapTwips)
 
     if (listMarker !== undefined) {

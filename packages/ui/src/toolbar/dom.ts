@@ -86,6 +86,7 @@ export function createToolbarDom(host: HTMLElement, config: ResolvedToolbarConfi
     host,
     bar,
     controls,
+    pluginControls: {},
     destroyParts: [...destroyParts, rovingTabindex.destroy],
     groups
   }

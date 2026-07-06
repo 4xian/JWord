@@ -83,6 +83,7 @@ export interface HeaderFooterBox extends LayoutRect {
   readonly sectionId: string
   readonly sourceId: string
   readonly pageNumber: number
+  readonly baseline: number
 }
 
 export interface ParagraphBox extends LayoutRect {

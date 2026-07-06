@@ -5,7 +5,7 @@
  * 性能/安全约束：纯类型模块，无副作用，可在非浏览器环境安全导入。
  * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
  */
-import type { DocumentProjection, Editor, SelectionState } from '@4xian/jword-core'
+import type { DocumentProjection, Editor, ResourceUrlPolicy, SelectionState } from '@4xian/jword-core'
 import type {
   JWordCommentPermissionOptions,
   JWordCommentThread,
@@ -59,6 +59,90 @@ export interface JWordToolbarOptions {
   readonly visibleTools?: readonly JWordToolbarToolId[]
   /** 未传 visibleTools 时从全部内建工具中过滤；已传 visibleTools 时从该列表中过滤。 */
   readonly hiddenTools?: readonly JWordToolbarToolId[]
+}
+
+/** 插件 toolbar / menu 读取状态时可见的只读上下文。 */
+export interface JWordUiPluginRenderContext {
+  /** 当前 editor facade。 */
+  readonly editor: Editor
+  /** 当前只读文档投影。 */
+  readonly projection: DocumentProjection
+  /** 当前选择区快照。 */
+  readonly selection: SelectionState | null
+  /** 宿主 UI 是否处于只读模式。 */
+  readonly readonly: boolean
+}
+
+/** 插件 toolbar 按钮定义。 */
+export interface JWordToolbarPluginItem {
+  /** 当前插件内唯一名称。 */
+  readonly name: string
+  /** 当前 M4 仅落地按钮工具。 */
+  readonly kind: 'button'
+  /** 可见按钮文案。 */
+  readonly label: string
+  /** 无障碍标签；未传时复用 label。 */
+  readonly ariaLabel?: string
+  /** tooltip 文案；未传时复用 label。 */
+  readonly tooltip?: string
+  /** 点击时执行的 core 插件命令。 */
+  readonly commandName: string
+  /** 传给插件命令的输入。 */
+  readonly input?: unknown
+  /** 只读模式下是否仍允许触发。 */
+  readonly allowReadonly?: boolean
+  /** 返回按钮是否可用。 */
+  readonly enabled?: (context: JWordUiPluginRenderContext) => boolean
+  /** 返回按钮是否处于按下态。 */
+  readonly active?: (context: JWordUiPluginRenderContext) => boolean
+  /** 返回命令执行后的播报文案；未返回文案时不播报。 */
+  readonly announce?: (context: JWordUiPluginRenderContext) => string | undefined
+}
+
+/** 插件菜单动作定义。 */
+export interface JWordMenuPluginAction {
+  /** 当前菜单内唯一动作名称。 */
+  readonly name: string
+  /** 菜单动作文案。 */
+  readonly label: string
+  /** 无障碍标签；未传时复用 label。 */
+  readonly ariaLabel?: string
+  /** 点击时执行的 core 插件命令。 */
+  readonly commandName: string
+  /** 传给插件命令的输入。 */
+  readonly input?: unknown
+  /** 只读模式下是否仍允许触发。 */
+  readonly allowReadonly?: boolean
+  /** 返回菜单动作是否可用。 */
+  readonly enabled?: (context: JWordUiPluginRenderContext) => boolean
+  /** 返回菜单动作是否处于选中态。 */
+  readonly active?: (context: JWordUiPluginRenderContext) => boolean
+  /** 返回命令执行后的播报文案；未返回文案时不播报。 */
+  readonly announce?: (context: JWordUiPluginRenderContext) => string | undefined
+}
+
+/** 插件菜单定义。 */
+export interface JWordMenuPluginItem {
+  /** 当前插件内唯一菜单名称。 */
+  readonly name: string
+  /** 菜单触发按钮文案。 */
+  readonly label: string
+  /** 无障碍标签；未传时复用 label。 */
+  readonly ariaLabel?: string
+  /** tooltip 文案；未传时复用 label。 */
+  readonly tooltip?: string
+  /** 菜单动作列表。 */
+  readonly items: readonly JWordMenuPluginAction[]
+}
+
+/** UI 包消费的插件扩展声明。 */
+export interface JWordUiPluginExtension {
+  /** 对应 core 插件名称。 */
+  readonly pluginName: string
+  /** 插件 toolbar 按钮。 */
+  readonly toolbarItems?: readonly JWordToolbarPluginItem[]
+  /** 插件菜单。 */
+  readonly menus?: readonly JWordMenuPluginItem[]
 }
 
 /** Gate 4 第一版图片资源状态。 */
@@ -154,11 +238,7 @@ export interface JWordMediaAdapter {
 }
 
 /** URL allowlist。 */
-export interface JWordMediaUrlPolicy {
-  readonly allowDataUrl?: boolean
-  readonly allowBlobUrl?: boolean
-  readonly allowExternalUrl?: (url: URL) => boolean
-}
+export type JWordMediaUrlPolicy = ResourceUrlPolicy
 
 /** 当前选中的图片目标快照。 */
 export interface JWordSelectedImageTarget {
@@ -466,6 +546,8 @@ export interface CreateJWordUiOptions {
   readonly revisions?: JWordRevisionsOptions
   /** 宿主级全局只读模式。 */
   readonly readonly?: boolean | JWordReadonlyOptions
+  /** Gate 7 M4 插件 UI 扩展声明。 */
+  readonly pluginExtensions?: readonly JWordUiPluginExtension[]
 }
 
 /** live region 控制器的最小协作边界。 */
@@ -505,6 +587,8 @@ export interface JWordToolbarElements {
   readonly host: HTMLElement
   /** 内建工具控件映射。 */
   readonly controls: Partial<Record<JWordToolbarToolId, JWordToolbarControlElement>>
+  /** 插件工具按钮映射，key 形如 plugin:插件名:工具名。 */
+  readonly pluginControls: Readonly<Record<string, HTMLButtonElement>>
 }
 
 /** 图片 panel 暴露给宿主和浏览器测试的节点。 */

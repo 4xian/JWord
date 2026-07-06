@@ -35,6 +35,21 @@ import type {
   JWordCollabUpdateMetadata
 } from './index.js'
 
+type HocuspocusCoreUpdateOrigin =
+  | 'local-user'
+  | 'remote-user'
+  | 'auto-inserter'
+  | 'version-restore'
+  | 'system-recovery'
+
+const FROZEN_HOCUSPOCUS_UPDATE_ORIGINS = new Set<HocuspocusCoreUpdateOrigin>([
+  'local-user',
+  'remote-user',
+  'auto-inserter',
+  'version-restore',
+  'system-recovery'
+])
+
 export interface CreateHocuspocusCollabProviderAdapterOptions {
   readonly document: Y.Doc
   readonly documentId: string
@@ -171,16 +186,16 @@ export function createHocuspocusCollabProviderAdapter(
         return
       }
       destroyed = true
-      provider.destroy()
-      websocketProvider.destroy()
       statusListeners.clear()
       errorListeners.clear()
       updateListeners.clear()
       syncedListeners.clear()
       awarenessListeners.clear()
+      provider.destroy()
+      websocketProvider.destroy()
     },
 
-    // 将外部 Yjs update 写入同一 Y.Doc，由 Hocuspocus provider 负责真实发送。
+    // 将外部 Yjs update 写入同一 Y.Doc；调用方必须保证 update 与目标文档匹配。
     async sendUpdate(update, metadata) {
       assertHocuspocusAdapterActive(destroyed)
       if (status !== 'connected' && status !== 'synced') {
@@ -202,7 +217,7 @@ export function createHocuspocusCollabProviderAdapter(
         throw metadataError
       }
 
-      Y.applyUpdate(options.document, update, metadata.origin ?? 'local')
+      Y.applyUpdate(options.document, update, normalizeHocuspocusUpdateOrigin(metadata.origin))
       emitHocuspocusAdapterUpdate(new Uint8Array(update), metadata)
     },
 
@@ -295,6 +310,30 @@ export function createHocuspocusCollabProviderAdapter(
       listener(states)
     }
   }
+}
+
+/** 将 provider metadata origin 归一到 core 已冻结的事务 origin 矩阵。 */
+function normalizeHocuspocusUpdateOrigin(
+  origin: JWordCollabUpdateMetadata['origin']
+): HocuspocusCoreUpdateOrigin {
+  if (origin === 'remote') {
+    return assertHocuspocusCoreUpdateOrigin('remote-user')
+  }
+
+  if (origin === 'replay') {
+    return assertHocuspocusCoreUpdateOrigin('version-restore')
+  }
+
+  return assertHocuspocusCoreUpdateOrigin('local-user')
+}
+
+/** 约束 Hocuspocus fallback 不再写入 core origin 矩阵外的裸字符串。 */
+function assertHocuspocusCoreUpdateOrigin(origin: HocuspocusCoreUpdateOrigin): HocuspocusCoreUpdateOrigin {
+  if (!FROZEN_HOCUSPOCUS_UPDATE_ORIGINS.has(origin)) {
+    throw new Error(`Unknown Hocuspocus update origin: ${origin}`)
+  }
+
+  return origin
 }
 
 // 创建 Hocuspocus awareness adapter。
@@ -512,4 +551,3 @@ function readHocuspocusCloseReason(value: unknown): string | undefined {
 
   return typeof value.reason === 'string' ? value.reason : undefined
 }
-

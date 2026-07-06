@@ -8,12 +8,12 @@
 
 import { cssPxToTwips } from './page-config'
 import { measureTextSegmentForLayout, segmentTextForLayout } from './text-segments'
-import { createInlineObjectPayload, readRunStyle } from './internal'
-import { resolveInlineObjectGeometry } from './paragraph-flow'
+import { assignPageSectionBoundary, createInlineObjectPayload, readRunStyle } from './internal'
+import { flushLine, resolveInlineObjectGeometry, startNewPage } from './paragraph-flow'
 import type { Inline, Paragraph, Section, Table, TableCell } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { TextPosition } from '../operations/transaction'
-import type { LayoutInput, NonTextInlineBox, TableBox, TextFragment } from './types'
+import type { LayoutCursor, LayoutInput, MutablePageBox, NonTextInlineBox, TableBox, TextFragment } from './types'
 
 const DEFAULT_TABLE_COLUMN_WIDTH_TWIPS = 1500
 const DEFAULT_TABLE_ROW_HEIGHT_TWIPS = 600
@@ -505,4 +505,97 @@ function isVisuallyEmptyParagraph(paragraph: Paragraph): boolean {
   }
 
   return true
+}
+
+
+/** 按整行分页排布表格块并写入当前页 blocks。 */
+export function layoutTable(
+  table: Table,
+  section: Section,
+  cursor: LayoutCursor,
+  pages: MutablePageBox[],
+  pageConfig: PageConfig,
+  input: LayoutInput
+): void {
+  flushLine(cursor)
+
+  const grid = resolveTableGrid(table, pageConfig)
+  const rowPlans = table.rows.map((row) => createTableRowLayoutPlan(row, section, grid, input))
+  const rowHeights = table.rows.map((row, rowIndex) =>
+    Math.max(resolveTableRowHeight(row), rowPlans[rowIndex]?.height ?? 0)
+  )
+  const tableWidth = grid.reduce((sum, width) => sum + width, 0)
+
+  if (table.rows.length === 0) {
+    cursor.page.blocks.push(createTableBox({
+      table,
+      section,
+      grid,
+      rowPlans,
+      rowHeights,
+      tableX: cursor.page.contentRect.x,
+      tableY: cursor.y,
+      tableWidth,
+      startRowIndex: 0,
+      endRowIndex: 0,
+      pageIndex: cursor.page.pageIndex
+    }))
+    cursor.x = cursor.page.contentRect.x
+    return
+  }
+
+  let rowIndex = 0
+
+  while (rowIndex < table.rows.length) {
+    const pageBottom = cursor.page.contentRect.y + cursor.page.contentRect.height
+    const firstRowHeight = rowHeights[rowIndex] ?? resolveTableRowHeight(table.rows[rowIndex]!)
+
+    if (cursor.y + firstRowHeight > pageBottom && cursor.y > cursor.page.contentRect.y) {
+      startNewPage(cursor, pages, pageConfig)
+      assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
+      continue
+    }
+
+    const startRowIndex = rowIndex
+    const tableY = cursor.y
+    let tableHeight = 0
+
+    while (rowIndex < table.rows.length) {
+      const rowHeight = rowHeights[rowIndex] ?? resolveTableRowHeight(table.rows[rowIndex]!)
+      const nextHeight = tableHeight + rowHeight
+      const rowFitsCurrentPage = tableY + nextHeight <= pageBottom
+
+      if (!rowFitsCurrentPage && rowIndex > startRowIndex) {
+        break
+      }
+
+      tableHeight = nextHeight
+      rowIndex += 1
+
+      if (!rowFitsCurrentPage) {
+        break
+      }
+    }
+
+    cursor.page.blocks.push(createTableBox({
+      table,
+      section,
+      grid,
+      rowPlans,
+      rowHeights,
+      tableX: cursor.page.contentRect.x,
+      tableY,
+      tableWidth,
+      startRowIndex,
+      endRowIndex: rowIndex,
+      pageIndex: cursor.page.pageIndex
+    }))
+    cursor.y = tableY + tableHeight
+    cursor.x = cursor.page.contentRect.x
+
+    if (rowIndex < table.rows.length) {
+      startNewPage(cursor, pages, pageConfig)
+      assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
+    }
+  }
 }

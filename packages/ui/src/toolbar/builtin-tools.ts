@@ -127,7 +127,6 @@ export const BUILTIN_TOOL_IDS = [
 export const DEFAULT_VISIBLE_TOOL_IDS = [
   'history.undo',
   'history.redo',
-  'document.pagePreset',
   'document.findReplace',
   'document.headingOutline',
   'document.headerFooter',

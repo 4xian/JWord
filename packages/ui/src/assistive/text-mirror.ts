@@ -155,7 +155,7 @@ function applyVisuallyHiddenStyle(element: HTMLElement): void {
   element.style.padding = '0'
   element.style.margin = '-1px'
   element.style.overflow = 'hidden'
-  element.style.clip = 'rect(0 0 0 0)'
+  element.style.clipPath = 'inset(50%)'
   element.style.whiteSpace = 'pre-wrap'
   element.style.border = '0'
 }

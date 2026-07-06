@@ -38,6 +38,9 @@ importers:
       '@xarsh/ooxml-validator':
         specifier: 0.3.0
         version: 0.3.0
+      axe-core:
+        specifier: 4.12.1
+        version: 4.12.1
       eslint:
         specifier: 10.3.0
         version: 10.3.0(jiti@2.6.1)
@@ -1079,6 +1082,10 @@ packages:
 
   async-mutex@0.5.0:
     resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
+
+  axe-core@4.12.1:
+    resolution: {integrity: sha512-s7iGf5GaVMxEG0ENN9x+xTr7GFZCb1ZP/1uATUpCEK2X78nDB3RwbtFCo9pGAf9ru+VwoQ464DkaLEeRM08wJA==}
+    engines: {node: '>=4'}
 
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
@@ -2816,6 +2823,8 @@ snapshots:
   async-mutex@0.5.0:
     dependencies:
       tslib: 2.8.1
+
+  axe-core@4.12.1: {}
 
   balanced-match@4.0.4: {}
 

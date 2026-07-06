@@ -82,6 +82,7 @@ export interface ResourceAdapterUploadResult {
   readonly resource: Resource
 }
 
+/** 宿主侧资源上传与删除适配器，供图片和附件命令通过公开契约接入。 */
 export interface ResourceAdapter {
   upload(
     request: ResourceAdapterUploadRequest,

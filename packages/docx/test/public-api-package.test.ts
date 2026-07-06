@@ -303,7 +303,7 @@ describe('@4xian/jword-docx public API package graph', () => {
             targetPart: 'word/media/image1.png',
             mimeType: 'image/png',
             extension: 'png',
-            bytes: [137, 80, 78, 71]
+            bytes: expect.any(Uint8Array)
           })
         ]
       },
@@ -322,6 +322,7 @@ describe('@4xian/jword-docx public API package graph', () => {
         footers: ['word/footer1.xml']
       }
     })
+    expect(Array.from(indexes.media.items[0]?.bytes ?? [])).toEqual([137, 80, 78, 71])
   })
 })
 

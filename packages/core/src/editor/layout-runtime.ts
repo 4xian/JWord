@@ -14,6 +14,7 @@ import type { Command, TextPosition } from '../operations/transaction'
 import { computeViewportPages } from '../canvas/viewport-virtualizer'
 import { JWordEditorMountFacadeRuntime } from './mount-facade-runtime'
 import { createPageStartKeys, isSameTextPosition, mergePageIndexes, renderPageBatch, resolveCanvasPixelRatio, resolveOperationDirtyPageIndexes } from './rendering'
+import { cancelDeferredVisualTask, scheduleDeferredVisualTask } from './visual-task-scheduler'
 import type { RenderReason, TransientLayoutQuerySnapshot } from './types'
 
 export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRuntime {
@@ -75,6 +76,13 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
       bufferPages: 1
     })
     const selectionRender = this.createSelectionRenderState(layout)
+    const experimentalDecorations = this.pluginHost.readDecorations({
+      projection: this.currentProjection,
+      layout,
+      selection: this.currentSelection,
+      reason
+    })
+    const decorationPageIndexes = mergePageIndexes(experimentalDecorations.map((decoration) => decoration.pageIndex))
     const shouldUseSchedule = reason === 'document'
     const scheduledImmediatePageIndexes = shouldUseSchedule ? schedule.immediatePageIndexes : []
     const retainedPageIndexes = mergePageIndexes(
@@ -89,7 +97,8 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
       scheduledImmediatePageIndexes,
       selectionRender.pageIndexes,
       mountedDom.commentPageIndexes,
-      this.selectionPageIndexes
+      this.selectionPageIndexes,
+      decorationPageIndexes
     )
 
     mountedDom.canvases = renderPageBatch({
@@ -98,6 +107,7 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
       retainedPageIndexes,
       rerenderPageIndexes,
       selectionRender,
+      experimentalDecorations,
       scale: this.pageConfig.scale,
       pixelRatio: resolveCanvasPixelRatio(mountedDom)
     })
@@ -380,7 +390,7 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
       return
     }
 
-    clearTimeout(deferredRender.timeoutId)
+    cancelDeferredVisualTask(deferredRender.taskHandle)
 
     if (this.pendingLayoutContinuation === undefined) {
       mountedDom.deferredRender = undefined
@@ -388,9 +398,9 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
     }
 
     mountedDom.deferredRender = {
-      timeoutId: setTimeout(() => {
+      taskHandle: scheduleDeferredVisualTask(mountedDom, () => {
         this.flushDeferredRenderChunk()
-      }, 0),
+      }),
       chunkSize: deferredRender.chunkSize,
       continuation: this.pendingLayoutContinuation
     }

@@ -156,6 +156,9 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
     const canvasContainer = ownerDocument.createElement('div')
     canvasContainer.className = 'jw-editor__canvas-container'
     canvasContainer.setAttribute('data-jword-canvas-container', '')
+    canvasContainer.setAttribute('role', 'region')
+    canvasContainer.setAttribute('aria-label', `${this.label} viewport`)
+    canvasContainer.tabIndex = 0
     const hiddenTextarea = createHiddenTextareaElement(ownerDocument)
     const liveRegion = createLiveRegionElement(ownerDocument)
     const textMirror = createTextMirrorElement(ownerDocument)
@@ -216,8 +219,12 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
     const handleBlur = () => {
       this.updateInputFocusState(false)
     }
+    const handleCanvasFocus = () => {
+      hiddenTextarea.focus()
+    }
 
     canvasContainer.addEventListener('scroll', handleScroll, eventListenerOptions)
+    canvasContainer.addEventListener('focus', handleCanvasFocus, eventListenerOptions)
     canvasContainer.addEventListener('mousedown', handlePointerDown, eventListenerOptions)
     canvasContainer.addEventListener('mousemove', handlePointerMove, eventListenerOptions)
     ownerDocument.addEventListener('mouseup', handlePointerUp, eventListenerOptions)
@@ -291,6 +298,11 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
       deferredTextMirrorSyncId: undefined
     }
     this.renderMountedLayout('mount')
+    this.pluginHost.dispatchMount({
+      host,
+      projection: this.currentProjection,
+      layout: this.getLayout()
+    })
   }
 
   /** 销毁已挂载 DOM、历史状态和事件监听。 */
@@ -298,6 +310,8 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
     if (this.isDestroyed) {
       return
     }
+
+    this.pluginHost.dispatchDestroy()
 
     if (this.mountedDom !== undefined) {
       this.cancelDeferredDocumentRender()
@@ -317,6 +331,7 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
     }
 
     this.mountedDom = undefined
+    this.pluginHost.dispose()
     this.history.clear()
     this.unsubscribePipeline()
     this.emit({ kind: 'destroyed' })

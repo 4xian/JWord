@@ -17,6 +17,7 @@ import type {
 
 import {
   createJWordCollabServer,
+  createJWordCollabHistoryService,
   type JWordCollabServer
 } from '../src/index'
 
@@ -72,6 +73,14 @@ describe('collab-server history document lock queue', () => {
       storage.releaseFirstLoad()
       await Promise.allSettled([firstRequest, secondRequest])
     }
+  })
+
+  it('reuses one persistence adapter for repeated history service operations', () => {
+    const service = createJWordCollabHistoryService({
+      storage: new BlockingHistoryStorage()
+    })
+
+    expect(service.createAdapter()).toBe(service.createAdapter())
   })
 })
 

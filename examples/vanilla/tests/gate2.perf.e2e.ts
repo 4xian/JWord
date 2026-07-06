@@ -8,7 +8,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-const expectedGate2PageCount = 53
+const expectedGate2PageCount = 67
 
 interface Gate2PerfMetrics {
   readonly pageCount: number

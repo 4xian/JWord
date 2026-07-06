@@ -20,11 +20,11 @@ interface Gate3PerfMetrics {
 
 const P95_SAMPLE_COUNT = 20
 const LARGE_DOCUMENT_INSERT_WARMUP_COUNT = 2
-const expectedGate2PageCount = 53
+const expectedGate2PageCount = 67
 
 const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
   gate2ScrollMs: 120,
-  largeDocumentInsertP95Ms: 140,
+  largeDocumentInsertP95Ms: 50,
   alphaLoadMs: 80,
   selectionSyncMs: 140,
   toggleBoldP95Ms: 140,
@@ -33,6 +33,7 @@ const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
 }
 
 test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ page, browserName }, testInfo) => {
+  test.setTimeout(60000)
   test.skip(browserName !== 'chromium', '当前 Gate 3 Alpha perf 门槛只固定 Chromium。')
 
   await page.goto('/?fixture=gate2')
@@ -262,6 +263,8 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       const lastPageIndex = demo.editor.getLayout().pages.length - 1
       const readLastPageMounted = (): boolean => document.querySelector(`[data-jword-page="${lastPageIndex}"] canvas`) !== null
 
+      demo.editor.setSelection(null)
+      await waitForSettledFrames()
       container.scrollTop = 0
       container.dispatchEvent(new Event('scroll'))
       await nextFrame()

@@ -414,6 +414,7 @@ async function runServerApiBenchmark(fixture, update) {
     address: '127.0.0.1',
     featureFlags: Object.values(GATE6_COLLAB_FEATURES),
     historyStorage: createVolatileHistoryStorage(),
+    authHook: () => ({ ok: true }),
     licenseHook: () => ({ ok: true })
   })
 
@@ -698,8 +699,13 @@ function runAutoInsertBenchmark(fixture) {
     const autoInsertStart = performance.now()
     const insertResult = inserter.write(fixture.text)
     const autoInsertDurationMs = roundMetric(performance.now() - autoInsertStart)
+
+    if (insertResult === null) {
+      throw new Error(`Gate 6 auto inserter benchmark did not insert text for ${fixture.id}.`)
+    }
+
     const inputProbeStart = performance.now()
-    const inputProbeResult = editor.executeCommand(
+    editor.executeCommand(
       {
         name: 'autoInsertInputProbe',
         operations: [{
@@ -715,18 +721,19 @@ function runAutoInsertBenchmark(fixture) {
     )
     const autoInsertInputProbeDurationMs = roundMetric(performance.now() - inputProbeStart)
 
-    if (insertResult === null) {
-      throw new Error(`Gate 6 auto inserter benchmark did not insert text for ${fixture.id}.`)
-    }
-
     return {
       autoInsertDurationMs,
       autoInsertInputProbeDurationMs,
-      autoInsertUpdateByteLength: insertResult.diagnostic.updateByteLength + inputProbeResult.diagnostic.updateByteLength
+      autoInsertUpdateByteLength: readEditorUpdateByteLength(editor)
     }
   } finally {
     editor.destroy()
   }
+}
+
+/** 通过公开 facade 显式计量 update 大小，避免依赖事务热路径诊断字段。 */
+function readEditorUpdateByteLength(editor) {
+  return editor.encodeSyncUpdate().byteLength
 }
 
 /** 创建公开 facade 可解析的默认段落锚点。 */

@@ -13,6 +13,7 @@ import {
 } from '../layout/font-manager'
 import { twipsToCssPx } from '../layout/page-config'
 import type { ImageInlineLayoutPayload, InlineBox, LayoutBox, LayoutRect, TableBox, TextFragment } from '../layout/runtime'
+import type { PluginResolvedDecoration } from '../plugins/types'
 import type { CanvasImageResourceResolution, CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 
 export interface RenderPageInput {
@@ -20,6 +21,7 @@ export interface RenderPageInput {
   readonly page: LayoutBox
   readonly selectionRects?: readonly LayoutRect[]
   readonly commentRects?: readonly LayoutRect[]
+  readonly experimentalDecorations?: readonly PluginResolvedDecoration[]
   readonly caretRect?: LayoutRect
   readonly backgroundColor?: string
   readonly selectionColor?: string
@@ -38,6 +40,7 @@ export interface SyncPageCanvasesInput {
   readonly pool: CanvasPool
   readonly selectionRects?: readonly LayoutRect[]
   readonly commentRects?: readonly LayoutRect[]
+  readonly experimentalDecorations?: readonly PluginResolvedDecoration[]
   readonly caretRect?: LayoutRect
   readonly scale?: number
   readonly pixelRatio?: number
@@ -49,6 +52,8 @@ const MAX_CANVAS_AREA_PX = 16777216
 const DEFAULT_CANVAS_TEXT_COLOR = '#374151'
 const DEFAULT_CANVAS_CARET_COLOR = '#111827'
 const DEFAULT_CANVAS_COMMENT_COLOR = '#fff3bf'
+const DEFAULT_PLUGIN_TEXT_HIGHLIGHT_COLOR = '#fef08a'
+const DEFAULT_PLUGIN_PAGE_MARKER_COLOR = '#bfdbfe'
 const IMAGE_STATUS_COLORS = Object.freeze({
   pending: { fill: '#fff7ed', border: '#f59e0b', text: '#92400e' },
   success: { fill: '#eff6ff', border: '#2563eb', text: '#1d4ed8' },
@@ -86,6 +91,7 @@ export function renderPageCanvas(input: RenderPageInput): void {
   context.fillRect(0, 0, supportsTransform ? cssWidth : canvasWidth, supportsTransform ? cssHeight : canvasHeight)
 
   renderTextBackgrounds(context, input.page, drawingScale)
+  renderExperimentalTextDecorations(context, input, drawingScale)
   renderCommentRects(context, input, drawingScale)
   renderSelectionRects(context, input, drawingScale)
   renderTables(context, input.page, drawingScale)
@@ -93,6 +99,7 @@ export function renderPageCanvas(input: RenderPageInput): void {
   renderParagraphListMarkers(context, input.page, drawingScale)
   renderTextFragments(context, input.page, drawingScale)
   renderInlineObjects(context, input.page, drawingScale, input.imageResourceResolver)
+  renderExperimentalPageDecorations(context, input, drawingScale)
 
   if (input.caretRect?.pageIndex === input.page.pageIndex) {
     context.fillStyle = input.caretColor ?? DEFAULT_CANVAS_CARET_COLOR
@@ -102,6 +109,59 @@ export function renderPageCanvas(input: RenderPageInput): void {
       Math.max(1, twipsToCssPx(input.caretRect.width, drawingScale)),
       twipsToCssPx(input.caretRect.height, drawingScale)
     )
+  }
+}
+
+/** 绘制 experimental 文本高亮 decoration，保持在正文文字下方。 */
+function renderExperimentalTextDecorations(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  input: RenderPageInput,
+  drawingScale: number
+): void {
+  for (const decoration of input.experimentalDecorations ?? []) {
+    if (decoration.kind !== 'textHighlight' || decoration.pageIndex !== input.page.pageIndex) {
+      continue
+    }
+
+    context.fillStyle = decoration.color ?? DEFAULT_PLUGIN_TEXT_HIGHLIGHT_COLOR
+    for (const rect of decoration.rects) {
+      context.fillRect(
+        toCanvasX(input.page, rect.x, drawingScale),
+        toCanvasY(input.page, rect.y, drawingScale),
+        Math.max(1, twipsToCssPx(rect.width, drawingScale)),
+        Math.max(1, twipsToCssPx(rect.height, drawingScale))
+      )
+    }
+  }
+}
+
+/** 绘制 experimental 页面 marker decoration，保持不暴露 canvas context 给插件。 */
+function renderExperimentalPageDecorations(
+  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
+  input: RenderPageInput,
+  drawingScale: number
+): void {
+  for (const decoration of input.experimentalDecorations ?? []) {
+    if (decoration.kind !== 'pageOverlay' || decoration.pageIndex !== input.page.pageIndex) {
+      continue
+    }
+
+    context.fillStyle = decoration.color ?? DEFAULT_PLUGIN_PAGE_MARKER_COLOR
+    context.fillRect(
+      toCanvasX(input.page, decoration.rect.x, drawingScale),
+      toCanvasY(input.page, decoration.rect.y, drawingScale),
+      Math.max(1, twipsToCssPx(decoration.rect.width, drawingScale)),
+      Math.max(1, twipsToCssPx(decoration.rect.height, drawingScale))
+    )
+
+    if (decoration.label !== undefined) {
+      context.fillStyle = DEFAULT_CANVAS_TEXT_COLOR
+      context.fillText(
+        decoration.label.slice(0, 24),
+        toCanvasX(input.page, decoration.rect.x + 40, drawingScale),
+        toCanvasY(input.page, decoration.rect.y + Math.max(180, decoration.rect.height / 2), drawingScale)
+      )
+    }
   }
 }
 
@@ -171,26 +231,6 @@ function renderTableGrid(
     context.fillRect(tableX, toCanvasY(page, y, drawingScale), tableWidth, borderWidth)
   }
 }
-
-/** 使用 fillRect 绘制矩形边框，兼容 mock canvas。 */
-function renderRectBorder(
-  context: NonNullable<ReturnType<CanvasLike['getContext']>>,
-  page: LayoutBox,
-  rect: LayoutRect,
-  drawingScale: number,
-  borderWidth: number
-): void {
-  const x = toCanvasX(page, rect.x, drawingScale)
-  const y = toCanvasY(page, rect.y, drawingScale)
-  const width = Math.max(1, twipsToCssPx(rect.width, drawingScale))
-  const height = Math.max(1, twipsToCssPx(rect.height, drawingScale))
-
-  context.fillRect(x, y, width, borderWidth)
-  context.fillRect(x, y + height - borderWidth, width, borderWidth)
-  context.fillRect(x, y, borderWidth, height)
-  context.fillRect(x + width - borderWidth, y, borderWidth, height)
-}
-
 
 /** 绘制批注锚点范围底色，层级保持在选区高亮之下。 */
 function renderCommentRects(
@@ -270,7 +310,7 @@ function renderHeaderFooterBoxes(
   for (const box of page.headerFooterBoxes) {
     const text = formatHeaderFooterText(box.sourceId, box.pageNumber)
     const x = resolveHeaderFooterTextX(page, box, text, drawingScale)
-    const baseline = toCanvasY(page, box.y + (box.height * 0.6), drawingScale)
+    const baseline = toCanvasY(page, box.baseline, drawingScale)
 
     context.fillStyle = '#6b7280'
     context.font = `${Math.max(10, Math.round(12 * drawingScale))}px sans-serif`
@@ -661,6 +701,9 @@ export function syncPageCanvases(input: SyncPageCanvasesInput): Map<number, Canv
         page,
         ...(input.selectionRects === undefined ? {} : { selectionRects: input.selectionRects }),
         ...(input.commentRects === undefined ? {} : { commentRects: input.commentRects }),
+        ...(input.experimentalDecorations === undefined
+          ? {}
+          : { experimentalDecorations: input.experimentalDecorations }),
         ...(input.caretRect === undefined ? {} : { caretRect: input.caretRect }),
         ...(input.scale === undefined ? {} : { scale: input.scale }),
         ...(input.pixelRatio === undefined ? {} : { pixelRatio: input.pixelRatio }),

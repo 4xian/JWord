@@ -1346,11 +1346,11 @@
 }
 
 .jw-toolbar__select[data-jword-state='empty'] {
-  color: #9aa3af;
+  color: #64748b;
 }
 
 .jw-toolbar__select-wrap[data-jword-state='empty'] .jw-toolbar__select-label {
-  color: #9aa3af;
+  color: #64748b;
 }
 
 .jw-toolbar__select[data-jword-state='mixed'],

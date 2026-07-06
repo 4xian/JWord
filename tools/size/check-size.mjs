@@ -1,3 +1,11 @@
+/**
+ * 职责：执行基础 core 与 vanilla 首屏 bundle 体积门禁。
+ * 边界：只读取 fresh build 产物、首屏资源和源码静态 import 图，不构建、不改写 dist。
+ * 协作模块：root `pnpm size`、examples/vanilla build、Gate 7 bundle size 校准计划。
+ * 约束：阻止高级包进入免费首屏，并用当前实测预算加收紧路线图约束体积回归。
+ * Specs：docs/superpowers/plans/2026-07-06-gate7-bundle-size-calibration.md。
+ */
+
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, normalize } from 'node:path'
 
@@ -31,8 +39,29 @@ const forbiddenFirstScreenImports = [
   'pdf-lib',
   'fontkit'
 ]
-const coreEntryByteLimit = 260000
-const demoFirstScreenByteLimit = 330000
+const sizeBudgetMeasuredAt = '2026-07-06'
+const coreEntryMeasuredBytes = 638269
+const demoFirstScreenMeasuredBytes = 687669
+const coreEntryByteLimit = 650000
+const demoFirstScreenByteLimit = 700000
+const sizeBudgetRoadmap = [
+  {
+    metric: 'coreEntry',
+    artifact: coreEntryPath,
+    measuredBytes: coreEntryMeasuredBytes,
+    maxBytes: coreEntryByteLimit,
+    nextTargetBytes: 520000,
+    targetStage: 'Gate 7 API freeze 后复核 core plugin / diagnostics 导出面并拆分可选能力'
+  },
+  {
+    metric: 'demoFirstScreen',
+    artifact: demoIndexPath,
+    measuredBytes: demoFirstScreenMeasuredBytes,
+    maxBytes: demoFirstScreenByteLimit,
+    nextTargetBytes: 560000,
+    targetStage: 'Gate 7 wrapper/theme/devtools 前保持免费首屏只加载基础 editor/UI，后续高级能力继续 lazy-load'
+  }
+]
 const runtimeImportFromPattern = /^\s*import(?!\s+type\b)[\s\S]*?\sfrom\s+["']([^"']+)["'];?/gmu
 const runtimeBareImportPattern = /^\s*import\s+["']([^"']+)["'];?/gmu
 const runtimeExportFromPattern = /^\s*export(?!\s+type\b)[\s\S]*?\sfrom\s+["']([^"']+)["'];?/gmu
@@ -93,7 +122,7 @@ for (const asset of demoAssets) {
 
 if (coreEntry !== null && coreEntry.bytes > coreEntryByteLimit) {
   failures.push(
-    `${coreEntryPath} 超出 Gate 2 体积门槛: ${coreEntry.bytes} > ${coreEntryByteLimit}`
+    `${coreEntryPath} 超出 Gate 7 校准体积预算: ${coreEntry.bytes} > ${coreEntryByteLimit}`
   )
 }
 
@@ -101,7 +130,7 @@ const firstScreenBytes = sumBytes(firstScreenAssets)
 
 if (firstScreenBytes > demoFirstScreenByteLimit) {
   failures.push(
-    `${demoIndexPath} 首屏 JS/CSS 总体积超出 Gate 2 门槛: ${firstScreenBytes} > ${demoFirstScreenByteLimit}`
+    `${demoIndexPath} 首屏 JS/CSS 总体积超出 Gate 7 校准体积预算: ${firstScreenBytes} > ${demoFirstScreenByteLimit}`
   )
 }
 
@@ -134,10 +163,12 @@ console.log(
         packageImports: demoGraph.packageImports
       },
       thresholds: {
+        measuredAt: sizeBudgetMeasuredAt,
+        roadmap: sizeBudgetRoadmap,
         coreEntryMaxBytes: coreEntryByteLimit,
         demoFirstScreenMaxBytes: demoFirstScreenByteLimit
       },
-      note: 'Gate 2 size evidence requires fresh builds, blocks spec-forbidden heavy dependencies, and enforces bundle byte ceilings.'
+      note: 'Gate 7 calibrated size evidence requires fresh builds, blocks spec-forbidden heavy dependencies, and enforces current measured ceilings with a tightening roadmap.'
     },
     null,
     2

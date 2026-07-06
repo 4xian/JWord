@@ -20,6 +20,7 @@ import type {
   ExportPdfOptions,
   ExportPdfResult,
   PdfError,
+  PdfExportImageInput,
   PdfImageAsset,
   PdfPageGeometry,
   PdfProgressEvent,
@@ -68,12 +69,22 @@ export {
   type PdfVisualReportOptions,
   type PdfVisualReportStatus
 } from './visual-report.js'
+export {
+  PDF_WORKER_CSP_DIRECTIVES,
+  detectPdfWorkerCapability
+} from './worker-capability.js'
 export type {
   PdfDiagnosticCodeMetadata,
   PdfDiagnosticSeverity,
   PdfErrorCode,
   PdfWarningCode
 } from './diagnostics.js'
+export type {
+  DetectPdfWorkerCapabilityOptions,
+  PdfWorkerCapability,
+  PdfWorkerCapabilityRequirement,
+  PdfWorkerCapabilityStatus
+} from './worker-capability.js'
 export type {
   CancelPdfWorkerRequest,
   ExportPdfOptions,
@@ -106,6 +117,13 @@ type PdfImageInlineBox = PdfInlineObjectBox & {
   readonly payload: Extract<PdfInlineObjectBox['payload'], { readonly resourceId: string }>
 }
 type PdfTableBox = Extract<PageBox['blocks'][number], { readonly kind: 'table' }>
+const MAX_PDF_PAGE_SIZE_POINTS = 14400
+
+interface PdfImageRenderContext {
+  readonly inputsById: ReadonlyMap<string, PdfExportImageInput>
+  readonly assetsById: Map<string, Promise<PdfImageAsset>>
+  readonly embeddedById: Map<string, Promise<PDFImage | undefined>>
+}
 
 /** 从 JWord 当前分页 layout 导出 PDF。 */
 export async function exportPdfFromLayout(
@@ -131,7 +149,7 @@ export async function exportPdfFromLayout(
   const standardFonts = await readPdfStandardFonts(pdfDocument, StandardFonts)
   assertPdfExportNotCancelled(options)
 
-  const imageAssets = await readPdfImageAssets(options)
+  const imageContext = createPdfImageRenderContext(options)
   assertPdfExportNotCancelled(options)
 
   const pages = layout.pages.length === 0 ? [createBlankPageFromLayout(layout)] : layout.pages
@@ -144,12 +162,13 @@ export async function exportPdfFromLayout(
   }
 
   assertPdfFontsCanCoverLayout(pages, fontRegistry, options)
+  assertPdfPageSizesWithinLimit(pages, options)
   warnPdfMissingFontVariants(pages, fontRegistry, warnings, options)
   assertPdfExportNotCancelled(options)
 
   for (const page of pages) {
     assertPdfExportNotCancelled(options)
-    await renderPdfPage(pdfDocument, fontRegistry, page, rgb, imageAssets)
+    await renderPdfPage(pdfDocument, fontRegistry, page, rgb, imageContext)
     assertPdfExportNotCancelled(options)
   }
 
@@ -168,6 +187,37 @@ export async function exportPdfFromLayout(
     progress,
     pageGeometry: readPdfPageGeometry(pages)
   }
+}
+
+/** 校验 PDF 单页尺寸不超过 14400 points 的规范上限。 */
+function assertPdfPageSizesWithinLimit(pages: readonly PageBox[], options: ExportPdfOptions): void {
+  for (const page of pages) {
+    const widthPoints = twipsToPdfPoints(page.width)
+    const heightPoints = twipsToPdfPoints(page.height)
+
+    if (widthPoints <= MAX_PDF_PAGE_SIZE_POINTS && heightPoints <= MAX_PDF_PAGE_SIZE_POINTS) {
+      continue
+    }
+
+    throw createPdfPageSizeExceededError(page, options)
+  }
+}
+
+/** 创建 PDF 页面尺寸超限错误并同步调用方回调。 */
+function createPdfPageSizeExceededError(page: PageBox, options: ExportPdfOptions): Error & PdfError {
+  const error = new Error('PDF 单页尺寸超过 14400 points 上限') as Error & PdfError
+
+  error.name = 'PdfPageSizeExceededError'
+  Object.assign(error, {
+    code: 'PDF_PAGE_SIZE_EXCEEDED',
+    recoverable: true,
+    widthTwips: page.width,
+    heightTwips: page.height,
+    ...(options.requestId === undefined ? {} : { requestId: options.requestId })
+  })
+  options.onError?.(error)
+
+  return error
 }
 
 /** 检查 PDF 导出是否已被取消。 */
@@ -243,14 +293,14 @@ async function renderPdfPage(
   fontRegistry: PdfFontRegistry,
   page: PageBox,
   createRgb: PdfRgbFactory,
-  imageAssets: ReadonlyMap<string, PdfImageAsset>
+  imageContext: PdfImageRenderContext
 ): Promise<void> {
   const pdfPage = pdfDocument.addPage([
     twipsToPdfPoints(page.width),
     twipsToPdfPoints(page.height)
   ])
 
-  await renderPdfInlineImages(pdfDocument, pdfPage, page, imageAssets)
+  await renderPdfInlineImages(pdfDocument, pdfPage, page, imageContext)
   renderPdfTables(pdfPage, page, createRgb)
   renderPdfTableText(pdfPage, fontRegistry, page, createRgb)
 
@@ -289,11 +339,13 @@ function renderPdfTextFragment(
   renderPdfTextDecoration(pdfPage, fragment, x, baseline, size, color)
 }
 
-/** 读取 PDF 导出需要的图片资产。 */
-async function readPdfImageAssets(options: ExportPdfOptions): Promise<ReadonlyMap<string, PdfImageAsset>> {
-  const assets = await Promise.all((options.images ?? []).map(readPdfImageAsset))
-
-  return new Map(assets.map((asset) => [asset.id, asset] as const))
+/** 创建按需读取和嵌入图片资源的上下文。 */
+function createPdfImageRenderContext(options: ExportPdfOptions): PdfImageRenderContext {
+  return {
+    inputsById: new Map((options.images ?? []).map((input) => [input.id, input] as const)),
+    assetsById: new Map(),
+    embeddedById: new Map()
+  }
 }
 
 /** 渲染页面里的 inline 图片。 */
@@ -301,7 +353,7 @@ async function renderPdfInlineImages(
   pdfDocument: PdfLibDocument,
   pdfPage: PDFPage,
   page: PageBox,
-  imageAssets: ReadonlyMap<string, PdfImageAsset>
+  imageContext: PdfImageRenderContext
 ): Promise<void> {
   for (const line of page.lines) {
     for (const inline of line.inlines) {
@@ -309,13 +361,11 @@ async function renderPdfInlineImages(
         continue
       }
 
-      const asset = imageAssets.get(inline.payload.resourceId)
+      const image = await embedPdfImage(pdfDocument, imageContext, inline.payload.resourceId)
 
-      if (asset === undefined) {
+      if (image === undefined) {
         continue
       }
-
-      const image = await embedPdfImage(pdfDocument, asset)
 
       pdfPage.drawImage(image, {
         x: twipsToPdfPoints(inline.x),
@@ -327,8 +377,55 @@ async function renderPdfInlineImages(
   }
 }
 
-/** 嵌入已读取的 PDF 图片资源。 */
-async function embedPdfImage(pdfDocument: PdfLibDocument, asset: PdfImageAsset): Promise<PDFImage> {
+/** 嵌入已读取的 PDF 图片资源，并按 resourceId 复用同一个 PDFImage。 */
+async function embedPdfImage(
+  pdfDocument: PdfLibDocument,
+  imageContext: PdfImageRenderContext,
+  resourceId: string
+): Promise<PDFImage | undefined> {
+  const cached = imageContext.embeddedById.get(resourceId)
+
+  if (cached !== undefined) {
+    return cached
+  }
+
+  const embedded = readPdfImageAssetById(imageContext, resourceId)
+    .then((asset) => {
+      if (asset === undefined) {
+        return undefined
+      }
+
+      return embedPdfImageAsset(pdfDocument, asset)
+    })
+
+  imageContext.embeddedById.set(resourceId, embedded)
+
+  return embedded
+}
+
+/** 按 resourceId 延迟读取图片输入。 */
+async function readPdfImageAssetById(
+  imageContext: PdfImageRenderContext,
+  resourceId: string
+): Promise<PdfImageAsset | undefined> {
+  const input = imageContext.inputsById.get(resourceId)
+
+  if (input === undefined) {
+    return undefined
+  }
+
+  let asset = imageContext.assetsById.get(resourceId)
+
+  if (asset === undefined) {
+    asset = readPdfImageAsset(input)
+    imageContext.assetsById.set(resourceId, asset)
+  }
+
+  return asset
+}
+
+/** 嵌入单个已读取的 PDF 图片资源。 */
+async function embedPdfImageAsset(pdfDocument: PdfLibDocument, asset: PdfImageAsset): Promise<PDFImage> {
   if (asset.mimeType === 'image/png') {
     return pdfDocument.embedPng(asset.bytes)
   }
@@ -426,7 +523,7 @@ function renderPdfHeaderFooterBoxes(
 
     pdfPage.drawText(text, {
       x: resolvePdfHeaderFooterTextX(page, box, text, font, size),
-      y: twipsToPdfPoints(page.height - box.y - (box.height * 0.6)),
+      y: twipsToPdfPoints(page.height - box.baseline),
       size,
       font,
       color: createRgb(0.42, 0.45, 0.5)
@@ -519,10 +616,15 @@ function readPdfPageGeometry(pages: readonly PageBox[]): readonly PdfPageGeometr
   })
 }
 
-/** 把 Uint8Array 复制成独立 ArrayBuffer。 */
+/** 读取 Uint8Array 覆盖的 ArrayBuffer，完整拥有时避免额外复制。 */
 function readOwnedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const output = new ArrayBuffer(bytes.byteLength)
+  if (bytes.buffer instanceof ArrayBuffer) {
+    return bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+  }
 
+  const output = new ArrayBuffer(bytes.byteLength)
   new Uint8Array(output).set(bytes)
 
   return output

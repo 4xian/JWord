@@ -56,10 +56,15 @@ export type {
   JWordSelectedImageTarget,
   JWordToolbarControlElement,
   JWordToolbarElements,
+  JWordToolbarPluginItem,
   JWordToolbarOptions,
   JWordToolbarToolId,
   JWordUiElements,
-  JWordUiInstance
+  JWordUiInstance,
+  JWordUiPluginExtension,
+  JWordUiPluginRenderContext,
+  JWordMenuPluginAction,
+  JWordMenuPluginItem
 } from './types'
 export { createFindReplaceController } from './find-replace/controller'
 export type {

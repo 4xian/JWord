@@ -28,6 +28,9 @@ describe('toolbar controller focus restore', () => {
       const controller = createToolbarController({
         editor,
         toolbarHost,
+        toolbar: {
+          visibleTools: ['document.pagePreset']
+        },
         assistive: {
           liveRegion: createStubLiveRegion(),
           textMirror: null
@@ -202,6 +205,9 @@ describe('toolbar controller focus restore', () => {
       const controller = createToolbarController({
         editor,
         toolbarHost,
+        toolbar: {
+          visibleTools: ['document.pagePreset', 'document.findReplace', 'format.textColor']
+        },
         assistive: {
           liveRegion: createStubLiveRegion(),
           textMirror: null

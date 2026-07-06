@@ -13,9 +13,11 @@ export class JWordEditor extends JWordEditorCollaborationRuntime implements Edit
   /** 创建 Editor runtime，可由内部协同入口绑定共享文档。 */
   constructor(options?: EditorOptions, internalOptions?: EditorInternalRuntimeOptions) {
     super(options, internalOptions)
+    this.initializePluginHost(this)
   }
 }
 
+/** 创建无框架依赖的 JWord editor facade。 */
 export function createEditor(options?: EditorOptions): Editor {
   return new JWordEditor(options)
 }
@@ -42,6 +44,35 @@ export type {
   InitialFocusPosition
 } from './types'
 export type {
+  PluginCommandContext,
+  PluginCommandDefinition,
+  PluginCommandMiddleware,
+  PluginCommandMiddlewareInput,
+  PluginCommandNext,
+  PluginContext,
+  PluginDecoration,
+  PluginDecorationReadInput,
+  PluginDecorationReadReason,
+  PluginDefinition,
+  PluginDiagnostic,
+  PluginDiagnosticCode,
+  PluginDiagnosticInput,
+  PluginDiagnosticsReporter,
+  PluginDisposable,
+  PluginPageOverlayDecoration,
+  PluginResolvedDecoration,
+  PluginResolvedPageOverlayDecoration,
+  PluginResolvedTextHighlightDecoration,
+  PluginTextHighlightDecoration,
+  ExperimentalDecorationProvider,
+  PluginKeyBindingContext,
+  PluginKeyBindingDefinition,
+  PluginKeyBindingPredicate,
+  PluginLifecycleEventMap,
+  PluginLifecycleEventName,
+  PluginLifecycleListener
+} from '../plugins/types'
+export type {
   EditorAnchorSnapshot,
   EditorLocationQuery,
   EditorLocationTarget,
@@ -53,3 +84,12 @@ export type {
   EditorTextLocation,
   EditorTextQueryResult
 } from './location-types'
+export type {
+  JWordDiagnosticsPluginEntry,
+  JWordDiagnosticsPrivacySummary,
+  JWordDiagnosticsSnapshot,
+  JWordPluginDiagnosticTelemetryEvent,
+  JWordTelemetryEvent,
+  JWordTelemetryOptions,
+  JWordTelemetrySink
+} from './observability'

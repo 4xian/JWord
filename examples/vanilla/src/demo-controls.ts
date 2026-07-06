@@ -18,6 +18,11 @@ interface CreateDemoControlsOptions {
   readonly refreshUi?: () => void
 }
 
+interface DemoControlState {
+  readonly pageCount: number
+  readonly selectionEmpty: boolean
+}
+
 interface DemoControlElements {
   readonly loadAlphaSampleButton: HTMLButtonElement
   readonly restoreGate2FixtureButton: HTMLButtonElement
@@ -56,7 +61,7 @@ export function createDemoControls(input: CreateDemoControlsOptions): DemoContro
       return
     }
 
-    renderControlsState(input.editor, elements)
+    renderControlsState(input.editor, elements, readMountedControlState(input.editor, input.host))
   })
 
   elements.loadAlphaSampleButton.addEventListener(
@@ -195,9 +200,33 @@ function announceStatus(statusHost: HTMLElement | null, message: string): void {
 /**
  * 职责：同步 demo-only 控件的可用状态，保持既有大夹具/小文档行为。
  */
-function renderControlsState(editor: Editor, elements: DemoControlElements): void {
-  elements.selectSampleButton.disabled = editor.getLayout().pages.length > DEMO_SELECT_ENABLED_MAX_PAGE_COUNT
-  elements.clearSelectionButton.disabled = editor.getSelection() === null
+function renderControlsState(
+  editor: Editor,
+  elements: DemoControlElements,
+  state: DemoControlState = readLiveControlState(editor)
+): void {
+  elements.selectSampleButton.disabled = state.pageCount > DEMO_SELECT_ENABLED_MAX_PAGE_COUNT
+  elements.clearSelectionButton.disabled = state.selectionEmpty
+}
+
+/** 事务监听器读取已挂载页数，避免 demo-only 状态刷新强制完整 layout。 */
+function readMountedControlState(editor: Editor, host: HTMLElement): DemoControlState {
+  const rawPageCount = host.ownerDocument
+    .querySelector<HTMLElement>('[data-jword-canvas-container]')
+    ?.getAttribute('data-jword-page-count')
+
+  return {
+    pageCount: rawPageCount === undefined || rawPageCount === null ? 0 : Number.parseInt(rawPageCount, 10) || 0,
+    selectionEmpty: editor.getSelection() === null
+  }
+}
+
+/** 显式用户操作后允许读取实时 layout，保持按钮状态与刚完成的文档切换一致。 */
+function readLiveControlState(editor: Editor): DemoControlState {
+  return {
+    pageCount: editor.getLayout().pages.length,
+    selectionEmpty: editor.getSelection() === null
+  }
 }
 
 /**

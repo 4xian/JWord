@@ -28,6 +28,7 @@ import type {
 
 export const PAGE_GAP_TWIPS = 720
 export const FONT_MANAGER_COMPATIBILITY_PROBE_TEXTS = Object.freeze(['M', '中', '😀', ' ', '.'])
+const HEADER_FOOTER_BASELINE_RATIO = 0.6
 
 export function createPage(pageIndex: number, pageConfig: PageConfig): MutablePageBox {
   const pageY = pageIndex * (pageConfig.heightTwips + PAGE_GAP_TWIPS)
@@ -198,6 +199,7 @@ function createHeaderFooterBox(
   const y = role === 'header'
     ? page.y
     : page.contentRect.y + page.contentRect.height
+  const baseline = resolveHeaderFooterBaseline(y, height)
 
   return Object.freeze({
     kind: 'headerFooter',
@@ -209,8 +211,14 @@ function createHeaderFooterBox(
     x: page.contentRect.x,
     y,
     width: page.contentRect.width,
-    height: Math.max(0, height)
+    height: Math.max(0, height),
+    baseline
   })
+}
+
+/** 根据 layout 盒子计算页眉页脚文字基线，后续 renderer 不再各自硬编码比例。 */
+function resolveHeaderFooterBaseline(y: number, height: number): number {
+  return y + (Math.max(0, height) * HEADER_FOOTER_BASELINE_RATIO)
 }
 
 export function createInlineObjectPayload(

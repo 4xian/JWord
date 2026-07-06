@@ -62,9 +62,8 @@ export abstract class JWordEditorInputRuntime extends JWordEditorKeyboardTextRun
       this.insertPlainTextFromRuntime(text)
     })
 
-    // 输入法提交后，同一任务内读取纯文本镜像的测试和无障碍消费方需要立即看到结果。
-    this.cancelDeferredTextMirrorSync()
-    this.syncMountedTextMirror()
+    // 小文档保持同步镜像；大文档把全文串联让出 input 热路径。
+    this.syncMountedTextMirrorAfterInput()
   }
 
   protected handleRuntimeCompositionStart(event: Event): void {
@@ -116,9 +115,8 @@ export abstract class JWordEditorInputRuntime extends JWordEditorKeyboardTextRun
       this.insertPlainTextFromRuntime(text)
     })
 
-    // 输入法结束事件后，调用方会同步读取纯文本镜像。
-    this.cancelDeferredTextMirrorSync()
-    this.syncMountedTextMirror()
+    // 小文档保持同步镜像；大文档把全文串联让出 composition 热路径。
+    this.syncMountedTextMirrorAfterInput()
   }
 
   /**
@@ -141,8 +139,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorKeyboardTextRun
     this.runProtectedInputHandler('splitParagraph', () => {
       this.splitParagraphFromRuntime()
     })
-    this.cancelDeferredTextMirrorSync()
-    this.syncMountedTextMirror()
+    this.syncMountedTextMirrorAfterInput()
   }
 
   protected handleRuntimeKeyDown(event: KeyboardEvent): void {
@@ -277,6 +274,24 @@ export abstract class JWordEditorInputRuntime extends JWordEditorKeyboardTextRun
           this.handleTabFromRuntime(event.shiftKey)
         })
         return
+    }
+
+    const pluginKeyBindingResult = this.pluginHost.handleKeyBinding({
+      rawKey: event.key,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      projection: this.currentProjection,
+      selection: this.currentSelection,
+      mounted: this.mountedDom !== undefined
+    })
+
+    if (pluginKeyBindingResult.handled) {
+      if (pluginKeyBindingResult.preventDefault) {
+        event.preventDefault()
+      }
+      return
     }
   }
 

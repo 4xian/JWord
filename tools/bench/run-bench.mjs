@@ -14,6 +14,7 @@ const benchmarksRoot = 'benchmarks'
 const benchmarkEntries = [
   join(benchmarksRoot, 'gate45-native-benchmark.mjs'),
   join(benchmarksRoot, 'gate2-render-benchmark.mjs'),
+  join(benchmarksRoot, 'phase4-input-hotpath-benchmark.mjs'),
   join(benchmarksRoot, 'gate5-interop-benchmark.mjs'),
   join(benchmarksRoot, 'gate6-collab-benchmark.mjs')
 ]

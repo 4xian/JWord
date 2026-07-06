@@ -209,11 +209,6 @@ function createPendingOpenXmlValidatorCheck(): DocxCompatibilityAutomatedCheck {
   }
 }
 
-/** 创建默认 pending 的办公套件人工检查结果。 */
-function createPendingAppResults(): readonly DocxCompatibilityAppResult[] {
-  return DEFAULT_APP_NAMES.map(createPendingAppResult)
-}
-
 /** 合并外部办公套件结果，确保矩阵目标完整可审计。 */
 function createAppResults(
   appResults: readonly DocxCompatibilityAppResult[] | undefined

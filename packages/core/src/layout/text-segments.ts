@@ -181,13 +181,16 @@ function createAdvanceTwips(
   width: number
 ): readonly number[] {
   const advances = [0]
-  let prefix = ''
+  let advance = 0
 
   for (let index = 0; index < segment.graphemes.length; index += 1) {
-    prefix += segment.graphemes[index] ?? ''
-    advances.push(index === segment.graphemes.length - 1
-      ? width
-      : cssPxToTwips(fontManager.measureText(prefix, style).widthCssPx))
+    if (index === segment.graphemes.length - 1) {
+      advances.push(width)
+      continue
+    }
+
+    advance += cssPxToTwips(fontManager.measureText(segment.graphemes[index] ?? '', style).widthCssPx)
+    advances.push(advance)
   }
 
   return Object.freeze(advances)

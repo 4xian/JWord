@@ -20,6 +20,10 @@ export {
   createDocxProgressEvent,
   createDocxTransferables
 } from './messages.js'
+export {
+  DOCX_WORKER_CSP_DIRECTIVES,
+  detectDocxWorkerCapability
+} from './worker-capability.js'
 export { convertDocxImportDocumentToCoreDocument } from './model.js'
 export {
   createDocxIndexes,
@@ -49,11 +53,19 @@ export type {
   DocxRoundtripDiffOptions,
   DocxRoundtripDiffResult,
   DocxRoundtripDifference,
+  DocxRoundtripBookmarkSnapshot,
   DocxRoundtripImageSnapshot,
   DocxRoundtripParagraphSnapshot,
+  DocxRoundtripRunLinkSnapshot,
   DocxRoundtripSnapshot,
   DocxRoundtripTableCellSnapshot,
   DocxRoundtripTableRowSnapshot,
   DocxRoundtripTableSnapshot
 } from './roundtrip.js'
+export type {
+  DetectDocxWorkerCapabilityOptions,
+  DocxWorkerCapability,
+  DocxWorkerCapabilityRequirement,
+  DocxWorkerCapabilityStatus
+} from './worker-capability.js'
 export type * from './types.js'

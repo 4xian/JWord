@@ -17,7 +17,7 @@ import type {
   JWordCollabServerLicenseHookResult
 } from './index.js'
 
-export type JWordCollabHocuspocusRole = 'read' | 'write'
+export type JWordCollabHocuspocusRole = 'read' | 'comment' | 'write'
 
 export interface JWordCollabHocuspocusAuthHookInput {
   /** Hocuspocus 连接请求 ID。 */
@@ -37,7 +37,7 @@ export interface JWordCollabHocuspocusAuthHookInput {
 export interface JWordCollabHocuspocusAuthHookResult {
   /** 是否允许建立连接。 */
   readonly allow: boolean
-  /** 连接权限粒度；read 只能同步，write 才能提交 update。 */
+  /** 连接权限粒度；read/comment 只能同步，write 才能提交 update。 */
   readonly role?: JWordCollabHocuspocusRole
   /** 宿主侧稳定用户 ID。 */
   readonly userId?: string
@@ -45,6 +45,7 @@ export interface JWordCollabHocuspocusAuthHookResult {
   readonly diagnosticCode?: string
 }
 
+/** Hocuspocus WebSocket 连接的宿主认证与权限 hook。 */
 export type JWordCollabHocuspocusAuthHook = (
   input: JWordCollabHocuspocusAuthHookInput
 ) => Promise<JWordCollabHocuspocusAuthHookResult> | JWordCollabHocuspocusAuthHookResult

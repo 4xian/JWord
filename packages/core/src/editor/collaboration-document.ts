@@ -28,6 +28,7 @@ export interface EditorCollaborationDocumentRefreshInput {
   readonly source?: TransactionDiagnosticSource
 }
 
+/** Editor 与协同 provider 共享同一个内部文档真源的公开 token。 */
 export type EditorSharedDocument = EditorCollaborationDocument
 export type EditorSharedDocumentRefreshInput = EditorCollaborationDocumentRefreshInput
 

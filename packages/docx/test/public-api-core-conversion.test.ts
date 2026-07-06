@@ -9,7 +9,7 @@
  */
 
 import { createEditor } from '@4xian/jword-core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { convertDocxImportDocumentToCoreDocument } from '../src/index'
 
@@ -76,7 +76,7 @@ describe('@4xian/jword-docx public API core conversion', () => {
           mimeType: 'image/png',
           extension: 'png',
           targetPart: 'word/media/image1.png',
-          bytes: [137, 80, 78, 71]
+          bytes: new Uint8Array([137, 80, 78, 71])
         }
       ],
       comments: [],
@@ -234,7 +234,7 @@ describe('@4xian/jword-docx public API core conversion', () => {
           mimeType: 'image/png',
           extension: 'png',
           targetPart: 'word/media/image1.png',
-          bytes: [137, 80, 78, 71]
+          bytes: new Uint8Array([137, 80, 78, 71])
         }
       ],
       comments: [],
@@ -300,5 +300,50 @@ describe('@4xian/jword-docx public API core conversion', () => {
         }
       ]
     })
+  })
+
+  it('converts DOCX resource bytes to data URL in bounded chunks', () => {
+    const originalFromCharCode = String.fromCharCode
+    const calls: number[] = []
+    const spy = vi.spyOn(String, 'fromCharCode').mockImplementation((...codes: number[]) => {
+      calls.push(codes.length)
+
+      return originalFromCharCode(...codes)
+    })
+
+    try {
+      const document = convertDocxImportDocumentToCoreDocument({
+        kind: 'docx-import-document',
+        metadata: {
+          mainDocumentPart: 'word/document.xml',
+          styleIds: [],
+          numberingIds: []
+        },
+        sections: [],
+        resources: [
+          {
+            kind: 'resource',
+            resourceId: 'word/media/large.png',
+            mimeType: 'image/png',
+            extension: 'png',
+            targetPart: 'word/media/large.png',
+            bytes: new Uint8Array(0x8000 + 3).fill(65)
+          }
+        ],
+        comments: [],
+        opaque: {
+          unsupportedParts: [],
+          unsupportedRelationships: [],
+          unsupportedElementFragments: [],
+          originalStyleIds: [],
+          originalNumberingIds: []
+        }
+      })
+
+      expect(document.resources?.[0]?.source.url).toMatch(/^data:image\/png;base64,/u)
+      expect(calls).toEqual([0x8000, 3])
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

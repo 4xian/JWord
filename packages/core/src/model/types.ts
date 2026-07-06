@@ -15,6 +15,7 @@ export type ModelProperties = Readonly<Record<string, unknown>>
 
 export type DocumentMetadata = Readonly<Record<string, string>>
 
+/** JWord 公开文档模型根节点，只描述可序列化内容，不暴露内部 Y.Doc 容器。 */
 export interface Document {
   readonly kind: 'document'
   readonly id: string

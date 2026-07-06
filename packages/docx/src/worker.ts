@@ -2,7 +2,7 @@
  * 职责：提供 Gate 5 DOCX worker 的最小消息入口。
  * 边界：只负责接收 worker 请求、调用公开 DOCX API 并回发响应，不直接访问 core store 或 Y.Doc。
  * 协作模块：index.ts 的 DocxWorkerRequest/DocxWorkerEvent、importDocx、exportDocx 和 inspectDocxPackage。
- * 性能/安全约束：成功导出时转移 ArrayBuffer；取消请求返回稳定错误事件。
+ * 性能/安全约束：成功导出与含媒体导入时转移 ArrayBuffer；取消请求返回稳定错误事件。
  * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
  */
 
@@ -20,6 +20,7 @@ import {
   inspectDocxPackage,
   isDocxErrorCode,
   type DocxError,
+  type ImportDocxResult,
   type DocxTransferable,
   type DocxWorkerEvent,
   type DocxWorkerRequest
@@ -232,11 +233,34 @@ function noop(): void {}
 
 /** 读取 worker 事件里可以转移的二进制资源。 */
 function readDocxWorkerEventTransferables(event: DocxWorkerEvent): readonly DocxTransferable[] {
-  if (event.type !== 'export-result') {
-    return []
+  if (event.type === 'export-result') {
+    return createDocxTransferables(event.result.bytes)
   }
 
-  return createDocxTransferables(event.result.bytes)
+  if (event.type === 'import-result') {
+    return readDocxImportResultTransferables(event.result)
+  }
+
+  return []
+}
+
+/** 读取 DOCX import 结果中可转移的媒体资源 buffer。 */
+function readDocxImportResultTransferables(result: ImportDocxResult): readonly DocxTransferable[] {
+  const transferables: DocxTransferable[] = []
+  const seen = new Set<ArrayBuffer>()
+
+  for (const resource of result.document.resources) {
+    const buffer = resource.bytes.buffer
+
+    if (!(buffer instanceof ArrayBuffer) || seen.has(buffer)) {
+      continue
+    }
+
+    seen.add(buffer)
+    transferables.push(buffer)
+  }
+
+  return transferables
 }
 
 /** 把未知异常转换为稳定 DOCX worker 错误。 */

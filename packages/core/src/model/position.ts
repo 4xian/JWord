@@ -16,7 +16,7 @@ import {
 declare const opaqueBrand: unique symbol
 const anchorStateSymbol = Symbol('jword.anchor.state')
 
-type Opaque<Value, Name extends string> = Value & {
+export type Opaque<Value, Name extends string> = Value & {
   readonly [opaqueBrand]: Name
 }
 
@@ -76,6 +76,13 @@ export interface AnchorRefSnapshot extends AnchorRefInput {
   readonly relativePosition?: Y.RelativePosition
 }
 
+/**
+ * AnchorRef 是可变句柄，外层对象冻结只保证宿主不能直接改写内部状态。
+ *
+ * @remarks
+ * 内部状态仅迁移/解析路径可变：Operation adapter 迁移文本锚点时会改写 block/run/text，
+ * resolveAnchorRef 会同步刷新 graphemeIndex。对外读取必须继续通过防御性快照。
+ */
 interface AnchorRefState {
   kind: 'block' | 'text'
   documentId: DocumentId
@@ -329,6 +336,9 @@ export function readAnchorRefSnapshot(anchor: AnchorRef): AnchorRefSnapshot {
 
 /**
  * 解析锚点的当前位置。
+ *
+ * @remarks
+ * resolveAnchorRef 会同步刷新内部 graphemeIndex，使句柄后续快照跟随 Y.RelativePosition。
  *
  * @param anchor 稳定锚点。
  * @param doc 需要解析相对位置的 Y.Doc。

@@ -133,14 +133,18 @@ describe('Gate 6 diagnostics registry', () => {
   it('freezes required diagnostics codes for every Gate 6 subsystem', () => {
     const registry = readDiagnosticsRegistry('fixtures/collab/diagnostics-registry.json')
 
-    expect(registry.codes.map((diagnostic) => diagnostic.code)).toEqual(expectedDiagnosticCodes)
-    expect(registry.codes.every(hasRequiredDiagnosticMetadata)).toBe(true)
+    const gate6Codes = registry.codes.filter(isGate6DiagnosticMetadata)
+
+    expect(gate6Codes.map((diagnostic) => diagnostic.code)).toEqual(expectedDiagnosticCodes)
+    expect(gate6Codes.every(hasRequiredDiagnosticMetadata)).toBe(true)
   })
 
   it('keeps diagnostics owners aligned with required Gate 6 subsystems', () => {
     const registry = readDiagnosticsRegistry('fixtures/collab/diagnostics-registry.json')
 
-    expect(registry.codes.map((diagnostic) => diagnostic.owner)).toEqual([
+    const gate6Codes = registry.codes.filter(isGate6DiagnosticMetadata)
+
+    expect(gate6Codes.map((diagnostic) => diagnostic.owner)).toEqual([
       'provider',
       'provider',
       'provider',
@@ -212,7 +216,11 @@ describe('Gate 6 diagnostics registry', () => {
 
   it('covers every commercial readiness diagnostics domain', () => {
     const registry = readDiagnosticsRegistry('fixtures/collab/diagnostics-registry.json')
-    const registeredDomains = new Set(registry.codes.flatMap((diagnostic) => diagnostic.domains))
+    const registeredDomains = new Set(
+      registry.codes
+        .filter(isGate6DiagnosticMetadata)
+        .flatMap((diagnostic) => diagnostic.domains)
+    )
 
     expect([...registeredDomains].sort()).toEqual([...requiredDiagnosticDomains].sort())
   })
@@ -288,7 +296,7 @@ function readHistoryRegistry(path: string): Gate6HistoryRegistry {
 
 /** 检查诊断 metadata 是否包含运行时和 fixture 复用所需字段。 */
 function hasRequiredDiagnosticMetadata(metadata: Gate6DiagnosticMetadata): boolean {
-  return ['COLLAB_', 'OFFLINE_', 'PERSISTENCE_', 'JWORD_COLLAB_'].some((prefix) => metadata.code.startsWith(prefix)) &&
+  return isGate6DiagnosticMetadata(metadata) &&
     ['provider', 'network', 'version', 'awareness', 'offline', 'snapshot', 'history', 'auto-inserter', 'restore', 'license', 'server', 'storage'].includes(metadata.owner) &&
     ['info', 'warning', 'error'].includes(metadata.severity) &&
     typeof metadata.recoverable === 'boolean' &&
@@ -299,6 +307,11 @@ function hasRequiredDiagnosticMetadata(metadata: Gate6DiagnosticMetadata): boole
     Array.isArray(metadata.domains) &&
     metadata.domains.length > 0 &&
     metadata.domains.every((domain) => requiredDiagnosticDomains.includes(domain as typeof requiredDiagnosticDomains[number]))
+}
+
+/** 判断是否属于 Gate 6 诊断子集。 */
+function isGate6DiagnosticMetadata(metadata: Gate6DiagnosticMetadata): boolean {
+  return ['COLLAB_', 'OFFLINE_', 'PERSISTENCE_', 'JWORD_COLLAB_'].some((prefix) => metadata.code.startsWith(prefix))
 }
 
 /** 读取协同 fixture 中声明的期望诊断 code。 */

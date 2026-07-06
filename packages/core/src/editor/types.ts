@@ -19,6 +19,8 @@ import type { Resource, ResourceAdapter, ResourceUrlPolicy } from '../resources/
 import type { CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
 import type { EditorAnchorSnapshot, EditorLocationQuery, EditorLocationTarget, EditorRangeSnapshot, EditorRangeSnapshotInput, EditorResolvedLocation, EditorScrollToLocationOptions, EditorSelectionSnapshot, EditorTextQueryResult } from './location-types'
 import type { JWordErrorCode, JWordErrorDetails } from '../shared/errors'
+import type { PluginDefinition, PluginDiagnostic } from '../plugins/types'
+import type { JWordDiagnosticsSnapshot, JWordTelemetryOptions } from './observability'
 
 export type { HistoryScope } from '../operations/history'
 
@@ -50,6 +52,7 @@ export interface EditorUserInput {
   readonly color?: string
 }
 
+/** 创建 editor 时传入的公开初始化、布局、宿主和诊断配置。 */
 export interface EditorOptions {
   /**
    * 挂载后编辑器外壳使用的无障碍标签。
@@ -101,6 +104,16 @@ export interface EditorOptions {
    * 当前本地用户。
    */
   readonly currentUser?: EditorUserInput
+
+  /**
+   * Gate 7 前置插件定义列表。
+   */
+  readonly plugins?: readonly PluginDefinition[]
+
+  /**
+   * Gate 7 R3 telemetry 配置；默认关闭，只有宿主提供 sink 时才发送。
+   */
+  readonly telemetry?: JWordTelemetryOptions
 }
 
 /**
@@ -785,6 +798,31 @@ export interface Editor {
   subscribe(listener: EditorEventListener): () => void
 
   /**
+   * 执行已注册的插件命令。
+   *
+   * @param commandName 插件注册的命令名称。
+   * @param input 传给插件命令的 JSON 兼容或宿主私有输入。
+   * @returns 插件命令产生的事务结果；未找到命令或命令无事务时返回 undefined。
+   * @remarks
+   * 插件命令如需修改文档，仍必须返回现有 Command 并进入统一 transaction pipeline。
+   */
+  executePluginCommand(commandName: string, input?: unknown): TransactionResult | undefined
+
+  /**
+   * 读取当前 editor 收集到的插件诊断。
+   *
+   * @returns 插件错误、拒绝和诊断快照。
+   */
+  getPluginDiagnostics(): readonly PluginDiagnostic[]
+
+  /**
+   * 导出隐私裁剪后的 diagnostics 快照。
+   *
+   * @returns 不包含文档正文的 diagnostics export。
+   */
+  exportDiagnostics(): JWordDiagnosticsSnapshot
+
+  /**
    * 聚焦当前已挂载的编辑器输入层。
    *
    * @returns 无返回值。
@@ -845,6 +883,18 @@ export interface Editor {
   destroy(): void
 }
 
+/** 延迟视觉任务的可取消句柄。 */
+export type DeferredVisualTaskHandle =
+  | {
+      readonly kind: 'animationFrame'
+      readonly view: Window
+      readonly frameId: number
+    }
+  | {
+      readonly kind: 'timeout'
+      readonly timeoutId: ReturnType<typeof setTimeout>
+    }
+
 export interface MountedEditorDom {
   readonly shell: HTMLElement
   readonly canvasContainer: HTMLElement
@@ -886,7 +936,7 @@ export interface MountedEditorDom {
   }
   canvases: Map<number, CanvasLike>
   deferredRender: {
-    timeoutId: ReturnType<typeof setTimeout>
+    taskHandle: DeferredVisualTaskHandle
     chunkSize: number
     continuation: Readonly<{
       dirtyPageIndex: number

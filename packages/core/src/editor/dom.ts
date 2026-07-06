@@ -67,7 +67,7 @@ export function applyVisuallyHiddenStyle(element: HTMLDivElement): void {
   element.style.border = '0'
   element.style.margin = '-1px'
   element.style.overflow = 'hidden'
-  element.style.clip = 'rect(0 0 0 0)'
+  element.style.clipPath = 'inset(50%)'
 }
 
 export function syncHiddenTextareaPosition(input: Readonly<{

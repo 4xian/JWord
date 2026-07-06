@@ -29,7 +29,7 @@ test('Gate 4 demo exposes a readonly example entry', async ({ page }) => {
 
   expect(await page.evaluate(() => window.__jwordDemo?.readonly)).toBe(true)
   await expect(page.locator('#jword-editor')).toHaveAttribute('data-jword-readonly', 'true')
-  await expect(page.locator('[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
+  await expect(page.locator('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
   await expect(page.locator('[data-jword-open-find-replace]')).toBeEnabled()
   await expect(page.locator('[data-jword-media-trigger="true"]')).toBeDisabled()
   await expect(page.locator('[data-jword-hidden-textarea]')).not.toBeFocused()
@@ -47,7 +47,7 @@ test('Gate 4 global readonly blocks editing while keeping scroll and link open a
   await expect(page.locator('#jword-toolbar')).toBeVisible()
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveJSProperty('readOnly', true)
   await expect(page.locator('#jword-editor')).toHaveAttribute('data-jword-readonly', 'true')
-  await expect(page.locator('[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
+  await expect(page.locator('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
   await expect(page.locator('[data-jword-format-bold]')).toBeDisabled()
   await expect(page.locator('[data-jword-insert-comment]')).toBeDisabled()
   await expect(page.locator('[data-jword-insert-link]')).toBeDisabled()

@@ -17,6 +17,16 @@ import type { PDFPage, RGB } from 'pdf-lib'
 import { twipsToPdfPoints } from './pdf-geometry.js'
 
 export type PdfRgbFactory = (red: number, green: number, blue: number) => RGB
+type PdfRgbTuple = readonly [number, number, number]
+
+export const PDF_NAMED_COLORS = Object.freeze({
+  black: [0, 0, 0],
+  white: [1, 1, 1],
+  red: [1, 0, 0],
+  green: [0, 0.501961, 0],
+  blue: [0, 0, 1],
+  transparent: [0, 0, 0]
+} satisfies Record<string, PdfRgbTuple>)
 
 /** 读取 PDF 字号，优先使用 layout 已解析出的 CSS px。 */
 export function readPdfFontSize(fragment: TextFragment): number {
@@ -127,17 +137,62 @@ function drawPdfLine(
   })
 }
 
-/** 读取 #rrggbb 颜色并转换成 PDF RGB。 */
+/** 读取常见 CSS 颜色并转换成 PDF RGB。 */
 function readPdfColor(color: string, createRgb: PdfRgbFactory): RGB {
-  const match = /^#(?<red>[0-9a-f]{2})(?<green>[0-9a-f]{2})(?<blue>[0-9a-f]{2})$/iu.exec(color)
+  const normalized = color.trim().toLocaleLowerCase()
+  const longHexMatch = /^#(?<red>[0-9a-f]{2})(?<green>[0-9a-f]{2})(?<blue>[0-9a-f]{2})$/iu.exec(normalized)
 
-  if (match?.groups === undefined) {
-    return createRgb(0, 0, 0)
+  if (longHexMatch?.groups !== undefined) {
+    return createRgb(
+      parsePdfColorChannel(longHexMatch.groups.red),
+      parsePdfColorChannel(longHexMatch.groups.green),
+      parsePdfColorChannel(longHexMatch.groups.blue)
+    )
   }
 
-  return createRgb(
-    parseInt(match.groups.red ?? '00', 16) / 255,
-    parseInt(match.groups.green ?? '00', 16) / 255,
-    parseInt(match.groups.blue ?? '00', 16) / 255
-  )
+  const shortHexMatch = /^#(?<red>[0-9a-f])(?<green>[0-9a-f])(?<blue>[0-9a-f])$/iu.exec(normalized)
+
+  if (shortHexMatch?.groups !== undefined) {
+    return createRgb(
+      parsePdfColorChannel(`${shortHexMatch.groups.red}${shortHexMatch.groups.red}`),
+      parsePdfColorChannel(`${shortHexMatch.groups.green}${shortHexMatch.groups.green}`),
+      parsePdfColorChannel(`${shortHexMatch.groups.blue}${shortHexMatch.groups.blue}`)
+    )
+  }
+
+  const rgbMatch = /^rgba?\((?<red>[^,]+),(?<green>[^,]+),(?<blue>[^,)]+)(?:,[^)]+)?\)$/iu.exec(normalized)
+
+  if (rgbMatch?.groups !== undefined) {
+    return createRgb(
+      parsePdfColorChannel(rgbMatch.groups.red),
+      parsePdfColorChannel(rgbMatch.groups.green),
+      parsePdfColorChannel(rgbMatch.groups.blue)
+    )
+  }
+
+  const named = PDF_NAMED_COLORS[normalized as keyof typeof PDF_NAMED_COLORS]
+
+  return named === undefined
+    ? createRgb(0, 0, 0)
+    : createRgb(named[0], named[1], named[2])
+}
+
+/** 读取十六进制、0-255 或百分比颜色通道并裁剪到 PDF RGB 范围。 */
+function parsePdfColorChannel(channel: string | undefined): number {
+  if (channel === undefined) {
+    return 0
+  }
+
+  const normalized = channel.trim()
+  const value = /^[0-9a-f]{2}$/iu.test(normalized)
+    ? Number.parseInt(normalized, 16)
+    : normalized.endsWith('%')
+      ? (Number.parseFloat(normalized.slice(0, -1)) / 100) * 255
+      : Number.parseFloat(normalized)
+
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+
+  return Math.min(255, Math.max(0, value)) / 255
 }

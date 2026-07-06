@@ -13,6 +13,8 @@ import { describe, expect, it } from 'vitest'
 import {
   createSelectionFormattingState
 } from '../../src/index'
+import type { DocumentProjection } from '../../src/model/projection'
+import type { TextInline } from '../../src/model/types'
 import {
   DOCUMENT_STORE_FIELDS,
   type DocumentStoreJson,
@@ -57,6 +59,22 @@ describe('selection formatting state', () => {
         styleId: { value: 'Heading1', mixed: false },
         list: { value: null, mixed: false }
       }
+    })
+  })
+
+  it('折叠选区格式状态不读取未命中段落文本', () => {
+    const projection = createPoisonedTrailingTextProjection()
+    const selection = createCollapsedSelection(createAnchorRef({
+      documentId: 'document-1' as DocumentId,
+      sectionId: 'section-1' as SectionId,
+      blockId: 'paragraph-1' as BlockId,
+      runId: 'run-1' as RunId,
+      graphemeIndex: createGraphemeIndex(0)
+    }))
+
+    expect(createSelectionFormattingState(projection, selection).run?.bold).toEqual({
+      value: true,
+      mixed: false
     })
   })
 
@@ -278,6 +296,73 @@ function createFormattingStateFixture() {
       })
     }
   }
+}
+
+function createPoisonedTrailingTextProjection(): DocumentProjection {
+  return {
+    document: {
+      kind: 'document',
+      id: 'document-1',
+      sections: [
+        {
+          kind: 'section',
+          id: 'section-1',
+          blocks: [
+            {
+              kind: 'paragraph',
+              id: 'paragraph-1',
+              properties: {
+                lineHeight: 1.25
+              },
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-1',
+                  properties: {
+                    bold: true
+                  },
+                  inlines: [
+                    {
+                      kind: 'text',
+                      text: '命中'
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              kind: 'paragraph',
+              id: 'paragraph-2',
+              runs: [
+                {
+                  kind: 'run',
+                  id: 'run-2',
+                  inlines: [
+                    createPoisonedTextInline()
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+function createPoisonedTextInline(): TextInline {
+  return Object.freeze(Object.defineProperty(
+    {
+      kind: 'text' as const
+    },
+    'text',
+    {
+      enumerable: true,
+      get() {
+        throw new Error('折叠选区不应读取未命中段落文本')
+      }
+    }
+  )) as TextInline
 }
 
 function createUniformListFormattingStateFixture() {

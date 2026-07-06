@@ -7,7 +7,7 @@
  */
 
 import { segmentGraphemes } from '../shared/grapheme'
-import type { FontManager, ResolvedFontStyle, RunTextStyle } from './font-manager'
+import { readFontManagerCompatibilitySignature, type FontManager, type ResolvedFontStyle, type RunTextStyle } from './font-manager'
 import type { Block, Inline, Paragraph, Run } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { DocumentProjection } from '../model/projection'
@@ -110,6 +110,13 @@ function isCompatibleLayoutFontManager(
   projection: DocumentProjection
 ): boolean {
   if (previousFontManager === nextFontManager) {
+    return true
+  }
+
+  const previousSignature = readFontManagerCompatibilitySignature(previousFontManager)
+  const nextSignature = readFontManagerCompatibilitySignature(nextFontManager)
+
+  if (previousSignature !== undefined && previousSignature === nextSignature) {
     return true
   }
 

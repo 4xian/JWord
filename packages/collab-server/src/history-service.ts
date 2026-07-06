@@ -51,7 +51,7 @@ export interface JWordCollabHistoryService {
   /** 将指定历史版本恢复到目标 Y.Doc。 */
   restoreVersion(input: RestoreJWordVersionInput): ReturnType<JWordPersistenceSnapshotAdapter['restoreVersion']>
 
-  /** 创建绑定同一 storage backend 的底层 adapter。 */
+  /** 读取绑定同一 storage backend 的共享底层 adapter。 */
   createAdapter(): JWordPersistenceSnapshotAdapter
 }
 
@@ -97,21 +97,21 @@ export function createJWordCollabHistoryService(
 }
 
 class StorageBackedJWordCollabHistoryService implements JWordCollabHistoryService {
-  private readonly storage: JWordHistoryStorage
+  private readonly adapter: JWordPersistenceSnapshotAdapter
   private readonly documentLocks = new Map<string, DocumentLockState>()
   private readonly maxDocumentLockQueueDepth: number
 
   /** 绑定宿主注入的 history storage backend。 */
   constructor(storage: JWordHistoryStorage, maxDocumentLockQueueDepth: number) {
-    this.storage = storage
+    this.adapter = createStoragePersistenceAdapter({
+      storage
+    })
     this.maxDocumentLockQueueDepth = maxDocumentLockQueueDepth
   }
 
-  /** 创建绑定同一 storage backend 的底层 adapter。 */
+  /** 读取绑定同一 storage backend 的共享底层 adapter。 */
   createAdapter(): JWordPersistenceSnapshotAdapter {
-    return createStoragePersistenceAdapter({
-      storage: this.storage
-    })
+    return this.adapter
   }
 
   /** 记录一个共享历史版本，并同步创建 snapshot。 */

@@ -11,7 +11,8 @@ import { getCaretRect as getLayoutCaretRect } from '../layout/runtime'
 import type { DocumentLayout, LayoutRect } from '../layout/runtime'
 import { isSelectionCollapsed } from '../model/selection'
 import type { SelectionState } from '../model/selection'
-import { CARET_BLINK_INTERVAL_MS, DEFERRED_DOCUMENT_RENDER_DELAY_MS, DEFERRED_TEXT_MIRROR_SYNC_DELAY_MS } from './constants'
+import type { PluginResolvedDecoration } from '../plugins/types'
+import { CARET_BLINK_INTERVAL_MS, DEFERRED_DOCUMENT_RENDER_DELAY_MS, DEFERRED_DOCUMENT_RENDER_PAGE_THRESHOLD, DEFERRED_TEXT_MIRROR_SYNC_DELAY_MS, DEFERRED_TEXT_MIRROR_SYNC_PAGE_THRESHOLD } from './constants'
 import { focusHiddenTextarea, syncHiddenTextareaPosition } from './dom'
 import { JWordEditorLayoutRuntime } from './layout-runtime'
 import { createCanvasElement, mergePageIndexes, renderPointerSelectionCanvas, resolveCanvasPixelRatio } from './rendering'
@@ -63,6 +64,21 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
 
     mountedDom.textMirror.textContent = readProjectionPlainText(this.currentProjection)
     this.mountedTextMirrorNeedsRefresh = false
+  }
+
+  /** 输入热路径结束时按文档规模选择立即或延迟同步全文文本镜像。 */
+  protected syncMountedTextMirrorAfterInput(): void {
+    if (this.shouldDeferMountedTextMirrorSync()) {
+      return
+    }
+
+    this.cancelDeferredTextMirrorSync()
+    this.syncMountedTextMirror()
+  }
+
+  /** 判断当前布局规模是否应把全文文本镜像同步让出 input 事件。 */
+  protected shouldDeferMountedTextMirrorSync(): boolean {
+    return (this.cachedLayout?.pages.length ?? 0) > DEFERRED_TEXT_MIRROR_SYNC_PAGE_THRESHOLD
   }
 
   protected scheduleDeferredTextMirrorSync(caretRect?: LayoutRect): void {
@@ -134,7 +150,14 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
    * 职责：保留显式文档切换的同步渲染语义，其余事务默认允许延后。
    */
   protected shouldRenderMountedDocumentImmediately(commandName: string): boolean {
-    return commandName === 'createDocument' || commandName === 'loadFixture'
+    return commandName === 'createDocument'
+      || commandName === 'loadFixture'
+      || !this.shouldDeferMountedDocumentRender()
+  }
+
+  /** 判断当前布局规模是否应把页面重排重绘让出 input 事件。 */
+  protected shouldDeferMountedDocumentRender(): boolean {
+    return (this.cachedLayout?.pages.length ?? 0) > DEFERRED_DOCUMENT_RENDER_PAGE_THRESHOLD
   }
 
   protected cancelDeferredTextMirrorSync(): void {
@@ -244,8 +267,14 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
       selectionRender.pageIndexes
     )
     const pageLookup = new Map(layout.pages.map((page) => [page.pageIndex, page]))
+    const experimentalDecorations = this.pluginHost.readDecorations({
+      projection: this.currentProjection,
+      layout,
+      selection: this.currentSelection,
+      reason: 'selection'
+    })
 
-    this.syncMountedBaseCanvases(layout, affectedPageIndexes)
+    this.syncMountedBaseCanvases(layout, affectedPageIndexes, experimentalDecorations)
 
     for (const pageIndex of affectedPageIndexes) {
       const canvas = mountedDom.canvases.get(pageIndex)
@@ -310,7 +339,16 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
     }
   }
 
-  protected syncMountedBaseCanvases(layout: DocumentLayout, pageIndexes: readonly number[]): void {
+  protected syncMountedBaseCanvases(
+    layout: DocumentLayout,
+    pageIndexes: readonly number[],
+    experimentalDecorations: readonly PluginResolvedDecoration[] = this.pluginHost.readDecorations({
+      projection: this.currentProjection,
+      layout,
+      selection: this.currentSelection,
+      reason: 'selection'
+    })
+  ): void {
     const mountedDom = this.mountedDom
 
     if (mountedDom === undefined) {
@@ -345,6 +383,7 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
         scale: this.pageConfig.scale,
         pixelRatio,
         commentRects: this.collectCommentRects(layout),
+        experimentalDecorations,
         ...(mountedDom.imageResourceResolver === undefined
           ? {}
           : { imageResourceResolver: mountedDom.imageResourceResolver })

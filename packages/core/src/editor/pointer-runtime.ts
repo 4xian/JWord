@@ -26,6 +26,7 @@ import {
   readProjectionRunText,
   resolveWordSelectionIndex
 } from './text-runtime'
+import { cancelDeferredVisualTask, scheduleDeferredVisualTask } from './visual-task-scheduler'
 import type { PointerPageMetrics } from './types'
 
 export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime {
@@ -228,9 +229,9 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
     }
 
     const deferredRender = {
-      timeoutId: setTimeout(() => {
+      taskHandle: scheduleDeferredVisualTask(mountedDom, () => {
         this.flushDeferredRenderChunk()
-      }, 0),
+      }),
       chunkSize,
       continuation
     }
@@ -320,9 +321,9 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
     }
 
     mountedDom.deferredRender = {
-      timeoutId: setTimeout(() => {
+      taskHandle: scheduleDeferredVisualTask(mountedDom, () => {
         this.flushDeferredRenderChunk()
-      }, 0),
+      }),
       chunkSize: deferredRender.chunkSize,
       continuation: pass.continuation
     }
@@ -335,7 +336,7 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
       return
     }
 
-    clearTimeout(deferredRender.timeoutId)
+    cancelDeferredVisualTask(deferredRender.taskHandle)
     this.mountedDom!.deferredRender = undefined
   }
 }

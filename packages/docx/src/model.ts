@@ -30,6 +30,8 @@ import type {
   DocxImportTableCell
 } from './index.js'
 
+const BASE64_CHUNK_SIZE = 0x8000
+
 /** 把 DOCX import 中间模型转换为 core editor 可加载的文档模型。 */
 export function convertDocxImportDocumentToCoreDocument(document: DocxImportDocument): Document {
   const resources = document.resources.map(convertDocxImportResource)
@@ -335,11 +337,11 @@ function createImportedTextAnchorRecord(
 }
 
 /** 把 byte array 编码为 base64 data URL 片段。 */
-function bytesToBase64(bytes: readonly number[]): string {
+function bytesToBase64(bytes: Uint8Array): string {
   let binary = ''
 
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte)
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + BASE64_CHUNK_SIZE))
   }
 
   return globalThis.btoa(binary)

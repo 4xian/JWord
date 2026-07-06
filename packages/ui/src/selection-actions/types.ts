@@ -15,6 +15,9 @@ export interface SelectionActionPosition {
   readonly top: number
 }
 
+/** 选区颜色控件类型。 */
+export type SelectionActionColorKind = 'text' | 'background'
+
 /** controller 创建参数。 */
 export interface CreateSelectionActionsControllerOptions {
   readonly editor: Editor
@@ -75,6 +78,33 @@ export interface SelectionActionsViewState {
 export interface StickyFloatingToolbarState {
   readonly selectionKey: string | null
   readonly position: SelectionActionPosition | null
+}
+
+/** controller 与命令绑定共享的可变运行态。 */
+export interface SelectionActionsRuntimeState {
+  readonly stableContextSelection: StableContextSelectionState
+  readonly frozenColorSelections: {
+    text: SelectionState | null
+    background: SelectionState | null
+  }
+  readonly activeColorValues: {
+    text: string | null
+    background: string | null
+  }
+  readonly activeColorInputSeen: {
+    text: boolean
+    background: boolean
+  }
+  readonly activeColorReturnedToEditor: {
+    text: boolean
+    background: boolean
+  }
+  dismissedSelectionKey: string | null
+  stickyFloatingSelectionKey: string | null
+  stickyFloatingPosition: SelectionActionPosition | null
+  openColorPicker: SelectionActionColorKind | null
+  interactiveFocus: boolean
+  destroyed: boolean
 }
 
 /** selection-actions controller 对外暴露的最小句柄。 */

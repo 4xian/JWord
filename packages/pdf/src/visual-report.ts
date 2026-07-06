@@ -8,6 +8,8 @@
 
 import type { CanvasLike, CanvasRenderingContextLike, DocumentLayout, PageBox, TextFragment } from '@4xian/jword-core'
 
+import { twipsToPdfPoints } from './pdf-geometry.js'
+
 export type PdfVisualReportStatus = 'pass' | 'warn' | 'fail'
 
 type PdfLayoutTableCellBox = Extract<PageBox['blocks'][number], { readonly kind: 'table' }>['rows'][number]['cells'][number]
@@ -878,9 +880,4 @@ function isPdfVisualPagePassed(page: PdfVisualPageReport): boolean {
     && page.pageSizeDelta.passed
     && page.imageBoundingBoxDeltas.every((delta) => delta.passed)
     && page.tableLineDeltas.every((delta) => delta.passed)
-}
-
-/** twips 转 PDF points。 */
-function twipsToPdfPoints(twips: number): number {
-  return twips / 20
 }
