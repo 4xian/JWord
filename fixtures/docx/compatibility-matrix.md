@@ -6,8 +6,6 @@
 | Fixture ID | Export Artifact | App | Version / Platform | Result | Editable | Repair Prompt | Main Visual Difference | Blocking Issue | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `<fixture-id>` | `<path-to-exported-docx>` | Word | `<version>` | pending | pending | pending | pending | pending | `<screenshot-or-note>` |
-| `<fixture-id>` | `<path-to-exported-docx>` | WPS | `<version>` | pending | pending | pending | pending | pending | `<screenshot-or-note>` |
-| `<fixture-id>` | `<path-to-exported-docx>` | LibreOffice | `<version>` | pending | pending | pending | pending | pending | `<screenshot-or-note>` |
 
 ## Review Notes
 

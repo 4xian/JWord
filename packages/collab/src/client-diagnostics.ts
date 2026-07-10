@@ -3,7 +3,7 @@
  * 边界：只做错误码和诊断结构转换，不连接 provider、不读取文档内容。
  * 协作模块：client-sdk.ts、license 包和 diagnostics registry 复用这里的 code 形态。
  * 性能/安全约束：授权错误只转成结构化 diagnostic，不泄露 token 或文档内容。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-625定义-connectjwordcollaborationeditor-options-公开入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

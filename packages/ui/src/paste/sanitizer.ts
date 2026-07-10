@@ -3,7 +3,7 @@
  * 边界：不监听 clipboard 事件、不执行 editor 事务、不把清洗后的 HTML 插回页面。
  * 协作模块：paste controller 调用这里，core pasteRichTextFragment 消费输出片段。
  * 性能/安全约束：只保留 Word HTML 常见文本格式子集，主动丢弃脚本、事件属性、媒体和危险 URL。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-415。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import DOMPurify from 'dompurify'
 import { isAllowedLinkUrl, type EditorRichTextFragment, type EditorRichTextRun } from '@4xian/jword-core'
@@ -92,6 +92,7 @@ export function sanitizePastedHtmlToRichTextFragmentWithWarnings(html: string): 
       'ul'
     ],
     ALLOWED_ATTR: ['class', 'href'],
+    ADD_ATTR: ['style'],
     ALLOW_DATA_ATTR: false,
     FORBID_ATTR: ['onclick', 'onerror', 'onload'],
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'img', 'svg', 'math']

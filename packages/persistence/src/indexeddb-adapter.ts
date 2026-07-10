@@ -3,7 +3,7 @@
  * 边界：只持久化和恢复 Yjs binary update，不保存 projection JSON，不访问 core 内部 store。
  * 协作模块：packages/persistence/src/index.ts、examples/collab 真实 provider runtime 和浏览器 IndexedDB。
  * 性能/安全约束：仅在存在 IndexedDB 的浏览器环境实例化 provider；Node 环境返回可恢复诊断。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-4---offline-recovery-与-indexeddb-persistencestep-65--612。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { IndexeddbPersistence } from 'y-indexeddb'

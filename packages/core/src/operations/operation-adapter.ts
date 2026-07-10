@@ -3,7 +3,7 @@
  * 边界：只保留 adapter 创建与 applyOperation 调度，不承载具体 operation 写入逻辑。
  * 协作模块：transaction pipeline 后续会在 ydoc.transact(origin) 内调用这里的 adapter。
  * 性能/安全约束：不访问 DOM，不触发布局、渲染、输入、历史、协同或事件发布。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 

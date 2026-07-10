@@ -3,7 +3,7 @@
  * 边界：只描述 OOXML 对齐结构，不实现事务、布局、渲染、输入或导入导出。
  * 协作模块：后续事务管线、投影、布局和互通包通过这些类型约束数据形状。
  * 约束：core 保持框架无关，不引入浏览器、docx、PDF、协同 provider 或 demo 依赖。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/02-technical-decisions.md#25-文档模型决策。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Resource } from '../resources/types'

@@ -3,7 +3,7 @@
  * 边界：只负责镜像 DOM、本地去重、延迟调度和清理，不决定业务文案，也不直接读取 editor 内部状态。
  * 协作模块：后续 createJWordUi 负责提供 readText 与 shouldDeferSync 回调，并在订阅事件里调用 sync。
  * 性能/安全约束：默认只保留一个延迟任务，大文档读全文延后到热路径之后；立即同步会先取消挂起任务。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md#67-a11y-验收。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export const DEFAULT_DEFERRED_TEXT_MIRROR_SYNC_DELAY_MS = 40

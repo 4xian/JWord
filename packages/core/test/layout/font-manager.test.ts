@@ -5,7 +5,7 @@
  * 边界：只测试无 DOM 的字体度量服务，不覆盖布局、渲染或真实字体加载。
  * 协作模块：layout 通过 字体管理器获取文本宽度和行高，PDF 后续可复用字体缺失诊断。
  * 约束：测试不访问 window、document 或 画布接口。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/02-technical-decisions.md#27-pdf-决策。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -189,7 +189,39 @@ describe('Gate 2 字体管理器', () => {
       'measure:abc'
     ])
     expect(measurement.widthCssPx).toBe(96)
-    expect(measurement.baselineCssPx).toBe(18.75)
+    expect(measurement.baselineCssPx).toBe(19.5)
+  })
+
+  it('keeps canvas baseline stable across glyph actual bounding boxes', () => {
+    const context: CanvasTextMeasurerContext = {
+      font: '',
+      measureText(text) {
+        return text === '。'
+          ? {
+              width: 16,
+              actualBoundingBoxAscent: 4,
+              actualBoundingBoxDescent: 10,
+              fontBoundingBoxAscent: 14,
+              fontBoundingBoxDescent: 4
+            }
+          : {
+              width: 16,
+              actualBoundingBoxAscent: 13,
+              actualBoundingBoxDescent: 3,
+              fontBoundingBoxAscent: 14,
+              fontBoundingBoxDescent: 4
+            }
+      }
+    }
+    const measurer = createCanvasTextMeasurer(context)
+    const style = {
+      fontFamily: 'Arial',
+      fontSizePx: 16,
+      status: 'available' as const
+    }
+
+    expect(measurer.measureText('字', style).baselineRatio).toBeCloseTo(14 / 18)
+    expect(measurer.measureText('。', style).baselineRatio).toBeCloseTo(14 / 18)
   })
 
   it('falls back and records missing font family without touching DOM', () => {

@@ -5,7 +5,7 @@
  * 边界：只构造测试输入和读取 PDF 内容流，不调用导出入口、不承载业务断言。
  * 协作模块：packages/pdf/test/public-api.test.ts 复用这些 helper 覆盖 P-1 文本样式导出。
  * 约束：测试 helper 不放入 src，不访问网络，不依赖真实浏览器。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-23---实现-pdf-中文字体图片表格线和页眉页脚。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

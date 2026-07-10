@@ -5,7 +5,7 @@
  * 边界：只读取 .husky 下的用户脚本，不执行 Git hook 或提交动作。
  * 协作模块：Husky prepare 脚本、commitlint hook 与仓库 lint/typecheck 命令。
  * 性能/安全约束：测试不触发 git commit，避免修改仓库历史。
- * Specs：docs/superpowers/reports/2026-07-02-gate0-gate1-review.md#g0-02-缺少-pre-commit-钩子。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync, statSync } from 'node:fs'

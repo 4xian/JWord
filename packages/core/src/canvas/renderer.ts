@@ -3,7 +3,7 @@
  * 边界：只消费结构化页面布局和选择/光标矩形，不生成布局、不访问 DOM、不处理输入事件。
  * 协作模块：layout 产出 页面盒、行盒和文本片段，视口虚拟器 决定保留页，画布池 管理 画布生命周期。
  * 性能/安全约束：每页单独 canvas，离屏页交给 画布池 回收，不实现单长 canvas，不默认 叠加层画布。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-分页-canvas-渲染。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { CanvasLike, CanvasPool } from './pool'

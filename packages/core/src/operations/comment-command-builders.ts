@@ -3,7 +3,7 @@
  * 边界：只生成命令和操作，不执行事务、不写入投影，也不处理界面交互。
  * 协作模块：编辑器门面、文本范围快照、事务流水线和投影共同提供批注闭环。
  * 性能/安全约束：builder 只依赖当前 projection 与 selection，保持 JSON 兼容输出。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-3---批注与超链接step-48-410。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createTextRangeRecord } from '../model/position'

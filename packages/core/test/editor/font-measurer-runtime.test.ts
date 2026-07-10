@@ -5,7 +5,7 @@
  * 边界：只覆盖 mount 后字体度量切换和 destroy 后新实例回退，不测试输入事件或渲染细节。
  * 协作模块：编辑器挂载运行时、字体管理器、布局运行时和命令构建器。
  * 约束：DOM 只在测试用例内创建，测试结束恢复 HTMLCanvasElement.getContext。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#36-g2-04--g2-0607-字体度量真实测量phase-3al。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

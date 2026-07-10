@@ -3,7 +3,7 @@
  * 边界：只覆盖 core、ui、native 三个免费基础包入口，不运行 SDK、不导入付费包或内部源码。
  * 协作模块：docs/sdk/quickstart.md、public API 清单和类型测试共同验证免费基础版外部接入路径。
  * 约束：本文件只能使用 package 名称导入；示例必须覆盖初始化、基础编辑、保存、打开、继续编辑和基础错误处理。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-74建立免费基础版-quickstart。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

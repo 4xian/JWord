@@ -3,7 +3,7 @@
  * 边界：不负责表格选择命中和工具栏动作绑定。
  * 协作模块：table controller 注入命令执行入口，controller-helpers 负责预览线 DOM 同步。
  * 性能/安全约束：拖拽中只更新预览 DOM，pointerup 后通过 table command adapter 进入 transaction pipeline。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 S11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordTableCommandContext,

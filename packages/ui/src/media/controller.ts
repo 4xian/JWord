@@ -3,7 +3,7 @@
  * 边界：不实现上传协议或 core command builder 本体；这里只维护 UI 状态并调度宿主注入的命令适配器。
  * 协作模块：create-ui 负责装配，media dom 负责节点结构，宿主通过 media options 注入 adapter/commands。
  * 性能/安全约束：图片入口只保留行内插图，不再暴露块级模式或独立大面板。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor } from '@4xian/jword-core'
 import type {
@@ -21,10 +21,16 @@ import type {
 import {
   createMediaPanelDom,
   destroyMediaPanel,
+  localizeMediaPanelDom,
   renderMediaPanel,
   resetMediaFileInput,
   type MediaPanelDom
 } from './dom'
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import { isAllowedJWordMediaUrl } from './policy'
 import {
   applyMediaPanelFailure,
@@ -42,6 +48,7 @@ interface CreateMediaControllerOptions {
   readonly media: JWordMediaOptions
   readonly disabled?: boolean
   readonly readonly?: JWordReadonlyMode
+  readonly i18n?: ResolvedJWordUiI18n
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
@@ -49,13 +56,15 @@ interface CreateMediaControllerOptions {
 
 interface MediaControllerHandle {
   readonly elements: JWordMediaPanelElements
+  setI18n(i18n: ResolvedJWordUiI18n): void
   refresh(): void
   destroy(): void
 }
 
 /** 创建 Gate 4 toolbar 图片入口 controller。 */
 export function createMediaController(options: CreateMediaControllerOptions): MediaControllerHandle {
-  const dom = createMediaPanelDom(options.host, options.media.title ?? '图片')
+  let i18n = options.i18n ?? resolveJWordUiI18n()
+  const dom = createMediaPanelDom(options.host, readMediaTitle(i18n, options.media.title))
   const adapter = options.media.adapter
   const commands = options.media.commands
   const liveRegion = options.assistive.liveRegion
@@ -69,6 +78,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   let urlError = ''
   let busy = false
   let activeUrlItemId: string | null = null
+  localizeMediaPanelDom(dom, i18n, readMediaTitle(i18n, options.media.title))
   const unsubscribeEditor = options.editor.subscribe((event) => {
     if (event.kind !== 'destroyed') {
       return
@@ -221,7 +231,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
       announce(`图片资源已就绪：${readMediaSourceLabel(source)}。`)
       refresh()
     } catch (error) {
-      const normalizedError = normalizeMediaError(error)
+      const normalizedError = normalizeMediaError(error, i18n)
       const currentItem = readItem(item.id) ?? item
       const nextItem = applyMediaPanelFailure(currentItem, normalizedError.error, normalizedError.retryToken)
 
@@ -286,14 +296,14 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
     urlDraft = url
 
     if (url.length === 0) {
-      urlError = '请输入一个图片 URL。'
+      urlError = readJWordUiText(i18n, 'dialog.media.errorUrlRequired', '请输入一个图片 URL。')
       announce(urlError)
       refresh()
       return
     }
 
     if (!isAllowedJWordMediaUrl(url, options.media.urlPolicy)) {
-      urlError = '当前 URL 不在 allowlist 中；请改用同源、data:、blob: 或宿主放行的地址。'
+      urlError = readJWordUiText(i18n, 'dialog.media.errorUrlDisallowed', '当前 URL 不在 allowlist 中；请改用同源、data:、blob: 或宿主放行的地址。')
       announce(urlError)
       refresh()
       return
@@ -423,6 +433,16 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
 
   return {
     elements: dom,
+    setI18n(nextI18n): void {
+      i18n = nextI18n
+      if (urlError.length > 0 && urlDraft.length === 0) {
+        urlError = readJWordUiText(i18n, 'dialog.media.errorUrlRequired', '请输入一个图片 URL。')
+      } else if (urlError.length > 0 && !isAllowedJWordMediaUrl(urlDraft, options.media.urlPolicy)) {
+        urlError = readJWordUiText(i18n, 'dialog.media.errorUrlDisallowed', '当前 URL 不在 allowlist 中；请改用同源、data:、blob: 或宿主放行的地址。')
+      }
+      localizeMediaPanelDom(dom, i18n, readMediaTitle(i18n, options.media.title))
+      refresh()
+    },
     refresh,
     destroy(): void {
       signalController.abort()
@@ -430,6 +450,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
       destroyMediaPanel(dom)
     }
   }
+}
+
+/** 读取图片入口标题，宿主自定义 title 优先。 */
+function readMediaTitle(i18n: ResolvedJWordUiI18n, title: string | undefined): string {
+  return title ?? readJWordUiText(i18n, 'menu.media.title', '图片')
 }
 
 /** 图片入口当前只走行内图片 command。 */
@@ -475,7 +500,10 @@ async function applyMediaCommand(
 }
 
 /** 把各种 throw 形状收敛成统一错误快照。 */
-function normalizeMediaError(error: unknown): { readonly error: JWordMediaErrorState, readonly retryToken?: string } {
+function normalizeMediaError(
+  error: unknown,
+  i18n: ResolvedJWordUiI18n
+): { readonly error: JWordMediaErrorState, readonly retryToken?: string } {
   if (isMediaErrorLike(error)) {
     const retryTokenPatch = error.retryToken === undefined
       ? {}
@@ -502,7 +530,7 @@ function normalizeMediaError(error: unknown): { readonly error: JWordMediaErrorS
   return {
     error: {
       code: 'MEDIA_UPLOAD_FAILED',
-      message: '媒体上传失败。'
+      message: readJWordUiText(i18n, 'dialog.media.errorUploadFailed', '媒体上传失败。')
     }
   }
 }

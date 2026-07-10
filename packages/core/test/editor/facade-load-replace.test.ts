@@ -5,7 +5,7 @@
  * 边界：只覆盖受控模型加载边界，不测试 docx/pdf/native 转换器。
  * 协作模块：编辑器运行时、文档模型类型、选择模型和共享门面测试辅助函数。
  * 性能/安全约束：测试只使用内联模型夹具，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

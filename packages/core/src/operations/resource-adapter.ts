@@ -3,7 +3,7 @@
  * 边界：只处理资源记录的增删和 document.resourceIds 同步，不处理图片 run 或外部下载。
  * 协作模块：operation-adapter 负责分发，document-store 负责资源记录结构。
  * 性能/安全约束：只接受资源 URL 策略校验通过的输入，不访问 DOM 和网络。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

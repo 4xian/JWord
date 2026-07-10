@@ -5,7 +5,7 @@
  * 边界：通过 experimental factory 与模拟 @hocuspocus/provider 观察构造、attach、connect 调用，不触发真实 WebSocket。
  * 协作模块：packages/collab/src/hocuspocus-adapter.ts、@hocuspocus/provider 和 Gate 6 public client 授权前置链路。
  * 约束：adapter 构造阶段不得发起网络连接，真实连接只能在 connect() 中显式发生。
- * Specs：docs/superpowers/reports/2026-07-02-gate6-review.md#22-packagescollab--hocuspocus-adapter。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

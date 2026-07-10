@@ -6,7 +6,7 @@
   "notes": [
     "This registry does not create placeholder .pdf binaries.",
     "Each input.path is a required future location for a real projection or layout fixture.",
-    "PDF export must use JWord layout/projection, not browser print or LibreOffice conversion."
+    "PDF export must use JWord layout/projection, not browser print or third-party office-suite conversion."
   ],
   "fixtures": [
     {

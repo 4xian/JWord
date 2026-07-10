@@ -3,7 +3,7 @@
  * 边界：只读取表格模型、section 与 layout input，不访问 DOM、不绘制 Canvas。
  * 协作模块：engine 负责块级调度，本模块负责表格网格、行高和单元格内容盒生成。
  * 性能/安全约束：所有输出冻结为 layout runtime 结构，不持有跨次布局状态。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { cssPxToTwips } from './page-config'

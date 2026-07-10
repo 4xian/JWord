@@ -3,7 +3,7 @@
  * 边界：只作为 facade 级继承入口，不承载具体编辑命令实现。
  * 协作模块：键盘编辑层、段落拆分层、粘贴计划层、富文本片段层、删除计划层与选区运行时层。
  * 性能/安全约束：入口文件不访问 Projection、不执行事务、不访问 top-level DOM。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { JWordEditorKeyboardEditingRuntime } from './keyboard-editing'

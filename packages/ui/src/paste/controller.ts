@@ -3,7 +3,7 @@
  * 边界：只监听 hidden textarea 的 paste，不解析纯文本、不直接修改文档模型。
  * 协作模块：paste sanitizer 清洗 HTML，core pasteRichTextFragment 执行事务。
  * 性能/安全约束：只有 sanitizer 产出有效片段且 core 接受时才阻止默认事件，否则保留纯文本降级路径。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-415。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor } from '@4xian/jword-core'
 import type { JWordUiLiveRegionController } from '../types'

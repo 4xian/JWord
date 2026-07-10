@@ -3,7 +3,7 @@
  * 边界：只处理 JSON over HTTP 与 service 调用，不承载 WebSocket、浏览器 runtime 或 IndexedDB 逻辑。
  * 协作：hocuspocus-history-service.ts 提供 storage-backed history backend，hocuspocus-service.ts 管理生命周期。
  * 约束：HTTP 响应不泄漏 Uint8Array 结构体，二进制 update 统一使用 base64。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createServer } from 'node:http'
 import type {

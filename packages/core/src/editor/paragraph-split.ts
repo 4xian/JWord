@@ -3,7 +3,7 @@
  * 边界：只构造 splitBlock 相关命令，不处理键盘事件监听或布局。
  * 协作模块：粘贴计划层、删除计划层、文本运行时与事务流水线。
  * 性能/安全约束：段落拆分只读取当前 selection 和 projection，不直接写 Y.Doc。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createSelectionState, isSelectionCollapsed } from '../model/selection'

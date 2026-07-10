@@ -3,7 +3,7 @@
  * 边界：只构造测试输入，不包含断言、不读取磁盘、不执行浏览器流程。
  * 协作模块：public-api*.test.ts 通过这些 helper 复用同一 DOCX 输入模型。
  * 约束：fixture helper 只服务 Gate 5 public API 测试，避免测试文件重复超限。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-5docx-导入导出与-pdf-导出。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createHash } from 'node:crypto'

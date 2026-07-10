@@ -5,7 +5,7 @@
  * 边界：只覆盖 ID、twip、grapheme、AnchorRef、RangeRef 和 Y.RelativePosition 第一版，不测试 selection。
  * 协作模块：后续 selection、comment、revision、layout 和 docx adapter 复用这些稳定引用。
  * 约束：测试直接导入 src/position，不要求公开入口导出，也不访问浏览器 DOM。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

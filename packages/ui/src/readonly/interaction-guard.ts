@@ -3,7 +3,7 @@
  * 边界：只在 UI 装配层处理 DOM 事件和控件状态，不改 core transaction pipeline。
  * 协作模块：create-ui 与各 UI controller 通过 canEdit/blockEdit 协作。
  * 性能/安全约束：只绑定固定输入类事件，销毁时恢复本模块写入的 DOM 状态。
- * Specs：docs/superpowers/plans/2026-05-24-jword-global-readonly-mode.md#task-1-增加只读配置类型和-guard-骨架。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordReadonlyOptions,

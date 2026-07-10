@@ -3,7 +3,7 @@
  * 边界：只做 demo host 接线，不实现 DOCX/PDF 包内部语义，不提供 PDF 导入查看或编辑能力。
  * 协作模块：core editor facade、官方 UI、@4xian/jword-docx 和 @4xian/jword-pdf。
  * 性能/安全约束：互通能力只在 examples/docx 路由加载，不进入 examples/vanilla 首屏。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-25---建立-examplesdocx-手动验收入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createEditor } from '@4xian/jword-core'
 import type { Document, DocumentLayout, DocumentProjection } from '@4xian/jword-core'

@@ -3,7 +3,7 @@
  * 边界：只声明 PDF 导出、worker、字体、图片和诊断契约，不承载运行时代码。
  * 协作模块：packages/pdf/src/index.ts、worker 入口和第三方调用方复用这些类型。
  * 性能/安全约束：类型模块无副作用，不引入 pdf-lib 运行时代码。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-23---实现-pdf-中文字体图片表格线和页眉页脚。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentLayout } from '@4xian/jword-core'

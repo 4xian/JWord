@@ -3,14 +3,14 @@
  * 边界：不修改 core command builder 本体，不实现图片模块，也不持有第二套文档状态。
  * 协作模块：create-ui 负责装配，selection-actions/dom 负责节点结构，selection-actions/state 负责只读状态。
  * 性能/安全约束：所有动作继续走 facade/transaction pipeline，右键菜单只绑定稳定选区快照，不沿用旧状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区浮层收尾项。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { SelectionState } from '@4xian/jword-core'
-import type { JWordSelectionActionElements } from '../types'
+import { resolveJWordUiI18n } from '../i18n'
 import { bindContextMenuActions, bindToolbarActions, cloneActiveSelection, toggleRunFormat } from './commands'
 import type { SelectionActionCommandContext, SelectionActionsBindingContext } from './commands'
 import type { SelectionActionsClipboardContext } from './clipboard'
-import { createSelectionActionsDom, destroySelectionActionsDom, renderSelectionActionsDom } from './dom'
+import { createSelectionActionsDom, destroySelectionActionsDom, localizeSelectionActionsDom, renderSelectionActionsDom } from './dom'
 import { bindSelectionActionsLifecycleEvents, preventDefaultEvent, renderReadonlySelectionActionsState, requireCanvasContainer, requireHiddenTextarea, resolveEditorShell } from './geometry'
 import { buildSelectionActionsViewState, hasActiveTextSelection, readFloatingToolbarPosition, readInteractiveFocus, readSelectionKey } from './state'
 import type { CreateSelectionActionsControllerOptions, SelectionActionColorKind, SelectionActionsControllerHandle, SelectionActionsRuntimeState } from './types'
@@ -23,10 +23,11 @@ export function createSelectionActionsController(
   const editorHost = options.editorHost
   const colorFormat = options.colorFormat
   const insertActions = options.insertActions
+  let i18n = options.i18n ?? resolveJWordUiI18n()
   const hiddenTextarea = requireHiddenTextarea(editorHost)
   const canvasContainer = requireCanvasContainer(editorHost)
   const overlayHost = resolveEditorShell(editorHost)
-  const dom = createSelectionActionsDom(overlayHost)
+  const dom = createSelectionActionsDom(overlayHost, i18n)
   const signalController = new AbortController()
   const liveRegion = options.assistive.liveRegion
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
@@ -370,6 +371,11 @@ export function createSelectionActionsController(
       host: dom.host,
       floatingToolbar: dom.floatingToolbar,
       contextMenu: dom.contextMenu
+    },
+    setI18n(nextI18n): void {
+      i18n = nextI18n
+      localizeSelectionActionsDom(dom, i18n)
+      render()
     },
     refresh(): void {
       render()

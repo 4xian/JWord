@@ -3,10 +3,15 @@
  * 边界：只创建和刷新节点，不读取 editor、不执行跳转、不访问外部宿主状态。
  * 协作模块：heading controller 提供目录项和点击处理函数。
  * 性能/安全约束：使用普通按钮列表，不使用 grid / gap，不保存 projection 副本。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { HeadingOutlineItem } from '@4xian/jword-core'
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 
 const HEADING_OUTLINE_LEVEL_INDENT_PX = 14
 
@@ -25,14 +30,17 @@ interface HeadingOutlineRenderItem {
 /**
  * 创建基础目录面板 DOM。
  */
-export function createHeadingOutlineDom(host: HTMLElement): HeadingOutlineDom {
+export function createHeadingOutlineDom(
+  host: HTMLElement,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
+): HeadingOutlineDom {
   const list = document.createElement('div')
 
   list.className = 'jw-heading-outline jw-heading-outline--sidebar'
   list.setAttribute('data-jword-heading-outline', 'true')
   list.setAttribute('data-jword-heading-outline-sidebar', 'true')
   list.setAttribute('role', 'tree')
-  list.setAttribute('aria-label', '文档目录')
+  list.setAttribute('aria-label', readHeadingOutlineText(i18n, 'ariaLabel', '文档目录'))
   list.hidden = true
   host.append(list)
 
@@ -40,6 +48,11 @@ export function createHeadingOutlineDom(host: HTMLElement): HeadingOutlineDom {
     host,
     list
   }
+}
+
+/** 动态刷新目录面板静态文案。 */
+export function localizeHeadingOutlineDom(dom: HeadingOutlineDom, i18n: ResolvedJWordUiI18n): void {
+  dom.list.setAttribute('aria-label', readHeadingOutlineText(i18n, 'ariaLabel', '文档目录'))
 }
 
 /**
@@ -51,11 +64,12 @@ export function renderHeadingOutlineDom(
   activeItemId: string | null,
   collapsedItemIds: ReadonlySet<string>,
   onActivate: (item: HeadingOutlineItem) => void,
-  onToggle: (item: HeadingOutlineItem) => void
+  onToggle: (item: HeadingOutlineItem) => void,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
 ): void {
   const renderItems = buildHeadingOutlineRenderItems(items, collapsedItemIds)
 
-  dom.list.replaceChildren(...renderItems.map((item) => createHeadingOutlineRow(item, activeItemId, onActivate, onToggle)))
+  dom.list.replaceChildren(...renderItems.map((item) => createHeadingOutlineRow(item, activeItemId, onActivate, onToggle, i18n)))
 }
 
 /**
@@ -72,7 +86,8 @@ function createHeadingOutlineRow(
   renderItem: HeadingOutlineRenderItem,
   activeItemId: string | null,
   onActivate: (item: HeadingOutlineItem) => void,
-  onToggle: (item: HeadingOutlineItem) => void
+  onToggle: (item: HeadingOutlineItem) => void,
+  i18n: ResolvedJWordUiI18n
 ): HTMLElement {
   const row = document.createElement('div')
   const toggle = document.createElement('button')
@@ -97,7 +112,9 @@ function createHeadingOutlineRow(
   toggle.type = 'button'
   toggle.className = 'jw-heading-outline__toggle'
   toggle.disabled = !renderItem.expandable
-  toggle.setAttribute('aria-label', renderItem.expanded ? '折叠目录项' : '展开目录项')
+  toggle.setAttribute('aria-label', renderItem.expanded
+    ? readHeadingOutlineText(i18n, 'collapseItem', '折叠目录项')
+    : readHeadingOutlineText(i18n, 'expandItem', '展开目录项'))
   toggle.setAttribute('data-jword-heading-outline-toggle', 'true')
   toggle.addEventListener('click', () => {
     onToggle(item)
@@ -113,6 +130,11 @@ function createHeadingOutlineRow(
   row.append(toggle, button)
 
   return row
+}
+
+/** 读取目录面板文案。 */
+function readHeadingOutlineText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
+  return readJWordUiText(i18n, `menu.headingOutline.${key}`, fallback)
 }
 
 /** 根据标题层级计算目录行缩进。 */

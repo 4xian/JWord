@@ -3,7 +3,7 @@
  * 边界：只通过 connectJWordCollaboration 返回的 session 写入正文，不访问 provider、DOM 或 Y.Doc 内部结构。
  * 协作：hocuspocus-runtime.ts 负责 provider 状态、离线持久化和历史记录回调。
  * 约束：自动插入默认进入独立 auto-inserter undo scope，不污染本地用户 undo。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   AnchorRef,
@@ -191,8 +191,7 @@ export function createHocuspocusAutoInsertController(
   function createTailAnchor(): AnchorRef | null {
     const editor = input.ensureEditorForWrite()
     const projection = editor.getProjection()
-    const currentText = readProjectionText(projection)
-    const anchorPosition = readFirstTextPosition(projection, countDemoGraphemes(currentText))
+    const anchorPosition = readFirstTextPosition(projection, countDemoGraphemes(readWritableTailText(projection)))
 
     return anchorPosition === null
       ? null
@@ -200,6 +199,11 @@ export function createHocuspocusAutoInsertController(
           ...anchorPosition,
           assoc: 1
         })
+  }
+
+  /** 读取 demo 可写正文尾部，忽略协同初始化合并留下的首尾空段落。 */
+  function readWritableTailText(projection: ReturnType<Editor['getProjection']>): string {
+    return readProjectionText(projection).replace(/^\n|\n$/gu, '')
   }
 
   /** 使用指定事件启动写入，供 retry 保持可诊断事件。 */
@@ -320,7 +324,7 @@ export function createHocuspocusAutoInsertController(
 
     const token = activeTokens[tokenIndex] ?? ''
     const editor = input.ensureEditorForWrite()
-    if (state.insertedCount > 0 && readProjectionText(editor.getProjection()).length === 0) {
+    if (state.insertedCount > 0 && readWritableTailText(editor.getProjection()).length === 0) {
       failWithAnchorUnresolved()
       input.notify()
       return

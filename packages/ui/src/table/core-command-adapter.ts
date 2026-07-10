@@ -3,7 +3,7 @@
  * 边界：只做 projection 目标解析、参数映射和 editor.executeCommand，不创建 DOM。
  * 协作模块：table controller 通过该适配器写入 core，vanilla demo 可直接复用。
  * 性能/安全约束：所有表格写入继续走 editor facade 的 transaction pipeline。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.4-4.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   buildDeleteTableColumnCommand,

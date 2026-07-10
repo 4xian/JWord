@@ -5,7 +5,7 @@
  * 边界：只覆盖纯 layout 输出，不触发 Canvas、DOM、Y.Doc 或编辑输入管线。
  * 协作模块：layout engine、paragraph flow 与 dirty page 查询共同提供分页几何。
  * 性能/安全约束：测试使用确定性字体度量和内存投影，不访问网络或磁盘。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#32-g2-02--g2-20-表格跨页断行与续排段前距phase-1cl。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

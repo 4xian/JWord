@@ -3,7 +3,7 @@
  * 边界：只转发到 comment-command-builders，不改变批注事务语义。
  * 协作模块：comment-command-builders、editor facade 与事务流水线共同提供批注能力。
  * 性能/安全约束：包装层不新增遍历和副作用，保持既有公开函数签名。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentProjection } from '../model/projection'

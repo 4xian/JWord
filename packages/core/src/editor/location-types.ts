@@ -3,7 +3,7 @@
  * 边界：只描述 selection、anchor、range 和 query result，不创建运行时对象。
  * 协作模块：Editor facade、跳转、批注、目录、查找替换和高级包共同消费这些类型。
  * 性能/安全约束：类型只包含 JSON 兼容字段，不暴露 AnchorRef、RangeRef、Yjs、DOM Range 或布局坐标。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 6.22-6.24。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { SelectionAffinity, SelectionDirection } from '../model/selection'

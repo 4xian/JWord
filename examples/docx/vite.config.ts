@@ -3,7 +3,7 @@
  * 边界：只处理 examples/docx 入口依赖的 alias，不改变包本身导出配置。
  * 协作：packages/core、packages/ui、packages/docx、packages/pdf 和 Gate 5 手动验收入口。
  * 约束：demo 直连源码 alias，避免 linked package 在 Vite build 中回落到不完整声明图。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-25---建立-examplesdocx-手动验收入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { fileURLToPath } from 'node:url'
 

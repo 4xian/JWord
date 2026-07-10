@@ -3,7 +3,7 @@
  * 边界: 只验证真实浏览器键盘路径和公开演示门面观察结果，不覆盖剪贴板、合成输入或大夹具拖拽。
  * 协作: 输入辅助模块、浏览器演示钩子、隐藏输入框测试钩子与样例文档。
  * 约束: 断言必须来自真实浏览器 DOM/canvas/公开 facade，不伪造原生输入法或剪贴板能力。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 3 Step 3.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import {

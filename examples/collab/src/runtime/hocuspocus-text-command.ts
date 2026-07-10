@@ -3,7 +3,7 @@
  * 边界：只处理 demo 首段纯文本的最小 diff 与简单 rebase，不接 provider、IndexedDB 或 DOM。
  * 协作：hocuspocus-runtime.ts 提供 projection 和 TextPosition 查找函数。
  * 约束：保持文本操作通过 Editor command 进入 transaction pipeline，不直接写 Y.Text。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Command, DocumentProjection, Operation, TextPosition } from '@4xian/jword-core'
 

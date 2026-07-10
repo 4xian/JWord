@@ -3,7 +3,7 @@
  * 边界：不创建 DOM，不绑定事件，只读取公开 editor facade 与宿主几何信息。
  * 协作模块：selection-actions/controller 调度这里构建状态，dom 只消费结果。
  * 性能/安全约束：所有判断都基于公开 facade，不引入第二套 selection 或 layout 状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区浮层收尾项。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { FormattingStateValue, Editor, SelectionState } from '@4xian/jword-core'
 import { isSelectionCollapsed, twipsToCssPx } from '@4xian/jword-core'

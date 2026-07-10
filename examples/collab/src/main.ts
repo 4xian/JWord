@@ -3,7 +3,7 @@
  * 边界：只做 demo host 接线；高级协作、离线、历史和自动插入能力都通过懒加载 runtime 进入页面。
  * 协作模块：@4xian/jword-core、@4xian/jword-ui、createCollabDemoRuntime、examples/collab/tests 和 Vite dev server。
  * 性能/安全约束：基础 editor/UI 首屏可用，高级协作 runtime 只在 provider query 启用时按需加载。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   createEditor,
@@ -57,6 +57,7 @@ const demoLicenseDurationMs = 30 * 24 * 60 * 60 * 1000
 const integrationContext = readThirdPartyIntegrationContext()
 const editorBundle = createDemoEditorBundle(integrationContext)
 
+void exposeBrowserHandshakeHarnessWhenRequested()
 applyThirdPartyIntegrationAttributes(appHost, integrationContext)
 editorBundle.editor.mount(editorHost)
 const jwordUi = createJWordUi({
@@ -127,6 +128,17 @@ function createDemoEditorOptions(context: ThirdPartyIntegrationContext): EditorO
   }
 }
 
+/** 按测试 query 按需暴露浏览器握手 harness，避免常规 demo 首屏加载测试模块。 */
+async function exposeBrowserHandshakeHarnessWhenRequested(): Promise<void> {
+  const parameters = new URLSearchParams(window.location.search)
+
+  if (!parameters.has('handshakeHarness')) {
+    return
+  }
+
+  await import('./browser-handshake-harness')
+}
+
 /** 根据 URL query 选择内存 runtime 或真实 Hocuspocus runtime。 */
 async function loadSelectedRuntime(): Promise<CollabDemoRuntime> {
   const parameters = new URLSearchParams(window.location.search)
@@ -194,6 +206,8 @@ function createDebugApi(source: CollabDemoRuntime): CollabDemoDebugApi {
     simulateDisconnect: source.simulateDisconnect,
     simulateReconnect: source.simulateReconnect,
     undoLocalUserEdit: source.undoLocalUserEdit,
+    updateClientText: source.updateClientText,
+    updateClientSelection: source.updateClientSelection,
     formatClientRange: source.formatClientRange,
     addCommentRange: source.addCommentRange,
     importDocxForCollabAcceptance: source.importDocxForCollabAcceptance

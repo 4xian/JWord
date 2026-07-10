@@ -5,7 +5,7 @@
  * 边界：只覆盖服务端 history backend、document 级串行事务和跨服务实例共享 storage，不启动浏览器 UI。
  * 协作：examples/collab/server/hocuspocus-history-service.ts、hocuspocus-service.ts 和 @4xian/jword-persistence。
  * 约束：测试使用易失 storage 模拟宿主生产后端；版本内容仍来自 Yjs binary update，不保存 projection JSON。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   createVolatileHistoryStorage

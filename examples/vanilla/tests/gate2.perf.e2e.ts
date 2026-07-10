@@ -3,7 +3,7 @@
  * 边界: 只测 examples/vanilla 已接通的 Gate 2 demo，不替代 core Node benchmark 或 Gate 3 toolbar perf。
  * 协作: data-jword-canvas-container、window.__jwordDemo 和 Playwright perf-chromium 项目。
  * 约束: 指标必须来自浏览器 performance、requestAnimationFrame 和真实 canvas DOM，可附带 JSON 供复查。
- * Specs: docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'

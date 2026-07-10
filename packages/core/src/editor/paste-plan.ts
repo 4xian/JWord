@@ -3,7 +3,7 @@
  * 边界：只构造文本插入/替换命令，不处理 DOM 事件和剪贴板安全清洗。
  * 协作模块：富文本片段层、删除计划层、文本运行时与输入运行时。
  * 性能/安全约束：所有文本变更统一封装为 command 后进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { countGraphemes } from '../shared/grapheme'

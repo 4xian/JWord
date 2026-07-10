@@ -5,7 +5,7 @@
  * 边界：只检查审查报告点名的死代码符号，不做通用未引用代码分析。
  * 协作模块：布局 inline 模块、Canvas 渲染器、DOCX 兼容性检查和命令构建器聚合入口。
  * 约束：不得把有调用者的批注命令辅助函数纳入删除范围。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-5---p3-改进与技术债清理。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

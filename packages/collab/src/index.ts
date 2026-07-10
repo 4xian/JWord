@@ -3,7 +3,7 @@
  * 边界：只提供内存 adapter 与纯数据 helper，不访问 DOM、IndexedDB、WebSocket 或 core 内部实现。
  * 协作模块：真实 provider、editor facade 和 presence UI 通过这些稳定类型接入。
  * 性能/安全约束：入口无副作用，所有 helper 使用结构化数据和同步内存事件。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-6--collaborationauto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
@@ -15,6 +15,7 @@ import {
   type JWordLicenseFeatureKey,
   type JWordLicenseValidationOptions
 } from '@4xian/jword-license'
+import type { PluginCollabProviderAdapterDescriptor } from '@4xian/jword-core'
 import {
   isAwarenessPresenceState,
   isAwarenessRangeSnapshot,
@@ -129,13 +130,36 @@ export interface JWordCollabProviderAdapter {
   connect(): Promise<void>
   disconnect(): Promise<void>
   destroy(): Promise<void>
-  /** 将外部 Yjs update 写入目标 Y.Doc；调用方必须保证 update 与目标文档匹配。 */
+  /** 将外部协同 update 写入目标协作文档；调用方必须保证 update 与目标文档匹配。 */
   sendUpdate(update: Uint8Array, metadata: JWordCollabUpdateMetadata): Promise<void>
   onStatus(listener: JWordCollabStatusListener): JWordCollabUnsubscribe
   onStatusChange(listener: JWordCollabStatusListener): JWordCollabUnsubscribe
   onError(listener: JWordCollabErrorListener): JWordCollabUnsubscribe
   onUpdate(listener: JWordCollabUpdateListener): JWordCollabUnsubscribe
   onSynced(listener: JWordCollabSyncedListener): JWordCollabUnsubscribe
+}
+
+export interface CreateJWordCollabProviderPluginAdapterOptions {
+  /** 当前 plugin registry 内的 adapter 名称。 */
+  readonly name?: string
+  /** 协同能力对应的 feature key。 */
+  readonly featureKey?: JWordLicenseFeatureKey
+}
+
+/** 创建协同 provider plugin adapter descriptor。 */
+export function createJWordCollabProviderPluginAdapter(
+  adapter: JWordCollabProviderAdapter,
+  options: CreateJWordCollabProviderPluginAdapterOptions = {}
+): PluginCollabProviderAdapterDescriptor<void, JWordCollabProviderAdapter> {
+  return {
+    kind: 'collabProvider',
+    name: options.name ?? 'jword.collab.provider',
+    featureKey: options.featureKey ?? GATE6_COLLAB_FEATURES.multiplayer,
+    diagnosticsSource: 'collab',
+    createProvider() {
+      return adapter
+    }
+  }
 }
 
 export interface CreateMemoryCollabProviderAdapterOptions {

@@ -3,7 +3,7 @@
  * 边界：只读取 DocumentProjection 与 selection 快照，不构造公开命令、不执行事务。
  * 协作模块：文本、链接、图片与表格命令构建器共享 run 定位和 ID 分配逻辑。
  * 性能/安全约束：仅遍历投影树收集现有 ID，禁止写入 Projection 或访问 DOM。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

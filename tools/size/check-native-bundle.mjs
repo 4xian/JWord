@@ -3,7 +3,7 @@
  * 边界：只检查 vanilla 首屏与 native lazy chunk 的内容，不判断 Gate 2 体积阈值。
  * 协作模块：examples/vanilla/dist、tools/size/check-size.mjs 和 Gate 4.5 真实浏览器验收。
  * 约束：首屏 bundle 不得包含 native 实现依赖，native 实现只能出现在按需加载的 lazy chunk。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-6---benchmarkbundle-和文档计划。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

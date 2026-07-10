@@ -1,11 +1,11 @@
 /**
  * @vitest-environment node
  *
- * 职责：验证 Gate 6 版本历史与 Yjs GC 技术决策已落档，并防止实现误走 Y.Snapshot 路线。
- * 边界：只检查技术决策文档、canonical plan 和协同历史相关源码中的禁用 API 文本。
+ * 职责：验证版本历史当前实现说明已落档，并防止实现误走 Y.Snapshot 路线。
+ * 边界：只检查 current-implementation、SDK 公开文档和协同历史相关源码中的禁用 API 文本。
  * 协作模块：packages/persistence、packages/collab 与 packages/collab-server 共同消费 update log 和隔离 Y.Doc 重放路线。
  * 约束：版本历史只能使用 JWord snapshot record 和 Yjs update API，不依赖 Y.Snapshot 或全生命周期 gc=false。
- * Specs：docs/superpowers/reports/2026-07-02-plan-review.md#316-版本历史与-yjs-gc-的交互缺少设计结论r2-复审补充。
+ * 实现说明：版本预览/恢复以 `update log`、`JWord snapshot record`、压缩和隔离 `Y.Doc` 重放为准。
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -13,8 +13,9 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-const decisionPath = 'docs/superpowers/plans/2026-07-06-gate6-history-yjs-gc-decision.md'
-const canonicalPlanPath = 'docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md'
+const persistenceSummaryPath = 'docs/current-implementation/packages/persistence.md'
+const collaborationSdkPath = 'docs/sdk/collaboration.md'
+const publicApiPath = 'docs/sdk/public-api.md'
 const historySourceRoots = [
   'packages/persistence/src',
   'packages/collab/src',
@@ -71,28 +72,30 @@ function findForbiddenPatterns(files: readonly SourceFile[], patterns: readonly 
 }
 
 describe('Gate 6 history Yjs GC decision', () => {
-  it('records the Y.Snapshot ban and update-log governance defaults', () => {
-    expect(existsSync(decisionPath)).toBe(true)
+  it('records the Y.Snapshot ban and current update-log restore route', () => {
+    expect(existsSync(persistenceSummaryPath)).toBe(true)
 
-    const decision = readFileSync(decisionPath, 'utf8')
+    const docs = readFileSync(persistenceSummaryPath, 'utf8')
 
-    expect(decision).toContain('禁止依赖 `Y.Snapshot`')
-    expect(decision).toContain('`gc = false`')
-    expect(decision).toContain('update log + 隔离 Y.Doc 重放')
-    expect(decision).toContain('每 200 个 update 或 5 分钟')
-    expect(decision).toContain('保留最近 50 个 snapshot')
-    expect(decision).toContain('宿主 storage hook 归档')
+    expect(docs).toContain('update log')
+    expect(docs).toContain('JWord snapshot record')
+    expect(docs).toContain('隔离 `Y.Doc` 重放')
+    expect(docs).toContain('不承诺直接使用 Yjs `Y.Snapshot`')
+    expect(docs).toContain('`gc=false`')
+    expect(docs).toContain('Compaction')
   })
 
-  it('keeps the canonical Gate 6 plan aligned with the decision document', () => {
-    const plan = readFileSync(canonicalPlanPath, 'utf8')
+  it('keeps SDK docs aligned with the persistence summary', () => {
+    const docs = [
+      readFileSync(collaborationSdkPath, 'utf8'),
+      readFileSync(publicApiPath, 'utf8')
+    ].join('\n')
 
-    expect(plan).toContain(decisionPath)
-    expect(plan).toContain('禁止依赖 `Y.Snapshot`')
-    expect(plan).toContain('全生命周期 `gc = false`')
-    expect(plan).toContain('每 200 个 update 或 5 分钟')
-    expect(plan).toContain('保留最近 50 个 snapshot')
-    expect(plan).toContain('更旧数据通过宿主 storage hook 归档')
+    expect(docs).toContain('update log')
+    expect(docs).toContain('JWord snapshot record')
+    expect(docs).toContain('隔离 Y.Doc')
+    expect(docs).toContain('Y.Snapshot')
+    expect(docs).toContain('gc')
   })
 
   it('does not use Yjs Snapshot APIs or gc=false in history source paths', () => {

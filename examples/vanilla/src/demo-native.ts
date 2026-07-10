@@ -3,7 +3,7 @@
  * 边界：只通过 `@4xian/jword-native` 公开 API 调用，不读取 native/core 内部源码或 store。
  * 协作模块：`@4xian/jword-core` Editor facade、`@4xian/jword-native` lazy runtime 与 demo 状态 DOM。
  * 性能/安全约束：native runtime 只在保存/打开触发时按需加载，长任务期间不锁定编辑器输入。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.5 Step 4.5.6-4.5.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Document, Editor } from '@4xian/jword-core'
 
@@ -28,6 +28,7 @@ interface NativeDemoPersistenceHandle {
   readonly readStatus: () => string
   readonly readWarnings: () => readonly NativeWarning[]
   readonly readLastSavedByteLength: () => number | null
+  readonly readRuntimeLoaded: () => boolean
 }
 
 interface NativeProgressEvent {
@@ -248,7 +249,8 @@ export function createNativeDemoPersistence(input: CreateNativeDemoPersistenceOp
     openSelectedFile,
     readStatus: () => elements.statusHost.textContent ?? '',
     readWarnings: () => lastWarnings,
-    readLastSavedByteLength: () => lastSavedByteLength
+    readLastSavedByteLength: () => lastSavedByteLength,
+    readRuntimeLoaded: () => nativeRuntimeHandle !== null
   }
 
   /** 运行 native 异步任务并统一处理 progress/error。 */

@@ -5,7 +5,7 @@
  * 边界：只检查 JSON 登记表结构和固定 fixture id，不依赖未完成的协同、历史或 DOCX 包实现。
  * 协作模块：后续协同提供方、在线状态、快照、历史恢复和自动插入回放器按这些字段补真实执行。
  * 约束：登记表必须同时约束输入、操作序列、来源、投影、撤销和诊断期望，避免只靠文字计划验收。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-6---协同离线自动插入。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

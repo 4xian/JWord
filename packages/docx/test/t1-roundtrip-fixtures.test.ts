@@ -5,7 +5,7 @@
  * 边界：只读取 fixtures/docx/registry.json 中已可用的 T1 输入，不声明外部办公套件兼容性。
  * 协作模块：fixtures/docx、diffDocxRoundtrip 和 canonical Gate 5 Step 5.18-5.21 复用这里的真实证据。
  * 约束：roundtrip 必须保留 T1 核心结构和样式，不能只靠内存构造样例。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-521建立-docx-roundtrip-diff导出后重新导入并比较-t1-核心结构和样式。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

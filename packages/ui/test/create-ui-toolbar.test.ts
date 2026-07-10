@@ -33,18 +33,26 @@ describe('createJWordUi toolbar config', () => {
       })
 
       const toolbarHost = editorHost.querySelector<HTMLElement>('[data-jword-toolbar-host="true"]')
+      const insertPanel = toolbarHost?.querySelector<HTMLElement>('[data-jword-toolbar-tab-panel="insert"]') ?? null
+      const tablePanel = toolbarHost?.querySelector<HTMLElement>('[data-jword-toolbar-tab-panel="table"]') ?? null
       const mediaTrigger = toolbarHost?.querySelector<HTMLButtonElement>('[data-jword-media-trigger="true"]') ?? null
       const tableTrigger = toolbarHost?.querySelector<HTMLButtonElement>('[data-jword-table-insert-trigger="true"]') ?? null
 
       expect(toolbarHost).not.toBeNull()
       expect(toolbarHost?.nextElementSibling).toBe(editorShell)
-      expect(toolbarHost?.querySelector('[data-jword-tool-id="document.pagePreset"]')).toBeNull()
-      expect(toolbarHost?.querySelector('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"]')).not.toBeNull()
+      expect(toolbarHost?.getAttribute('data-jword-toolbar-mode')).toBe('professional')
+      expect(toolbarHost?.querySelector('[data-jword-toolbar-tab="home"]')).not.toBeNull()
+      expect(toolbarHost?.querySelector('[data-jword-tool-id="document.pagePreset"]')).not.toBeNull()
+      expect(toolbarHost?.querySelector('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"]')).toBeNull()
       expect(toolbarHost?.querySelector('[data-jword-tool-id="document.findReplace"]')).not.toBeNull()
       expect(mediaTrigger).not.toBeNull()
-      expect(mediaTrigger?.disabled).toBe(true)
+      expect(mediaTrigger?.disabled).toBe(false)
+      expect(insertPanel?.querySelector('[data-jword-media-trigger="true"]')).toBe(mediaTrigger)
       expect(tableTrigger).not.toBeNull()
       expect(tableTrigger?.disabled).toBe(false)
+      expect(tableTrigger?.getAttribute('aria-label')).toBe('插入表格')
+      expect(tablePanel?.querySelector('[data-jword-table-insert-trigger="true"]')).toBe(tableTrigger)
+      expect(tablePanel?.querySelector('[data-jword-table-action="insert-row-before"]')).not.toBeNull()
       expect(ui.elements.mediaPanel).not.toBeNull()
       expect(ui.elements.tablePanel).not.toBeNull()
       expect(editorHost.style.display).toBe('flex')
@@ -181,6 +189,200 @@ describe('createJWordUi toolbar config', () => {
     }
   })
 
+  test('默认专业工具栏可切换常用模式并播报当前语言', () => {
+    const editorHost = document.createElement('div')
+    const toolbarHost = document.createElement('div')
+    const liveRegionHost = document.createElement('div')
+    const editor = createEditor({ initialText: 'toolbar mode switch' })
+
+    document.body.append(editorHost, toolbarHost, liveRegionHost)
+
+    try {
+      editor.mount(editorHost)
+      const ui = createJWordUi({
+        editor,
+        editorHost,
+        toolbarHost,
+        liveRegionHost
+      })
+      const switcher = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toolbar-mode-switcher="true"]')
+      const commonOption = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toolbar-mode-option="common"]')
+      const professionalOption = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toolbar-mode-option="professional"]')
+      const modeMenu = toolbarHost.querySelector<HTMLElement>('[data-jword-toolbar-mode-menu="true"]')
+      const commonPanel = toolbarHost.querySelector<HTMLElement>('[data-jword-toolbar-common-panel="true"]')
+      const mediaTrigger = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-media-trigger="true"]')
+      const tableTrigger = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-table-insert-trigger="true"]')
+      const tableActionRow = toolbarHost.querySelector<HTMLElement>('.jw-table-toolbar__action-row')
+      const tableActionButtons = () => [
+        ...toolbarHost.querySelectorAll<HTMLButtonElement>('[data-jword-table-action]')
+      ]
+
+      expect(toolbarHost.getAttribute('data-jword-toolbar-mode')).toBe('professional')
+      expect(tableActionRow?.hidden).toBe(false)
+      expect(tableActionRow?.style.display).toBe('')
+      expect(tableActionButtons().every((button) => button.hidden === false)).toBe(true)
+      expect(switcher?.textContent).toContain('切换工具栏')
+      switcher?.click()
+      commonOption?.click()
+
+      expect(toolbarHost.getAttribute('data-jword-toolbar-mode')).toBe('common')
+      expect(modeMenu?.hidden).toBe(true)
+      expect(commonOption?.getAttribute('data-jword-selected')).toBe('true')
+      expect(professionalOption?.getAttribute('data-jword-selected')).toBe('false')
+      expect(commonPanel?.hidden).toBe(false)
+      expect(commonPanel?.querySelector('[data-jword-media-trigger="true"]')).toBe(mediaTrigger)
+      expect(commonPanel?.querySelector('[data-jword-table-insert-trigger="true"]')).toBe(tableTrigger)
+      expect(tableActionRow?.hidden).toBe(true)
+      expect(tableActionRow?.style.display).toBe('none')
+      expect(tableActionButtons().every((button) => button.hidden === true)).toBe(true)
+      ui.refresh()
+      expect(tableActionRow?.hidden).toBe(true)
+      expect(tableActionButtons().every((button) => button.hidden === true)).toBe(true)
+      expect(liveRegionHost.textContent).toContain('已切换为 常用 工具栏')
+
+      ui.setLocale('en-US')
+      expect(switcher?.textContent).toContain('Switch toolbar')
+      expect(commonOption?.textContent).toContain('Common toolbar')
+      expect(professionalOption?.textContent).toContain('Professional toolbar')
+      switcher?.click()
+      professionalOption?.click()
+
+      expect(toolbarHost.getAttribute('data-jword-toolbar-mode')).toBe('professional')
+      expect(tableActionRow?.hidden).toBe(false)
+      expect(tableActionRow?.style.display).toBe('')
+      expect(tableActionButtons().every((button) => button.hidden === false)).toBe(true)
+      expect(professionalOption?.getAttribute('data-jword-selected')).toBe('true')
+      expect(commonOption?.getAttribute('data-jword-selected')).toBe('false')
+      expect(tableTrigger?.getAttribute('aria-label')).toBe('Insert table')
+      expect(liveRegionHost.textContent).toContain('Switched to Professional toolbar')
+
+      ui.destroy()
+    } finally {
+      editor.destroy()
+      editorHost.remove()
+      toolbarHost.remove()
+      liveRegionHost.remove()
+    }
+  })
+
+  test('页面水印 API 与工具栏菜单共享实例级水印状态', async () => {
+    const editorHost = document.createElement('div')
+    const toolbarHost = document.createElement('div')
+    const liveRegionHost = document.createElement('div')
+    const editor = createEditor({ initialText: 'watermark toolbar' })
+
+    document.body.append(editorHost, toolbarHost, liveRegionHost)
+
+    try {
+      editor.mount(editorHost)
+      const ui = createJWordUi({
+        editor,
+        editorHost,
+        toolbarHost,
+        liveRegionHost
+      })
+      const canvas = editorHost.querySelector<HTMLElement>('[data-jword-canvas-container]')
+
+      ui.setWatermark({
+        text: '内部资料\n禁止外传',
+        fontSizePx: 32,
+        color: '#ff0000'
+      })
+
+      expect(ui.getWatermark()).toMatchObject({
+        text: '内部资料\n禁止外传',
+        fontSizePx: 32,
+        color: '#ff0000'
+      })
+      expect(canvas?.querySelector('[data-jword-watermark-layer="user"]')).not.toBeNull()
+
+      ui.clearWatermark()
+      expect(ui.getWatermark()).toBeNull()
+      expect(canvas?.querySelector('[data-jword-watermark-layer="user"]')).toBeNull()
+
+      const button = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-tool-id="document.watermark"]')
+
+      expect(button).toBeInstanceOf(HTMLButtonElement)
+      button?.click()
+
+      const menu = toolbarHost.querySelector<HTMLElement>('[data-jword-watermark-menu="true"]')
+      const content = menu?.querySelector<HTMLTextAreaElement>('[data-jword-watermark-content="true"]')
+      const fontSize = menu?.querySelector<HTMLInputElement>('[data-jword-watermark-font-size="true"]')
+      const color = menu?.querySelector<HTMLInputElement>('[data-jword-watermark-color="true"]')
+      const apply = menu?.querySelector<HTMLButtonElement>('[data-jword-watermark-apply="true"]')
+
+      expect(menu?.hidden).toBe(false)
+      expect(menu?.querySelector('[data-jword-watermark-label="content"]')?.textContent).toBe('水印内容')
+      if (content === null || content === undefined || fontSize === null || fontSize === undefined || color === null || color === undefined) {
+        throw new Error('水印菜单输入未创建')
+      }
+
+      content.value = 'Draft\nSecret'
+      fontSize.value = '30'
+      color.value = '#00ff00'
+      apply?.click()
+      await Promise.resolve()
+
+      expect(ui.getWatermark()).toMatchObject({
+        text: 'Draft\nSecret',
+        fontSizePx: 30,
+        color: '#00ff00'
+      })
+      expect(menu?.hidden).toBe(true)
+      expect(liveRegionHost.textContent).toContain('页面水印已应用')
+
+      button?.click()
+      ui.setLocale('en-US')
+      expect(menu?.querySelector('[data-jword-watermark-label="content"]')?.textContent).toBe('Watermark content')
+      expect(menu?.querySelector<HTMLButtonElement>('[data-jword-watermark-clear="true"]')?.textContent).toBe('Clear watermark')
+      menu?.querySelector<HTMLButtonElement>('[data-jword-watermark-clear="true"]')?.click()
+      await Promise.resolve()
+
+      expect(ui.getWatermark()).toBeNull()
+      expect(canvas?.querySelector('[data-jword-watermark-layer="user"]')).toBeNull()
+      expect(liveRegionHost.textContent).toContain('Page watermark cleared')
+
+      ui.destroy()
+    } finally {
+      editor.destroy()
+      editorHost.remove()
+      toolbarHost.remove()
+      liveRegionHost.remove()
+    }
+  })
+
+  test('旧 visibleTools 常用模式仍只显示宿主声明的内建工具', () => {
+    const editorHost = document.createElement('div')
+    const toolbarHost = document.createElement('div')
+    const editor = createEditor({ initialText: 'legacy visible tools' })
+
+    document.body.append(editorHost, toolbarHost)
+
+    try {
+      editor.mount(editorHost)
+      const ui = createJWordUi({
+        editor,
+        editorHost,
+        toolbarHost,
+        toolbar: {
+          visibleTools: ['format.bold']
+        }
+      })
+      const commonPanel = toolbarHost.querySelector<HTMLElement>('[data-jword-toolbar-common-panel="true"]')
+
+      expect(toolbarHost.getAttribute('data-jword-toolbar-mode')).toBe('common')
+      expect(commonPanel?.querySelector('[data-jword-tool-id="format.bold"]')).not.toBeNull()
+      expect(commonPanel?.querySelector('[data-jword-media-trigger="true"]')).toBeNull()
+      expect(commonPanel?.querySelector('[data-jword-table-insert-trigger="true"]')).toBeNull()
+
+      ui.destroy()
+    } finally {
+      editor.destroy()
+      editorHost.remove()
+      toolbarHost.remove()
+    }
+  })
+
   test('空 overlay、assistive mirror 与非表格选区事务不强制读取完整 layout', () => {
     const editorHost = document.createElement('div')
     const toolbarHost = document.createElement('div')
@@ -234,7 +436,7 @@ describe('createJWordUi toolbar config', () => {
     }
   })
 
-  test('默认页面尺寸菜单迁移为内部插件消费者', async () => {
+  test('默认专业工具栏使用内建页面尺寸控件', async () => {
     const editorHost = document.createElement('div')
     const toolbarHost = document.createElement('div')
     const liveRegionHost = document.createElement('div')
@@ -251,19 +453,23 @@ describe('createJWordUi toolbar config', () => {
         liveRegionHost
       })
       const trigger = toolbarHost.querySelector<HTMLButtonElement>(
-        '[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"] .jw-toolbar__select-trigger'
+        '[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-trigger'
       )
       const a3 = toolbarHost.querySelector<HTMLButtonElement>(
-        '[data-jword-plugin-menu-item-key="plugin:jword.ui:pagePreset:a3"]'
+        '[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-option[data-jword-option-value="a3"]'
       )
       const a4 = toolbarHost.querySelector<HTMLButtonElement>(
-        '[data-jword-plugin-menu-item-key="plugin:jword.ui:pagePreset:a4"]'
+        '[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-option[data-jword-option-value="a4"]'
+      )
+      const custom = toolbarHost.querySelector<HTMLButtonElement>(
+        '[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-option[data-jword-option-value="custom"]'
       )
 
-      expect(toolbarHost.querySelector('[data-jword-tool-id="document.pagePreset"]')).toBeNull()
+      expect(toolbarHost.querySelector('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"]')).toBeNull()
       expect(trigger).toBeInstanceOf(HTMLButtonElement)
       expect(a3).toBeInstanceOf(HTMLButtonElement)
       expect(a4?.getAttribute('data-jword-selected')).toBe('true')
+      expect(custom?.querySelector('.jw-toolbar__select-option-label')?.textContent).toBe('自定义大小')
 
       trigger?.click()
       a3?.click()
@@ -271,8 +477,51 @@ describe('createJWordUi toolbar config', () => {
 
       expect(editor.getPageConfig().preset).toBe('a3')
       expect(a3?.getAttribute('data-jword-selected')).toBe('true')
-      expect(liveRegionHost.textContent).toContain('已切换纸张为 A3')
-      expect(editor.getPluginDiagnostics()).toEqual([])
+
+      trigger?.click()
+      custom?.click()
+
+      const dialog = toolbarHost.querySelector<HTMLElement>('[data-jword-page-size-dialog="true"]')
+      const width = dialog?.querySelector<HTMLInputElement>('[data-jword-page-size-field="width"] input')
+      const height = dialog?.querySelector<HTMLInputElement>('[data-jword-page-size-field="height"] input')
+      const marginTop = dialog?.querySelector<HTMLInputElement>('[data-jword-page-size-field="marginTop"] input')
+      const marginRight = dialog?.querySelector<HTMLInputElement>('[data-jword-page-size-field="marginRight"] input')
+      const marginBottom = dialog?.querySelector<HTMLInputElement>('[data-jword-page-size-field="marginBottom"] input')
+      const marginLeft = dialog?.querySelector<HTMLInputElement>('[data-jword-page-size-field="marginLeft"] input')
+      const apply = dialog?.querySelector<HTMLButtonElement>('[data-jword-page-size-apply="true"]')
+
+      expect(dialog?.querySelector('[data-jword-page-size-title="true"]')?.textContent).toBe('自定义页面大小')
+      if (
+        width === null
+        || width === undefined
+        || height === null
+        || height === undefined
+        || marginTop === null
+        || marginTop === undefined
+        || marginRight === null
+        || marginRight === undefined
+        || marginBottom === null
+        || marginBottom === undefined
+        || marginLeft === null
+        || marginLeft === undefined
+      ) {
+        throw new Error('自定义页面大小输入未创建')
+      }
+      width.value = '20'
+      height.value = '30'
+      marginTop.value = '1'
+      marginRight.value = '2'
+      marginBottom.value = '1'
+      marginLeft.value = '2'
+      apply?.click()
+      await Promise.resolve()
+
+      expect(editor.getPageConfig().preset).toBe('custom')
+      expect(editor.getPageConfig().widthTwips).toBe(11339)
+      expect(editor.getPageConfig().heightTwips).toBe(17008)
+      expect(editor.getPageConfig().marginTwips.left).toBe(1134)
+      expect(toolbarHost.querySelector('[data-jword-page-size-dialog="true"]')).toBeNull()
+      expect(liveRegionHost.textContent).toContain('已应用自定义页面大小')
 
       ui.destroy()
     } finally {
@@ -383,10 +632,17 @@ describe('createJWordUi toolbar config', () => {
         }]
       })
       const trigger = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-plugin-menu-key="plugin:demo.menu:insert"] .jw-toolbar__select-trigger')
+      const wrapper = trigger?.closest<HTMLElement>('.jw-toolbar__select-wrap')
+      const triggerRow = trigger?.querySelector<HTMLElement>(':scope > .jw-toolbar__select-trigger-row')
+      const fieldLabel = trigger?.querySelector<HTMLElement>(':scope > .jw-toolbar__select-field-label')
       const action = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-plugin-menu-item-key="plugin:demo.menu:insert:question"]')
       const menu = action?.closest<HTMLElement>('.jw-toolbar__select-menu')
 
       expect(trigger).toBeInstanceOf(HTMLButtonElement)
+      expect(wrapper?.getAttribute('data-jword-field-label')).toBe('插件菜单')
+      expect(triggerRow?.querySelector('.jw-toolbar__select-arrow')).toBeInstanceOf(HTMLElement)
+      expect(fieldLabel?.textContent).toBe('插件菜单')
+      expect(fieldLabel?.parentElement).toBe(trigger)
       expect(action).toBeInstanceOf(HTMLButtonElement)
       expect(menu?.hidden).toBe(true)
 

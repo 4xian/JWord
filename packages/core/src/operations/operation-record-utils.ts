@@ -3,7 +3,7 @@
  * 边界：不解释具体 operation 语义，只处理共享容器、属性 Map 和 JSON 兼容值。
  * 协作模块：operation-adapter 和后续 focused operation 模块复用这里的容器读写规则。
  * 性能/安全约束：不访问 DOM，不触发 transaction，只在调用方传入的 Yjs 容器上做同步变更。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'

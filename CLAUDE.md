@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-JWord 是一个 Word 风格的文档编辑器 SDK（pnpm monorepo）：Y.Doc 作为唯一状态真源，自研分页排版引擎，按页 Canvas 渲染，支持 docx/pdf 互通、多人协同和 `.jword` 原生格式。规范文档见 `docs/superpowers/specs/2026-05-11-jword-canonical/`（架构、工程标准、Gate 验收），公开 API 目录见 `docs/sdk/public-api.md`。
+JWord 是一个 Word 风格的文档编辑器 SDK（pnpm monorepo）：Y.Doc 作为唯一状态真源，自研分页排版引擎，按页 Canvas 渲染，支持 docx/pdf 互通、多人协同和 `.jword` 原生格式。当前实现摘要见 `docs/current-implementation/`，公开 API 目录见 `docs/sdk/public-api.md`。
 
 ## 常用命令
 

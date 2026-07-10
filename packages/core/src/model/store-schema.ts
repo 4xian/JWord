@@ -3,7 +3,7 @@
  * 边界：只保存结构常量，不创建 Y.Doc 容器，不投影模型。
  * 协作模块：状态类型、记录工厂、批注记录和修订记录模块共享同一字段表。
  * 性能/安全约束：无副作用，不访问 DOM、网络或持久化资源。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#32-状态真源。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 /** Y.Doc 结构版本；具体写入仍交给 transaction adapter。 */

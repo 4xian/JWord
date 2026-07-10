@@ -5,7 +5,7 @@
  * 边界：只覆盖 Node 本地 WebSocket provider 收敛，不接浏览器 UI、IndexedDB 或 core 内部 store。
  * 协作：examples/collab/server/hocuspocus-service.ts、@4xian/jword-collab 和 Yjs。
  * 约束：测试使用随机端口和独立 room，不写入持久化存储，不复用内存 adapter。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { afterEach, describe, expect, it } from 'vitest'
 import * as Y from 'yjs'

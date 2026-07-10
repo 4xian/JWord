@@ -3,7 +3,7 @@
  * 边界：这里只定义边界，Yjs index、UTF-16、grapheme 转换与锚点解析 helper 分开处理。
  * 协作模块：selection、comment、revision、auto inserter 和 remote cursor 后续复用 AnchorRef/RangeRef。
  * 性能/安全约束：不在 top-level 访问 DOM 或文档状态，创建函数只做品牌化和不可变包装。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'
@@ -56,6 +56,7 @@ export interface AnchorRefInput {
   readonly blockId: BlockId
   readonly runId: RunId
   readonly graphemeIndex: GraphemeIndex
+  readonly assoc?: number
 }
 
 /**
@@ -192,7 +193,7 @@ export function createAnchorRef(input: AnchorRefInput): AnchorRef {
     runId: input.runId,
     graphemeIndex: input.graphemeIndex,
     text: undefined,
-    assoc: 0,
+    assoc: input.assoc ?? 0,
     relativePosition: undefined
   })
 }

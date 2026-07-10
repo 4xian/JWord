@@ -3,7 +3,7 @@
  * 边界：只读取 fresh build 产物、首屏资源和源码静态 import 图，不构建、不改写 dist。
  * 协作模块：root `pnpm size`、examples/vanilla build、Gate 7 bundle size 校准计划。
  * 约束：阻止高级包进入免费首屏，并用当前实测预算加收紧路线图约束体积回归。
- * Specs：docs/superpowers/plans/2026-07-06-gate7-bundle-size-calibration.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'

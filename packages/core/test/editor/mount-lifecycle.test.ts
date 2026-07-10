@@ -5,7 +5,7 @@
  * 边界：只覆盖挂载层事件绑定、document mouseup 与销毁释放，不测试输入语义、分页布局或真实浏览器画布。
  * 协作模块：挂载门面、指针运行时、画布池和渲染器共同维护挂载资源生命周期。
  * 性能/安全约束：测试运行在 jsdom，使用内存 DOM，不访问网络或磁盘。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-1-修复核心功能正确性与资源生命周期。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

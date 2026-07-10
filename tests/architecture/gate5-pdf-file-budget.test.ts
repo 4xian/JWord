@@ -5,7 +5,7 @@
  * 边界：只检查 packages/pdf/src 与 packages/pdf/test 的 TypeScript 文件行数，不处理历史 core/ui 文件。
  * 协作模块：packages/pdf/src/index.ts 与 PDF 公开接口、任务线程和视觉报告测试共同满足此门禁。
  * 约束：超过 1000 行的 PDF 文件必须拆分，避免一个文件承载导出、worker、字体和测试夹具多条纵线。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-5---商业高级格式互通docx-导入导出与-pdf-导出。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readdirSync, readFileSync } from 'node:fs'

@@ -3,7 +3,7 @@
  * 边界：只处理修订记录写入、接受/拒绝后的文本或格式回滚、修订引用清理。
  * 协作模块：operation-adapter 负责分发，text-adapter 负责接受/拒绝时的 deleteRange。
  * 性能/安全约束：不访问 DOM，不触发布局渲染；所有状态变更由外层 transaction pipeline 包裹。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

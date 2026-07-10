@@ -3,11 +3,16 @@
  * 边界：不直接打开窗口、不修改 editor，不把错误抛给宿主未处理异常；这里只维护 UI 状态并调度回调。
  * 协作模块：link/dom 负责节点结构，link/state 负责纯状态计算，link/policy 负责协议 allowlist。
  * 性能/安全约束：public API 只保留插入弹窗、设置当前链接和销毁；打开链接必须经宿主回调，不调用 window.open。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
-import { createLinkPanelDom, destroyLinkPanel, renderLinkPanel } from './dom'
+import { createLinkPanelDom, destroyLinkPanel, localizeLinkPanelDom, renderLinkPanel } from './dom'
 import { createLinkDialogState, normalizeLinkDraft, readLinkValidationError } from './state'
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import type {
   CreateLinkControllerOptions,
   JWordLinkAdapter,
@@ -27,6 +32,9 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
   let activeLink: JWordLinkDraft | null = null
   let quickToolsVisible = false
   let dialog: JWordLinkDialogState | null = null
+  let i18n = options.i18n ?? resolveJWordUiI18n()
+
+  localizeLinkPanelDom(dom, i18n)
 
   /** 用当前状态刷新 link panel。 */
   function refresh(): void {
@@ -36,7 +44,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
       quickToolsVisible,
       dialog,
       readonly: readonlyMode
-    }, policy)
+    }, policy, i18n)
   }
 
   /** 关闭当前 dialog。 */
@@ -141,7 +149,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
       await adapter.openLink(activeLink)
     } catch (error) {
       dialog = createLinkDialogState('edit', activeLink)
-      setDialogError(normalizeLinkError(error, '打开链接失败，请重试。'))
+      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.openFailed', '打开链接失败，请重试。')))
       refresh()
     }
   }
@@ -158,7 +166,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
       return
     }
 
-    const validationError = readLinkValidationError(draft, policy)
+    const validationError = readLinkValidationError(draft, policy, i18n)
 
     if (validationError.length > 0) {
       setDialogError(validationError)
@@ -177,7 +185,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
       activeLink = draft
       closeDialog()
     } catch (error) {
-      setDialogError(normalizeLinkError(error, '保存链接失败，请重试。'))
+      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.saveFailed', '保存链接失败，请重试。')))
       refresh()
     }
   }
@@ -207,7 +215,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
       if (dialog === null) {
         dialog = createLinkDialogState('edit', activeLink ?? undefined)
       }
-      setDialogError(normalizeLinkError(error, '移除链接失败，请重试。'))
+      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.removeFailed', '移除链接失败，请重试。')))
       refresh()
     }
   }
@@ -275,6 +283,17 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
         dialog = null
       }
 
+      refresh()
+    },
+    setI18n(nextI18n: ResolvedJWordUiI18n): void {
+      i18n = nextI18n
+      if (dialog !== null && readLinkValidationError(dialog.draft, policy, i18n).length > 0) {
+        dialog = {
+          ...dialog,
+          error: ''
+        }
+      }
+      localizeLinkPanelDom(dom, i18n)
       refresh()
     },
     /** 销毁 controller 并移除 DOM。 */

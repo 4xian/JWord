@@ -3,7 +3,7 @@
  * 边界：不实现 table UI，也不复制 core table command builder；这些逻辑分别交给 `@4xian/jword-ui` 和 core 公开 API。
  * 协作模块：main.ts 把这里的 table options 传给 `createJWordUi(...)`，浏览器测试通过 `window.__jwordDemo.table` 读取钩子。
  * 性能/安全约束：所有表格写入继续走 `createCoreTableCommandAdapter()` + `editor.executeCommand(...)`，不允许直接修改 projection。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 2 Step 4.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   buildSetTableCellTextCommand,
@@ -51,7 +51,6 @@ export function createDemoTableSupport(editor: Editor): DemoTableSupport {
 
   /** 暴露给 UI 的 table options。 */
   const table = Object.freeze({
-    title: '表格',
     description: 'Gate 4 Iteration 2：验证官方 table toolbar、core table command adapter 与 vanilla demo 的最小闭环。',
     commands
   } satisfies JWordTableOptions)

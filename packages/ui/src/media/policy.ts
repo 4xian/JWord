@@ -3,7 +3,7 @@
  * 边界：只校验 URL 输入，不访问 DOM、不发起网络请求，也不依赖 demo 宿主。
  * 协作模块：media controller 在 URL 提交前调用这里，浏览器测试与宿主策略通过公开类型对齐。
  * 性能/安全约束：默认不信任任意外部 URL，只在显式 allowlist 通过时接受 http/https。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { DEFAULT_RESOURCE_URL_POLICY, isAllowedResourceUrl } from '@4xian/jword-core'
 

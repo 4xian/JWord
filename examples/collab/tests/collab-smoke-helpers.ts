@@ -3,15 +3,20 @@
  * 边界：不声明测试断言、不启动浏览器上下文、不管理 Hocuspocus 服务生命周期。
  * 协作：collab-smoke.e2e.ts、examples/collab/src/runtime.ts 和浏览器 debug window。
  * 约束：helper 只读取公开 debug API，避免测试主体超过文件体量上限。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Page } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 
-export const collabDemoUrl = 'http://127.0.0.1:4186'
+export let collabDemoUrl = 'http://127.0.0.1:4186'
 export const collabDemoDirectory = fileURLToPath(new URL('..', import.meta.url))
 export const viteExecutablePath = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url))
+
+/** 按当前浏览器项目切换 collab smoke demo 端口。 */
+export function setCollabDemoPort(port: number): void {
+  collabDemoUrl = `http://127.0.0.1:${port}`
+}
 
 /** 等待 collab demo Vite 服务可访问。 */
 export async function waitForCollabDemoServer(): Promise<void> {
@@ -108,7 +113,7 @@ export async function findHistoryVersionIdByText(page: Page, text: string): Prom
     const versionId = await page.evaluate((targetText) => {
       const debugWindow = window as unknown as CollabDebugWindow
       const entry = debugWindow.__jwordCollabDemo?.readVersionHistory()
-        .find((candidate) => candidate.text === targetText)
+        .find((candidate) => candidate.text.replace(/^\n|\n$/gu, '') === targetText)
 
       return entry?.id ?? null
     }, text)
@@ -125,11 +130,13 @@ export async function findHistoryVersionIdByText(page: Page, text: string): Prom
 
 /** 读取历史版本文本列表。 */
 export async function readHistoryTexts(page: Page): Promise<readonly string[]> {
-  return page.evaluate(() => {
+  const texts = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readVersionHistory().map((entry) => entry.text) ?? []
   })
+
+  return texts.map((text) => normalizeCollabText(text) ?? '')
 }
 
 /** 构造真实 Hocuspocus provider demo URL。 */
@@ -173,9 +180,10 @@ export interface ThirdPartyHocuspocusDemoInput {
 export function createThirdPartyHocuspocusDemoUrl(
   webSocketUrl: string,
   roomId: string,
-  input: ThirdPartyHocuspocusDemoInput
+  input: ThirdPartyHocuspocusDemoInput,
+  historyHttpUrl?: string
 ): string {
-  const url = new URL(createHocuspocusDemoUrl(webSocketUrl, roomId, input.clientId))
+  const url = new URL(createHocuspocusDemoUrl(webSocketUrl, roomId, input.clientId, undefined, undefined, historyHttpUrl))
 
   url.searchParams.set('serverUrl', input.serverUrl)
   url.searchParams.set('documentId', input.documentId)
@@ -197,20 +205,66 @@ export async function readProviderMode(page: Page): Promise<string | null> {
 
 /** 读取第一个 client 文本。 */
 export async function readFirstClientText(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
+  const text = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readCollabState().clients[0]?.text ?? null
   })
+
+  return normalizeCollabText(text)
 }
 
 /** 读取第二个 client 文本。 */
 export async function readSecondClientText(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
+  const text = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readCollabState().clients[1]?.text ?? null
   })
+
+  return normalizeCollabText(text)
+}
+
+/** 读取指定 client 的正文投影。 */
+export async function readClientText(page: Page, clientId: string): Promise<string | null> {
+  return clientId === 'client-a'
+    ? readFirstClientText(page)
+    : readSecondClientText(page)
+}
+
+/** 通过 demo debug API 写入指定 provider client 的正文。 */
+export async function writeClientText(
+  page: Page,
+  clientId: string,
+  text: string,
+  previousText?: string
+): Promise<void> {
+  const baseline = previousText ?? await readClientText(page, clientId) ?? ''
+
+  await page.evaluate((input) => {
+    const debugWindow = window as unknown as CollabDebugWindow
+
+    debugWindow.__jwordCollabDemo?.updateClientText(input.clientId, input.text, input.previousText)
+  }, { clientId, text, previousText: baseline })
+}
+
+/** 通过 demo debug API 更新指定 client 的远端选区。 */
+export async function updateClientSelection(
+  page: Page,
+  clientId: string,
+  selectionStart: number,
+  selectionEnd: number
+): Promise<void> {
+  await page.evaluate((input) => {
+    const debugWindow = window as unknown as CollabDebugWindow
+
+    debugWindow.__jwordCollabDemo?.updateClientSelection(input.clientId, input.selectionStart, input.selectionEnd)
+  }, { clientId, selectionStart, selectionEnd })
+}
+
+/** 去除 editor 投影为单段文档补出的首尾换行。 */
+function normalizeCollabText(text: string | null): string | null {
+  return text?.replace(/^\n|\n$/gu, '') ?? null
 }
 
 /** 读取离线状态最近事件。 */
@@ -332,6 +386,8 @@ interface CollabDebugApi {
   readonly retryAutoInsert: () => void
   readonly simulateDisconnect: () => void
   readonly simulateReconnect: () => void
+  readonly updateClientText: (clientId: string, text: string, previousText?: string) => void
+  readonly updateClientSelection: (clientId: string, selectionStart: number, selectionEnd: number) => void
 }
 
 interface AwarenessStateSnapshot {

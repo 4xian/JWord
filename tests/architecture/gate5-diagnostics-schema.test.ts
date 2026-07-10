@@ -5,7 +5,7 @@
  * 边界：只检查公开 registry 和源码诊断 code 覆盖，不执行 DOCX/PDF 导入导出。
  * 协作模块：packages/docx、packages/pdf 的公开诊断类型和后续 fixture 矩阵复用这些 code。
  * 约束：新增诊断 code 必须先进入 registry，避免 warning/error 字段漂移或口头约定。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-54建立统一-warningerror-schema。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

@@ -5,7 +5,7 @@
  * 边界：只检查 registry、派生文档、派生 core 摘要和稳定 code 定义，不执行包运行时流程。
  * 协作模块：fixtures/collab/diagnostics-registry.json、tools/diagnostics、docs/sdk 与 core observability。
  * 约束：新增公开诊断码必须先登记到统一 registry，再由生成脚本刷新文档和 diagnostics export 摘要。
- * Specs：docs/superpowers/reports/2026-07-02-gate7-review.md#r2-复审补充。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

@@ -5,7 +5,7 @@
  * 边界：只读取 SDK 文档、类型 fixture 和类型测试配置，不运行浏览器或 SDK 运行时。
  * 协作模块：公开 API 清单、quickstart 文档、类型测试和原生保存打开 API 共同提供免费基础版接入证据。
  * 约束：quickstart 只能演示 core、ui、native 的 package 入口，不依赖 monorepo 内部路径、demo runtime 或高级付费包。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-74建立免费基础版-quickstart。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'

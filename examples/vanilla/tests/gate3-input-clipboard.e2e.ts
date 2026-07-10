@@ -3,7 +3,7 @@
  * 边界: 只模拟浏览器剪贴板事件数据面，不覆盖富文本粘贴或系统剪贴板集成。
  * 协作: 输入辅助模块、隐藏输入框测试钩子与样例文档。
  * 约束: 剪贴板断言必须通过 hidden textarea 事件链和公开文本镜像验证。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 3 Step 3.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import {

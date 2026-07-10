@@ -5,7 +5,7 @@
  * 边界：只覆盖 history HTTP record 路由的同文档并发排队，不测试 Hocuspocus WebSocket 或浏览器 UI。
  * 协作模块：packages/collab-server/src/index.ts 提供 HTTP 服务，packages/persistence 提供 storage 契约。
  * 约束：超出同文档队列深度时必须快速失败，不能把请求无限挂在 promise 链上。
- * Specs：docs/superpowers/reports/2026-07-02-gate6-review.md#history-service-document-lock-无队列深度限制。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, it } from 'vitest'

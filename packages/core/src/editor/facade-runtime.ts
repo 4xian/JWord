@@ -3,7 +3,7 @@
  * 边界：不处理 DOM 事件细节，不直接绘制 canvas。
  * 协作模块：状态层、文档辅助函数、格式命令、历史记录、选择区和布局/渲染子类。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 import { createDocumentProjection } from '../model/projection'
@@ -29,6 +29,7 @@ import { JWordEditorFormattingFacadeRuntime } from './formatting-facade-runtime'
 import { resolveCommandDirtyRange } from './rendering'
 import type { EditorCommandOptions, EditorDocumentInput, EditorDocumentModelInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
 import type { PluginDiagnostic } from '../plugins/types'
+import { createJWordDiagnosticsSnapshot, createJWordLayoutMetricsSummary, createJWordSelectionSummary } from './observability'
 import type { JWordDiagnosticsSnapshot } from './observability'
 
 export abstract class JWordEditorFacadeRuntime extends JWordEditorFormattingFacadeRuntime {
@@ -314,7 +315,11 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorFormattingFaca
   exportDiagnostics(): JWordDiagnosticsSnapshot {
     this.assertActive()
 
-    return this.pluginHost.exportDiagnostics()
+    return createJWordDiagnosticsSnapshot(this.pluginHost.getDiagnostics(), {
+      operations: this.operationSummary,
+      layout: createJWordLayoutMetricsSummary(this.getLayout()),
+      selection: createJWordSelectionSummary(this.currentSelection)
+    })
   }
 
   undo(scope?: HistoryScope): HistoryOperationResult {
@@ -614,6 +619,14 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorFormattingFaca
 
     if (restoredSelection === null) {
       return null
+    }
+
+    if (restoredSelection === this.currentSelection) {
+      return restoredSelection
+    }
+
+    if (this.isSelectionValidInCurrentProjection(restoredSelection)) {
+      return restoredSelection
     }
 
     const anchor = this.restoreHistoryAnchor(restoredSelection.anchor)

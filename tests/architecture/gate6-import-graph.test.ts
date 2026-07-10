@@ -5,7 +5,7 @@
  * 边界：只扫描 import graph 和 Vite alias，不启动 Vite、Hocuspocus 或真实浏览器。
  * 协作：examples/collab、packages/collab、packages/collab-server 和 Gate 6 Step 6.47-6.49。
  * 约束：禁止示例/验收测试依赖 workspace 源码路径、demo runtime 内部路径或 demo server 内部服务。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.47-6.49。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'

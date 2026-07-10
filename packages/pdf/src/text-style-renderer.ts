@@ -3,7 +3,7 @@
  * 边界：只处理颜色、背景、装饰线和上下标基线，不选择字体、不遍历页面内容。
  * 协作模块：index.ts 在绘制 TextFragment 时调用，core 提供上下标共享比例常量。
  * 性能/安全约束：无 DOM 访问，不保存 PDFPage 状态，所有坐标由 layout 只读数据推导。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-23---实现-pdf-中文字体图片表格线和页眉页脚。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

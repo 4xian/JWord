@@ -3,7 +3,7 @@
  * 边界: 验证官方 UI 在 vanilla host 的装配、revision metadata 落地、点击定位、基础 undo/redo 与单条接受/拒绝。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/revisions/*、core revision command 与 editor facade。
  * 约束: 断言来自真实 DOM 或 window.__jwordDemo.editor 公开 facade，不读取 controller 私有状态。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.14。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'

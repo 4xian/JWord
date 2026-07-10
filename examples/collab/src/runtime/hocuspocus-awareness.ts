@@ -3,7 +3,7 @@
  * 边界：只处理 demo 首段纯文本 selection，不实现远端光标 UI 或 provider 通用协议。
  * 协作：hocuspocus-runtime.ts 写入 awareness state 前同步镜像，读取 debug API 时解析 range snapshot。
  * 约束：正文编辑仍走 Editor transaction pipeline；这里的 Y.Text 只作为 awareness 相对位置镜像。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordAwarenessRangeSnapshot,

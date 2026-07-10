@@ -5,7 +5,7 @@
  * 边界：只覆盖 core model/operation/projection 闭环，不测试布局、渲染或浏览器 UI。
  * 协作模块：builder 负责构造 command，transaction pipeline 与 operation adapter 负责状态写入。
  * 性能/安全约束：测试仅使用内存中的 Y.Doc，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-44-step-46。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

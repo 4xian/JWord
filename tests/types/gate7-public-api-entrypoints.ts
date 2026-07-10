@@ -3,7 +3,7 @@
  * 边界：只做类型层验收，不运行 SDK，不导入 monorepo src、demo runtime、provider 内部或 Yjs 内部类型。
  * 协作模块：Gate 7 公开接口目录、包导出映射和无别名冒烟共同验证对外消费边界。
  * 约束：本文件只能使用 package 名称导入；新增 stable API 时应先更新冻结清单和本类型测试。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-72建立-api-导出审计和类型测试。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
@@ -17,17 +17,33 @@ import {
   type EditorEvent,
   type EditorOptions,
   type EditorSharedDocument,
+  type JWordDiagnosticsFeatureFlag,
+  type JWordDiagnosticsOperationSummary,
   type JWordDiagnosticsSnapshot,
+  type PluginAdapterRegistry,
+  type PluginAdapterResolution,
+  type PluginAdapterSlot,
+  type PluginCollabProviderAdapterDescriptor,
   type PluginDefinition,
+  type PluginExportAdapterDescriptor,
+  type PluginImportAdapterDescriptor,
+  type PluginPersistenceAdapterDescriptor,
   type ResourceAdapter
 } from '@4xian/jword-core'
 import {
   BUILTIN_JWORD_TOOL_IDS,
+  DEFAULT_JWORD_UI_I18N_DICTIONARY,
+  DEFAULT_JWORD_UI_THEME_TOKENS,
   createCoreMediaCommandAdapter,
   createJWordUi,
+  resolveJWordUiI18n,
   type CreateJWordUiOptions,
   type JWordToolbarPluginItem,
-  type JWordUiInstance
+  type JWordUiI18nDictionary,
+  type JWordUiI18nOptions,
+  type JWordUiInstance,
+  type JWordUiThemeOptions,
+  type JWordUiThemeToken
 } from '@4xian/jword-ui'
 import {
   JWORD_NATIVE_FORMAT_VERSION,
@@ -39,6 +55,8 @@ import {
 } from '@4xian/jword-native'
 import {
   DOCX_WORKER_CSP_DIRECTIVES,
+  createDocxExportPluginAdapter,
+  createDocxImportPluginAdapter,
   detectDocxWorkerCapability,
   exportDocx,
   importDocx,
@@ -47,6 +65,7 @@ import {
 } from '@4xian/jword-docx'
 import {
   PDF_WORKER_CSP_DIRECTIVES,
+  createPdfExportPluginAdapter,
   detectPdfWorkerCapability,
   exportPdfFromLayout,
   type ExportPdfResult,
@@ -54,6 +73,7 @@ import {
 } from '@4xian/jword-pdf'
 import {
   createMemoryPersistenceAdapter,
+  createJWordPersistencePluginAdapter,
   createStoragePersistenceAdapter,
   type JWordPersistenceDiagnostic,
   type JWordPersistenceSnapshotAdapter,
@@ -62,6 +82,7 @@ import {
 import {
   GATE6_COLLAB_FEATURES,
   connectJWordCollaboration,
+  createJWordCollabProviderPluginAdapter,
   createMemoryCollabProviderAdapter,
   type ConnectJWordCollaborationOptions,
   type JWordCollabProviderAdapter,
@@ -83,6 +104,28 @@ import {
   type JWordLicenseEntitlement,
   type JWordLicenseFeatureKey
 } from '@4xian/jword-license'
+import {
+  JWordReactEditor,
+  JWordReactErrorBoundary,
+  JWordEditorProvider,
+  useJWordEditor,
+  useJWordEditorHandle,
+  type JWordReactEditorHandle,
+  type JWordReactEditorProps
+} from '@4xian/jword-react'
+import {
+  JWORD_VUE_EDITOR_KEY,
+  JWordVueEditor,
+  useJWordEditor as useJWordVueEditor,
+  useJWordEditorHandle as useJWordVueEditorHandle,
+  type JWordVueEditorHandle,
+  type JWordVueEditorProps
+} from '@4xian/jword-vue'
+import {
+  attachJWordDevtools,
+  type AttachJWordDevtoolsOptions,
+  type JWordDevtoolsHandle
+} from '@4xian/jword-devtools'
 
 /** 在不运行代码的前提下断言表达式类型。 */
 declare function expectType<T>(value: T): void
@@ -96,16 +139,59 @@ expectType<EditorSharedDocument>(createEditorSharedDocument())
 expectType<typeof buildSetBoldCommand>(buildSetBoldCommand)
 expectType<typeof createTextInserter>(createTextInserter)
 expectType<JWordDiagnosticsSnapshot>(undefined as unknown as JWordDiagnosticsSnapshot)
+expectType<JWordDiagnosticsFeatureFlag>({ key: 'diagnostics.export', enabled: true, source: 'core' })
+expectType<JWordDiagnosticsOperationSummary>({ transactionCount: 1 })
 expectType<PluginDefinition>(undefined as unknown as PluginDefinition)
+expectType<PluginAdapterRegistry>(undefined as unknown as PluginAdapterRegistry)
+expectType<PluginAdapterSlot<ResourceAdapter>>(undefined as unknown as PluginAdapterSlot<ResourceAdapter>)
+expectType<PluginAdapterResolution<ResourceAdapter>>(undefined as unknown as PluginAdapterResolution<ResourceAdapter>)
+expectType<PluginPersistenceAdapterDescriptor>(undefined as unknown as PluginPersistenceAdapterDescriptor)
+expectType<PluginImportAdapterDescriptor>(undefined as unknown as PluginImportAdapterDescriptor)
+expectType<PluginExportAdapterDescriptor>(undefined as unknown as PluginExportAdapterDescriptor)
+expectType<PluginCollabProviderAdapterDescriptor>(undefined as unknown as PluginCollabProviderAdapterDescriptor)
 expectType<ResourceAdapter>(undefined as unknown as ResourceAdapter)
 expectType<typeof JWordError>(JWordError)
 
 expectType<typeof createJWordUi>(createJWordUi)
-expectType<CreateJWordUiOptions>(undefined as unknown as CreateJWordUiOptions)
+expectType<CreateJWordUiOptions>({
+  editor: undefined as unknown as Editor,
+  theme: {
+    name: 'dark',
+    tokens: { colorAccent: '#2563eb' }
+  },
+  i18n: {
+    locale: 'zh-CN',
+    messages: { 'toolbar.format.bold.label': '加粗' }
+  }
+})
 expectType<JWordUiInstance>(undefined as unknown as JWordUiInstance)
 expectType<typeof createCoreMediaCommandAdapter>(createCoreMediaCommandAdapter)
 expectType<readonly string[]>(BUILTIN_JWORD_TOOL_IDS)
+expectType<typeof DEFAULT_JWORD_UI_THEME_TOKENS>(DEFAULT_JWORD_UI_THEME_TOKENS)
+expectType<typeof DEFAULT_JWORD_UI_I18N_DICTIONARY>(DEFAULT_JWORD_UI_I18N_DICTIONARY)
+expectType<typeof resolveJWordUiI18n>(resolveJWordUiI18n)
+expectType<JWordUiThemeToken>('colorAccent')
+expectType<JWordUiThemeOptions>({ name: 'dark' })
+expectType<JWordUiI18nDictionary>({ 'diagnostics.pluginAdapterFailed': '插件适配器执行失败。' })
+expectType<JWordUiI18nOptions>({ locale: 'en-US' })
 expectType<JWordToolbarPluginItem>(undefined as unknown as JWordToolbarPluginItem)
+
+expectType<typeof attachJWordDevtools>(attachJWordDevtools)
+expectType<AttachJWordDevtoolsOptions>({})
+expectType<JWordDevtoolsHandle>(undefined as unknown as JWordDevtoolsHandle)
+
+expectType<typeof JWordReactEditor>(JWordReactEditor)
+expectType<typeof JWordReactErrorBoundary>(JWordReactErrorBoundary)
+expectType<typeof JWordEditorProvider>(JWordEditorProvider)
+expectType<() => Editor | null>(useJWordEditor)
+expectType<() => JWordReactEditorHandle | null>(useJWordEditorHandle)
+expectType<JWordReactEditorProps>({ defaultValue: { text: 'React fixture' } })
+expectType<typeof JWordVueEditor>(JWordVueEditor)
+expectType<typeof JWORD_VUE_EDITOR_KEY>(JWORD_VUE_EDITOR_KEY)
+expectType<typeof useJWordVueEditor>(useJWordVueEditor)
+expectType<typeof useJWordVueEditorHandle>(useJWordVueEditorHandle)
+expectType<JWordVueEditorProps>({ defaultValue: { text: 'Vue fixture' } })
+expectType<JWordVueEditorHandle>(undefined as unknown as JWordVueEditorHandle)
 
 expectType<typeof saveJWordDocument>(saveJWordDocument)
 expectType<typeof loadJWordDocument>(loadJWordDocument)
@@ -116,18 +202,24 @@ expectType<typeof detectJWordNativeWorkerCapability>(detectJWordNativeWorkerCapa
 
 expectType<typeof importDocx>(importDocx)
 expectType<typeof exportDocx>(exportDocx)
+expectType<ReturnType<typeof createDocxImportPluginAdapter>>(createDocxImportPluginAdapter())
+expectType<ReturnType<typeof createDocxExportPluginAdapter>>(createDocxExportPluginAdapter())
 expectType<ImportDocxResult>(undefined as unknown as ImportDocxResult)
 expectType<ExportDocxResult>(undefined as unknown as ExportDocxResult)
 expectType<readonly string[]>(DOCX_WORKER_CSP_DIRECTIVES)
 expectType<typeof detectDocxWorkerCapability>(detectDocxWorkerCapability)
 
 expectType<typeof exportPdfFromLayout>(exportPdfFromLayout)
+expectType<ReturnType<typeof createPdfExportPluginAdapter>>(createPdfExportPluginAdapter())
 expectType<ExportPdfResult>(undefined as unknown as ExportPdfResult)
 expectType<PdfWarning>(undefined as unknown as PdfWarning)
 expectType<readonly string[]>(PDF_WORKER_CSP_DIRECTIVES)
 expectType<typeof detectPdfWorkerCapability>(detectPdfWorkerCapability)
 
 expectType<JWordPersistenceSnapshotAdapter>(createMemoryPersistenceAdapter())
+expectType<PluginPersistenceAdapterDescriptor<void, JWordPersistenceSnapshotAdapter>>(createJWordPersistencePluginAdapter(
+  createMemoryPersistenceAdapter()
+))
 expectType<typeof createStoragePersistenceAdapter>(createStoragePersistenceAdapter)
 expectType<JWordVersionRecord>(undefined as unknown as JWordVersionRecord)
 expectType<JWordPersistenceDiagnostic>(undefined as unknown as JWordPersistenceDiagnostic)
@@ -140,6 +232,12 @@ expectType<JWordCollabProviderAdapter>(createMemoryCollabProviderAdapter({
   documentId: 'doc-1',
   clientId: 'client-1'
 }))
+expectType<PluginCollabProviderAdapterDescriptor<void, JWordCollabProviderAdapter>>(createJWordCollabProviderPluginAdapter(
+  createMemoryCollabProviderAdapter({
+    documentId: 'doc-1',
+    clientId: 'client-1'
+  })
+))
 expectType<JWordLicenseFeatureKey>(GATE6_COLLAB_FEATURES.multiplayer)
 
 expectType<typeof createJWordCollabServer>(createJWordCollabServer)

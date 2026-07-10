@@ -3,7 +3,7 @@
  * 边界：只处理版本字符串排序，不读取网络、授权或 provider 状态。
  * 协作模块：client-sdk.ts 在版本握手时调用，collab-server 的 /version 响应提供待比较版本。
  * 性能/安全约束：比较必须为同步纯函数，预发布版本必须低于相同主版本的正式版。
- * Specs：docs/superpowers/reports/2026-07-02-gate6-review.md#medium安全含义r2-复审补充版本握手-compareversions-预发布标识失效可导致最低版本门禁被绕过。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 interface ParsedVersion {

@@ -5,7 +5,7 @@
  * 边界：只验证同步环境检测、稳定 unavailable 诊断和 CSP 指令清单，不启动真实 Web Worker。
  * 协作模块：packages/docx、packages/pdf、packages/native 的 public entry 与诊断 registry。
  * 约束：Worker 不可用时只能返回稳定诊断，不走同线程 fallback。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-6---gate-7-前置准备。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

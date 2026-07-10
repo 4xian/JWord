@@ -2,12 +2,12 @@
  * 职责：运行 Gate 5 DOCX Open XML 与办公套件兼容矩阵的本地入口。
  * 边界：只生成可复查报告和导出 artifact，不安装外部工具，不把缺失工具伪造成通过。
  * 协作模块：fixtures/docx/registry.json、compatibility-matrix.json、packages/docx 和 packages/core。
- * 约束：开放 XML 校验器、Word、WPS、LibreOffice 缺失时必须保留待验或未运行证据。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 约束：Open XML 校验器或 Microsoft Word 缺失时必须保留待验或未运行证据。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname } from 'node:path'
 
 import { createEvidenceRequests, createEvidenceTemplates, createExportArtifactEvidence, createOpenXmlValidationSummary, writeEvidenceTemplateFiles } from './gate5-docx-compatibility-evidence.mjs'
 import { commandExists, expandCommandTemplateParts, formatCommandEvidence, isAvailableFixture, isOptionalNumberField, isOptionalStringField, isStringField, parseCommandTemplate, printJson, readCommandFailureMessage, readJson, readPositiveIntegerEnv, runCommand, summarizeFixtures } from './gate5-docx-compatibility-utils.mjs'
@@ -35,7 +35,6 @@ const manualAppResultByKey = await readManualAppResults(manualResultsPath)
 const openXmlValidationByFixtureId = await readOpenXmlValidationResults(openXmlValidationResultsPath)
 const toolAvailability = createToolAvailability()
 const fixtureSummary = summarizeFixtures(registry.fixtures)
-let cachedWpsProcessLsofOutput = null
 
 if (dryRun) {
   printJson({
@@ -217,9 +216,7 @@ function createSkippedOpenXmlValidationResult(fixtureId) {
 /** 为缺少输入的目标保留人工应用证据，不启动外部应用。 */
 function createSkippedAppResults(fixtureId) {
   return [
-    readManualAppResult(fixtureId, 'Word') ?? createPendingAppResult('Word'),
-    readManualAppResult(fixtureId, 'WPS') ?? createPendingAppResult('WPS'),
-    readManualAppResult(fixtureId, 'LibreOffice') ?? createPendingAppResult('LibreOffice')
+    readManualAppResult(fixtureId, 'Word') ?? createPendingAppResult('Word')
   ]
 }
 
@@ -329,23 +326,19 @@ function isOoxmlValidatorError(value) {
     isOptionalStringField(value, 'errorType')
 }
 
-/** 运行 Word/WPS/LibreOffice 兼容检查，缺工具或只能人工时保留 pending。 */
+/** 运行 Microsoft Word 兼容检查，缺工具或只能人工时保留 pending。 */
 function runAppCompatibilityChecks(fixtureId, artifactPath, exportArtifactEvidence) {
+  void artifactPath
+
   return [
     readBoundManualAppResult(fixtureId, 'Word', exportArtifactEvidence) ??
-      createManualAppResult('Word', toolAvailability.word),
-    readBoundManualAppResult(fixtureId, 'WPS', exportArtifactEvidence) ??
-      createManualAppResult('WPS', toolAvailability.wps, artifactPath),
-    readBoundManualAppResult(fixtureId, 'LibreOffice', exportArtifactEvidence) ??
-      runLibreOfficeCompatibility(artifactPath)
+      createManualAppResult('Word', toolAvailability.word)
   ]
 }
 
 /** 创建需要人工打开的办公套件 pending 结果。 */
 function createManualAppResult(app, availability, artifactPath) {
-  const processEvidence = app === 'WPS' && artifactPath !== undefined
-    ? readWpsOpenArtifactEvidence(artifactPath)
-    : null
+  void artifactPath
 
   return {
     app,
@@ -355,94 +348,10 @@ function createManualAppResult(app, availability, artifactPath) {
     mainVisualDifference: 'pending',
     blockingIssue: availability.status === 'missing'
       ? `${app} is not installed on this machine.`
-      : processEvidence?.blockingIssue ?? `${app} requires manual open/edit/save verification.`,
+      : `${app} requires manual open/edit/save verification.`,
     evidence: availability.status === 'missing'
       ? 'not-run'
-      : [availability.evidence, processEvidence?.evidence].filter((part) => part !== undefined).join('; ')
-  }
-}
-
-/** 读取 WPS 是否已经打开导出 artifact 的只读进程证据。 */
-function readWpsOpenArtifactEvidence(artifactPath) {
-  const absoluteArtifactPath = resolve(artifactPath)
-  const output = readWpsProcessLsofOutput()
-
-  if (!output.includes(artifactPath) && !output.includes(absoluteArtifactPath)) {
-    return null
-  }
-
-  return {
-    blockingIssue: 'WPS process opened the exported artifact, but repair prompt, editability, visual difference, and save evidence still require UI verification.',
-    evidence: `lsof shows WPS opened ${absoluteArtifactPath}`
-  }
-}
-
-/** 读取 WPS 进程 lsof 输出；测试可用环境变量注入稳定样本。 */
-function readWpsProcessLsofOutput() {
-  if (process.env.GATE5_WPS_PROCESS_LSOF_OUTPUT !== undefined) {
-    return process.env.GATE5_WPS_PROCESS_LSOF_OUTPUT
-  }
-
-  if (cachedWpsProcessLsofOutput !== null) {
-    return cachedWpsProcessLsofOutput
-  }
-
-  const pgrepResult = runCommand('pgrep', ['-x', 'wpsoffice'])
-
-  if (pgrepResult.status !== 0) {
-    cachedWpsProcessLsofOutput = ''
-
-    return ''
-  }
-
-  cachedWpsProcessLsofOutput = pgrepResult.stdout
-    .split(/\s+/)
-    .filter((pid) => /^\d+$/.test(pid))
-    .map((pid) => runCommand('lsof', ['-n', '-p', pid]).stdout)
-    .join('\n')
-
-  return cachedWpsProcessLsofOutput
-}
-
-/** 用 LibreOffice headless 转换作为可选离线打开烟测。 */
-function runLibreOfficeCompatibility(artifactPath) {
-  const availability = toolAvailability.libreOffice
-
-  if (availability.status === 'missing') {
-    return createManualAppResult('LibreOffice', availability)
-  }
-
-  const outputDir = 'fixtures/docx/compatibility-libreoffice'
-  const result = runCommand(availability.command, [
-    '--headless',
-    '--convert-to',
-    'pdf',
-    '--outdir',
-    outputDir,
-    artifactPath
-  ])
-  const expectedPdfPath = join(outputDir, `${basename(artifactPath, '.docx')}.pdf`)
-
-  if (result.status === 0 && existsSync(expectedPdfPath)) {
-    return {
-      app: 'LibreOffice',
-      result: 'pass',
-      editable: 'pending',
-      repairPrompt: 'pending',
-      mainVisualDifference: 'pending',
-      blockingIssue: '',
-      evidence: formatCommandEvidence(availability.command, result)
-    }
-  }
-
-  return {
-    app: 'LibreOffice',
-    result: 'fail',
-    editable: 'pending',
-    repairPrompt: 'pending',
-    mainVisualDifference: 'pending',
-    blockingIssue: readCommandFailureMessage(result),
-    evidence: formatCommandEvidence(availability.command, result)
+      : availability.evidence
   }
 }
 
@@ -735,7 +644,7 @@ function isManualAppResult(value) {
 
 /** 判断人工证据 app 是否属于 Gate 5 矩阵目标。 */
 function isManualAppName(value) {
-  return value === 'Word' || value === 'WPS' || value === 'LibreOffice'
+  return value === 'Word'
 }
 
 /** 判断人工证据状态是否属于兼容报告支持的枚举。 */
@@ -818,25 +727,10 @@ function normalizeOoxmlValidatorPartPath(path) {
 function createToolAvailability() {
   return {
     openXmlValidator: findOpenXmlValidator(),
-    libreOffice: findCommandTool('LibreOffice', ['soffice', 'libreoffice']),
     word: findMacApplicationTool('Word', [
       '/Applications/Microsoft Word.app'
-    ]),
-    wps: findMacApplicationTool('WPS', readMacApplicationCandidates('GATE5_WPS_APP_PATH', [
-      '/Applications/WPS Office.app',
-      '/Applications/wpsoffice.app',
-      '/Applications/WPS.app'
-    ]))
+    ])
   }
-}
-
-/** 读取 macOS 应用候选路径，允许测试注入临时 app 路径。 */
-function readMacApplicationCandidates(envName, defaultPaths) {
-  const configuredPath = process.env[envName]
-
-  return configuredPath === undefined || configuredPath.trim().length === 0
-    ? defaultPaths
-    : [configuredPath, ...defaultPaths]
 }
 
 /** 查找 Open XML validator 命令或显式配置。 */

@@ -3,7 +3,7 @@
  * 边界：只负责 UI 包 DOM 注册和 core 插件命令触发，不保存第二套编辑状态。
  * 协作模块：toolbar controller 提供生命周期，core editor facade 执行插件命令，types 定义公开插件 UI 契约。
  * 性能/安全约束：状态刷新只读取 projection/selection，不触发布局；插件工具 ID 不并入内建 union。
- * Specs：docs/superpowers/plans/2026-07-06-gate7-plugin-api-m1-design.md#6-ui-扩展草案。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Editor } from '@4xian/jword-core'
@@ -15,7 +15,9 @@ import type {
   JWordUiPluginExtension,
   JWordUiPluginRenderContext
 } from '../types'
+import type { ResolvedJWordUiI18n } from '../i18n'
 import { createToolbarIcon } from './icons'
+import { CUSTOM_PAGE_SIZE_COMMAND, openCustomPageSizeDialog } from './page-size-dialog'
 import { wrapWithTooltip } from './tooltip'
 
 interface CreateToolbarPluginExtensionsOptions {
@@ -25,6 +27,7 @@ interface CreateToolbarPluginExtensionsOptions {
   readonly extensions: readonly JWordUiPluginExtension[] | undefined
   announce(message: string, refreshMirror?: boolean): void
   markToolbarTransaction(): void
+  readI18n(): ResolvedJWordUiI18n
   restoreEditorFocusSoon(): void
 }
 
@@ -134,6 +137,20 @@ export function createToolbarPluginExtensions(
           }
 
           closePluginMenus(menus)
+          if (action.commandName === CUSTOM_PAGE_SIZE_COMMAND) {
+            openCustomPageSizeDialog({
+              ownerDocument,
+              host: options.bar.closest<HTMLElement>('.jw-root') ?? options.bar,
+              editor: options.editor,
+              i18n: options.readI18n(),
+              announce: options.announce,
+              markToolbarTransaction: options.markToolbarTransaction,
+              refresh,
+              restoreEditorFocusSoon: options.restoreEditorFocusSoon
+            })
+            return
+          }
+
           executePluginCommand(options, action.commandName, action.input)
           refresh()
           announcePluginControlResult(options, action)
@@ -231,7 +248,9 @@ function createPluginMenu(
 ): RegisteredPluginMenu {
   const wrapper = ownerDocument.createElement('span')
   const trigger = ownerDocument.createElement('button')
+  const triggerRow = ownerDocument.createElement('span')
   const label = ownerDocument.createElement('span')
+  const fieldLabel = ownerDocument.createElement('span')
   const arrow = ownerDocument.createElement('span')
   const menuElement = ownerDocument.createElement('div')
 
@@ -240,14 +259,18 @@ function createPluginMenu(
   wrapper.setAttribute('data-jword-plugin-name', extension.pluginName)
   wrapper.setAttribute('data-jword-plugin-menu', menu.name)
   wrapper.setAttribute('data-jword-open', 'false')
+  wrapper.setAttribute('data-jword-field-label', menu.label)
   trigger.type = 'button'
   trigger.className = 'jw-toolbar__select-trigger'
   trigger.setAttribute('data-jword-tooltip-surface', 'true')
   trigger.setAttribute('aria-label', menu.ariaLabel ?? menu.label)
   trigger.setAttribute('aria-haspopup', 'menu')
   trigger.setAttribute('aria-expanded', 'false')
+  triggerRow.className = 'jw-toolbar__select-trigger-row'
   label.className = 'jw-toolbar__select-label'
   label.textContent = menu.label
+  fieldLabel.className = 'jw-toolbar__select-field-label'
+  fieldLabel.textContent = menu.label
   arrow.className = 'jw-toolbar__select-arrow'
   arrow.append(createToolbarIcon('caretDown'))
   menuElement.className = 'jw-toolbar__select-menu'
@@ -258,7 +281,8 @@ function createPluginMenu(
     menuElement.append(createPluginMenuAction(ownerDocument, extension, menu, action))
   }
 
-  trigger.append(label, arrow)
+  triggerRow.append(label, arrow)
+  trigger.append(triggerRow, fieldLabel)
   wrapper.append(trigger, menuElement)
   bindPluginPointerFocusGuard(trigger)
 
@@ -278,6 +302,9 @@ function createPluginMenuAction(
 ): HTMLButtonElement {
   const button = ownerDocument.createElement('button')
   const label = ownerDocument.createElement('span')
+  const description = action.description === undefined
+    ? null
+    : ownerDocument.createElement('span')
 
   button.type = 'button'
   button.className = 'jw-toolbar__select-option'
@@ -285,13 +312,27 @@ function createPluginMenuAction(
   button.setAttribute('data-jword-plugin-menu-item-key', createPluginMenuActionKey(extension.pluginName, menu.name, action.name))
   button.setAttribute('data-jword-plugin-name', extension.pluginName)
   button.setAttribute('data-jword-plugin-menu-item', action.name)
-  button.setAttribute('aria-label', action.ariaLabel ?? action.label)
+  button.setAttribute('aria-label', action.ariaLabel ?? readPluginMenuActionAriaLabel(action))
   label.className = 'jw-toolbar__select-option-label'
   label.textContent = action.label
+  if (description !== null) {
+    description.className = 'jw-toolbar__select-option-description'
+    description.textContent = action.description ?? ''
+  }
   button.append(label)
+  if (description !== null) {
+    button.append(description)
+  }
   bindPluginPointerFocusGuard(button)
 
   return button
+}
+
+/** 读取插件菜单动作的无障碍标签。 */
+function readPluginMenuActionAriaLabel(action: JWordMenuPluginAction): string {
+  return action.description === undefined
+    ? action.label
+    : `${action.label} ${action.description}`
 }
 
 /** 执行 core 插件命令并把焦点还给 editor。 */

@@ -3,7 +3,7 @@
  * 边界：只检查 core package.json 与 packages/core/src，不检查其他 worker 负责的包或 examples。
  * 协作模块：根 ESLint 规则、tools/lint/check-boundaries.mjs 与共享边界策略共同组成 Gate 0 门禁。
  * 性能/安全约束：测试只做静态文件扫描，避免执行 core 代码或加载浏览器环境。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-0---工程基座。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

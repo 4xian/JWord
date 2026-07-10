@@ -3,7 +3,7 @@
  * 边界：不加载真实字体文件，不访问 画布、window 或 document，不做布局分页。
  * 协作模块：layout 使用 字体管理器 测量 文本片段，浏览器运行时后续可注入真实测量器。
  * 性能/安全约束：缓存 key 只包含影响度量的纯数据样式和文本，缺字体以可诊断状态返回。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { splitGraphemes } from '../shared/grapheme'
@@ -314,8 +314,8 @@ export function createCanvasTextMeasurer(context: CanvasTextMeasurerContext): Te
       context.font = formatCanvasMeasurementFont(style)
 
       const metrics = context.measureText(text)
-      const ascent = readFiniteMetric(metrics.actualBoundingBoxAscent) ?? readFiniteMetric(metrics.fontBoundingBoxAscent)
-      const descent = readFiniteMetric(metrics.actualBoundingBoxDescent) ?? readFiniteMetric(metrics.fontBoundingBoxDescent)
+      const ascent = readFiniteMetric(metrics.fontBoundingBoxAscent)
+      const descent = readFiniteMetric(metrics.fontBoundingBoxDescent)
 
       return {
         widthCssPx: metrics.width,

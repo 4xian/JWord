@@ -3,7 +3,7 @@
  * 边界：只处理首个 paragraph run 的 bold 范围和格式快照，不实现完整工具栏或复杂富文本 UI。
  * 协作：hocuspocus-runtime.ts 通过本 helper 触发 Editor facade 格式命令并读取 projection 格式状态。
  * 约束：格式变更必须走 Editor transaction pipeline；debug 快照只用于 Gate 6 真实 provider 并发验收。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   buildSetBoldCommand,
@@ -22,7 +22,12 @@ import {
 export function applyHocuspocusBoldRange(
   editor: Editor,
   start: number,
-  end: number
+  end: number,
+  metadata?: {
+    readonly roomId: string
+    readonly clientId: string
+    readonly authorId: string
+  }
 ): boolean {
   const projection = editor.getProjection()
   const anchorPosition = readFirstTextPosition(projection, start)
@@ -44,7 +49,8 @@ export function applyHocuspocusBoldRange(
 
   editor.setSelection(selection)
   editor.executeCommand(command, {
-    origin: 'local-user'
+    origin: 'local-user',
+    ...(metadata ?? {})
   })
 
   return true

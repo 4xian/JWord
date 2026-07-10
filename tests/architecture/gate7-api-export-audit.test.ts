@@ -5,7 +5,7 @@
  * 边界：只读取 package manifest、类型测试 fixture 和公开 API 文档，不执行 SDK 运行时。
  * 协作模块：公开包导出映射、公开接口目录与 Gate 7 类型测试共同冻结对外消费边界。
  * 约束：第三方只能从 package 入口或明确公开子路径导入，不能依赖 src、provider 内部、Yjs、worker 内部 helper 或 demo runtime。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-72建立-api-导出审计和类型测试。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -23,6 +23,9 @@ const publicPackageManifestPaths = [
   'packages/docx/package.json',
   'packages/pdf/package.json',
   'packages/persistence/package.json',
+  'packages/react/package.json',
+  'packages/vue/package.json',
+  'packages/devtools/package.json',
   'packages/collab/package.json',
   'packages/collab-server/package.json',
   'packages/license/package.json'
@@ -110,6 +113,9 @@ describe('Gate 7 API export audit and type tests', () => {
       '@4xian/jword-docx',
       '@4xian/jword-pdf',
       '@4xian/jword-persistence',
+      '@4xian/jword-react',
+      '@4xian/jword-vue',
+      '@4xian/jword-devtools',
       '@4xian/jword-collab',
       '@4xian/jword-collab-server',
       '@4xian/jword-license'

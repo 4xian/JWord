@@ -3,7 +3,7 @@
  * 边界：只注入 axe-core 并断言 serious/critical violation；不替代键盘路径或人工屏幕阅读器验收。
  * 协作：Gate 4-6 a11y E2E 和根 package.json 的 axe-core devDependency。
  * 约束：扫描输出只保留规则、影响级别和目标节点，避免快照整页 HTML。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md#67-a11y-验收。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, type Page } from '@playwright/test'
 import axeCore from 'axe-core'

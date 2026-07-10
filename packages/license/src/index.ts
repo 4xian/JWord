@@ -3,7 +3,7 @@
  * 边界：只做本地 entitlement 判定与错误归一，不联网、不读取文档内容、不绑定 DOCX/PDF 运行时。
  * 协作模块：packages/docx、packages/pdf、packages/collab、后续协作服务端和商业发布检查复用这里的 feature matrix。
  * 性能/安全约束：纯函数无副作用；未授权时只返回诊断元数据，不携带用户文档内容。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-619冻结-gate-6-商业-edition-matrix。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

@@ -5,7 +5,7 @@
  * 边界：只使用 Yjs binary update 与持久化 storage 契约，不访问 core、IndexedDB 或 projection JSON。
  * 协作模块：packages/persistence/src/storage-history-adapter.ts 和内存 adapter 共享同一 snapshot adapter contract。
  * 约束：测试先行证明重建 adapter 后仍可 list/preview/restore，避免把 demo runtime 内存状态误当生产持久化。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 import { describe, expect, it } from 'vitest'

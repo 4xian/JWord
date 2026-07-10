@@ -5,7 +5,7 @@
  * 边界：只覆盖 self-host HTTP JSON 路由的最小滑窗限流，不测试 WebSocket 或浏览器 UI。
  * 协作模块：packages/collab-server/src/index.ts 提供 server 入口与稳定诊断响应。
  * 约束：超过配置窗口请求数时必须返回稳定 429 诊断，不能继续执行业务 handler。
- * Specs：docs/superpowers/reports/2026-07-02-gate6-review.md#rateLimit-公开选项未实现。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, it } from 'vitest'

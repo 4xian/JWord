@@ -3,7 +3,7 @@
  * 边界：不生成编辑 command，不处理布局算法，不暴露 Y.Doc 或 store。
  * 协作模块：facade-runtime 提供文档和选择区状态，mounted/input/pointer runtime 提供具体事件处理。
  * 性能/安全约束：顶层不访问 DOM；只有 mount 传入宿主元素后才创建浏览器对象。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createCanvasPool } from '../canvas/pool'
@@ -164,10 +164,13 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
     const textMirror = createTextMirrorElement(ownerDocument)
     shell.style.width = '100%'
     shell.style.height = '100%'
+    shell.style.minWidth = '0'
     shell.style.position = 'relative'
     canvasContainer.style.width = '100%'
     canvasContainer.style.height = '100%'
-    canvasContainer.style.overflow = 'auto'
+    canvasContainer.style.minWidth = '0'
+    canvasContainer.style.overflowX = 'auto'
+    canvasContainer.style.overflowY = 'auto'
     canvasContainer.style.position = 'relative'
     canvasContainer.style.cursor = 'text'
 

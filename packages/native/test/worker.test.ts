@@ -5,7 +5,7 @@
  * 边界：不启动真实 Web Worker，只验证纯函数分发、进度、取消和响应结构。
  * 协作模块：packages/native/src/worker.ts、packages/native/src/index.ts。
  * 约束：worker contract 必须支持 requestId、progress、warning、cancel 和 AbortSignal 语义。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---4xianjword-native-公开-api-与-worker。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, it } from 'vitest'
 

@@ -2,10 +2,10 @@
  * @vitest-environment node
  *
  * 职责：锁定 Phase 5 架构纯度项的机器验收条件。
- * 边界：只覆盖审查计划点名的 ID branding、命令 ID 分配器、AnchorRef 可变契约与 mergeBlock 约束文档。
- * 协作模块：core position/store-types、operation command builders 和 canonical architecture spec。
+ * 边界：只覆盖 ID branding、命令 ID 分配器、AnchorRef 可变契约与 mergeBlock 实现约束。
+ * 协作模块：`core position/store-types`、命令构造器、块操作适配器和共享错误码。
  * 约束：通过源码与规范文档检查防止架构债回流，不替代行为单测。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-5---p3-改进与技术债清理。
+ * 实现说明：本测试只读取当前 core 源码，不读取旧审查计划或规范文档。
  */
 
 import { readFileSync } from 'node:fs'
@@ -42,13 +42,12 @@ describe('Phase 5 architecture purity follow-ups', () => {
     expect(positionSource).toContain('resolveAnchorRef 会同步刷新')
   })
 
-  it('records the mergeBlock adjacency constraint in the architecture spec', () => {
-    const architectureSpec = readFileSync(
-      'docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md',
-      'utf8'
-    )
+  it('records the mergeBlock adjacency constraint in core implementation', () => {
+    const blockAdapterSource = readFileSync('packages/core/src/operations/block-adapter.ts', 'utf8')
+    const errorSource = readFileSync('packages/core/src/shared/errors.ts', 'utf8')
 
-    expect(architectureSpec).toContain('`mergeBlock` 仅支持同一容器中的相邻段落')
-    expect(architectureSpec).toContain('OPERATION_MERGE_BLOCK_NOT_ADJACENT')
+    expect(blockAdapterSource).toContain('合并同一容器中相邻段落块')
+    expect(blockAdapterSource).toContain('mergeBlock 暂只支持同一容器中的相邻段落')
+    expect(errorSource).toContain('OPERATION_MERGE_BLOCK_NOT_ADJACENT')
   })
 })

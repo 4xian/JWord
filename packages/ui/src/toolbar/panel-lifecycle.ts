@@ -3,8 +3,10 @@
  * 边界：只管理 toolbar 面板 DOM 显隐与宿主容器，不执行任何编辑命令。
  * 协作模块：controller 负责生命周期编排，insert/panel 控件动作复用这里的面板关闭规则。
  * 性能/安全约束：不读取文档正文，不访问 core 状态。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
+import type { JWordToolbarTabId } from '../types'
+import type { ToolbarDom } from './dom'
 
 export interface ToolbarPanelActionOptions {
   readonly readonlyEnabled: boolean
@@ -25,17 +27,66 @@ export interface ToolbarPanelActionOptions {
   render(): void
 }
 
-/** 为 Gate 4 扩展入口补一个挂到 toolbar bar 末尾的独立分组。 */
-export function createToolbarExtensionHost(bar: HTMLElement, kind: 'media' | 'table' | 'link' | 'panel'): HTMLElement {
-  const group = document.createElement('div')
+type ToolbarExtensionHostKind = 'media' | 'table' | 'link' | 'panel' | 'plugin'
+
+/** 为 Gate 4 扩展入口创建归属 Tab 的稳定宿主。 */
+export function createToolbarExtensionHost(dom: ToolbarDom, kind: ToolbarExtensionHostKind): HTMLElement {
+  const group = dom.host.ownerDocument.createElement('div')
+  const slot = readToolbarExtensionSlot(dom, kind)
 
   group.className = kind === 'panel'
     ? 'jw-toolbar__group jw-toolbar__group--overlay'
     : 'jw-toolbar__group'
   group.setAttribute(`data-jword-${kind}-host`, 'true')
-  bar.append(group)
+  if (kind !== 'panel') {
+    const tab = readToolbarExtensionTab(kind)
+
+    group.setAttribute('data-jword-toolbar-extension-kind', kind)
+    group.setAttribute('data-jword-toolbar-extension-tab', tab)
+    if (shouldShowExtensionInCommonMode(kind)) {
+      group.setAttribute('data-jword-toolbar-extension-common', 'true')
+    }
+  }
+  slot.append(group)
 
   return group
+}
+
+/** 读取扩展入口所属的专业模式 Tab 槽位。 */
+function readToolbarExtensionSlot(dom: ToolbarDom, kind: ToolbarExtensionHostKind): HTMLElement {
+  if (kind === 'panel') {
+    return dom.bar
+  }
+
+  const tabId = readToolbarExtensionTab(kind)
+
+  if (
+    dom.host.getAttribute('data-jword-toolbar-mode') === 'common'
+    && dom.host.getAttribute('data-jword-toolbar-common-extensions') === 'true'
+    && shouldShowExtensionInCommonMode(kind)
+  ) {
+    return dom.extensionSlots.common ?? dom.bar
+  }
+
+  return dom.extensionSlots[tabId] ?? dom.bar
+}
+
+/** 将扩展入口归类到专业模式 Tab。 */
+function readToolbarExtensionTab(kind: Exclude<ToolbarExtensionHostKind, 'panel'>): JWordToolbarTabId {
+  switch (kind) {
+    case 'media':
+    case 'link':
+      return 'insert'
+    case 'table':
+      return 'table'
+    case 'plugin':
+      return 'tools'
+  }
+}
+
+/** 判断扩展入口切到常用模式后是否仍作为默认常用入口显示。 */
+function shouldShowExtensionInCommonMode(kind: Exclude<ToolbarExtensionHostKind, 'panel'>): boolean {
+  return kind === 'media' || kind === 'table'
 }
 
 /** 绑定点击 toolbar 与浮层外部时关闭当前打开面板的监听。 */

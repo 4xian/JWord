@@ -5,7 +5,7 @@
  * 边界：不接真实 IndexedDB、不访问 core、不把 projection JSON 当成持久化真源。
  * 协作模块：Yjs update API、后续 collab provider 和 editor restore transaction 会复用这些公开类型。
  * 约束：测试先行，先观察缺包红灯，再实现最小闭环。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-5---update-logsnapshot-和版本历史step-66--613。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'

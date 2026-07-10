@@ -3,7 +3,7 @@
  * 边界：只做纯数据映射，不读取/写入 Y.Doc，不触发 editor 事务，不访问 DOM。
  * 协作模块：importDocx、roundtrip diff、examples/docx 和 core editor.loadDocumentModel。
  * 性能/安全约束：返回 JSON-compatible 数据，不保留 JSZip、XML 节点或可写内部对象引用。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-25---建立-examplesdocx-手动验收入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

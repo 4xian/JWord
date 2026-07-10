@@ -3,13 +3,25 @@
  * 边界：只注册基于现有 editor facade 的命令，不导入 UI 包，不增加新的文档 Operation。
  * 协作模块：PluginHost 负责 setup，editor facade 负责页面配置、事务与诊断边界。
  * 性能/安全约束：内置插件命令不访问 Y.Doc 或 document-store，仍通过公开 facade 修改 editor 状态。
- * Specs：docs/superpowers/plans/2026-07-06-gate7-plugin-api-m1-design.md#8-m2-m6-交付切分。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { PagePreset } from '../layout/page-config'
 import type { PluginCommandContext, PluginDefinition } from './types'
 
-const PAGE_PRESETS = new Set<PagePreset>(['a3', 'a4', 'a5', 'letter'])
+const PAGE_PRESETS = new Set<PagePreset>([
+  'a3',
+  'a4',
+  'a5',
+  'b5',
+  'letter',
+  'legal',
+  'envelope3',
+  'envelope5',
+  'envelope6',
+  'envelope7',
+  'envelope9'
+])
 
 export const BUILTIN_PLUGIN_DEFINITIONS: readonly PluginDefinition[] = [{
   name: 'jword.ui',

@@ -3,7 +3,7 @@
  * 边界：不读取 zip，不创建 package entry，不处理资源 checksum。
  * 协作模块：包读取阶段调用迁移可达性检查，加载阶段调用迁移执行入口。
  * 性能/安全约束：迁移只处理 canonical document 快照，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-45---jword-原生保存与打开。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Document } from '@4xian/jword-core'

@@ -4,8 +4,8 @@
   "scope": "docx-openxml-and-app-compatibility",
   "status": "template-only",
   "notes": [
-    "This matrix records required validation targets without claiming real Open XML or app compatibility evidence.",
-    "Each fixture must keep Open XML validation plus Word, WPS, and LibreOffice records visible until real evidence is attached.",
+    "This matrix records required validation targets without claiming real Open XML or Microsoft Word evidence.",
+    "Each fixture must keep Open XML validation plus Microsoft Word records visible until real evidence is attached.",
     "No compatibility percent is allowed; use explicit per-target results and evidence."
   ],
   "fixtures": [
@@ -19,24 +19,6 @@
       "appResults": [
         {
           "app": "Word",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -62,24 +44,6 @@
           "mainVisualDifference": "pending",
           "blockingIssue": "pending",
           "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
         }
       ]
     },
@@ -93,24 +57,6 @@
       "appResults": [
         {
           "app": "Word",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -136,24 +82,6 @@
           "mainVisualDifference": "pending",
           "blockingIssue": "pending",
           "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
         }
       ]
     },
@@ -167,24 +95,6 @@
       "appResults": [
         {
           "app": "Word",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -210,24 +120,6 @@
           "mainVisualDifference": "pending",
           "blockingIssue": "pending",
           "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
         }
       ]
     },
@@ -241,24 +133,6 @@
       "appResults": [
         {
           "app": "Word",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -284,24 +158,6 @@
           "mainVisualDifference": "pending",
           "blockingIssue": "pending",
           "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
         }
       ]
     },
@@ -315,24 +171,6 @@
       "appResults": [
         {
           "app": "Word",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -358,24 +196,6 @@
           "mainVisualDifference": "pending",
           "blockingIssue": "pending",
           "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
         }
       ]
     },
@@ -389,24 +209,6 @@
       "appResults": [
         {
           "app": "Word",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",
@@ -432,24 +234,6 @@
           "mainVisualDifference": "pending",
           "blockingIssue": "pending",
           "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
         }
       ]
     },
@@ -469,24 +253,6 @@
           "mainVisualDifference": "pending",
           "blockingIssue": "pending",
           "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
         }
       ]
     },
@@ -500,24 +266,6 @@
       "appResults": [
         {
           "app": "Word",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "WPS",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "pending",
-          "evidence": "not-run"
-        },
-        {
-          "app": "LibreOffice",
           "result": "pending",
           "editable": "pending",
           "repairPrompt": "pending",

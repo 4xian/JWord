@@ -3,7 +3,7 @@
  * 边界：只处理修订记录与格式快照，不创建正文记录或批注记录。
  * 协作模块：document-store 公开入口 re-export，本模块复用 store-schema、store-types 与 store-json。
  * 性能/安全约束：只读投影不改写 Y.Doc，写入由调用方事务包裹，不访问 DOM 或网络。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#32-状态真源。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'

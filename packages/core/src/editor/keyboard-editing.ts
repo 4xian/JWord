@@ -3,7 +3,7 @@
  * 边界：不绑定 DOM 键盘事件，只提供 input runtime 调用的编辑能力。
  * 协作模块：段落拆分层、删除计划层、文本运行时、格式命令构建器与事务流水线。
  * 性能/安全约束：键盘编辑只构造最小 operation，并保持所有变更带 origin 进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

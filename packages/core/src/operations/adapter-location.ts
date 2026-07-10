@@ -3,7 +3,7 @@
  * 边界：只在 Y.Doc 状态结构内查找或移动既有记录，不解释具体 operation 的业务语义。
  * 协作模块：文本适配器、块适配器、图片适配器、修订适配器复用这里的定位结果。
  * 性能/安全约束：不访问 DOM，不触发布局渲染；所有写入由外层 transaction pipeline 包裹。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 

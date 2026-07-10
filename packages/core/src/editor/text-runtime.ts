@@ -3,7 +3,7 @@
  * 边界：不访问 editor class 私有状态，不执行事务。
  * 协作模块：projection、layout line、selection target 和 transaction text position。
  * 性能/安全约束：constructor/top-level 不访问 window/document/HTMLElement 实例，DOM 只在 mount 后创建，编辑命令统一进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { countGraphemes, splitGraphemes } from '../shared/grapheme'
 import { createAnchorRef, createGraphemeIndex } from '../model/position'

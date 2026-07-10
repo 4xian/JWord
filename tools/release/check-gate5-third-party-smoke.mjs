@@ -3,7 +3,7 @@
  * 边界：只从当前 workspace 打包并安装公开包，再通过包名 import 运行最小 DOCX/PDF 授权路径。
  * 协作模块：packages/core、packages/license、packages/docx 和 packages/pdf。
  * 约束：smoke 项目必须从空目录安装 tarball，不读取 monorepo 源码路径、不发布包。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-538建立商业包发布检查。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'

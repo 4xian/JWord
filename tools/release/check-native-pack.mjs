@@ -3,7 +3,7 @@
  * 边界：只检查 `npm pack --dry-run` 的文件清单，不发布、不改写版本号。
  * 协作模块：packages/native/package.json、packages/native/dist、packages/native/fixtures。
  * 约束：输出必须稳定可读，且明确拒绝测试私有文件、源码路径泄漏和缺失的发布产物。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-6---benchmarkbundle-和文档计划。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'

@@ -3,7 +3,7 @@
  * 边界: 只验证 toolbar 图片入口、URL 弹框、本地上传和 editor projection 的最小闭环，不覆盖后续图片编辑能力。
  * 协作: examples/vanilla/src/main.ts、demo media support、packages/ui/src/media/* 和 core image command builders。
  * 约束: 断言必须来自真实 DOM、window.__jwordDemo.media 钩子和 editor.getProjection()，所有插入都只允许是 inline。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 1 Step 4.1-4.3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -553,22 +553,25 @@ test('Gate 4 image overlay exposes eight resize handles and supports rotate rese
   await expect(page.locator('[data-jword-image-drag-ghost="true"]')).toBeVisible()
   await expect(dropCaret).toBeVisible()
   await expect.poll(() => {
-    return page.evaluate(() => {
+    return page.evaluate((expectedPoint) => {
       const ghost = document.querySelector<HTMLElement>('[data-jword-image-drag-ghost="true"]')
       const caret = document.querySelector<HTMLElement>('[data-jword-image-drop-caret="true"]')
       const ghostRect = ghost?.getBoundingClientRect()
       const caretRect = caret?.getBoundingClientRect()
+      const ghostLeft = Math.round(ghostRect?.left ?? -9999)
+      const ghostTop = Math.round(ghostRect?.top ?? -9999)
+      const caretLeft = Math.round(caretRect?.left ?? -9999)
 
       return {
-        ghostLeft: Math.round(ghostRect?.left ?? -9999),
-        ghostTop: Math.round(ghostRect?.top ?? -9999),
-        caretLeft: Math.round(caretRect?.left ?? -9999)
+        ghostLeftReady: Math.abs(ghostLeft - Math.round(expectedPoint.x)) === 0,
+        ghostTopReady: Math.abs(ghostTop - Math.round(expectedPoint.y)) <= 1,
+        caretLeftReady: Math.abs(caretLeft - Math.round(expectedPoint.x)) === 0
       }
-    })
+    }, dragTarget)
   }).toEqual({
-    ghostLeft: Math.round(dragTarget.x),
-    ghostTop: Math.round(dragTarget.y),
-    caretLeft: Math.round(dragTarget.x)
+    ghostLeftReady: true,
+    ghostTopReady: true,
+    caretLeftReady: true
   })
   await page.mouse.up()
   await expect(page.locator('[data-jword-image-drag-ghost="true"]')).toHaveCount(0)

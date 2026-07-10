@@ -3,7 +3,7 @@
  * 边界：暴露 Editor facade、命令、投影、opaque 位置、分页 layout 和 canvas render 入口，不导出可写 Yjs 容器。
  * 协作模块：examples、UI package、React/Vue wrapper 通过此入口消费 core。
  * 性能/安全约束：入口文件不访问 DOM，不产生副作用，保证 SSR/Node 可导入。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md#46-api-稳定性。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export type {
@@ -26,6 +26,7 @@ export type {
   EditorCommandOptions,
   EditorSyncUpdateInput,
   EditorDocumentInput,
+  EditorDocumentModelInput,
   EditorEvent,
   EditorEventListener,
   EditorFixture,
@@ -38,9 +39,18 @@ export type {
   EditorRangeSnapshotInput,
   EditorResolvedLocation,
   EditorScrollToLocationOptions,
+  JWordDiagnosticsCollaborationSummary,
+  JWordDiagnosticsFeatureFlag,
+  JWordDiagnosticsLayoutMetrics,
+  JWordDiagnosticsLicenseState,
+  JWordDiagnosticsOperationSummary,
+  JWordDiagnosticsPackageVersion,
   JWordDiagnosticsPluginEntry,
   JWordDiagnosticsPrivacySummary,
+  JWordDiagnosticsSelectionSummary,
+  JWordDiagnosticsServerSummary,
   JWordDiagnosticsSnapshot,
+  JWordDiagnosticsTransactionSummary,
   JWordPluginDiagnosticTelemetryEvent,
   JWordTelemetryEvent,
   JWordTelemetryOptions,
@@ -57,6 +67,16 @@ export type {
   EditorUserInput,
   HistoryScope,
   InitialFocusPosition,
+  PluginAdapterExecute,
+  PluginAdapterExecuteOptions,
+  PluginAdapterKind,
+  PluginAdapterRegisterOptions,
+  PluginAdapterRegistration,
+  PluginAdapterRegistry,
+  PluginAdapterResolveOptions,
+  PluginAdapterResolution,
+  PluginAdapterSlot,
+  PluginCollabProviderAdapterDescriptor,
   PluginCommandContext,
   PluginCommandDefinition,
   PluginCommandMiddleware,
@@ -72,7 +92,11 @@ export type {
   PluginDiagnosticInput,
   PluginDiagnosticsReporter,
   PluginDisposable,
+  PluginExportAdapterDescriptor,
+  PluginFormatAdapterSlot,
+  PluginImportAdapterDescriptor,
   PluginPageOverlayDecoration,
+  PluginPersistenceAdapterDescriptor,
   PluginResolvedDecoration,
   PluginResolvedPageOverlayDecoration,
   PluginResolvedTextHighlightDecoration,

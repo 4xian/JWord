@@ -3,7 +3,7 @@
  * 边界：只处理状态快照、标签与默认文案，不访问 DOM，也不直接调用 editor 或上传适配器。
  * 协作模块：media controller 维护状态，media dom 只消费这里归一化后的数据。
  * 性能/安全约束：状态保持最小可序列化，避免在 UI 层持有多份冗余资源数据。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordMediaCommandResult,

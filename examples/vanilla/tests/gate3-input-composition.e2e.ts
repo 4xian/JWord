@@ -3,7 +3,7 @@
  * 边界: 不声称验证平台原生 IME，只验证当前浏览器事件链已接入运行时。
  * 协作: 输入辅助模块、隐藏输入框测试钩子与样例文档。
  * 约束: 断言必须来自真实输入事件、合成输入事件和公开文本镜像。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 3 Step 3.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import {

@@ -3,7 +3,7 @@
  * 边界：只生成 table operation，不执行事务、不修改 DocumentProjection。
  * 协作模块：共享插入定位辅助函数、事务流水线和 layout 表格模型共同提供表格能力。
  * 性能/安全约束：只遍历投影树收集模型 ID 和查找目标表格，避免生成重复 ID。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#step-410图片插入与资源管理。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentProjection } from '../model/projection'

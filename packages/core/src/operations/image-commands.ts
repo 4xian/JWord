@@ -3,7 +3,7 @@
  * 边界：只生成图片和资源相关 operation，不执行事务、不访问图片二进制或 DOM。
  * 协作模块：image-target、资源命令语义、共享 run 定位辅助函数与事务流水线共同提供图片能力。
  * 性能/安全约束：只遍历投影树统计资源引用和定位插入 run，避免无变化 operation。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#step-410图片插入与资源管理。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { resolveSelectedImageTarget } from '../model/image-target'

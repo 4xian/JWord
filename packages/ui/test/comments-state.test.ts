@@ -5,7 +5,7 @@
  * 边界：只验证 thread 状态、权限和草稿提交流程，不触碰 DOM 或宿主 adapter。
  * 协作模块：packages/ui/src/comments/state.ts 与 packages/ui/src/comments/types.ts。
  * 约束：作者只能编辑/删除自己的消息，非作者只有在显式允许时才能 resolve/reopen。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.8-4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, test } from 'vitest'

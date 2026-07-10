@@ -2,7 +2,12 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node", "vitest/globals", "@playwright/test"]
+    "types": [
+      "node",
+      "vitest/globals",
+      "@playwright/test"
+    ],
+    "jsx": "react-jsx"
   },
   "include": [
     "eslint.config.js",
@@ -14,9 +19,17 @@
     "packages/*/test/**/*.ts",
     "tests/**/*.ts",
     "examples/*/src/**/*.ts",
+    "examples/*/src/**/*.tsx",
     "examples/*/vite.config.ts",
     "examples/*/tests/**/*.ts",
     "benchmarks/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist", "coverage", "playwright-report", "tests/types/**/*.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "playwright-report",
+    "tests/types/**/*.ts",
+    "examples/vue2/src/**/*.ts"
+  ]
 }

@@ -3,7 +3,7 @@
  * 边界：只验证 demo runtime 的 provider history 快照契约，不启动 WebSocket、IndexedDB 或浏览器页面。
  * 协作：examples/collab/src/runtime/hocuspocus-history.ts、@4xian/jword-core 和 Yjs state update。
  * 约束：历史版本更新必须可在隔离 Y.Doc 中预览，且不得包含服务历史共享类型。
- * 规格：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createEditor } from '@4xian/jword-core'
 import type { JWordPersistenceSnapshotAdapter } from '@4xian/jword-persistence'

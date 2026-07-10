@@ -4,8 +4,8 @@
  * 职责：覆盖 Gate 5 Iteration 19 的 DOCX roundtrip diff 契约。
  * 边界：只验证 T1 DOCX 导入、写入 JWord facade、导出、重新导入和结构差异比较。
  * 协作模块：packages/docx/src/roundtrip.ts、importDocx、exportDocx 和 core editor facade。
- * 约束：测试不读取磁盘 fixture，不声明 Word/WPS/LibreOffice 人工兼容性。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-19---建立-docx-roundtrip-diff。
+ * 约束：测试不读取磁盘 fixture，不声明 Microsoft Word 人工兼容性。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import JSZip from 'jszip'

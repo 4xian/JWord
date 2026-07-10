@@ -3,7 +3,7 @@
  * 边界：仅在调用方显式提供 artifact 目录时保存 PDF.js 渲染截图，不做人工查看器验收、不实现 PDF 导入或编辑。
  * 协作模块：index.ts 导出的 PDF 字节、core 布局框、PDF.js 旧版渲染器和后续视觉矩阵复用报告。
  * 性能/安全约束：PDF.js 和 Node artifact 写入只在调用报告入口时动态加载，避免进入普通导出热路径。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-24---建立-pdf-视觉验证。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { CanvasLike, CanvasRenderingContextLike, DocumentLayout, PageBox, TextFragment } from '@4xian/jword-core'

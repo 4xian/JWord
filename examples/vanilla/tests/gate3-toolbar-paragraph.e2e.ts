@@ -3,10 +3,11 @@
  * 边界: 不覆盖文字格式矩阵、插入工具或面板外观基线。
  * 协作: vanilla demo、工具栏 DOM、编辑器公开门面和共享工具栏测试辅助函数。
  * 约束: 断言必须来自真实 DOM、Canvas 输出和公开门面，不伪造布局结果。
- * Specs: docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T4。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import {
   openToolbarSelectMenu,
@@ -59,9 +60,7 @@ test('Gate 3 toolbar paragraph metric dropdowns update projection and layout geo
   await page.goto('/')
   await waitForDemoReady(page)
 
-  const paperPresetSelect = page.locator('[data-jword-page-preset]')
-
-  await paperPresetSelect.selectOption('a5')
+  await selectPluginPagePreset(page, 'a5')
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await selectFirstTwoParagraphs(page)
 
@@ -255,21 +254,11 @@ test('Gate 3 toolbar switches paper size and updates real page geometry', async 
   await page.goto('/')
   await waitForDemoReady(page)
 
-  const paperPresetSelect = page.locator('[data-jword-page-preset]')
-
-  await expect(paperPresetSelect).toBeVisible()
-
-  await paperPresetSelect.selectOption('a5')
-  await expect.poll(() => readPagePresetProbe(page)).toMatchObject({
-    preset: 'a5'
-  })
+  await selectPluginPagePreset(page, 'a5')
 
   const a5Probe = await readPagePresetProbe(page)
 
-  await paperPresetSelect.selectOption('a3')
-  await expect.poll(() => readPagePresetProbe(page)).toMatchObject({
-    preset: 'a3'
-  })
+  await selectPluginPagePreset(page, 'a3')
 
   const a3Probe = await readPagePresetProbe(page)
 
@@ -350,3 +339,19 @@ test('Gate 7 plugin command error is isolated in real browser runtime', async ({
     preset: 'a5'
   })
 })
+
+/** 通过当前 Gate 7 plugin 菜单选择纸张预设。 */
+async function selectPluginPagePreset(page: Page, preset: 'a3' | 'a5'): Promise<void> {
+  const toolbar = readOfficialToolbar(page)
+  const pluginMenu = toolbar.locator('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"]')
+  const trigger = pluginMenu.locator('.jw-toolbar__select-trigger')
+  const option = pluginMenu.locator(`[data-jword-plugin-menu-item-key="plugin:jword.ui:pagePreset:${preset}"]`)
+
+  await expect(pluginMenu).toBeVisible()
+  await trigger.click()
+  await expect(option).toBeVisible()
+  await option.click()
+  await expect.poll(() => readPagePresetProbe(page)).toMatchObject({
+    preset
+  })
+}

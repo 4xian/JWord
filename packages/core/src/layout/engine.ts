@@ -3,7 +3,7 @@
  * 边界：只读取投影、页面配置和字体度量，不访问 DOM、不绘制 Canvas。
  * 协作模块：incremental 决定重排范围，pagination-flow 负责块级调度，internal 负责页面盒构造。
  * 性能/安全约束：同步最小实现，保留 viewport 和脏范围输入边界，不创建浏览器资源。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { TextPosition } from '../operations/transaction'

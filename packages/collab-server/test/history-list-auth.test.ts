@@ -5,7 +5,7 @@
  * 边界：只覆盖 HTTP history list 的 licenseHook 入参与响应，不测试 WebSocket 或浏览器 UI。
  * 协作模块：packages/collab-server/src/index.ts 提供服务入口，server-test-helpers 提供测试请求工具。
  * 约束：GET list 必须与 record/preview 一样传递 entitlement，避免版本元数据枚举风险。
- * Specs：docs/superpowers/reports/2026-07-02-gate6-review.md#history-list-授权-metadata-与-recordpreview-不一致。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, it } from 'vitest'

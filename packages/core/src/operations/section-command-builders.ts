@@ -3,7 +3,7 @@
  * 边界：只生成 section properties 操作，不执行事务、不访问 DOM、不处理页眉页脚正文编辑。
  * 协作模块：transaction pipeline、operation adapter、projection 与 layout 共同消费这些 section 语义。
  * 性能/安全约束：builder 只定位现有 section，不扫描正文内容或生成额外模型节点。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentProjection } from '../model/projection'

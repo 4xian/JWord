@@ -5,7 +5,7 @@
  * 边界：只读取包清单并调用 rollup external 判定，不执行构建。
  * 协作模块：rollup.config.mjs、packages 下 package.json 和 size 门禁脚本。
  * 约束：新增生产依赖后必须自动进入 external，避免第三方源码被打进 dist。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#1f-构建产物与商业阻塞。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync, readdirSync } from 'node:fs'

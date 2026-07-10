@@ -5,7 +5,7 @@
  * 边界：只覆盖单 run 文本匹配与替换命令构造，不实现跨 run 搜索或 UI 面板。
  * 协作模块：编辑器门面、稳定范围快照、事务流水线与查找替换辅助函数。
  * 性能/安全约束：测试只使用内存文档，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, test } from 'vitest'

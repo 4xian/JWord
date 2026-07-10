@@ -5,7 +5,7 @@
  * 边界：只验证弹窗开关、校验、编辑、打开与移除回调，不验证宿主 wiring。
  * 协作模块：packages/ui/src/link/controller.ts。
  * 约束：错误必须落回 UI state，打开链接不得固定调用 window.open。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, test, vi } from 'vitest'
 import { createLinkController } from '../src/link/controller'

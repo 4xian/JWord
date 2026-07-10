@@ -5,7 +5,7 @@
  * 边界：只覆盖 mounted document render 调度，不验证 canvas 像素内容或 UI toolbar。
  * 协作模块：transaction event 标记布局脏页，mounted runtime 把大文档渲染让到延迟任务。
  * 性能/安全约束：大文档输入热路径不得同步执行真实 canvas 重绘，避免浏览器输入 P95 超标。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#39-phase-4-性能专项输入热路径-p95--50ms。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

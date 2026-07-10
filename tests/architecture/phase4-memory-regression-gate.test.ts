@@ -5,7 +5,7 @@
  * 边界：只验证 Playwright 采样入口、CDP heap 字段和 perf 项目接线，不执行浏览器用例。
  * 协作模块：examples/vanilla/tests/phase4-memory.perf.e2e.ts 与 playwright.config.ts。
  * 约束：内存门禁必须纳入 perf-chromium，且不得退化为仅检查静态 DOM 或单次加载。
- * Specs：docs/superpowers/reports/2026-07-02-plan-review.md#314-内存回归门禁缺失r2-复审补充。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync } from 'node:fs'
 

@@ -5,7 +5,7 @@
  * 边界：只做源码和登记表扫描，不执行保存/打开。
  * 协作模块：packages/native、fixtures/native、Gate 4.5 canonical plan。
  * 约束：native 不能依赖 DOCX/PDF/collab/license，也不能把禁止缓存作为主格式保存。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-45---jword-原生保存与打开。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

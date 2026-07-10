@@ -3,7 +3,7 @@
  * 边界：只扫描纯数据 projection，不访问 DOM、布局、Y.Doc、provider 或 document-store。
  * 协作模块：location-runtime 提供 selection/comment/range snapshot 入口，本模块提供文本、块和标题查询。
  * 性能/安全约束：返回 JSON 兼容位置结果，不泄漏 AnchorRef、RangeRef、Yjs 相对位置或布局坐标。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 6.22-6.24。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { resolveParagraphStyleId } from '../layout/paragraph-semantics'

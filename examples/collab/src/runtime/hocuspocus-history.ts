@@ -3,7 +3,7 @@
  * 边界：只把 history 附属数据写入同一 Y.Doc 的独立 shared type，不参与正文 projection、不保存 DOCX 或 projection JSON。
  * 协作：hocuspocus-runtime.ts 负责触发记录、预览和恢复，persistence 包负责更完整的 adapter 契约。
  * 约束：恢复只替换 core 文档容器，不能把 history shared type 回滚到旧版本。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 import {

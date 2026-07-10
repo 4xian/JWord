@@ -3,7 +3,7 @@
  * 边界: 只覆盖 packages/ui 的纯状态与策略，不验证 editor facade、真实上传或 demo 宿主。
  * 协作: packages/ui/src/media/policy.ts 与 packages/ui/src/media/state.ts。
  * 约束: 断言只依赖公开或同包可复用 helper，不把 DOM/adapter 细节当契约。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 1。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, test } from 'vitest'
 import { isAllowedJWordMediaUrl } from '../src/media/policy'

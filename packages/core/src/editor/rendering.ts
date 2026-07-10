@@ -3,7 +3,7 @@
  * 边界：不读取键盘/剪贴板事件，不修改文档模型。
  * 协作模块：canvas renderer、layout、transaction operation 和 mounted DOM。
  * 性能/安全约束：constructor/top-level 不访问 window/document/HTMLElement 实例，DOM 只在 mount 后创建，编辑命令统一进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { CanvasLike } from '../canvas/pool'
 import { renderPageCanvas, syncPageCanvases } from '../canvas/renderer'
@@ -29,9 +29,11 @@ export function flattenLayoutLines(layout: DocumentLayout): readonly LineBox[] {
 
 /** 按页号和容差匹配当前 caret 所在 layout 行，避免浮点抖动导致键盘导航失效。 */
 export function isLayoutLineMatchingCaret(line: LineBox, caretRect: LayoutRect): boolean {
+  const caretCenterY = caretRect.y + (caretRect.height / 2)
+
   return line.pageIndex === caretRect.pageIndex
-    && Math.abs(line.y - caretRect.y) <= LAYOUT_LINE_MATCH_TOLERANCE_TWIPS
-    && Math.abs(line.height - caretRect.height) <= LAYOUT_LINE_MATCH_TOLERANCE_TWIPS
+    && caretCenterY >= line.y - LAYOUT_LINE_MATCH_TOLERANCE_TWIPS
+    && caretCenterY <= line.y + line.height + LAYOUT_LINE_MATCH_TOLERANCE_TWIPS
 }
 
 export function resolveLineBoundaryPosition(
@@ -142,6 +144,7 @@ export function updatePageElement(
   page.setAttribute('data-jword-page', String(layoutPage.pageIndex))
   page.style.position = 'relative'
   page.style.width = `${twipsToCssPx(layoutPage.width, scale)}px`
+  page.style.minWidth = page.style.width
   page.style.height = `${twipsToCssPx(layoutPage.height, scale)}px`
   page.style.margin = '0 auto 48px'
   page.style.background = '#ffffff'

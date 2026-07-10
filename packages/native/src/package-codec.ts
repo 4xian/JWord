@@ -3,7 +3,7 @@
  * 边界：只负责把 canonical document 写入 .jword zip，不读取外部 package，不执行 schema 迁移。
  * 协作模块：index.ts 公开入口 re-export，本模块复用诊断、进度与 checksum 校验模块。
  * 性能/安全约束：不保存渲染缓存、画布位图、DOM 状态或协同 provider 状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-45---jword-原生保存与打开。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import JSZip from 'jszip'

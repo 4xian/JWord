@@ -3,7 +3,7 @@
  * 边界：只通过公开 import/export 与 core editor facade 运行，不读取磁盘、不访问 DOM、不直接读写 Y.Doc store。
  * 协作模块：index.ts 公开 API、export.ts、core createEditor/loadDocumentModel 和后续 fixture diff。
  * 性能/安全约束：当前只比较 T1 结构快照，不保存原始 JSZip/DOM 节点，不伪装人工兼容验证。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-19---建立-docx-roundtrip-diff。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor } from '@4xian/jword-core'

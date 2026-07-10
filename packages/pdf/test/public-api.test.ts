@@ -5,7 +5,7 @@
  * 边界：不做 PDF.js 视觉截图、不验证真实自定义字体嵌入、不实现 PDF 导入。
  * 协作模块：后续 packages/pdf/src/index.ts、layout 输出和兼容验证复用这个契约。
  * 约束：测试先行，新增 PDF 行为必须先观察红灯再实现。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-23---实现-pdf-中文字体图片表格线和页眉页脚。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { PDFDocument } from 'pdf-lib'

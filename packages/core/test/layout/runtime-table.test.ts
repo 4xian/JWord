@@ -5,7 +5,7 @@
  * 边界：只测试表格 layout box 派生，不覆盖 UI 表格交互或 Canvas 渲染。
  * 协作模块：布局运行时、表格布局、页面配置与字体管理器。
  * 性能/安全约束：测试只读 DocumentProjection，不访问 DOM，不夹带表格能力变更。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

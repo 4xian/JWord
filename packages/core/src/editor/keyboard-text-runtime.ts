@@ -3,7 +3,7 @@
  * 边界：只扩展文本编辑 runtime 的键盘入口，不处理 DOM 事件绑定、不直接写 Y.Doc。
  * 协作模块：input-runtime 调用本模块，text-runtime 提供 word 边界，layout 查询提供行定位。
  * 性能/安全约束：所有编辑仍走 transaction pipeline，不访问顶层 DOM，不缓存跨事务状态。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { cssPxToTwips } from '../layout/page-config'

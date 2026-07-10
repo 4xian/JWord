@@ -3,7 +3,7 @@
  * 边界：不连接 provider、不读取文档内容、不执行授权校验。
  * 协作模块：client-sdk.ts、第三方 package 入口和测试共享这些类型。
  * 性能/安全约束：类型模块无副作用，避免 SDK 入口继续膨胀。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-625定义-connectjwordcollaborationeditor-options-公开入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

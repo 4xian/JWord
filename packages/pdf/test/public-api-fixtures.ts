@@ -5,7 +5,7 @@
  * 边界：只读取测试输入，不断言 PDF 输出、不触发渲染。
  * 协作模块：packages/pdf/test/public-api.test.ts 与 fixtures/pdf/inputs。
  * 约束：所有 fixture 读取保持同步、显式，避免在测试主体里堆叠文件系统细节。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-23---实现-pdf-中文字体图片表格线和页眉页脚。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

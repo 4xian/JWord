@@ -3,7 +3,7 @@
  * 边界：只封装 Node WebSocket 协同服务、room 前缀、token 校验和服务端授权边界，不接浏览器 UI 或 demo runtime。
  * 协作模块：@hocuspocus/server 承载 Yjs 同步；packages/license 提供 Gate 6 server feature key。
  * 性能/安全约束：服务端连接和客户端 update 写入前必须经过授权 hook，未授权时不进入正常同步路径。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-633。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { Server as HocuspocusServer } from '@hocuspocus/server'

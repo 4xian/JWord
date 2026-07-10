@@ -5,7 +5,7 @@
  * 边界：只覆盖公开命令门面，不测试输入事件分发或 UI 控件。
  * 协作模块：编辑器运行时、命令构建器、选择模型和共享门面测试辅助函数。
  * 性能/安全约束：测试只读投影快照并通过事务管线变更文档，不访问 DOM。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

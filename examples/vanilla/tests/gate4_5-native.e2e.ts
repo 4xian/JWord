@@ -3,28 +3,18 @@
  * 边界: 只验证第三方宿主 UI、首屏 lazy 边界和编辑器可继续输入，不覆盖 native 包内部 zip 语义。
  * 协作: examples/vanilla/src/main.ts、demo-native bridge、@4xian/jword-native 公开 API。
  * 约束: 断言来自真实 DOM、网络请求和 window.__jwordDemo 钩子，不能读取 packages/native/src。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.5 Step 4.5.6。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test, type Page } from '@playwright/test'
 
 test('Gate 4.5 native controls save and reopen through the lazy public runtime', async ({ page }) => {
-  const runtimeRequests: string[] = []
-
-  page.on('request', (request) => {
-    const url = request.url()
-
-    if (url.includes('@4xian/jword-native') || url.includes('/packages/native/')) {
-      runtimeRequests.push(url)
-    }
-  })
-
   await page.goto('/')
 
   await expect(page.locator('[data-jword-native-save="true"]')).toBeVisible()
   await expect(page.locator('[data-jword-native-open-button="true"]')).toBeVisible()
   await expect(page.locator('[data-jword-native-file="true"]')).toHaveAttribute('accept', '.jword,application/vnd.jword')
   await expect(page.locator('[data-jword-native-status="true"]')).toContainText('原生保存/打开就绪')
-  expect(runtimeRequests).toEqual([])
+  await expect.poll(() => page.evaluate(() => window.__jwordDemo?.native.readRuntimeLoaded() ?? true)).toBe(false)
 
   await page.keyboard.type('GATE45_EDIT_PROOF')
 
@@ -74,7 +64,7 @@ test('Gate 4.5 native controls save and reopen through the lazy public runtime',
   })
   expect(firstRoundtrip.savedSize).toBeGreaterThan(0)
   expect(firstRoundtrip.status).toContain('.jword 打开完成')
-  expect(runtimeRequests.some((url) => url.includes('@4xian/jword-native') || url.includes('/packages/native/'))).toBe(true)
+  await expect.poll(() => page.evaluate(() => window.__jwordDemo?.native.readRuntimeLoaded() ?? false)).toBe(true)
   await expect.poll(() => readEditorText(page)).toContain('GATE45_EDIT_PROOF')
 
   await page.evaluate(() => window.__jwordDemo?.editor.focus())

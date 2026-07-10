@@ -3,7 +3,7 @@
  * 边界：只新增 Playwright 红灯测试，不修改 collab runtime、DOCX runtime 或 provider 实现。
  * 协作：examples/collab/src/main.ts、Hocuspocus 本地服务和后续 DOCX 导入桥接 API。
  * 约束：当前 collab demo 若没有 DOCX 导入 UI/API，本测试必须以明确错误失败，避免伪造普通文本导入。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 DOCX 普通文档协同验收。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { ChildProcess } from 'node:child_process'
@@ -66,8 +66,8 @@ test('Gate 6 DOCX 导入文档应能进入真实 Hocuspocus history 与 auto ins
   const roomId = `${started.roomPrefix}-${Date.now()}`
 
   try {
-    await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-    await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+    await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a'))
+    await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b'))
     await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
       timeout: 10000
     })
@@ -86,7 +86,7 @@ test('Gate 6 DOCX 导入文档应能进入真实 Hocuspocus history 与 auto ins
 
     expect(importResult.warnings).toEqual([])
     expect(importResult.text).toBe(importedDocxText)
-    await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(importedDocxText, {
+    await expectClientText(clientB, 'client-b', importedDocxText, {
       timeout: 10000
     })
     await expect.poll(() => readHistoryTexts(clientB)).toContain(importedDocxText)
@@ -106,10 +106,10 @@ test('Gate 6 DOCX 导入文档应能进入真实 Hocuspocus history 与 auto ins
     await expect(clientB.locator('#jword-collab-history-preview-text')).toContainText(importedDocxText)
 
     await clientB.locator('#jword-collab-history-restore').click()
-    await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(importedDocxText, {
+    await expectClientText(clientA, 'client-a', importedDocxText, {
       timeout: 10000
     })
-    await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(importedDocxText, {
+    await expectClientText(clientB, 'client-b', importedDocxText, {
       timeout: 10000
     })
   } finally {
@@ -130,7 +130,7 @@ test('Gate 6 DOCX 导入文档应能通过 IndexedDB reload 恢复', async ({ br
   const roomId = `${started.roomPrefix}-${Date.now()}`
 
   try {
-    await writer.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
+    await writer.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a', 'indexeddb'))
     await expect(writer.locator('[data-jword-collab-status]')).toContainText('synced', {
       timeout: 10000
     })
@@ -144,7 +144,7 @@ test('Gate 6 DOCX 导入文档应能通过 IndexedDB reload 恢复', async ({ br
     await hocuspocusService.stop()
     hocuspocusService = null
 
-    await restored.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
+    await restored.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a', 'indexeddb'))
     await expect.poll(() => readFirstClientText(restored), {
       timeout: 10000
     }).toBe(importedDocxText)
@@ -168,8 +168,8 @@ test('Gate 6 DOCX 导入文档应能断网 pending 并在重连后同步', async
   const offlineDocxText = `${importedDocxText}\nDOCX offline pending text`
 
   try {
-    await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
-    await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb'))
+    await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a', 'indexeddb'))
+    await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b', 'indexeddb'))
     await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
       timeout: 10000
     })
@@ -180,22 +180,22 @@ test('Gate 6 DOCX 导入文档应能断网 pending 并在重连后同步', async
     const importResult = await importDocxForCollabAcceptance(clientA, docxFixturePath)
 
     expect(importResult.text).toBe(importedDocxText)
-    await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(importedDocxText, {
+    await expectClientText(clientB, 'client-b', importedDocxText, {
       timeout: 10000
     })
 
     await clientA.evaluate(() => window.__jwordCollabDemo?.simulateDisconnect())
     await expect.poll(() => readOfflineConnected(clientA)).toBe(false)
-    await clientA.locator('#jword-collab-client-a').fill(offlineDocxText)
+    await updateClientText(clientA, 'client-a', offlineDocxText, importedDocxText)
     await expect.poll(() => readOfflineQueuedOperations(clientA)).toBeGreaterThan(0)
     await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('OFFLINE_LOCAL_UPDATE_QUEUED')
-    await expect(clientB.locator('#jword-collab-client-b')).not.toHaveValue(offlineDocxText, {
+    await expectClientTextNot(clientB, 'client-b', offlineDocxText, {
       timeout: 1000
     })
 
     await clientA.evaluate(() => window.__jwordCollabDemo?.simulateReconnect())
     await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('OFFLINE_RECONNECT_STARTED')
-    await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(offlineDocxText, {
+    await expectClientText(clientB, 'client-b', offlineDocxText, {
       timeout: 10000
     })
     await expect.poll(() => readOfflineQueuedOperations(clientA)).toBe(0)
@@ -240,6 +240,7 @@ async function waitForCollabDemoServer(): Promise<void> {
 /** 构造真实 Hocuspocus provider demo URL。 */
 function createHocuspocusDemoUrl(
   webSocketUrl: string,
+  historyHttpUrl: string,
   roomId: string,
   clientId: string,
   offlineMode?: string
@@ -248,6 +249,7 @@ function createHocuspocusDemoUrl(
 
   url.searchParams.set('provider', 'hocuspocus')
   url.searchParams.set('ws', webSocketUrl)
+  url.searchParams.set('history', historyHttpUrl)
   url.searchParams.set('room', roomId)
   url.searchParams.set('client', clientId)
   if (offlineMode !== undefined) {
@@ -291,7 +293,7 @@ async function findHistoryVersionIdByText(page: Page, text: string): Promise<str
     const versionId = await page.evaluate((targetText) => {
       const debugWindow = window as unknown as CollabDebugWindow
       const entry = debugWindow.__jwordCollabDemo?.readVersionHistory()
-        .find((candidate) => candidate.text === targetText)
+        .find((candidate) => candidate.text.replace(/^\n|\n$/gu, '') === targetText)
 
       return entry?.id ?? null
     }, text)
@@ -308,29 +310,85 @@ async function findHistoryVersionIdByText(page: Page, text: string): Promise<str
 
 /** 读取历史版本文本列表。 */
 async function readHistoryTexts(page: Page): Promise<readonly string[]> {
-  return page.evaluate(() => {
+  const texts = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readVersionHistory().map((entry) => entry.text) ?? []
   })
+
+  return texts.map((text) => normalizeCollabText(text) ?? '')
 }
 
 /** 读取第一个 client 文本。 */
 async function readFirstClientText(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
+  const text = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readCollabState().clients[0]?.text ?? null
   })
+
+  return normalizeCollabText(text)
 }
 
 /** 读取第二个 client 文本。 */
 async function readSecondClientText(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
+  const text = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readCollabState().clients[1]?.text ?? null
   })
+
+  return normalizeCollabText(text)
+}
+
+/** 按 client id 读取对应页面的正文快照。 */
+async function readClientText(page: Page, clientId: string): Promise<string | null> {
+  return clientId === 'client-a'
+    ? readFirstClientText(page)
+    : readSecondClientText(page)
+}
+
+/** 断言指定 client 正文最终等于预期文本。 */
+async function expectClientText(
+  page: Page,
+  clientId: string,
+  expectedText: string,
+  options: ClientTextExpectationOptions = {}
+): Promise<void> {
+  await expect.poll(() => readClientText(page, clientId), options).toBe(expectedText)
+}
+
+/** 断言指定 client 正文最终不等于给定文本。 */
+async function expectClientTextNot(
+  page: Page,
+  clientId: string,
+  expectedText: string,
+  options: ClientTextExpectationOptions = {}
+): Promise<void> {
+  await expect.poll(() => readClientText(page, clientId), options).not.toBe(expectedText)
+}
+
+/** 通过 demo debug API 写入指定 provider client 的正文。 */
+async function updateClientText(
+  page: Page,
+  clientId: string,
+  text: string,
+  previousText?: string
+): Promise<void> {
+  await page.evaluate((input) => {
+    const debugWindow = window as unknown as CollabDebugWindow
+
+    debugWindow.__jwordCollabDemo?.updateClientText(input.clientId, input.text, input.previousText)
+  }, {
+    clientId,
+    text,
+    previousText
+  })
+}
+
+/** 去除 editor 投影为单段文档补出的首尾换行。 */
+function normalizeCollabText(text: string | null): string | null {
+  return text?.replace(/^\n|\n$/gu, '') ?? null
 }
 
 /** 读取离线状态是否已连接。 */
@@ -401,10 +459,15 @@ interface CollabDebugApi {
   readonly startAutoInsert: () => unknown
   readonly simulateDisconnect: () => void
   readonly simulateReconnect: () => void
+  readonly updateClientText: (clientId: string, text: string, previousText?: string) => void
   readonly importDocxForCollabAcceptance: (
     bytes: readonly number[],
     fileName: string
   ) => Promise<DocxImportAcceptanceSnapshot>
+}
+
+interface ClientTextExpectationOptions {
+  readonly timeout?: number
 }
 
 interface OfflineStateSnapshot {

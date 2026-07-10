@@ -5,7 +5,7 @@
  * 边界：只通过已挂载 editor facade 触发 hidden textarea keydown，不访问运行时私有实现。
  * 协作模块：输入运行时、键盘文本运行时、事务流水线和布局查询共同支撑键盘语义。
  * 性能/安全约束：测试只运行在 jsdom，不访问网络或磁盘，不直接写 projection。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

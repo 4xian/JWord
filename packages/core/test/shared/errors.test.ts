@@ -5,7 +5,7 @@
  * 边界：只覆盖 core error 类型、transaction 和 operation adapter，不测试 UI、诊断导出或 i18n 文案。
  * 协作模块：Editor facade、transaction pipeline 和 operation adapter 统一抛出可诊断错误。
  * 性能/安全约束：测试只使用内存文档，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

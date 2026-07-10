@@ -5,7 +5,7 @@
  * 边界：覆盖 health/version、Hocuspocus lifecycle 和 history storage，不接浏览器 UI。
  * 协作模块：packages/collab-server/src/index.ts、packages/collab experimental provider 和 packages/license 的 Gate 6 feature key。
  * 约束：服务端版本接口不能读取用户文档内容，测试使用随机端口并在结束后关闭。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md 第六阶段正式服务端包导出分级。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, it } from 'vitest'

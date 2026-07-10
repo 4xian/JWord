@@ -5,7 +5,7 @@
  * 边界：只通过公开 connectJWordCollaboration API 驱动 history，不导入内部实现。
  * 协作模块：client-history.ts、client-sdk.ts 和内存 provider adapter。
  * 约束：大 update 编解码不得展开整段 Uint8Array 到调用栈。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#1e-协作gate-6-high。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createServer, type IncomingMessage } from 'node:http'

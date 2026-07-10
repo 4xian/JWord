@@ -3,7 +3,7 @@
  * 边界：不创建运行时对象，不访问 DOM，不执行业务逻辑。
  * 协作模块：projection、selection、transaction、layout、history 和 formatting 类型。
  * 性能/安全约束：constructor/top-level 不访问 window/document/HTMLElement 实例，DOM 只在 mount 后创建，编辑命令统一进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { CanvasLike, createCanvasPool } from '../canvas/pool'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'

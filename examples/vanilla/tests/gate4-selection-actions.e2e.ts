@@ -3,7 +3,7 @@
  * 边界: 只覆盖 selection-actions 与 vanilla demo 的公开协作，不验证图片 overlay、系统剪贴板权限或后续批注/链接闭环。
  * 协作: examples/vanilla/src/main.ts、window.__jwordDemo、packages/ui/src/selection-actions/* 与 core Editor facade。
  * 约束: 断言来自真实 DOM 和公开 facade，不读取 controller 私有状态。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 1 后续收尾。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'

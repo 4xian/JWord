@@ -3,18 +3,20 @@
  * 边界：不实现完整页眉页脚编辑器、不保存第二份文档状态、不直接改 projection。
  * 协作模块：页眉页脚 DOM、核心分节命令构造器和编辑器门面。
  * 性能/安全约束：每次点击只读取当前 projection 和表单草稿，销毁时释放事件监听。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { buildSetSectionPropertiesCommand, type Editor, type SectionPropertiesInput } from '@4xian/jword-core'
-import { createHeaderFooterDom, destroyHeaderFooterDom } from './dom'
+import { createHeaderFooterDom, destroyHeaderFooterDom, localizeHeaderFooterDom } from './dom'
 import type { HeaderFooterDom } from './dom'
+import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 import type { JWordReadonlyMode } from '../types'
 
 export interface CreateHeaderFooterControllerOptions {
   readonly editor: Editor
   readonly host: HTMLElement
   readonly readonly?: JWordReadonlyMode
+  readonly i18n?: ResolvedJWordUiI18n
   readonly announce?: (message: string) => void
 }
 
@@ -23,6 +25,7 @@ export interface HeaderFooterControllerHandle {
   toggleHeaderFooterMenu(anchor?: HTMLElement): void
   toggleFooterMenu(anchor?: HTMLElement): void
   togglePageNumberMenu(anchor?: HTMLElement): void
+  setI18n(i18n: ResolvedJWordUiI18n): void
   refresh(): void
   destroy(): void
 }
@@ -50,7 +53,10 @@ export function createHeaderFooterController(
   const dom = createHeaderFooterDom(options.host)
   const signalController = new AbortController()
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
+  const i18n = options.i18n ?? resolveJWordUiI18n()
   let destroyed = false
+
+  localizeHeaderFooterDom(dom, i18n)
 
   /** 切换页眉页脚下拉。 */
   function toggleHeaderFooterMenu(anchor?: HTMLElement): void {
@@ -413,6 +419,9 @@ export function createHeaderFooterController(
     toggleHeaderFooterMenu,
     toggleFooterMenu,
     togglePageNumberMenu,
+    setI18n(i18n): void {
+      localizeHeaderFooterDom(dom, i18n)
+    },
     refresh,
     destroy
   }

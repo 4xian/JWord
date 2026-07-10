@@ -3,7 +3,7 @@
  * 边界：运行内存 provider、内存 persistence、公开 Editor facade 和真实 Chromium IndexedDB restore 探针。
  * 协作模块：packages/core、packages/collab、packages/persistence 和 tools/bench/run-bench.mjs。
  * 约束：Node 离线 adapter 不可用诊断和浏览器 IndexedDB restore 时间分开输出，不能用内存 adapter 冒充离线恢复。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-6--collaborationauto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createServer } from 'node:http'
 import { performance } from 'node:perf_hooks'

@@ -3,7 +3,7 @@
  * 边界：不绑定 DOM 事件，不管理浮层显示时序，不实现剪贴板语义。
  * 协作模块：selection-actions/controller 提供运行态回调，selection-rebind 保持表格等选区回绑。
  * 性能/安全约束：所有文档写入继续走 editor.executeCommand 或既有 colorFormat facade，禁止直接写状态。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Command, Editor, SelectionState } from '@4xian/jword-core'
 import {

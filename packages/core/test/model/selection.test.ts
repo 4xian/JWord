@@ -5,7 +5,7 @@
  * 边界：只覆盖纯数据选择区，不测试 DOM 输入、hit-test、布局或 history undo。
  * 协作模块：history、input、comment、revision 和 remote cursor 后续复用这些选择区状态。
  * 性能/安全约束：测试只使用不可变 AnchorRef，不触发 DOM、网络或磁盘写入。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

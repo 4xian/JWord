@@ -3,7 +3,7 @@
  * 边界: 只测 vanilla demo 在 Chromium 下的 DOM、canvas 和 JS heap 采样，不替代 Node heap benchmark 或泄漏根因单测。
  * 协作: demo 测试钩子、画布容器、浏览器调试协议和 Playwright 性能项目。
  * 约束: 指标使用 CDP HeapProfiler/Performance 采样；阈值固定为冒烟护栏，避免内存泄漏类回归静默进入主线。
- * Specs: docs/superpowers/reports/2026-07-02-plan-review.md#314-内存回归门禁缺失r2-复审补充。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { CDPSession, Page } from '@playwright/test'

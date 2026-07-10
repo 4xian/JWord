@@ -3,7 +3,7 @@
  * 边界：只读取 DocumentLayout，不触发布局、不修改页面盒。
  * 协作模块：editor facade、测试和增量布局通过这里查询文本位置与几何映射。
  * 性能/安全约束：缓存挂在布局对象 WeakMap 上，避免全局持久状态泄漏。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { TextPosition, TextRange } from '../operations/transaction'
@@ -88,7 +88,10 @@ export function hitTestDocumentLayout(
     }
   }
 
-  return resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x) ?? lastFragment.end
+  return resolveOuterInlineBoundaryPosition(line.inlines, absolutePoint.x) ?? {
+    ...lastFragment.end,
+    assoc: -1
+  }
 }
 
 /**
@@ -268,7 +271,10 @@ function hitTestTableCellFragments(
     }
   }
 
-  return lastFragment.end
+  return {
+    ...lastFragment.end,
+    assoc: -1
+  }
 }
 
 /** 判断点是否在布局矩形内。 */
@@ -324,15 +330,48 @@ export function getCaretRect(layout: DocumentLayout, position: TextPosition): La
     return locateTableCellRect(layout, position)
   }
 
+  const height = resolveCaretHeight(located.line, target)
+
   return {
     pageIndex: target.pageIndex,
     x: located.fragment === undefined
       ? offsetInInline(located.inline, position)
       : offsetInFragment(located.fragment, position),
-    y: located.fragment?.y ?? located.inline?.y ?? located.line.y,
+    y: resolveCaretY({
+      line: located.line,
+      target,
+      height
+    }),
     width: 0,
-    height: located.fragment?.height ?? located.inline?.height ?? DEFAULT_CARET_HEIGHT_TWIPS
+    height
   }
+}
+
+/** 读取 caret 可视高度，文本行沿用当前片段字体高度，避免被整行高图撑满。 */
+function resolveCaretHeight(line: LineBox, target: TextFragment | InlineBox): number {
+  if (shouldCenterCaretInTextLine(line)) {
+    return Math.min(target.height, line.height)
+  }
+
+  return target.height
+}
+
+/** 读取 caret 顶部坐标；纯文本行以行盒中心归一，避免标点/英文 baseline 抖动。 */
+function resolveCaretY(input: Readonly<{
+  line: LineBox
+  target: TextFragment | InlineBox
+  height: number
+}>): number {
+  if (shouldCenterCaretInTextLine(input.line)) {
+    return input.line.y + ((input.line.height - input.height) / 2)
+  }
+
+  return input.target.y
+}
+
+/** 判断当前行是否可以按文本行中心放置 caret。 */
+function shouldCenterCaretInTextLine(line: LineBox): boolean {
+  return line.inlines.every((inline) => inline.kind === 'emptyTextAnchor')
 }
 
 /** 读取表格单元格命中的 caret 矩形。 */

@@ -3,7 +3,7 @@
  * 边界：只通过 examples/docx 暴露的第三方宿主调试入口操作，不读取 packages/docx 或 packages/pdf 内部模块。
  * 协作：examples/docx/src/main.ts、@4xian/jword-docx、@4xian/jword-pdf 和 @4xian/jword-license。
  * 约束：测试自启独立 Vite 服务，验证 valid、missing 和 feature-mismatch 授权路径均可复跑。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-5---商业高级格式互通docx-导入导出与-pdf-导出。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test, type Page } from '@playwright/test'
 import { spawn, type ChildProcess } from 'node:child_process'

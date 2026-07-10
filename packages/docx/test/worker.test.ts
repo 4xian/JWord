@@ -5,7 +5,7 @@
  * 边界：只验证 worker 消息分发、取消响应和导入导出响应，不验证浏览器 worker 加载策略。
  * 协作模块：packages/docx/src/worker.ts、importDocx、exportDocx 和 inspectDocxPackage。
  * 约束：worker 入口必须可单测，也必须能作为 Rollup worker entry 独立构建。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, it } from 'vitest'
 

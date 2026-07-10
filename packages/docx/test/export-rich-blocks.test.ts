@@ -4,8 +4,8 @@
  * 职责：覆盖 Gate 5 Iteration 18 的 DOCX rich block export roundtrip 契约。
  * 边界：只验证列表、基础表格和内联图片从 projection 导出后能被当前 importer 回读。
  * 协作模块：packages/docx/src/export.ts、importDocx 和 core DocumentProjection 类型。
- * 约束：测试不读取磁盘 fixture，不做 Word/WPS/LibreOffice 人工兼容性声明。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-18---实现-t1-docx-export列表表格图片。
+ * 约束：测试不读取磁盘 fixture，不做 Microsoft Word 人工兼容性声明。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentProjection } from '@4xian/jword-core'

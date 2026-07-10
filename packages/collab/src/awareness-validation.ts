@@ -3,7 +3,7 @@
  * 边界：只处理未知值到协作 awareness 类型的结构校验，不访问 provider、网络、DOM 或 Y.Doc。
  * 协作模块：packages/collab/src/index.ts 与 hocuspocus-adapter.ts 复用这些守卫保持 schema 一致。
  * 性能/安全约束：校验函数必须保持同步纯函数，避免 provider 事件路径引入副作用。
- * Specs：docs/superpowers/reports/2026-07-02-gate6-review.md#low-awareness-状态校验函数重复。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

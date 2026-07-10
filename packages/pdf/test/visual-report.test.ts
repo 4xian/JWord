@@ -5,7 +5,7 @@
  * 边界：只在显式 artifact 目录下保存截图二进制，不做真实浏览器人工验收、不覆盖中文字体嵌入。
  * 协作模块：PDF 导出入口、PDF.js renderer、JWord layout baseline 共同产出结构化报告。
  * 约束：测试先行，报告必须包含 page count、page size、文本框、图片框和表格线字段。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-24---建立-pdf-视觉验证。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

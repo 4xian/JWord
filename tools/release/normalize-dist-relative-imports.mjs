@@ -3,7 +3,7 @@
  * 边界：只处理已生成的 .js 与 .d.ts 文本产物，不构建、不打包、不改源码。
  * 协作模块：rollup.config.mjs、Gate 5/Gate 6 commercial pack 检查和第三方 smoke。
  * 约束：Node ESM 包消费者需要显式 .js 后缀；声明文件中的 type-only 引用也要指向 .js specifier。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-538建立商业包发布检查。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, relative } from 'node:path'

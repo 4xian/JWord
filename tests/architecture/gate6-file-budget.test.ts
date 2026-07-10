@@ -5,7 +5,7 @@
  * 边界：只检查 Gate 6 新增目录，不处理历史 core/ui/vanilla 旧文件。
  * 协作模块：packages/collab、packages/collab-server、packages/persistence 与 examples/collab 的 focused runtime/test 文件共同满足此门禁。
  * 约束：超过 1000 行的 Gate 6 文件必须拆分，避免 client SDK、runtime 或 E2E 用例继续横向膨胀。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-6---商业高级协作离线与自动插入。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readdirSync, readFileSync } from 'node:fs'

@@ -5,7 +5,7 @@
  * 边界：只覆盖颜色字符串到 pdf-lib RGB 入参的转换，不创建 PDF 文档。
  * 协作模块：packages/pdf/src/text-style-renderer.ts 供正文、边框和页眉页脚渲染复用。
  * 约束：颜色扩展必须覆盖 #RGB、rgba() 与命名颜色，未知值稳定回退黑色。
- * Specs：docs/superpowers/reports/2026-07-02-gate45-gate5-review.md#p3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

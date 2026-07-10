@@ -5,7 +5,7 @@
  * 边界：不导入 experimental provider、demo runtime、Y.Doc 或 Hocuspocus 类型。
  * 协作模块：packages/collab/src/client-sdk.ts、内存 provider adapter 和 license feature matrix。
  * 约束：公开入口必须先返回诊断再阻止半连接，用户身份必须稳定派生 presence。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-625定义-connectjwordcollaborationeditor-options-公开入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'

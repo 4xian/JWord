@@ -3,7 +3,7 @@
  * 边界：不创建文档容器，不执行编辑命令，只处理 Y.Doc 字段的序列化形态。
  * 协作模块：记录工厂、批注记录和修订记录模块复用这里的 JSON 与读取规则。
  * 性能/安全约束：过滤 undefined 字段，拒绝非 JSON 兼容值，不访问 DOM 或网络。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#32-状态真源。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'

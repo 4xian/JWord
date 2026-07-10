@@ -5,7 +5,7 @@
  * 边界：只覆盖公开 connectJWordCollaboration、内存 provider 和 core editor，不导入协作内部实现。
  * 协作模块：packages/collab/src/client-history.ts、core replaceSyncUpdate 和测试 history HTTP 服务。
  * 约束：恢复必须保持 `version-restore` origin，不能把旧 update 直接叠加到当前文档。
- * Specs：docs/superpowers/reports/2026-07-02-gate6-review.md#g6-h4-restoreversion-真实回退语义。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createServer, type IncomingMessage } from 'node:http'

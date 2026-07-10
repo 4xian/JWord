@@ -3,7 +3,7 @@
  * 边界: 只封装测试辅助读取和 DOM 事件模拟，不新增产品行为断言。
  * 协作: 浏览器演示钩子、隐藏输入框测试钩子、页面对象与核心锚点类型。
  * 约束: 辅助函数必须通过真实浏览器 DOM/canvas/公开 facade 读取状态，禁止绕过运行时写内部状态。
- * Specs: docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'

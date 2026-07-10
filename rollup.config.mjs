@@ -20,7 +20,10 @@ const packageBuildOrder = new Map([
   ['@4xian/jword-persistence', 5],
   ['@4xian/jword-collab', 6],
   ['@4xian/jword-collab-server', 7],
-  ['@4xian/jword-ui', 8]
+  ['@4xian/jword-ui', 8],
+  ['@4xian/jword-devtools', 9],
+  ['@4xian/jword-react', 10],
+  ['@4xian/jword-vue', 11]
 ])
 
 function readPackageJson(packageDir) {
@@ -99,6 +102,60 @@ function readDependencyNames(dependencies) {
   }
 
   return Object.keys(dependencies)
+}
+
+
+function trimGeneratedLeadingWhitespace() {
+  return {
+    name: 'trim-generated-leading-whitespace',
+    renderChunk(code) {
+      return {
+        code: stripLeadingWhitespaceOutsideLiterals(code),
+        map: null
+      }
+    }
+  }
+}
+
+function stripLeadingWhitespaceOutsideLiterals(code) {
+  let output = ''
+  let quote = null
+  let escaping = false
+  let lineStart = true
+
+  for (const character of code) {
+    if (lineStart && quote === null && (character === ' ' || character === '\t')) {
+      continue
+    }
+
+    output += character
+
+    if (escaping) {
+      escaping = false
+      lineStart = character === '\n'
+      continue
+    }
+
+    if (quote !== null) {
+      if (character === '\\') {
+        escaping = true
+      } else if (character === quote) {
+        quote = null
+      }
+      lineStart = character === '\n'
+      continue
+    }
+
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character
+      lineStart = false
+      continue
+    }
+
+    lineStart = character === '\n'
+  }
+
+  return output
 }
 
 function stripPreservedDocComments() {
@@ -191,6 +248,7 @@ function createPackageConfig(pkg, options = {}) {
       nodeResolve({ browser: true, preferBuiltins: false }),
       commonjs(),
       stripPreservedDocComments(),
+      trimGeneratedLeadingWhitespace(),
       copyPackageStyleAssets(pkg.dir),
       normalizeDistRelativeImports(pkg.dir)
     ],

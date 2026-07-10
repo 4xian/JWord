@@ -3,7 +3,7 @@
  * 边界：不读取 registry、不执行外部工具，只根据 runner 结果生成可复查证据结构。
  * 协作模块：run-gate5-docx-compatibility.mjs 和 DOCX 兼容矩阵报告共同消费这些函数。
  * 约束：缺失、过期或不完整证据必须保持 pending，不得生成兼容百分比或伪造通过结论。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createHash } from 'node:crypto'
@@ -94,7 +94,7 @@ async function writeEvidenceTemplateReadme(evidenceTemplates, outputDirectory) {
     '',
     '这些文件只用于复制填写。模板文件不是通过证据，runner 默认不会把本目录下的 `.template.json` 当作真实证据读取。',
     '',
-    '补 Word/WPS/LibreOffice 人工证据时：',
+    '补 Microsoft Word 人工证据时：',
     '',
     '1. 从 `manual-compatibility-results.template.json` 复制对应结果行。',
     `2. 写入 \`${evidenceTemplates.manualCompatibilityResults.path}\` 的 \`results\` 数组。`,

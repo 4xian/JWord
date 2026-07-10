@@ -3,7 +3,7 @@
  * 边界：只放类型契约，不读取 ZIP、XML、worker 或 core store。
  * 协作模块：index.ts、package.ts、import.ts、export.ts、worker.ts 和兼容报告复用这些公开类型。
  * 性能/安全约束：类型模块无运行时副作用，避免把 JSZip 或 worker 逻辑拉入首屏。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-5docx-导入导出与-pdf-导出。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentProjection } from '@4xian/jword-core'

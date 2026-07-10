@@ -3,7 +3,7 @@
  * 边界: 只测 examples/vanilla 真实接通的 UI/facade 闭环，不覆盖 core benchmark、IME、剪贴板或跨浏览器性能基线。
  * 协作: examples/vanilla/src/main.ts 的 demo 测试钩子、真实 toolbar DOM、@4xian/jword-core Editor facade 和 Playwright Chromium。
  * 约束: 当前门槛只固定 Chromium；若超阈值必须直接失败，避免把性能回归藏进文档说明。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 3 Step 3.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'

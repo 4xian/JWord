@@ -5,7 +5,7 @@
  * 边界：只读取类型测试 fixture、公开文档和 TypeScript 声明，不执行 SDK 运行时。
  * 协作模块：公开 API 清单、类型测试入口、诊断码生成文档和稳定公开接口示例共同提供外部接入证据。
  * 约束：示例只能从 package 入口导入，不能使用 monorepo 内部路径、Yjs/provider 内部类型或 demo runtime。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-73为稳定-api-补-tsdoc最小示例和-diagnostics-payload-文档。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'

@@ -3,7 +3,7 @@
  * 边界：只处理段落属性、section 属性、split/merge/insert/delete block，不处理文本内容编辑和表格内部编辑。
  * 协作模块：operation-adapter 负责分发，adapter-location 负责递归定位与锚点迁移。
  * 性能/安全约束：不访问 DOM，不触发布局渲染；所有结构写入由外层 transaction pipeline 包裹。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

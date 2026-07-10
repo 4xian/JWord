@@ -5,7 +5,7 @@
 ## Files
 
 - `registry.json`：DOCX T1/T2 fixture 清单，覆盖输入文件、projection 摘要、warning、截图基线、DOCX roundtrip 和 PDF 视觉期望字段。
-- `compatibility-matrix.md`：Word、WPS、LibreOffice 人工打开、编辑、修复提示和视觉差异记录模板。
+- `compatibility-matrix.md`：Microsoft Word 人工打开、编辑、修复提示和视觉差异记录模板。
 
 ## Rules
 

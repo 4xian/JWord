@@ -3,7 +3,7 @@
  * 边界：只描述格式值和状态形状，不构造 command、不读取 projection、不访问 DOM。
  * 协作模块：command builder、toolbar 状态同步和外部 UI wrapper 通过这些类型对齐格式语义。
  * 性能/安全约束：纯类型模块，无副作用，不依赖浏览器或 Yjs 运行时。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { ParagraphList } from './types'

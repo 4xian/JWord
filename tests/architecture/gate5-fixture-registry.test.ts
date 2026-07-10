@@ -5,7 +5,7 @@
  * 边界：只检查 registry 结构、固定 fixture id 和输入文件存在性，不解析真实 DOCX/PDF 二进制或截图基线。
  * 协作模块：packages/docx、packages/pdf、examples/docx 和兼容矩阵后续按这些 id 追加真实证据。
  * 约束：registry 必须先约束新增 fixture，不允许只靠 README 口头验收。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---建立-fixture-registry-和兼容矩阵模板。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -167,7 +167,7 @@ function hasRequiredEvidenceFields(fixture: Gate5Fixture): boolean {
     typeof fixture.pdfVisualExpectation?.expected === 'string'
 }
 
-/** 检查 DOCX 兼容矩阵是否包含 validator 与三套办公软件目标。 */
+/** 检查 DOCX 兼容矩阵是否包含 validator 与 Microsoft Word 目标。 */
 function hasRequiredDocxCompatibilityTargets(fixture: Gate5DocxCompatibilityFixture): boolean {
   const appResults = fixture.appResults
 
@@ -175,7 +175,7 @@ function hasRequiredDocxCompatibilityTargets(fixture: Gate5DocxCompatibilityFixt
     fixture.openXmlValidation?.result === 'pending' &&
     fixture.openXmlValidation.evidence === 'not-run' &&
     Array.isArray(appResults) &&
-    JSON.stringify(appResults.map((result) => result.app)) === JSON.stringify(['Word', 'WPS', 'LibreOffice']) &&
+    JSON.stringify(appResults.map((result) => result.app)) === JSON.stringify(['Word']) &&
     appResults.every(hasPendingAppCompatibilityResult)
 }
 

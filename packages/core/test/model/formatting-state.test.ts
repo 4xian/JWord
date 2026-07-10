@@ -5,7 +5,7 @@
  * 边界：只覆盖 projection + selection 计算，不测试 toolbar DOM 或 editor runtime 事件同步。
  * 协作模块：toolbar 状态同步、快捷键高亮和后续只读诊断面板可复用这里的状态结果。
  * 性能/安全约束：测试只使用内存 projection，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

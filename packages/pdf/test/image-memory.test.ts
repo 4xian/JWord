@@ -5,7 +5,7 @@
  * 边界：只覆盖图片内存路径，不扩展字体、表格或视觉对比断言。
  * 协作模块：packages/pdf/src/index.ts、core layout 输出和 public API fixture。
  * 约束：通过真实 pdf-lib 输出验证资源复用，不依赖内部 cache 结构。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-4---性能与内存优化。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

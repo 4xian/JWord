@@ -5,7 +5,7 @@
  * 边界：只检查 packages/docx/src 与 packages/docx/test 的 TypeScript 文件行数，不处理其他历史包。
  * 协作模块：packages/docx/src/index.ts、export.ts 和拆分后的 focused DOCX 测试共同满足此门禁。
  * 约束：超过 1000 行的 DOCX 文件必须拆分，避免单文件继续承载多个纵线。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-5docx-导入导出与-pdf-导出。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readdirSync, readFileSync } from 'node:fs'

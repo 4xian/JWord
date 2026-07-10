@@ -5,7 +5,7 @@
  * 边界：只覆盖 selection-rebind 与 core Editor facade 协作，不测试 toolbar DOM。
  * 协作模块：selection-rebind、core command builders 和 run split 事务。
  * 约束：组合 emoji 必须按单个 grapheme 计数，避免格式化后选区偏移。
- * Specs：docs/superpowers/reports/2026-07-02-gate2-gate3-review.md#g3-14-p3-轻微-ui-层-grapheme-长度计算使用-arrayfrom-而非-intlsegmenter。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

@@ -3,7 +3,7 @@
  * 边界：只持久化 Yjs binary update/snapshot 的可序列化形态，不保存 projection JSON、不访问 IndexedDB 或 core 内部 store。
  * 协作模块：index.ts 导出公开入口，宿主可用任意 storage backend 持久化文档历史。
  * 性能/安全约束：每次公开操作按 documentId 懒加载并保存完整文档历史，适合作为生产后端 adapter 的最小契约样板。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 

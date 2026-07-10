@@ -5,7 +5,7 @@
  * 边界：只测试 布局盒坐标索引，不创建 锚点引用，不读取 Y.Doc，不覆盖真实 pointer 事件。
  * 协作模块：编辑器工厂 后续可把 TextPosition 转成 锚点引用，渲染器后续消费 rect 绘制 caret/selection。
  * 约束：测试不访问 DOM，不依赖 Canvas，不实现输入系统。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-2---分页-layout-与-canvas-render。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -73,6 +73,88 @@ describe('Gate 2 命中测试 and 矩形映射', () => {
     expect(rects).toHaveLength(1)
     expect(rects[0]?.width).toBeGreaterThan(0)
     expect(rects[0]?.x).toBe(caret?.x)
+  })
+
+  it('keeps caret vertically centered in the line when punctuation has different baseline metrics', () => {
+    const layout = layoutDocument({
+      projection: createProjection('保持一致。'),
+      pageConfig: createPageConfig({
+        widthTwips: 6000,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createBaselineSensitiveFontManager()
+    })
+    const line = layout.pages[0]?.lines[0]
+    const textCaret = getCaretRect(layout, {
+      sectionId: 'section-hit',
+      blockId: 'paragraph-hit',
+      runId: 'run-hit',
+      graphemeIndex: 1
+    })
+    const punctuationCaret = getCaretRect(layout, {
+      sectionId: 'section-hit',
+      blockId: 'paragraph-hit',
+      runId: 'run-hit',
+      graphemeIndex: 5
+    })
+
+    if (line === undefined || textCaret === undefined || punctuationCaret === undefined) {
+      throw new Error('缺少 caret 垂直居中回归测试所需的 line 或 caret')
+    }
+
+    expect(line.fragments.map((fragment) => fragment.text)).toEqual(['保', '持', '一', '致', '。'])
+    expect(line.height).toBeGreaterThan(punctuationCaret.height)
+    expect(readRectCenterY(textCaret)).toBeCloseTo(readRectCenterY(line), 1)
+    expect(readRectCenterY(punctuationCaret)).toBeCloseTo(readRectCenterY(line), 1)
+  })
+
+  it('keeps soft wrapped line-end hit-test anchored to the trailing line boundary', () => {
+    const layout = layoutDocument({
+      projection: createProjection('第一段：保持分页 canvas 路线，但把交互样例收敛到小文档，避免大夹具的阿德 selection 热路径拖慢体验。'),
+      pageConfig: createPageConfig({
+        widthTwips: 5200,
+        heightTwips: 4000,
+        marginTwips: {
+          top: 120,
+          right: 120,
+          bottom: 120,
+          left: 120
+        }
+      }),
+      fontManager: createFontManager({
+        fallbackFontFamily: 'Arial',
+        availableFontFamilies: ['Arial']
+      })
+    })
+    const page = layout.pages[0]
+    const firstLine = page?.lines[0]
+    const secondLine = page?.lines[1]
+    const lastFragment = firstLine?.fragments.at(-1)
+
+    if (page === undefined || firstLine === undefined || secondLine === undefined || lastFragment === undefined) {
+      throw new Error('缺少软换行行尾命中测试所需的页面、行或片段')
+    }
+
+    const hit = hitTestDocumentLayout(layout, {
+      pageIndex: page.pageIndex,
+      x: lastFragment.x - page.x + lastFragment.width + 1,
+      y: firstLine.y - page.y + (firstLine.height / 2)
+    })
+    const caret = hit === undefined ? undefined : getCaretRect(layout, hit)
+
+    expect(hit).toEqual({
+      ...lastFragment.end,
+      assoc: -1
+    })
+    expect(caret).toBeDefined()
+    expect(readRectCenterY(caret!)).toBeCloseTo(readRectCenterY(firstLine), 1)
+    expect(readRectCenterY(caret!)).not.toBeCloseTo(readRectCenterY(secondLine), 1)
   })
 
   it('maps points inside a merged latin fragment to internal grapheme positions', () => {
@@ -423,6 +505,30 @@ function createSingleLineLayout() {
       availableFontFamilies: ['Arial']
     })
   })
+}
+
+/** 创建会让中文标点和正文产生不同 Canvas baselineRatio 的字体管理器。 */
+function createBaselineSensitiveFontManager() {
+  return createFontManager({
+    fallbackFontFamily: 'Arial',
+    availableFontFamilies: ['Arial'],
+    textMeasurer: {
+      measureText(text, style) {
+        return {
+          widthCssPx: Array.from(text).length * style.fontSizePx,
+          baselineRatio: text === '。' ? 0.64 : 0.78
+        }
+      }
+    }
+  })
+}
+
+/** 读取布局矩形的垂直中心。 */
+function readRectCenterY(rect: Readonly<{
+  y: number
+  height: number
+}>): number {
+  return rect.y + (rect.height / 2)
 }
 
 function createProjection(text: string, secondPageText?: string): DocumentProjection {

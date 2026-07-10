@@ -5,7 +5,7 @@
  * 边界：只覆盖 importDocx/exportDocx 授权 fail-fast，不扩展 DOCX 格式能力。
  * 协作模块：packages/docx/src/index.ts 与 packages/license 共享稳定授权诊断。
  * 约束：缺授权时必须在读取或输出用户文档内容前失败，错误不携带文档内容。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-5-commercial-readiness。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { JWordLicenseEntitlement, JWordLicenseSignaturePayload } from '@4xian/jword-license'

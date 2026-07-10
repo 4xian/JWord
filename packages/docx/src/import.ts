@@ -3,7 +3,7 @@
  * 边界：只做 OOXML 到中间模型的读取，不写 ZIP，不触发 editor transaction。
  * 协作模块：package.ts 提供 OPC/index，import-readers.ts 提供段落/run/table 属性读取。
  * 性能/安全约束：unsupported 内容通过 warning 和 opaque fragments 表达，不伪装成已支持编辑能力。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-7---实现-docx-import-中间模型。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

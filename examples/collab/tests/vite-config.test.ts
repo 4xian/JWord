@@ -3,7 +3,7 @@
  * 边界：只验证示例宿主结构与内存 debug API 骨架，不覆盖真实协同网络实现。
  * 协作：examples/collab package、Vite 配置、src runtime 和 smoke e2e 测试。
  * 约束：collab demo 不把协同逻辑写入 core，样式不得使用 grid 或 gap。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

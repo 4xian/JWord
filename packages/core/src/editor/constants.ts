@@ -3,7 +3,7 @@
  * 边界：不放置可变状态，不访问 DOM，不依赖文档实例。
  * 协作模块：editor state、DOM runtime、渲染调度和输入 runtime。
  * 性能/安全约束：constructor/top-level 不访问 window/document/HTMLElement 实例，DOM 只在 mount 后创建，编辑命令统一进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 export const DEFAULT_EDITOR_LABEL = 'JWord editor'
 export const DEFAULT_DOCUMENT_ID = 'document-1'

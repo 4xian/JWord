@@ -3,7 +3,7 @@
  * 边界：不构造编辑 operation，不执行事务，不处理 DOM 事件绑定。
  * 协作模块：文本编辑入口、删除计划层、键盘编辑层、布局运行时与剪贴板运行时。
  * 性能/安全约束：只读取当前 projection、selection 和 layout，不写 Y.Doc、不访问 top-level DOM。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { countGraphemes, splitGraphemes } from '../shared/grapheme'
@@ -93,6 +93,7 @@ export abstract class JWordEditorRuntimeSelection extends JWordEditorMountedRunt
       return
     }
 
+    this.ensureCurrentLayout()
     this.setSelection(selection)
   }
 

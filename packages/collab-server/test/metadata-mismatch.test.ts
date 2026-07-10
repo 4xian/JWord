@@ -5,7 +5,7 @@
  * 边界：只覆盖 HTTP JSON 路由的 metadata mismatch 诊断，不测试 WebSocket 或浏览器 UI。
  * 协作模块：packages/collab-server/src/history-routes.ts、auto-insert-relay.ts 和 server-test-helpers。
  * 约束：body tenantId 与 URL/header tenantId 不一致时必须在业务写入前返回稳定诊断码。
- * Specs：docs/superpowers/reports/2026-07-02-gate6-review.md#recordpreviewrelay-未校验-bodytenantid-与授权-metadata-一致。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, it } from 'vitest'

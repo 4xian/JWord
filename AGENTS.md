@@ -2,35 +2,32 @@
 
 ## Project Structure & Module Organization
 
-This repository is a pnpm workspace for JWord. Core editor logic lives in `packages/core/src`, and package-level tests live in `packages/core/test`. Repository architecture tests belong in `tests/architecture`. Demo code is in `examples/vanilla`, reusable sample inputs are in `fixtures/plain-text`, local automation scripts are in `tools`, benchmark entry points are in `benchmarks`, and design/spec notes are kept under `docs`.
+JWord is a pnpm workspace. Runtime packages live in `packages/*`, with source in each package's `src/` and colocated tests in `test/`. Core editor logic is under `packages/core/src`; keep it framework-agnostic and free of DOM work at module top level. Cross-package architecture, security, type, and E2E checks live in `tests/`. Examples are in `examples/*`, fixtures in `fixtures/`, benchmarks in `benchmarks/`, and maintenance scripts in `tools/`. SDK and implementation notes are under `docs/`.
 
 ## Build, Test, and Development Commands
 
-Use Node `>=20.19.0` and pnpm `9.14.2`.
-
-- `pnpm install --frozen-lockfile`: install exact locked dependencies.
+- `pnpm install --frozen-lockfile`: install workspace dependencies.
+- `pnpm dev`: run the local development helper.
+- `pnpm build`: build all public outputs with Rollup and normalize dist imports.
 - `pnpm lint`: run ESLint plus package-version, boundary, and comment checks.
-- `pnpm typecheck`: run TypeScript checks without emitting files.
-- `pnpm test`: run Vitest unit tests.
-- `pnpm test:e2e`: run Playwright projects for Chromium, Firefox, and WebKit.
-- `pnpm build`: build packages with Rollup.
-- `pnpm dev`: start the local development helper.
-- `pnpm bench`, `pnpm size`, `pnpm test:visual`: run benchmark, bundle-size, and visual dry-run checks.
-
-For the vanilla demo, use `pnpm --filter @4xian/jword-example-vanilla dev`.
+- `pnpm typecheck`: run the repository TypeScript check.
+- `pnpm test`: build first, then run Vitest unit/architecture tests.
+- `pnpm test:e2e`: run Playwright projects across supported browsers.
+- `pnpm test:visual`, `pnpm bench`, `pnpm size`: run visual, benchmark, and bundle-size gates.
+- Focus a package with examples such as `pnpm --filter @4xian/jword-core test`.
 
 ## Coding Style & Naming Conventions
 
-The project uses TypeScript ESM. Follow the existing style: single quotes, no semicolons, no trailing commas, and no `any`. TypeScript files must start with a responsibility/boundary/collaborator/constraint/spec header comment. Code comments in `.ts`, `.tsx`, `.js`, and `.mjs` files should use Chinese prose. Keep `packages/core` framework-agnostic: no top-level DOM access and no imports from UI, docx, PDF, collaboration, demo, Vite, or Playwright packages.
+Use TypeScript ES modules. ESLint enforces single quotes, no semicolons, no trailing commas, and `@typescript-eslint/no-explicit-any`. TypeScript files must start with the repository header comment required by `tools/lint/check-comments.mjs` and `jword-boundaries/file-header`. Keep files small and responsibilities narrow; split files before they become difficult to review. Name tests `*.test.ts` and prefer feature-specific names such as `gate7-browser-support.test.ts`.
 
 ## Testing Guidelines
 
-Use Vitest for unit and architecture tests, and Playwright for e2e checks. Test files must not live under any `src` directory. Place package tests in that package's `test/` directory, and repository-level integration or boundary tests in `tests/`. Name tests with `.test.ts` or `.spec.ts`.
+Use Vitest for unit, package, architecture, security, and type-oriented tests; use Playwright for browser flows. Add the smallest test that proves the changed behavior. For public API work, include `pnpm test:types`; for rendering, browser, or accessibility changes, include the relevant `pnpm test:e2e` or `pnpm test:visual` command. Always rerun the same focused command that failed before claiming a fix.
 
 ## Commit & Pull Request Guidelines
 
-Commits use Conventional Commits, enforced by commitlint through Husky. Recent examples include `feat: establish gate 0 foundation` and `feat: 实现gate1任务`. Before opening a pull request, run the relevant CI-equivalent checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and any affected e2e, visual, benchmark, or size checks. PR descriptions should summarize intent, verification commands, and user-visible changes; include screenshots for UI/demo changes.
+The repo uses Conventional Commits via commitlint, for example `fix: correct paste sanitizer` or `docs: add release notes`. Keep commits focused. Pull requests should describe the change, list verification commands, link the relevant issue or plan, and include screenshots or artifacts for UI, visual, or benchmark changes. Do not publish packages from PR scripts.
 
-## Release Safety
+## Agent-Specific Instructions
 
-Do not run `git commit`, `git tag`, `npm publish`, `pnpm publish`, or release automation without explicit human approval.
+Make surgical changes only. Do not introduce a separate mobile editor concept; use narrow viewport terminology for responsive behavior. For structural code questions, use CodeGraph before text search when the index is available.

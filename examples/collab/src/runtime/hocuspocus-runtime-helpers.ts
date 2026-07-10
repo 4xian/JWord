@@ -3,7 +3,7 @@
  * 边界：不连接 provider、不读写 Y.Doc、不操作 DOM，只服务 hocuspocus-runtime.ts 装配。
  * 协作：hocuspocus-runtime.ts、@4xian/jword-collab feature matrix 和 demo debug snapshot 类型。
  * 约束：保持纯函数，避免把 runtime 生命周期状态拆散到多个可写模块。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { GATE6_COLLAB_FEATURES } from '@4xian/jword-collab'
 import type {

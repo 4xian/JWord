@@ -3,9 +3,9 @@
  *
  * 职责：约束 Gate 5 商业授权、第三方集成和发布审计入口。
  * 边界：只检查包图、公开 API、发布检查脚本和基础首屏扫描，不执行 DOCX/PDF 互通。
- * 协作模块：packages/license、packages/docx、packages/pdf、examples/docx、tools/release 和 Gate 7 文档计划。
+ * 协作模块：packages/license、packages/docx、packages/pdf、examples/docx、tools/release 和 SDK 文档。
  * 约束：商业能力不能只靠文档声明，必须有可运行检查证明授权和包边界存在。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-538建立商业包发布检查。
+ * 实现说明：本测试只读取真实代码、脚本和 docs/sdk 当前公开文档，不依赖旧实施计划。
  */
 
 import { execFileSync } from 'node:child_process'
@@ -140,14 +140,19 @@ describe('Gate 5 commercial readiness', () => {
     }
   })
 
-  it('keeps Gate 7 documentation plan aware of Gate 5 API, feature keys and billing boundary', () => {
-    const plan = readFileSync('docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md', 'utf8')
+  it('keeps SDK docs aware of Gate 5 API, feature keys and billing boundary', () => {
+    const sdkDocs = readEvidenceFiles([
+      'docs/sdk/advanced-formats.md',
+      'docs/sdk/licensing.md',
+      'docs/sdk/public-api.md'
+    ])
 
-    expect(plan).toContain('Gate 5 高级格式互通文档')
-    expect(plan).toContain('DOCX import/export、PDF export')
-    expect(plan).toContain('feature key')
-    expect(plan).toContain('未授权失败')
-    expect(plan).toContain('收费边界')
+    expect(sdkDocs).toContain('Gate 5 高级格式互通')
+    expect(sdkDocs).toContain('DOCX import/export')
+    expect(sdkDocs).toContain('PDF export')
+    expect(sdkDocs).toContain('GATE5_FORMAT_FEATURES')
+    expect(sdkDocs).toContain('未授权失败')
+    expect(sdkDocs).toContain('收费能力边界')
   })
 })
 
@@ -202,4 +207,9 @@ function assertRuntimeRelativeImportsUseJsSuffix(sourcePath: string): void {
       throw new Error(`${sourcePath}: runtime import ${specifier} must include .js for Node ESM package consumers.`)
     }
   }
+}
+
+/** 汇总当前 SDK 文档内容。 */
+function readEvidenceFiles(paths: readonly string[]): string {
+  return paths.map((path) => readFileSync(path, 'utf8')).join('\n')
 }

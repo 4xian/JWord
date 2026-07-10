@@ -5,7 +5,7 @@
  * 边界：只覆盖输入处理异常可恢复路径，不扩展其它键盘能力断言。
  * 协作模块：transaction pipeline、history、layout hit/caret 映射和 formatting builder 共同支撑“小文档可编辑”闭环。
  * 性能/安全约束：测试只运行在 jsdom，不访问网络或磁盘，不直接写 projection。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T1。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, it } from 'vitest'
 

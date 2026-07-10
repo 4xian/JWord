@@ -3,7 +3,7 @@
  * 边界：只从当前 workspace 打包全部可发布包并安装本地 tarball，不读取 examples 源码 alias，不发布包。
  * 协作模块：核心包、界面包、原生格式包、商业格式包、授权包、持久化包、协作客户端和协作服务端。
  * 约束：smoke 必须覆盖 typecheck、Vite build 和 Chromium 浏览器路径，并同时触达免费基础路径与付费 PDF 授权路径。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#313-发布no-alias-消费闭环phase-6m按-d2-执行。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -51,6 +51,18 @@ const workspacePackages = [
   {
     name: '@4xian/jword-collab-server',
     dir: 'packages/collab-server'
+  },
+  {
+    name: '@4xian/jword-react',
+    dir: 'packages/react'
+  },
+  {
+    name: '@4xian/jword-vue',
+    dir: 'packages/vue'
+  },
+  {
+    name: '@4xian/jword-devtools',
+    dir: 'packages/devtools'
   }
 ]
 const rootPackageJson = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
@@ -146,8 +158,13 @@ function writeEmptyProject(projectDir, packs) {
     dependencies,
     devDependencies: {
       '@playwright/test': readRootDevDependencyVersion('@playwright/test'),
+      '@types/react': readRootDevDependencyVersion('@types/react'),
+      '@types/react-dom': readRootDevDependencyVersion('@types/react-dom'),
+      react: readRootDevDependencyVersion('react'),
+      'react-dom': readRootDevDependencyVersion('react-dom'),
       typescript: readRootDevDependencyVersion('typescript'),
-      vite: readRootDevDependencyVersion('vite')
+      vite: readRootDevDependencyVersion('vite'),
+      vue: readRootDevDependencyVersion('vue')
     }
   }
 
@@ -363,6 +380,15 @@ import {
   createJWordUi
 } from '@4xian/jword-ui'
 import {
+  JWordReactEditor
+} from '@4xian/jword-react'
+import {
+  JWordVueEditor
+} from '@4xian/jword-vue'
+import {
+  attachJWordDevtools
+} from '@4xian/jword-devtools'
+import {
   saveJWordDocument
 } from '@4xian/jword-native'
 import {
@@ -377,7 +403,8 @@ import {
 import {
   GATE5_FORMAT_FEATURES,
   GATE6_COLLAB_FEATURES,
-  assertJWordFeatureEntitled
+  assertJWordFeatureEntitled,
+  createJWordLicenseError
 } from '@4xian/jword-license'
 import {
   connectJWordCollaboration,
@@ -392,12 +419,17 @@ import {
   createVolatileHistoryStorage
 } from '@4xian/jword-persistence'
 
+const missingLicense = createJWordLicenseError('JWORD_LICENSE_MISSING', GATE5_FORMAT_FEATURES.pdfExport)
+
 export const consumedApis = {
   createEditor,
   createFontManager,
   createPageConfig,
   layoutDocument,
   createJWordUi,
+  JWordReactEditor,
+  JWordVueEditor,
+  attachJWordDevtools,
   saveJWordDocument,
   exportDocx,
   exportPdfFromLayout,
@@ -410,7 +442,8 @@ export const consumedApis = {
   createJWordCollabServer,
   createJWordCollabHocuspocusServer,
   createStoragePersistenceAdapter,
-  createVolatileHistoryStorage
+  createVolatileHistoryStorage,
+  missingLicense
 }
 `
 

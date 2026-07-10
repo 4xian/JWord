@@ -3,7 +3,7 @@
  * 边界：只覆盖内存 runtime 的可见协作 UI，不启动真实 Hocuspocus 双端同步。
  * 协作：examples/collab/src/main.ts、tests/e2e/a11y-axe.ts 和 collab demo Vite 服务。
  * 约束：测试自启独立端口，避免依赖根 Playwright vanilla webServer。
- * Specs：docs/superpowers/reports/2026-07-02-plan-review.md#24-可访问性a11y验收缺乏实质进展。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test, type Page } from '@playwright/test'
 import { spawn, type ChildProcess } from 'node:child_process'

@@ -5,7 +5,7 @@
  * 边界：只覆盖 text-segments 的纯函数输出，不访问 DOM、不触发分页或 Canvas 渲染。
  * 协作模块：font-manager 提供可注入测量器，layout query 依赖 advanceTwips 做命中定位。
  * 约束：长段落 advance 必须保持线性测量，避免输入热路径退化为重复前缀扫描。
- * Specs：docs/superpowers/reports/2026-07-02-gate2-gate3-review.md#G2-05。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, it } from 'vitest'
 

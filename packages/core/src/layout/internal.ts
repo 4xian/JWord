@@ -3,7 +3,7 @@
  * 边界：只服务 layout 子目录内部模块，不暴露新的仓库级能力。
  * 协作模块：engine、incremental 和 types 共同维持分页盒构建的最小公共逻辑。
  * 性能/安全约束：工具函数保持纯计算，不访问 DOM、不持有文档状态。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { twipsToCssPx } from './page-config'

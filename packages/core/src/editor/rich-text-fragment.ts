@@ -3,7 +3,7 @@
  * 边界：只面向结构化富文本片段生成 operation，不读取剪贴板原始 HTML。
  * 协作模块：删除计划层、富文本辅助模块、文本运行时与事务流水线。
  * 性能/安全约束：只格式化本次新增文本，链接输入已由上游清洗，命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { countGraphemes } from '../shared/grapheme'

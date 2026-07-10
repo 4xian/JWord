@@ -3,7 +3,7 @@
  * 边界：只处理 requestAnimationFrame/timeout 选择，不执行 layout、render 或 DOM 同步。
  * 协作模块：pointer runtime、layout runtime 和 mounted editor DOM。
  * 性能/安全约束：顶层不读取浏览器全局对象，仅在已挂载 DOM 的 ownerDocument 上读取 rAF。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DeferredVisualTaskHandle, MountedEditorDom } from './types'

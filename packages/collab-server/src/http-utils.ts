@@ -3,7 +3,7 @@
  * 边界：不路由业务请求、不调用授权 hook、不访问 history storage。
  * 协作模块：index.ts、history-routes.ts 和 auto-insert-relay.ts 共享这些无状态 helper。
  * 性能/安全约束：body 读取统一限制最大字节数；授权 metadata 可从 URL/header 读取而不消费 body。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-631。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

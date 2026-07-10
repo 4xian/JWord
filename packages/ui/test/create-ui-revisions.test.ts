@@ -5,7 +5,7 @@
  * 边界：覆盖 revision 列表显示、点击定位 range、接受/拒绝按钮和销毁。
  * 协作模块：packages/ui/src/create-ui.ts、revisions controller 与 @4xian/jword-core。
  * 约束：通过公开 elements 和稳定 data selector 断言，不读取 controller 私有状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.14。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

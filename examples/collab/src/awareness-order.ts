@@ -3,7 +3,7 @@
  * 边界：只处理只读快照数组，不读取 DOM、不访问 provider、不修改输入。
  * 协作：examples/collab/src/main.ts、runtime.ts 和 demo 契约测试。
  * 约束：保持 helper 纯函数，避免 main.ts 静态拉入完整 runtime 分片。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { AwarenessUserSnapshot } from './runtime'
 

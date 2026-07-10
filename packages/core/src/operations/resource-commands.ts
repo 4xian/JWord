@@ -3,7 +3,7 @@
  * 边界：只生成 resource operation，不执行事务、不读取 DOM 或外部资源。
  * 协作模块：图片命令、docx/pdf/native 互通层和 editor facade 通过事务流水线消费资源命令。
  * 性能/安全约束：写入前执行资源 URL allowlist 校验，保持命令 JSON 兼容。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#step-410图片插入与资源管理。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { isAllowedResourceUrl } from '../resources/types'

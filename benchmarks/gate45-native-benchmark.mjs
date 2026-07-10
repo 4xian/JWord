@@ -3,7 +3,7 @@
  * 边界：只运行本地合成 canonical 文档，不读取真实 `.jword` fixture，也不依赖浏览器环境。
  * 协作模块：packages/native、packages/core 和 tools/bench/run-bench.mjs。
  * 约束：输出必须是可机器读取 JSON，指标字段保持稳定，用于计划回写和后续趋势比较。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-6---benchmarkbundle-和文档计划。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { performance } from 'node:perf_hooks'
 

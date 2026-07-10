@@ -3,7 +3,7 @@
  * 边界：只验证 Vite 配置返回的 alias，不覆盖浏览器渲染与 bundle 内容。
  * 协作：examples/vanilla/vite.config.ts、packages/core/src/index.ts 和 packages/core/package.json。
  * 约束：开发态与构建态都必须直连 workspace 源码 alias，避免 linked package 回落到不完整的声明图。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'

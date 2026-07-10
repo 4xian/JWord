@@ -5,7 +5,7 @@
  * 边界：只验证 benchmark 脚本结构、runner 接入和输出字段，不执行耗时 benchmark。
  * 协作模块：benchmarks/gate5-interop-benchmark.mjs、tools/bench/run-bench.mjs、packages/docx 和 packages/pdf。
  * 约束：Gate 5 benchmark 必须记录 DOCX import/export/PDF export 耗时，并按文件大小、页数、图片数分组。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync } from 'node:fs'
 

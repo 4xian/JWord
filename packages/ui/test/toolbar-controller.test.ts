@@ -41,7 +41,7 @@ describe('toolbar controller focus restore', () => {
       trigger?.click()
 
       const option = toolbarHost.querySelector<HTMLButtonElement>(
-        '[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-option[data-jword-option-value="A3"]'
+        '[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-option[data-jword-option-value="a3"]'
       )
 
       expect(option).toBeInstanceOf(HTMLButtonElement)
@@ -52,6 +52,65 @@ describe('toolbar controller focus restore', () => {
       await Promise.resolve()
 
       expect(document.activeElement).toBe(textarea)
+
+      controller.destroy()
+    } finally {
+      editor.destroy()
+      editorHost.remove()
+      toolbarHost.remove()
+    }
+  })
+
+  test('opens custom page size dialog from the built-in page preset select', async () => {
+    const editorHost = document.createElement('div')
+    const toolbarHost = document.createElement('div')
+    const editor = createEditor({ initialText: 'custom page size' })
+
+    document.body.append(editorHost, toolbarHost)
+
+    try {
+      editor.mount(editorHost)
+      const controller = createToolbarController({
+        editor,
+        toolbarHost,
+        toolbar: {
+          visibleTools: ['document.pagePreset']
+        },
+        assistive: {
+          liveRegion: createStubLiveRegion(),
+          textMirror: null
+        }
+      })
+      const pagePreset = toolbarHost.querySelector<HTMLSelectElement>('[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select')
+
+      expect(pagePreset?.querySelector('option[value="custom"]')?.textContent).toBe('自定义大小')
+
+      if (pagePreset === null) {
+        throw new Error('页面尺寸 select 未创建')
+      }
+
+      pagePreset.value = 'custom'
+      pagePreset.dispatchEvent(new Event('change', { bubbles: true }))
+
+      const dialog = toolbarHost.querySelector<HTMLElement>('[data-jword-page-size-dialog="true"]')
+      const width = dialog?.querySelector<HTMLInputElement>('[data-jword-page-size-field="width"] input')
+      const height = dialog?.querySelector<HTMLInputElement>('[data-jword-page-size-field="height"] input')
+      const apply = dialog?.querySelector<HTMLButtonElement>('[data-jword-page-size-apply="true"]')
+
+      expect(dialog).toBeInstanceOf(HTMLElement)
+
+      if (width === null || width === undefined || height === null || height === undefined) {
+        throw new Error('自定义页面尺寸宽高输入未创建')
+      }
+
+      width.value = '21'
+      height.value = '28'
+      apply?.click()
+      await Promise.resolve()
+
+      expect(editor.getPageConfig().preset).toBe('custom')
+      expect(editor.getPageConfig().widthTwips).toBe(11906)
+      expect(editor.getPageConfig().heightTwips).toBe(15874)
 
       controller.destroy()
     } finally {

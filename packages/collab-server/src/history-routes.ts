@@ -3,7 +3,7 @@
  * 边界：只处理 history payload、tenant/license gate 和 storage service 调用，不负责 health/version/license-status。
  * 协作模块：index.ts 分发路由；history-service.ts 提供 storage-backed 版本服务；request-guards.ts 提供 tenant hook。
  * 性能/安全约束：record/preview 在读取 body 前必须先从 URL/header 读取 metadata 并完成 tenant/license 检查。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-631。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

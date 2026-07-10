@@ -3,7 +3,7 @@
  * 边界：只服务纯数据 layout，不读取 projection、不绘制 Canvas、不访问 DOM。
  * 协作模块：engine 负责遍历文档结构，本模块负责段落缩进、对齐、换页和行内盒追加。
  * 性能/安全约束：所有 helper 只修改当前 layout cursor，不保留跨次布局状态。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { cssPxToTwips } from './page-config'

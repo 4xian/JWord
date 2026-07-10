@@ -3,7 +3,7 @@
  * 边界: 只覆盖分页 layout/render 行为，不测试 Gate 3 输入系统或手势选择语义。
  * 协作: examples/vanilla 测试钩子、@4xian/jword-core Editor facade 和 Playwright 项目矩阵。
  * 约束: 不依赖截图人工判断，断言必须来自 DOM 属性、canvas 数量和公开 facade 返回值。
- * Specs: docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -286,10 +286,12 @@ async function readMountedViewportProbe(page: Page): Promise<MountedViewportProb
     const lastMountedPageIndex = viewportPageIndexes[viewportPageIndexes.length - 1] ?? null
     const targetPageIndexes = [
       visibleMountedPageIndexes[0] ?? firstMountedPageIndex,
-      visibleMountedPageIndexes[visibleMountedPageIndexes.length - 1] ?? lastMountedPageIndex
+      visibleMountedPageIndexes[visibleMountedPageIndexes.length - 1] ?? lastMountedPageIndex,
+      lastMountedPageIndex,
+      firstMountedPageIndex
     ].filter((pageIndex, index, values): pageIndex is number => {
       return pageIndex !== null && pageIndex !== undefined && values.indexOf(pageIndex) === index
-    })
+    }).slice(0, 2)
 
     return {
       pageCount: layout.pages.length,

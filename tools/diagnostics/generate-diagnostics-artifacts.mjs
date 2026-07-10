@@ -3,7 +3,7 @@
  * 边界：只读取 fixtures/collab/diagnostics-registry.json 并写入派生产物，不扫描源码、不修改运行时代码。
  * 协作模块：docs/sdk、core observability 和 Gate 7 架构测试共同复用这些派生产物。
  * 性能/安全约束：生成内容不包含用户文档内容；check 模式只比较文件，不写磁盘。
- * Specs：docs/superpowers/reports/2026-07-02-gate7-review.md#r2-复审补充。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -19,8 +19,6 @@ const checkMode = process.argv.includes('--check')
 
 const registry = readJson(registryPath)
 const codes = [...registry.codes]
-const owners = [...new Set(codes.map((item) => item.owner))].sort()
-const domains = [...new Set(codes.flatMap((item) => item.domains))].sort()
 
 const artifacts = new Map([
   [markdownPath, renderMarkdown()],
@@ -103,9 +101,7 @@ function renderSummarySource() {
 export const JWORD_DIAGNOSTICS_REGISTRY_SUMMARY = {
   source: '${registryPath}',
   schemaVersion: ${JSON.stringify(registry.schemaVersion)},
-  codeCount: ${codes.length},
-  owners: ${renderStringArray(owners)},
-  domains: ${renderStringArray(domains)}
+  codeCount: ${codes.length}
 } as const
 `
 }
@@ -120,10 +116,4 @@ function renderGeneratedHeader(kind) {
 /** 转义 Markdown 表格单元格。 */
 function escapeMarkdownCell(value) {
   return String(value).replaceAll('|', '\\|')
-}
-
-/** 稳定渲染字符串数组。 */
-function renderStringArray(values) {
-  const lines = values.map((value) => `  '${value}'`)
-  return `[\n${lines.join(',\n')}\n]`.replace(/\n/g, '\n  ')
 }

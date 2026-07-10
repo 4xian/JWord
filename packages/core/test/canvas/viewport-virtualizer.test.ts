@@ -5,7 +5,7 @@
  * 边界：只计算页索引集合，不创建 DOM、canvas 或执行渲染。
  * 协作模块：画布渲染器 根据 retainedPageIndexes 持有真实 canvas，画布池 回收离屏页。
  * 性能/安全约束：测试使用固定 PageBox 序列，避免滚动环境和计时器导致不确定性。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-分页-canvas-渲染。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

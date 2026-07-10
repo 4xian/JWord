@@ -5,7 +5,7 @@
  * 边界：通过临时 workspace 调用 check-boundaries.mjs CLI，不读取真实 packages/core 源码。
  * 协作模块：tools/lint/check-boundaries.mjs 与 pnpm-workspace.yaml 扫描根派生逻辑。
  * 性能/安全约束：测试只写入系统临时目录，脚本失败输出必须包含具体违规文件。
- * Specs：docs/superpowers/reports/2026-07-02-gate0-gate1-review.md#g0-06-check-boundariesmjs-的-import-匹配存在绕过通道。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { execFile } from 'node:child_process'

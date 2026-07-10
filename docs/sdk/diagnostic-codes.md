@@ -4,7 +4,7 @@
 
 Source: `fixtures/collab/diagnostics-registry.json`  
 Schema version: 1  
-Code count: 184
+Code count: 190
 
 | Code | Owner | Severity | Recoverable | Fallback | Domains | Description |
 |---|---|---|---|---|---|---|
@@ -110,6 +110,12 @@ Code count: 184
 | `OPERATION_TABLE_CELL_NOT_FOUND` | core | error | no | reject-operation-and-keep-document | core, import, operation | Operation adapter rejects an invalid operation with OPERATION_TABLE_CELL_NOT_FOUND. |
 | `OPERATION_TEXT_INDEX_OUT_OF_BOUNDS` | core | error | no | reject-operation-and-keep-document | core, operation | Operation adapter rejects an invalid operation with OPERATION_TEXT_INDEX_OUT_OF_BOUNDS. |
 | `PLUGIN_CALLBACK_FAILED` | core | warning | yes | isolate-plugin-callback | core, plugin | Core plugin host emits PLUGIN_CALLBACK_FAILED for plugin isolation and command diagnostics. |
+| `PLUGIN_ADAPTER_DUPLICATE` | core | warning | yes | use-first-registered-adapter | core, plugin, adapter | Core plugin host detected more than one adapter for the same slot and will use the first registered adapter. |
+| `PLUGIN_ADAPTER_FAILED` | core | warning | yes | isolate-plugin-adapter | core, plugin, adapter | Core plugin host isolated a plugin adapter failure without corrupting editor state. |
+| `PLUGIN_ADAPTER_UNAVAILABLE` | core | warning | yes | skip-adapter-dependent-action | core, plugin, adapter | Core plugin host could not resolve a requested adapter from the plugin registry. |
+| `PLUGIN_IMPORT_REJECTED` | core | warning | yes | keep-document-unchanged | core, plugin, adapter, import | Plugin import adapter rejected an import request and the current document remains unchanged. |
+| `PLUGIN_EXPORT_REJECTED` | core | warning | yes | return-export-error-without-download | core, plugin, adapter, export | Plugin export adapter rejected an export request and no browser download is triggered by core. |
+| `PLUGIN_COLLAB_PROVIDER_REJECTED` | core | warning | yes | block-provider-attachment | core, plugin, adapter, collaboration | Plugin collaboration provider adapter rejected provider creation or attachment without exposing provider internals. |
 | `PLUGIN_COMMAND_DUPLICATE` | core | error | no | reject-duplicate-plugin-registration | core, plugin | Core plugin host emits PLUGIN_COMMAND_DUPLICATE for plugin isolation and command diagnostics. |
 | `PLUGIN_COMMAND_NOT_FOUND` | core | error | yes | ignore-missing-plugin-command | core, plugin | Core plugin host emits PLUGIN_COMMAND_NOT_FOUND for plugin isolation and command diagnostics. |
 | `PLUGIN_COMMAND_REJECTED` | core | warning | yes | reject-plugin-command-with-diagnostic | core, plugin | Core plugin host emits PLUGIN_COMMAND_REJECTED for plugin isolation and command diagnostics. |

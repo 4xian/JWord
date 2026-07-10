@@ -3,7 +3,7 @@
  * 边界：不执行 zip 保存、打开或校验，只组装可跨线程传输的纯数据。
  * 协作模块：index.ts 公开入口、worker.ts runtime 和外部 worker host。
  * 性能/安全约束：二进制传输使用标准 ArrayBuffer，避免共享调用方可变视图。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---4xianjword-native-公开-api-与-worker。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Document } from '@4xian/jword-core'
 

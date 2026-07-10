@@ -5,7 +5,7 @@
  * 边界：只检查诊断登记表 JSON 和 fixture 引用，不导入未完成包实现。
  * 协作模块：协同提供方、在线状态、离线、快照、历史、自动插入和恢复后续复用这些诊断码。
  * 约束：新增 Gate 6 诊断码必须先进入登记表，且带有级别、可恢复标记、回退方式和归属方。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-6---协同离线自动插入。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

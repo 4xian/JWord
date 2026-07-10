@@ -3,7 +3,7 @@
  * 边界：只处理版本记录、只读预览、恢复和 persistence 诊断转发，不连接 DOM、provider 或 IndexedDB。
  * 协作：hocuspocus-runtime.ts 提供当前 Y.Doc、离线保存回调和页面刷新回调。
  * 约束：历史保存必须基于 update log / snapshot，恢复失败不得修改当前可写文档。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { JWordPersistenceDiagnostic } from '@4xian/jword-persistence'
 import * as Y from 'yjs'

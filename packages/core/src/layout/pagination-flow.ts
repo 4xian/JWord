@@ -3,7 +3,7 @@
  * 边界：不实现 run 级测量，不实现表格单元格内容布局，不生成最终 DocumentLayout。
  * 协作模块：engine 遍历文档结构后调用这里，inline-layout 和 table-layout 执行具体块布局。
  * 性能/安全约束：只读 DocumentProjection 派生输入，不访问 DOM、不绘制 Canvas。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Block, Section } from '../model/types'

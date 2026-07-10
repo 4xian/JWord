@@ -3,7 +3,7 @@
  * 边界：不放置大段输入、渲染、文档 helper 逻辑。
  * 协作模块：pointer/input/mounted/layout/facade runtime。
  * 性能/安全约束：constructor/top-level 不访问 window/document/HTMLElement 实例，DOM 只在 mount 后创建，编辑命令统一进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor, EditorOptions } from './types'
 import { JWordEditorCollaborationRuntime } from './collaboration-runtime'
@@ -43,6 +43,22 @@ export type {
   HistoryScope,
   InitialFocusPosition
 } from './types'
+export type {
+  PluginAdapterExecute,
+  PluginAdapterExecuteOptions,
+  PluginAdapterKind,
+  PluginAdapterRegisterOptions,
+  PluginAdapterRegistration,
+  PluginAdapterRegistry,
+  PluginAdapterResolveOptions,
+  PluginAdapterResolution,
+  PluginAdapterSlot,
+  PluginCollabProviderAdapterDescriptor,
+  PluginExportAdapterDescriptor,
+  PluginFormatAdapterSlot,
+  PluginImportAdapterDescriptor,
+  PluginPersistenceAdapterDescriptor
+} from '../plugins/adapter-types'
 export type {
   PluginCommandContext,
   PluginCommandDefinition,
@@ -85,9 +101,18 @@ export type {
   EditorTextQueryResult
 } from './location-types'
 export type {
+  JWordDiagnosticsCollaborationSummary,
+  JWordDiagnosticsFeatureFlag,
+  JWordDiagnosticsLayoutMetrics,
+  JWordDiagnosticsLicenseState,
+  JWordDiagnosticsOperationSummary,
+  JWordDiagnosticsPackageVersion,
   JWordDiagnosticsPluginEntry,
   JWordDiagnosticsPrivacySummary,
+  JWordDiagnosticsSelectionSummary,
+  JWordDiagnosticsServerSummary,
   JWordDiagnosticsSnapshot,
+  JWordDiagnosticsTransactionSummary,
   JWordPluginDiagnosticTelemetryEvent,
   JWordTelemetryEvent,
   JWordTelemetryOptions,

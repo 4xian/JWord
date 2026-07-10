@@ -5,7 +5,7 @@
  * 边界：只读取文档、package manifest 和公开入口源码，不执行 SDK 运行时。
  * 协作模块：packages/* 公开入口、Gate 5/6 商业包和 Gate 7 SDK 稳定化计划。
  * 约束：清单必须基于已实现包和导出面，不得记录未实现 Future API 为 stable。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-71整理公开-api-清单。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -28,6 +28,12 @@ const packageCatalogExpectations = [
       'EditorApplyUpdateOptions',
       'PluginDefinition',
       'PluginContext',
+      'PluginAdapterRegistry',
+      'PluginAdapterSlot',
+      'PluginPersistenceAdapterDescriptor',
+      'PluginImportAdapterDescriptor',
+      'PluginExportAdapterDescriptor',
+      'PluginCollabProviderAdapterDescriptor',
       'PluginCommandMiddleware',
       'PluginKeyBindingDefinition',
       'PluginDiagnostic',
@@ -60,6 +66,12 @@ const packageCatalogExpectations = [
       'EditorSharedDocument',
       'PluginDefinition',
       'PluginContext',
+      'PluginAdapterRegistry',
+      'PluginAdapterSlot',
+      'PluginPersistenceAdapterDescriptor',
+      'PluginImportAdapterDescriptor',
+      'PluginExportAdapterDescriptor',
+      'PluginCollabProviderAdapterDescriptor',
       'PluginCommandMiddleware',
       'PluginKeyBindingDefinition',
       'PluginDiagnostic',
@@ -79,6 +91,13 @@ const packageCatalogExpectations = [
       'createCoreMediaCommandAdapter',
       'createCoreTableCommandAdapter',
       'BUILTIN_JWORD_TOOL_IDS',
+      'DEFAULT_JWORD_UI_THEME_TOKENS',
+      'DEFAULT_JWORD_UI_I18N_DICTIONARY',
+      'resolveJWordUiI18n',
+      'JWordUiThemeOptions',
+      'JWordUiThemeToken',
+      'JWordUiI18nDictionary',
+      'JWordUiI18nOptions',
       'JWordUiPluginExtension',
       'JWordToolbarPluginItem',
       'JWordMenuPluginAction',
@@ -90,6 +109,13 @@ const packageCatalogExpectations = [
       'createCoreMediaCommandAdapter',
       'createCoreTableCommandAdapter',
       'BUILTIN_JWORD_TOOL_IDS',
+      'DEFAULT_JWORD_UI_THEME_TOKENS',
+      'DEFAULT_JWORD_UI_I18N_DICTIONARY',
+      'resolveJWordUiI18n',
+      'JWordUiThemeOptions',
+      'JWordUiThemeToken',
+      'JWordUiI18nDictionary',
+      'JWordUiI18nOptions',
       'JWordUiPluginExtension',
       'JWordToolbarPluginItem',
       'JWordMenuPluginAction',
@@ -124,6 +150,8 @@ const packageCatalogExpectations = [
       'Edition：paid format',
       'importDocx',
       'exportDocx',
+      'createDocxImportPluginAdapter',
+      'createDocxExportPluginAdapter',
       'inspectDocxPackage',
       'detectDocxWorkerCapability',
       'DOCX_WORKER_CSP_DIRECTIVES',
@@ -134,6 +162,8 @@ const packageCatalogExpectations = [
     sourceTokens: [
       'importDocx',
       'exportDocx',
+      'createDocxImportPluginAdapter',
+      'createDocxExportPluginAdapter',
       'inspectDocxPackage',
       'detectDocxWorkerCapability',
       'DOCX_WORKER_CSP_DIRECTIVES'
@@ -145,6 +175,7 @@ const packageCatalogExpectations = [
     catalogTokens: [
       'Edition：paid format',
       'exportPdfFromLayout',
+      'createPdfExportPluginAdapter',
       'detectPdfWorkerCapability',
       'PDF_WORKER_CSP_DIRECTIVES',
       'PDF_WORKER_UNAVAILABLE',
@@ -153,6 +184,7 @@ const packageCatalogExpectations = [
     ],
     sourceTokens: [
       'exportPdfFromLayout',
+      'createPdfExportPluginAdapter',
       'detectPdfWorkerCapability',
       'PDF_WORKER_CSP_DIRECTIVES'
     ]
@@ -163,6 +195,7 @@ const packageCatalogExpectations = [
     catalogTokens: [
       'Edition：free base contract',
       'createMemoryPersistenceAdapter',
+      'createJWordPersistencePluginAdapter',
       'createStoragePersistenceAdapter',
       'createIndexedDbOfflineAdapter',
       'createUnavailableIndexedDbOfflineAdapter',
@@ -170,10 +203,72 @@ const packageCatalogExpectations = [
     ],
     sourceTokens: [
       'createMemoryPersistenceAdapter',
+      'createJWordPersistencePluginAdapter',
       'createStoragePersistenceAdapter',
       'createIndexedDbOfflineAdapter',
       'createUnavailableIndexedDbOfflineAdapter',
       'PERSISTENCE_DIAGNOSTIC_CODE_METADATA'
+    ]
+  },
+  {
+    packageName: '@4xian/jword-react',
+    entrypoint: 'packages/react/src/index.ts',
+    catalogTokens: [
+      'Edition：free wrapper',
+      'JWordReactEditor',
+      'JWordReactEditorProps',
+      'JWordReactEditorHandle',
+      'JWordReactErrorBoundary',
+      'JWordEditorProvider',
+      'useJWordEditor',
+      'useJWordEditorHandle'
+    ],
+    sourceTokens: [
+      'JWordReactEditor',
+      'JWordReactEditorProps',
+      'JWordReactEditorHandle',
+      'JWordReactErrorBoundary',
+      'JWordEditorProvider',
+      'useJWordEditor',
+      'useJWordEditorHandle'
+    ]
+  },
+  {
+    packageName: '@4xian/jword-vue',
+    entrypoint: 'packages/vue/src/index.ts',
+    catalogTokens: [
+      'Edition：free wrapper',
+      'JWordVueEditor',
+      'JWordVueEditorProps',
+      'JWordVueEditorHandle',
+      'JWORD_VUE_EDITOR_KEY',
+      'useJWordEditor',
+      'useJWordEditorHandle'
+    ],
+    sourceTokens: [
+      'JWordVueEditor',
+      'JWordVueEditorProps',
+      'JWordVueEditorHandle',
+      'JWORD_VUE_EDITOR_KEY',
+      'useJWordEditor',
+      'useJWordEditorHandle'
+    ]
+  },
+
+  {
+    packageName: '@4xian/jword-devtools',
+    entrypoint: 'packages/devtools/src/index.ts',
+    catalogTokens: [
+      'Edition：free diagnostics',
+      'attachJWordDevtools',
+      'AttachJWordDevtoolsOptions',
+      'JWordDevtoolsHandle',
+      'Editor.exportDiagnostics()'
+    ],
+    sourceTokens: [
+      'attachJWordDevtools',
+      'AttachJWordDevtoolsOptions',
+      'JWordDevtoolsHandle'
     ]
   },
   {
@@ -189,6 +284,7 @@ const packageCatalogExpectations = [
       'JWordCollaborationHistoryVersion',
       'JWordCollaborationAutoInsertSession',
       'createMemoryCollabProviderAdapter',
+      'createJWordCollabProviderPluginAdapter',
       'GATE6_COLLAB_FEATURES',
       './experimental',
       'createHocuspocusCollabProviderAdapter'
@@ -202,6 +298,7 @@ const packageCatalogExpectations = [
       'JWordCollaborationHistoryVersion',
       'JWordCollaborationAutoInsertSession',
       'createMemoryCollabProviderAdapter',
+      'createJWordCollabProviderPluginAdapter',
       'GATE6_COLLAB_FEATURES'
     ]
   },
@@ -254,11 +351,7 @@ const packageCatalogExpectations = [
   }
 ] as const
 
-const unimplementedFuturePackages = [
-  '@4xian/jword-react',
-  '@4xian/jword-vue',
-  '@4xian/jword-devtools'
-] as const
+const unimplementedFuturePackages = [] as const
 
 describe('Gate 7 public API catalog', () => {
   it('ships a catalog for the currently implemented public packages', () => {

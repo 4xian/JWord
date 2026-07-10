@@ -3,7 +3,7 @@
  * 边界：只封装 persistence storage adapter，不处理 HTTP、WebSocket、浏览器 runtime 或 demo 私有逻辑。
  * 协作模块：packages/persistence 提供 update log、snapshot、preview 和 restore adapter。
  * 性能/安全约束：同一 document 的读写按队列串行，避免并发 load/save 覆盖版本链。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.29-6.34。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

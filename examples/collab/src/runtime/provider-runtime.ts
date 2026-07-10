@@ -3,7 +3,7 @@
  * 边界：只返回 demo 内存 provider 的初始快照，不连接真实 Hocuspocus、WebSocket 或 core 协同 provider。
  * 协作：lazy-runtime 动态加载本模块后把种子传给 createCollabDemoRuntime。
  * 约束：模块可被单独分包加载，顶层不访问 DOM、window 或网络。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { CollabDemoRuntimeProviderInput } from '../runtime'
 

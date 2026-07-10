@@ -5,7 +5,7 @@
  * 边界：只通过 createEditor、Editor facade、telemetry sink 和 diagnostics export 观察行为。
  * 协作模块：editor runtime、plugin host、插件诊断和隐私裁剪契约。
  * 性能/安全约束：telemetry 默认由宿主 opt-in，diagnostics export 不包含文档正文或插件私有字符串。
- * Specs：docs/superpowers/plans/2026-07-06-gate7-observability-telemetry-design.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -90,6 +90,51 @@ describe('Gate 7 R3 observability contract', () => {
     expect(serialized).not.toContain(secret)
     expect(serialized).not.toContain('documentText')
     expect(serialized).toContain('[redacted]')
+
+    editor.destroy()
+  })
+
+  it('diagnostics export includes package, feature, operation and layout summaries without private content', () => {
+    const secret = '诊断快照正文不得泄漏'
+    const editor = createEditor({ initialText: secret })
+
+    editor.executeCommand({
+      name: 'gate7.diagnostics.insert',
+      operations: [{
+        kind: 'insertText',
+        at: editor.resolveTextPosition(editor.createTextAnchor({
+          sectionId: 'section-1',
+          blockId: 'paragraph-1',
+          runId: 'run-1',
+          graphemeIndex: 0
+        })),
+        text: secret
+      }]
+    })
+
+    const snapshot = editor.exportDiagnostics()
+    const serialized = JSON.stringify(snapshot)
+
+    expect(snapshot.packageVersions).toContainEqual({
+      name: '@4xian/jword-core',
+      version: '0.0.0'
+    })
+    expect(snapshot.featureFlags).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'core.editor', enabled: true }),
+      expect.objectContaining({ key: 'diagnostics.export', enabled: true })
+    ]))
+    expect(snapshot.license.status).toBe('not-configured')
+    expect(snapshot.operations.transactionCount).toBeGreaterThan(0)
+    expect(snapshot.operations.lastTransaction).toEqual(expect.objectContaining({
+      commandName: 'gate7.diagnostics.insert',
+      operationCount: 1,
+      operationKinds: ['insertText']
+    }))
+    expect(snapshot.layout.pageCount).toBeGreaterThan(0)
+    expect(snapshot.layout.lineCount).toBeGreaterThan(0)
+    expect(snapshot.collaboration.status).toBe('not-connected')
+    expect(snapshot.server.status).toBe('not-configured')
+    expect(serialized).not.toContain(secret)
 
     editor.destroy()
   })

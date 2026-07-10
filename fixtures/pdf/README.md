@@ -10,7 +10,7 @@
 
 ## Rules
 
-- PDF fixture 必须来自 JWord layout/projection，不使用浏览器打印或 LibreOffice 转换作为导出主路径。
+- PDF fixture 必须来自 JWord layout/projection，不使用浏览器打印或第三方办公套件转换作为导出主路径。
 - 中文字体 fixture 必须显式记录字体覆盖预期；缺字体 fixture 必须期望可恢复错误或 warning，禁止乱码输出。
 - 视觉期望必须能被截图或 PDF.js 渲染结果复查，不只写 pass/fail。
 - 不提交无法复现的生成 PDF 或空白二进制占位。

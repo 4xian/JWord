@@ -3,7 +3,7 @@
  * 边界：只处理 table、row、cell 与 cell 内 block 的 XML 拼接，不写 package graph。
  * 协作模块：export.ts 提供 block writer，export-utils 提供边框与属性 XML helper。
  * 性能/安全约束：不访问 DOM，不读取磁盘，只消费 projection 中的表格快照。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-18---实现-t1-docx-export列表表格图片。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Block, Table, TableCell, TableRow } from '@4xian/jword-core'

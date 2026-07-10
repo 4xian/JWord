@@ -5,7 +5,7 @@
  * 边界：只覆盖 画布生命周期，不覆盖分页布局、视口计算或真实浏览器画布。
  * 协作模块：视口虚拟器和画布渲染器通过画布池 获取、释放每页独立 canvas。
  * 性能/安全约束：测试使用确定性 mock canvas，不访问 DOM，不创建真实图形资源。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-分页-canvas-渲染。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

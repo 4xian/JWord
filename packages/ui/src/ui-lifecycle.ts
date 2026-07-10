@@ -3,7 +3,7 @@
  * 边界：只组装各 UI controller 与内部 setup 模块，不实现具体 controller DOM 细节。
  * 协作模块：create-ui 公开入口、toolbar/media/table/comments/link/heading setup 模块共同完成官方 UI 装配。
  * 性能/安全约束：事务订阅中避免无条件读取完整 layout，所有写入仍走 editor command pipeline。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   buildAddCommentThreadCommand,
@@ -17,6 +17,7 @@ import {
 } from '@4xian/jword-core'
 
 import { createLiveRegion } from './assistive/live-region'
+import { readJWordUiText, resolveJWordUiI18n } from './i18n'
 import { createTextMirror } from './assistive/text-mirror'
 import { createCommentsController } from './comments/controller'
 import type { CommentsControllerHandle } from './comments/types'
@@ -55,13 +56,20 @@ import { createPasteController } from './paste/controller'
 import { createJWordInteractionGuard } from './readonly/interaction-guard'
 import { createRevisionController } from './revisions/controller'
 import { createSelectionActionsController } from './selection-actions/controller'
+import {
+  createStatusBarController,
+  type StatusBarControllerHandle
+} from './status-bar/controller'
+import { resolveStatusBarMount } from './status-bar/mount'
 import { createTableController } from './table/controller'
+import { createJWordUiThemeController } from './theme'
 import { resolveTableOptions } from './table-setup'
 import {
   bindFindReplaceKeyboardShortcuts,
   resolveToolbarMount
 } from './toolbar-setup'
 import { createToolbarController } from './toolbar/controller'
+import { createWatermarkController } from './watermark/controller'
 import {
   readProjectionPlainText,
   readSelectionText
@@ -69,6 +77,10 @@ import {
 import type {
   CreateJWordUiOptions,
   JWordReadonlyOptions,
+  JWordStatusBarLocale,
+  JWordUiI18nDictionary,
+  JWordUiThemeName,
+  JWordUiThemeOptions,
   JWordUiInstance
 } from './types'
 import { scrollTextRangeIntoView } from './ui-geometry'
@@ -77,6 +89,8 @@ import { scrollTextRangeIntoView } from './ui-geometry'
 export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   const toolbarMount = resolveToolbarMount(options)
   const toolbarHost = toolbarMount.host
+  const statusBarMount = resolveStatusBarMount(options)
+  const statusBarHost = statusBarMount?.host ?? null
   const liveRegion = createLiveRegion({
     host: options.liveRegionHost ?? null
   })
@@ -111,23 +125,36 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   const readonlyEditingBlocked = readonlyOptions.enabled === true
   const readonlyNavigationAllowed = readonlyOptions.allowNavigation !== false
   const resolvedMedia = resolveMediaOptions(options.media)
-  const mediaDisabled = options.media === undefined
   const resolvedTable = resolveTableOptions(options.table)
+  let i18n = resolveJWordUiI18n(options.i18n)
+  let currentThemeName: JWordUiThemeName = options.theme?.name ?? 'light'
+  let currentLocale: JWordStatusBarLocale = normalizeStatusBarLocale(options.i18n?.locale)
+  const themeController = createJWordUiThemeController({
+    ...(options.theme === undefined ? {} : { theme: options.theme }),
+    hosts: [toolbarHost, options.editorHost, statusBarHost]
+  })
+  const watermark = createWatermarkController(options.editorHost)
+  let statusBarHandle: StatusBarControllerHandle | null = null
+
+  /** 按 i18n key 播报 UI 阻断文案。 */
+  function announceUiMessage(key: Parameters<typeof readJWordUiText>[1], fallback: string): void {
+    liveRegion.announce(readJWordUiText(i18n, key, fallback), { force: true })
+  }
 
   /** 从当前选区打开批注草稿。 */
   function openCommentFromSelection(selection: SelectionState | null = options.editor.getSelection()): void {
     if (readonlyOptions.enabled === true) {
-      liveRegion.announce('BLOCKED: 当前为只读模式。', { force: true })
+      announceUiMessage('a11y.blockedReadonly', 'BLOCKED: 当前为只读模式。')
       return
     }
 
     if (commentsHandle === null) {
-      liveRegion.announce('BLOCKED: 当前宿主未启用批注侧栏。', { force: true })
+      announceUiMessage('a11y.commentSidebarMissing', 'BLOCKED: 当前宿主未启用批注侧栏。')
       return
     }
 
     if (selection === null || isSelectionCollapsed(selection)) {
-      liveRegion.announce('BLOCKED: 批注需要先选中一段正文。', { force: true })
+      announceUiMessage('a11y.commentSelectionRequired', 'BLOCKED: 批注需要先选中一段正文。')
       return
     }
 
@@ -148,17 +175,17 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   /** 从当前选区打开链接弹窗。 */
   function openLinkFromSelection(selection: SelectionState | null = options.editor.getSelection()): void {
     if (readonlyOptions.enabled === true) {
-      liveRegion.announce('BLOCKED: 当前为只读模式。', { force: true })
+      announceUiMessage('a11y.blockedReadonly', 'BLOCKED: 当前为只读模式。')
       return
     }
 
     if (linkHandle === null) {
-      liveRegion.announce('BLOCKED: 当前宿主未启用链接弹窗。', { force: true })
+      announceUiMessage('a11y.linkDialogMissing', 'BLOCKED: 当前宿主未启用链接弹窗。')
       return
     }
 
     if (readActiveLinkDraftFromSelection(options.editor, selection) !== null) {
-      liveRegion.announce('BLOCKED: 当前内容已有链接，请使用打开、编辑或删除链接。', { force: true })
+      announceUiMessage('a11y.linkAlreadyExists', 'BLOCKED: 当前内容已有链接，请使用打开、编辑或删除链接。')
       return
     }
 
@@ -173,7 +200,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     const draft = readActiveLinkDraftFromSelection(options.editor, selection)
 
     if (draft === null) {
-      liveRegion.announce('BLOCKED: 当前选区未命中可打开的链接。', { force: true })
+      announceUiMessage('a11y.linkOpenMissing', 'BLOCKED: 当前选区未命中可打开的链接。')
       return
     }
 
@@ -183,19 +210,19 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   /** 用当前链接选区打开编辑弹窗。 */
   function editLinkFromSelection(selection: SelectionState | null): void {
     if (readonlyOptions.enabled === true) {
-      liveRegion.announce('BLOCKED: 当前为只读模式。', { force: true })
+      announceUiMessage('a11y.blockedReadonly', 'BLOCKED: 当前为只读模式。')
       return
     }
 
     if (linkHandle === null) {
-      liveRegion.announce('BLOCKED: 当前宿主未启用链接弹窗。', { force: true })
+      announceUiMessage('a11y.linkDialogMissing', 'BLOCKED: 当前宿主未启用链接弹窗。')
       return
     }
 
     const draft = readActiveLinkDraftFromSelection(options.editor, selection)
 
     if (draft === null) {
-      liveRegion.announce('BLOCKED: 当前选区未命中可编辑的链接。', { force: true })
+      announceUiMessage('a11y.linkEditMissing', 'BLOCKED: 当前选区未命中可编辑的链接。')
       return
     }
 
@@ -207,14 +234,14 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   /** 删除当前链接选区命中的链接。 */
   function removeLinkFromSelection(selection: SelectionState | null): void {
     if (readonlyOptions.enabled === true) {
-      liveRegion.announce('BLOCKED: 当前为只读模式。', { force: true })
+      announceUiMessage('a11y.blockedReadonly', 'BLOCKED: 当前为只读模式。')
       return
     }
 
     const command = buildDeleteLinkCommand(options.editor.getProjection(), selection)
 
     if (command === null) {
-      liveRegion.announce('BLOCKED: 当前选区未命中可移除的链接。', { force: true })
+      announceUiMessage('a11y.linkRemoveMissing', 'BLOCKED: 当前选区未命中可移除的链接。')
       return
     }
 
@@ -264,6 +291,25 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       headingOutlineAvailable(): boolean {
         return options.headingOutline !== undefined && buildHeadingOutline(options.editor).length > 0
       }
+    },
+    uiActions: {
+      setTheme(theme): void {
+        applyUiTheme(theme)
+      },
+      setLocale(locale): void {
+        applyUiLocale(locale)
+      }
+    },
+    watermarkActions: {
+      getWatermark(): ReturnType<typeof watermark.getWatermark> {
+        return watermark.getWatermark()
+      },
+      setWatermark(nextWatermark): void {
+        watermark.setWatermark(nextWatermark)
+      },
+      clearWatermark(): void {
+        watermark.clearWatermark()
+      }
     }
   })
   const mountedEditorHost = options.editorHost
@@ -282,8 +328,9 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       editor: options.editor,
       host: toolbar.mediaHost,
       media: resolvedMedia,
-      disabled: mediaDisabled,
+      disabled: false,
       readonly: options.readonly,
+      i18n,
       assistive: {
         liveRegion
       }
@@ -296,6 +343,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       editorHost: options.editorHost ?? toolbarHost,
       table: resolvedTable,
       readonly: options.readonly,
+      i18n,
       assistive: {
         liveRegion
       }
@@ -307,6 +355,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       viewportHost: options.editorHost,
       readonly: options.readonly,
       policy: options.link.policy,
+      i18n,
       adapter: {
         openLink(linkDraft): Promise<void> | void {
           return options.link?.openLink?.(linkDraft.url)
@@ -380,6 +429,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       editor: options.editor,
       host: toolbar.panelHost ?? options.headerFooter.host ?? toolbarHost,
       readonly: options.readonly,
+      i18n,
       announce(message): void {
         liveRegion.announce(message)
       }
@@ -402,6 +452,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     : createHeadingOutlineController({
       editor: options.editor,
       host: headingOutlineMount.host,
+      i18n,
       scrollToRange(range): void {
         scrollTextRangeIntoView(options.editor, options.editorHost, range)
       }
@@ -423,6 +474,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       editor: options.editor,
       host: toolbar.panelHost ?? options.findReplace.host ?? toolbarHost,
       readonly: options.readonly,
+      i18n,
       findOptions: {
         caseSensitive: options.findReplace.caseSensitive !== false
       },
@@ -451,6 +503,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     : createRevisionController({
       editor: options.editor,
       host: toolbar.panelHost ?? options.revisions.host ?? toolbarHost,
+      i18n,
       announce(message): void {
         liveRegion.announce(message)
       }
@@ -472,6 +525,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       formatCreatedAt: commentsMount.options.formatCreatedAt,
       readonly: options.readonly,
       threads: commentsMount.options.threads ?? readCommentThreads(options.editor),
+      i18n,
       adapter: {
         createThread(request): void {
           const selection = createPersistentSelection(
@@ -538,6 +592,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       editor: options.editor,
       editorHost: options.editorHost,
       readonly: options.readonly,
+      i18n,
       colorFormat: toolbar.colorFormat,
       insertActions: {
         openComment: openCommentFromSelection,
@@ -574,6 +629,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       editor: options.editor,
       editorHost: options.editorHost,
       readonly: options.readonly,
+      i18n,
       commands: resolvedMedia.commands
     })
   const paste = mountedEditorHost === undefined
@@ -605,6 +661,35 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       revisions?.refresh()
     }
   })
+  statusBarHandle = statusBarMount === null
+    ? null
+    : createStatusBarController({
+      editor: options.editor,
+      ...(options.editorHost === undefined ? {} : { editorHost: options.editorHost }),
+      host: statusBarMount.host,
+      fullscreenHost: options.editorHost ?? statusBarMount.host,
+      statusBar: statusBarMount.options,
+      i18n,
+      themeName: currentThemeName,
+      locale: currentLocale,
+      assistive: {
+        liveRegion
+      },
+      setTheme(theme): void {
+        applyUiTheme(theme)
+      },
+      setLocale(locale): void {
+        applyUiLocale(locale)
+      },
+      brandWatermark: {
+        set(text): void {
+          watermark.setBrandWatermark(text)
+        },
+        clear(): void {
+          watermark.clearBrandWatermark()
+        }
+      }
+    })
   commentsOverlay?.sync()
   linkOverlay?.sync()
   syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
@@ -612,6 +697,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   return {
     elements: {
       ...toolbar.elements,
+      statusBar: statusBarHandle?.elements ?? null,
       mediaPanel: media?.elements ?? null,
       tablePanel: table?.elements ?? null,
       selectionActions: selectionActions?.elements ?? null,
@@ -622,8 +708,26 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       findReplacePanel: findReplace?.elements ?? null,
       revisionsPanel: revisions?.elements ?? null
     },
+    setTheme(theme): void {
+      applyUiTheme(theme)
+    },
+    setLocale(locale, messages): void {
+      applyUiLocale(locale, messages)
+    },
+    setWatermark(nextWatermark): void {
+      watermark.setWatermark(nextWatermark)
+      toolbar.refresh()
+    },
+    clearWatermark(): void {
+      watermark.clearWatermark()
+      toolbar.refresh()
+    },
+    getWatermark(): ReturnType<typeof watermark.getWatermark> {
+      return watermark.getWatermark()
+    },
     refresh(): void {
       toolbar.refresh()
+      statusBarHandle?.refresh()
       media?.refresh()
       table?.refresh()
       selectionActions?.refresh()
@@ -657,10 +761,47 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       link?.destroy()
       table?.destroy()
       media?.destroy()
+      statusBarHandle?.destroy()
+      statusBarMount?.cleanup()
       interactionGuard.destroy()
       toolbar.destroy()
       toolbarMount.cleanup()
+      watermark.destroy()
+      themeController.destroy()
     }
+  }
+
+  /** 动态应用 UI 主题，并同步状态栏当前值。 */
+  function applyUiTheme(theme: JWordUiThemeOptions): void {
+    currentThemeName = theme.name ?? currentThemeName
+    themeController.setTheme(theme)
+    toolbar.setThemeName(currentThemeName)
+    statusBarHandle?.setThemeName(currentThemeName)
+  }
+
+  /** 动态应用 UI 语言，并同步 toolbar/statusBar 文案。 */
+  function applyUiLocale(locale: JWordStatusBarLocale, messages?: JWordUiI18nDictionary): void {
+    currentLocale = locale
+    i18n = resolveJWordUiI18n({
+      ...(options.i18n ?? {}),
+      locale,
+      messages: {
+        ...(options.i18n?.messages ?? {}),
+        ...(messages ?? {})
+      }
+    })
+    toolbar.setI18n(i18n)
+    statusBarHandle?.setI18n(i18n, currentLocale)
+    headerFooter?.setI18n(i18n)
+    headingOutline?.setI18n(i18n)
+    findReplace?.setI18n(i18n)
+    revisions?.setI18n(i18n)
+    link?.setI18n(i18n)
+    comments?.setI18n(i18n)
+    media?.setI18n(i18n)
+    table?.setI18n(i18n)
+    selectionActions?.setI18n(i18n)
+    imageSelection?.setI18n(i18n)
   }
 }
 
@@ -679,6 +820,11 @@ function normalizeReadonlyOptions(input: CreateJWordUiOptions['readonly']): JWor
   }
 
   return input
+}
+
+/** 把公开状态栏语言收口到首批中英文。 */
+function normalizeStatusBarLocale(locale: string | undefined): JWordStatusBarLocale {
+  return locale === 'en-US' ? 'en-US' : 'zh-CN'
 }
 
 /** 从已挂载 canvas 容器读取最近一次渲染页数，避免 UI 热路径强制刷新 layout。 */

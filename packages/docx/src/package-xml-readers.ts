@@ -3,7 +3,7 @@
  * 边界：不读取 ZIP，不建立 indexes，只从已解析 XML 节点读取文本、属性和值。
  * 协作模块：package.ts 和 import readers 复用这里保持 OOXML 读取语义一致。
  * 性能/安全约束：只消费内存中的 XmlElementNode，不访问 DOM、文件系统或网络。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-5---实现-opc-package-reader-与-xml-解析骨架。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { XmlElementNode } from './xml.js'

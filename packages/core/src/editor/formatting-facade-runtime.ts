@@ -3,7 +3,7 @@
  * 边界：只把公开格式 API 翻译为 Command，不处理文档加载、位置查询、DOM 或插件调度。
  * 协作模块：命令构建器、选择区目标收集、格式状态读取和事务执行入口。
  * 性能/安全约束：格式修改必须通过统一事务流水线，不直接写 Y.Doc 或 document-store。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 Phase 5 文件拆分规则。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

@@ -3,7 +3,7 @@
  * 边界：只做同步 feature detection，不创建真实 Worker、不读取或写入 .jword package。
  * 协作模块：index.ts 公开导出、diagnostics.ts 稳定诊断和 SDK CSP 文档。
  * 性能/安全约束：Worker 不可用时只返回稳定诊断，不做同线程 fallback。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#一预置决策记录d1-d9。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createDiagnostic } from './diagnostics.js'

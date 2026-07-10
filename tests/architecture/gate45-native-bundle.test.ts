@@ -5,7 +5,7 @@
  * 边界：只验证脚本存在与检查字段，不运行构建产物扫描。
  * 协作模块：tools/size/check-native-bundle.mjs、examples/vanilla/dist 和 Gate 4.5 native 接线。
  * 约束：native 代码只能出现在 lazy chunk，不能进入 vanilla 首屏 bundle。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-6---benchmarkbundle-和文档计划。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync } from 'node:fs'
 

@@ -3,7 +3,7 @@
  * 边界: 不生成跨平台截图基线，不声称等同 Windows 原生 IME 视觉验收。
  * 协作: `window.__jwordDemo`、隐藏输入框测试钩子、Alpha 样例和 canvas renderer。
  * 约束: 证据必须来自真实 canvas 像素与公开 facade 的 caret/selection 几何，避免退化成纯 DOM 断言。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 3 Step 3.12、3.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'

@@ -5,7 +5,7 @@
  * 边界：只通过 layoutDocument 公开 seam 观察缓存命中，不测试内部辅助函数。
  * 协作模块：incremental、font-manager、engine 和 DocumentProjection 共同保证大文档输入热路径。
  * 约束：测试不访问 DOM，不依赖真实字体，不把测试放入 src。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

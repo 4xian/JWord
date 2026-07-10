@@ -5,7 +5,7 @@
  * 边界：只验证 demo host 的 session guard，不执行真实 DOCX/PDF 互通。
  * 协作模块：examples/docx/src/task-session.ts 与浏览器手动验收入口。
  * 约束：取消后的旧任务不得继续写入 editor 或输出面板。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, it } from 'vitest'
 

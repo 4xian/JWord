@@ -3,7 +3,7 @@
  * 边界：不做表格命中测试和 resize 会话，不直接改写 Y.Doc。
  * 协作模块：table controller 注入 editor 上下文，controller-helpers 提供剪贴板桥接，state 提供默认文案。
  * 性能/安全约束：所有表格写入都通过宿主 commands 进入 editor transaction pipeline。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 S11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   createSelectionState,

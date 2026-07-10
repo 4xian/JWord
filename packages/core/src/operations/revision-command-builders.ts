@@ -3,7 +3,7 @@
  * 边界：只生成 revision metadata、目标 run 标记和单条接受/拒绝命令，不实现全部处理或嵌套修订 diff 引擎。
  * 协作模块：selection targets、文本范围快照、事务流水线和投影共同提供修订闭环。
  * 性能/安全约束：builder 只读取当前 projection 与 selection，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.14。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createTextRangeRecord } from '../model/position'

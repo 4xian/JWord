@@ -5,7 +5,7 @@
  * 边界：只检查审查计划点名的重复 helper、PDF 换算和媒体 URL allowlist，不做通用重复代码检测。
  * 协作模块：DOCX export-utils/roundtrip、PDF 几何与视觉报告、core 资源 URL 策略和 UI 媒体策略。
  * 约束：UI 媒体入口必须复用 core URL 策略，DOCX/PDF 只保留一个可写实现来源。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-5---p3-改进与技术债清理。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

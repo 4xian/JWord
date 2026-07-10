@@ -3,7 +3,7 @@
  * 边界：只处理 insertText、deleteRange、setRunProperties、setRunLink，不处理段落块结构和图片 run。
  * 协作模块：operation-adapter 负责分发，adapter-location 负责定位、拆 run 与批注范围迁移。
  * 性能/安全约束：不访问 DOM，不直接触发布局；所有写入发生在外层 transaction pipeline 中。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

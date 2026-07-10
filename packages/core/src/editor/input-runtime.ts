@@ -3,7 +3,7 @@
  * 边界：不直接访问画布绘制细节，不修改布局引擎。
  * 协作模块：挂载运行时、选择区、事务操作和文本运行时辅助函数。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { AnchorRef } from '../model/position'
 import { createSelectionState, isSelectionCollapsed } from '../model/selection'

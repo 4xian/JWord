@@ -3,13 +3,24 @@
  * 边界：只处理纯数据页面几何，不做布局、渲染、输入、字体加载或 DOM 访问。
  * 协作模块：layout 使用 页面配置 计算分页，渲染器和 PDF 后续复用尺寸和单位转换。
  * 性能/安全约束：无副作用、无浏览器 API，所有输出不可变，避免单长 canvas 路线依赖。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export const TWIPS_PER_INCH = 1440
 export const CSS_PX_PER_INCH = 96
 
-export type PagePreset = 'a3' | 'a4' | 'a5' | 'letter'
+export type PagePreset =
+  | 'a3'
+  | 'a4'
+  | 'a5'
+  | 'b5'
+  | 'letter'
+  | 'legal'
+  | 'envelope3'
+  | 'envelope5'
+  | 'envelope6'
+  | 'envelope7'
+  | 'envelope9'
 export type PageOrientation = 'portrait' | 'landscape'
 
 export interface PageMargins {
@@ -48,22 +59,17 @@ const PAGE_PRESETS: Readonly<Record<PagePreset, Readonly<{
   widthTwips: number
   heightTwips: number
 }>>> = {
-  a3: {
-    widthTwips: 16838,
-    heightTwips: 23811
-  },
-  a4: {
-    widthTwips: 11906,
-    heightTwips: 16838
-  },
-  a5: {
-    widthTwips: 8391,
-    heightTwips: 11906
-  },
-  letter: {
-    widthTwips: 12240,
-    heightTwips: 15840
-  }
+  a3: createPagePresetSizeFromMillimeters(297, 420),
+  a4: createPagePresetSizeFromMillimeters(210, 297),
+  a5: createPagePresetSizeFromMillimeters(148, 210),
+  b5: createPagePresetSizeFromMillimeters(176, 250),
+  letter: createPagePresetSizeFromInches(8.5, 11),
+  legal: createPagePresetSizeFromInches(8.5, 14),
+  envelope3: createPagePresetSizeFromMillimeters(125, 176),
+  envelope5: createPagePresetSizeFromMillimeters(110, 220),
+  envelope6: createPagePresetSizeFromMillimeters(120, 230),
+  envelope7: createPagePresetSizeFromMillimeters(162, 229),
+  envelope9: createPagePresetSizeFromMillimeters(229, 324)
 }
 
 const DEFAULT_MARGIN_TWIPS: PageMargins = {
@@ -133,6 +139,39 @@ export function twipsToCssPx(twips: number, scale = 1): number {
  */
 export function cssPxToTwips(cssPx: number, scale = 1): number {
   return cssPx / scale * TWIPS_PER_INCH / CSS_PX_PER_INCH
+}
+
+/** 根据毫米宽高创建 twip 页面预设尺寸。 */
+function createPagePresetSizeFromMillimeters(
+  widthMillimeters: number,
+  heightMillimeters: number
+): Readonly<{
+  widthTwips: number
+  heightTwips: number
+}> {
+  return Object.freeze({
+    widthTwips: millimetersToTwips(widthMillimeters),
+    heightTwips: millimetersToTwips(heightMillimeters)
+  })
+}
+
+/** 根据英寸宽高创建 twip 页面预设尺寸。 */
+function createPagePresetSizeFromInches(
+  widthInches: number,
+  heightInches: number
+): Readonly<{
+  widthTwips: number
+  heightTwips: number
+}> {
+  return Object.freeze({
+    widthTwips: Math.round(widthInches * TWIPS_PER_INCH),
+    heightTwips: Math.round(heightInches * TWIPS_PER_INCH)
+  })
+}
+
+/** 将毫米值换算为 twip。 */
+function millimetersToTwips(millimeters: number): number {
+  return Math.round(millimeters / 25.4 * TWIPS_PER_INCH)
 }
 
 function hasCustomSize(input: PageConfigInput): boolean {

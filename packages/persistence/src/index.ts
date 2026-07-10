@@ -3,7 +3,7 @@
  * 边界：只保存 Yjs binary update/snapshot，IndexedDB 仅通过独立 adapter 接入，不保存 projection JSON、不访问 core 内部 store。
  * 协作模块：Yjs update API、后续 collab provider、offline recovery 和 editor restore transaction 通过此入口协作。
  * 性能/安全约束：内存实现仅用于 contract tests 和后续 adapter 对齐，preview 与 restore 构建必须使用隔离 Y.Doc。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-5---update-logsnapshot-和版本历史step-66--613。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'
@@ -26,6 +26,10 @@ export {
   createStoragePersistenceAdapter,
   createVolatileHistoryStorage
 } from './storage-history-adapter.js'
+export {
+  createJWordPersistencePluginAdapter,
+  type CreateJWordPersistencePluginAdapterOptions
+} from './plugin-adapter.js'
 export type {
   JWordPersistenceDiagnosticCode,
   JWordPersistenceDiagnosticCodeMetadata,

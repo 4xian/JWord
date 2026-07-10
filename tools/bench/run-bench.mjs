@@ -3,7 +3,7 @@
  * 边界：只编排本地脚本执行和汇总发现数量，不解释各 benchmark 的业务指标。
  * 协作模块：benchmarks/gate2-render-benchmark.mjs、benchmarks/gate5-interop-benchmark.mjs 与 benchmarks/gate6-collab-benchmark.mjs。
  * 约束：任一 benchmark 失败时立即透传退出码，避免后续输出掩盖失败。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

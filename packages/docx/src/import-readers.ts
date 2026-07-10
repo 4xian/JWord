@@ -3,7 +3,7 @@
  * 边界：不遍历 document body，不建立 package/index，不写 core 文档。
  * 协作模块：import.ts 调用这些 reader 组装中间模型。
  * 性能/安全约束：只返回 JSON-compatible 属性和 warning，不保留 XML 节点引用。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-10---读取-run-段落-表格和图片属性。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

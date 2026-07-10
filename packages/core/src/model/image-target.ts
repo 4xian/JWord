@@ -3,7 +3,7 @@
  * 边界：只读遍历文档结构，不写入 Y.Doc，不访问 DOM，不执行命令。
  * 协作模块：图片 command builder、UI media panel 和浏览器测试通过这里读取当前选中图片。
  * 性能/安全约束：按当前 projection 做一次轻量 DFS，不缓存外部可写引用。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-4---块级结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readAnchorRefSnapshot } from './position'

@@ -3,7 +3,7 @@
  * 边界：不读取 editor projection，不决定 cut/copy/paste 业务语义。
  * 协作模块：selection-actions/clipboard 负责稳定选区剪贴板动作，core facade 监听合成事件。
  * 性能/安全约束：只在用户交互链路内分发合成事件，失败时由调用方输出稳定提示。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 /** selection-actions 内部剪贴板缓冲区。 */

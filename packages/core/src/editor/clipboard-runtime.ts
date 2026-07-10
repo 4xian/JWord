@@ -3,7 +3,7 @@
  * 边界：不绑定 DOM 事件，不执行事务，不读取画布布局。
  * 协作模块：selection targets 提供选区 run，text-runtime 提供段落上下文和 runtime anchor。
  * 性能/安全约束：只基于当前只读 projection 派生字符串，不保留可写模型引用。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { splitGraphemes } from '../shared/grapheme'
 import { createSelectionState, isSelectionCollapsed } from '../model/selection'

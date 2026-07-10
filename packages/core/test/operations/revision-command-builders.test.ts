@@ -5,7 +5,7 @@
  * 边界：覆盖修订元数据、范围快照、文本片段修订标记、定位与单条接受/拒绝流程。
  * 协作模块：编辑器门面、修订命令构造器、投影与事务管线。
  * 性能/安全约束：测试只依赖内存文档，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.14。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

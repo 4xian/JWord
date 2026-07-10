@@ -3,7 +3,7 @@
  * 边界：不遍历 body block，不读取 run/table 内容，不访问 ZIP。
  * 协作模块：import.ts 在切分 section 时调用本模块。
  * 性能/安全约束：只产生 JSON-compatible section metadata 和 warning。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-13---读取-section-page-setup-页眉页脚和页码。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

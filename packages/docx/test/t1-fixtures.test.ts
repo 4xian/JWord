@@ -5,7 +5,7 @@
  * 边界：只读取 fixtures/docx/registry.json 中已标记 available 的真实 .docx fixture，不生成临时内存包。
  * 协作模块：fixtures/docx、importDocx 和 canonical Gate 5 Step 5.11 的真实验收证据复用这里。
  * 约束：fixture 必须是仓库内可复查文件，不能只依赖测试内联 XML 或口头 registry 占位。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-511实现-t1-docx-import段落run文本run-样式。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

@@ -3,7 +3,7 @@
  * 边界：只处理字符串路径，不读取 ZIP、XML 或 package 内容。
  * 协作模块：package.ts 和 import.ts 复用这些路径工具。
  * 性能/安全约束：纯函数，无运行时副作用。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-5---实现-opc-package-reader-与-xml-解析骨架。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 /** 读取某个 part 对应的 relationships part 路径。 */

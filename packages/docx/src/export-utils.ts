@@ -3,7 +3,7 @@
  * 边界：不创建 ZIP，不遍历文档 projection，不读取媒体资源。
  * 协作模块：export.ts 调用这些 helper 输出稳定 OOXML 片段。
  * 性能/安全约束：纯字符串/数值转换，避免 DOM、Node-only API 和运行时副作用。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-18---实现-t1-docx-export列表表格图片。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { TableBorder } from '@4xian/jword-core'

@@ -3,7 +3,7 @@
  * 边界：不从 core 包根导出，不把 Y.Doc 放进 public EditorOptions。
  * 协作模块：editor runtime、examples/collab 真实 provider runtime 和 persistence adapter。
  * 性能/安全约束：只在内部绑定同一 Y.Doc；正文写入仍必须通过编辑器事务流水线。
- * 规格：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.4。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 

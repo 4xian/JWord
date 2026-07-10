@@ -3,7 +3,7 @@
  * 边界：只声明插件契约，不保存插件状态，不触发 editor 事务。
  * 协作模块：编辑器门面、事务流水线、只读投影、选择区和布局运行时。
  * 性能/安全约束：插件只能通过公开 facade 与只读快照交互，不暴露 Y.Doc、document-store 或 DOM Range。
- * Specs：docs/superpowers/plans/2026-07-06-gate7-plugin-api-m1-design.md#4-core-api-草案。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentLayout, LayoutRect } from '../layout/runtime'
@@ -12,12 +12,19 @@ import type { SelectionState } from '../model/selection'
 import type { Command, TextRange, TransactionEvent, TransactionResult } from '../operations/transaction'
 import type { JWordErrorDetails } from '../shared/errors'
 import type { Editor, EditorCommandOptions } from '../editor/types'
+import type { PluginAdapterRegistry } from './adapter-types'
 
 export type PluginDiagnosticCode =
   | 'PLUGIN_CALLBACK_FAILED'
+  | 'PLUGIN_ADAPTER_DUPLICATE'
+  | 'PLUGIN_ADAPTER_FAILED'
+  | 'PLUGIN_ADAPTER_UNAVAILABLE'
+  | 'PLUGIN_COLLAB_PROVIDER_REJECTED'
   | 'PLUGIN_COMMAND_REJECTED'
   | 'PLUGIN_COMMAND_NOT_FOUND'
   | 'PLUGIN_COMMAND_DUPLICATE'
+  | 'PLUGIN_EXPORT_REJECTED'
+  | 'PLUGIN_IMPORT_REJECTED'
 
 export interface PluginDiagnostic {
   /** 产生诊断的插件名称。 */
@@ -27,7 +34,7 @@ export interface PluginDiagnostic {
   /** 中文可读说明。 */
   readonly message: string
   /** 诊断关联的插件生命周期或回调名称。 */
-  readonly lifecycle?: PluginLifecycleEventName | 'setup' | 'dispose' | 'command' | 'middleware' | 'keybinding' | 'decoration' | undefined
+  readonly lifecycle?: PluginLifecycleEventName | 'setup' | 'dispose' | 'command' | 'middleware' | 'keybinding' | 'decoration' | 'adapter' | undefined
   /** 诊断关联的命令名称。 */
   readonly commandName?: string | undefined
   /** 插件拒绝命令时给出的业务原因。 */
@@ -270,6 +277,8 @@ export interface PluginContext {
   readonly version: string
   /** 当前 editor facade。 */
   readonly editor: Editor
+  /** 注册和解析插件提供的外部 adapter。 */
+  readonly adapters: PluginAdapterRegistry
   /** 注册可由快捷键或后续 UI 扩展调用的插件命令。 */
   registerCommand(command: PluginCommandDefinition): PluginDisposable
   /** 注册命令中间件。 */

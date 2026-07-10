@@ -3,7 +3,7 @@
  * 边界：只处理段落对齐、缩进、行距、间距、样式和列表命令，不处理 run 格式或面板入口。
  * 协作模块：controller 绑定 DOM 事件，toolbar-state-sync 提供统一 action 上下文。
  * 性能/安全约束：段落变更继续走 editor facade/transaction pipeline，不直接改 DOM 文档状态。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

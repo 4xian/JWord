@@ -3,7 +3,7 @@
  * 边界: 只固定当前浏览器项目的大夹具指针响应路径，不覆盖普通样例的基础选区能力。
  * 协作: 输入辅助模块、大文档样例、画布命中测试与浏览器鼠标事件。
  * 约束: 长拖和双击断言必须通过真实浏览器鼠标事件、选区快照和画布像素探针完成。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 3 Step 3.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import {

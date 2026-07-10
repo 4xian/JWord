@@ -3,7 +3,7 @@
  * 边界：只生成 insertText 与 setRunLink 操作，不执行事务、不打开链接。
  * 协作模块：选区目标、链接策略、共享 run 定位辅助函数与事务流水线共同提供链接命令。
  * 性能/安全约束：构造前校验链接 URL allowlist，选区命中 run 后仅生成必要 operation。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#step-48-410。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { isAllowedLinkUrl } from '../links/policy'

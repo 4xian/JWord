@@ -3,7 +3,7 @@
  * 边界: 不覆盖文字格式矩阵、段落格式或插入工具专属路径。
  * 协作: vanilla demo、工具栏 DOM、编辑器公开门面和共享工具栏测试辅助函数。
  * 约束: 断言必须来自真实 DOM 和公开门面，不伪造工具栏状态。
- * Specs: docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T4。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { expect, test } from '@playwright/test'

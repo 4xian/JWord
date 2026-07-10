@@ -3,7 +3,7 @@
  * 边界：不作为 root stable API 导出；只编排 worker 请求、授权校验、取消响应与 transferables。
  * 协作模块：worker.ts、index.ts 的 exportPdfFromLayout、image-assets.ts 和 license 包。
  * 性能/安全约束：错误响应只携带稳定诊断元数据，不泄漏文档正文内容。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#313-发布no-alias-消费闭环phase-6m按-d2-执行。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

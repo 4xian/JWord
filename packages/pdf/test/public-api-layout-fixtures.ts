@@ -3,7 +3,7 @@
  * 边界：只构造测试用 DocumentLayout，不断言 PDF 内容、不读取真实 PDF。
  * 协作模块：public-api.test.ts 与 PDF visual report 测试复用这些 fixture。
  * 约束：测试 fixture 保持纯数据构造，不访问 DOM，不引入额外授权逻辑。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-23---实现-pdf-中文字体图片表格线和页眉页脚。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

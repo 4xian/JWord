@@ -3,7 +3,7 @@
  * 边界：只给基础 editor/UI/docx 包保留开发态源码 alias，高级协作包走公开 package entry。
  * 协作：packages/core、packages/ui、packages/docx 和 Gate 6 第三方集成验收。
  * 约束：collab、collab-server、license 和 persistence 不在 demo Vite 层指向源码路径。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { fileURLToPath } from 'node:url'
 

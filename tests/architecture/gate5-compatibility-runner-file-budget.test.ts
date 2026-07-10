@@ -5,7 +5,7 @@
  * 边界：只检查 Gate 5 兼容 runner 的测试文件和本地执行脚本，不处理 DOCX/PDF 业务包。
  * 协作模块：tests/architecture/gate5-compatibility-runner.test.ts 与 tools/compat/run-gate5-docx-compatibility.mjs 共同满足此门禁。
  * 约束：超过 1000 行的 runner 文件必须拆分，避免兼容矩阵、证据模板和工具可用性逻辑继续横向膨胀。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readdirSync, readFileSync } from 'node:fs'

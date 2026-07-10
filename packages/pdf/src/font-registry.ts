@@ -3,7 +3,7 @@
  * 边界：只处理字体加载、覆盖检查和绘制段拆分，不创建页面、不绘制表格或图片。
  * 协作模块：index.ts 在导出 PDF 时调用，fontkit 与 pdf-lib 通过此模块隔离。
  * 性能/安全约束：默认启用字体子集化，缺字在导出前 fail-fast，避免生成乱码 PDF。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#37-pdf-字体子集化--fallback-链phase-3cl。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

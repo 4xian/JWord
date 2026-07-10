@@ -5,7 +5,7 @@
  * 边界：只读取 package manifest 和公开入口源码，不启动协作服务、不连接 provider、不执行浏览器流程。
  * 协作模块：packages/collab、packages/collab-server、packages/license 和 Gate 6 商业化计划。
  * 约束：stable API 只能从包入口导出；internal 不得出现在 export map；server 必须是正式 workspace 包。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md 的 Gate 6 Step 6.20。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'

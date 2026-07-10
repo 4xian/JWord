@@ -14,18 +14,9 @@
       "command": "node_modules/.bin/ooxml-validator",
       "evidence": "Open XML validator command found: node_modules/.bin/ooxml-validator"
     },
-    "libreOffice": {
-      "status": "missing",
-      "evidence": "LibreOffice command was not found."
-    },
     "word": {
       "status": "missing",
       "evidence": "Word app was not found in /Applications."
-    },
-    "wps": {
-      "status": "available",
-      "appPath": "/Applications/wpsoffice.app",
-      "evidence": "WPS app found: /Applications/wpsoffice.app"
     }
   },
   "evidenceInputDiagnostics": [],
@@ -46,21 +37,6 @@
       ]
     },
     {
-      "fixtureId": "docx-t1-paragraphs",
-      "target": "LibreOffice",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-paragraphs.docx",
-      "artifactByteLength": 4889,
-      "artifactSha256": "e02ab84410d40de07e7bbe65d8ec3e1948e3f14bb6f846a31afcd8084a744191",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
       "fixtureId": "docx-t1-run-styles",
       "target": "Word",
       "status": "pending",
@@ -76,68 +52,8 @@
       ]
     },
     {
-      "fixtureId": "docx-t1-run-styles",
-      "target": "WPS",
-      "status": "stale-artifact-evidence",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-      "artifactByteLength": 5291,
-      "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-run-styles",
-      "target": "LibreOffice",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-      "artifactByteLength": 5291,
-      "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
       "fixtureId": "docx-t1-paragraph-formatting",
       "target": "Word",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
-      "artifactByteLength": 5144,
-      "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-paragraph-formatting",
-      "target": "WPS",
-      "status": "stale-artifact-evidence",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
-      "artifactByteLength": 5144,
-      "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-paragraph-formatting",
-      "target": "LibreOffice",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
       "artifactByteLength": 5144,
@@ -166,38 +82,8 @@
       ]
     },
     {
-      "fixtureId": "docx-t1-headings",
-      "target": "LibreOffice",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-headings.docx",
-      "artifactByteLength": 4961,
-      "artifactSha256": "c98e14109c7c15055d664ea2e2e7da1ba716e05d05fcd25cbb76fa4c8c52af3e",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
       "fixtureId": "docx-t1-lists",
       "target": "Word",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-lists.docx",
-      "artifactByteLength": 5651,
-      "artifactSha256": "d6245e206767bc9b700d227c12487d3ce743ac903a1b8d85173151d52793ef87",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-lists",
-      "target": "LibreOffice",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-lists.docx",
       "artifactByteLength": 5651,
@@ -226,38 +112,8 @@
       ]
     },
     {
-      "fixtureId": "docx-t1-table-basic",
-      "target": "LibreOffice",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-table-basic.docx",
-      "artifactByteLength": 5376,
-      "artifactSha256": "abe71d33ac03eb87272411e393d0c42b24c43c40f8f012efb7456af818306dbd",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
       "fixtureId": "docx-t1-inline-image",
       "target": "Word",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-inline-image.docx",
-      "artifactByteLength": 5987,
-      "artifactSha256": "c049724c884d7b5e100f54efc70b6fa39c4bcf26b43127ae10f1654ffb8c2174",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t1-inline-image",
-      "target": "LibreOffice",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t1-inline-image.docx",
       "artifactByteLength": 5987,
@@ -286,38 +142,8 @@
       ]
     },
     {
-      "fixtureId": "docx-t1-page-setup",
-      "target": "LibreOffice",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t1-page-setup.docx",
-      "artifactByteLength": 4823,
-      "artifactSha256": "fc27dea6a16a85204fa5890f3fa970f08d6c140eb5d58ee32ee78518639f23da",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
       "fixtureId": "docx-t2-header-footer",
       "target": "Word",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-header-footer.docx",
-      "artifactByteLength": 4756,
-      "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-header-footer",
-      "target": "LibreOffice",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-header-footer.docx",
       "artifactByteLength": 4756,
@@ -346,38 +172,8 @@
       ]
     },
     {
-      "fixtureId": "docx-t2-page-number",
-      "target": "LibreOffice",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-page-number.docx",
-      "artifactByteLength": 4756,
-      "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
       "fixtureId": "docx-t2-comments",
       "target": "Word",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-comments.docx",
-      "artifactByteLength": 4745,
-      "artifactSha256": "bba6063e7ee21c5b13624d87499822d93eb20a825b3aee33d04b2e810f26f855",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-comments",
-      "target": "LibreOffice",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-comments.docx",
       "artifactByteLength": 4745,
@@ -406,21 +202,6 @@
       ]
     },
     {
-      "fixtureId": "docx-t2-links",
-      "target": "LibreOffice",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-links.docx",
-      "artifactByteLength": 4980,
-      "artifactSha256": "8c8b7f2db79d3f3bd9346ebd801a6fc375c797baf26095c7c78a535a1c850874",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
       "fixtureId": "docx-t2-section-breaks",
       "target": "Word",
       "status": "pending",
@@ -436,53 +217,8 @@
       ]
     },
     {
-      "fixtureId": "docx-t2-section-breaks",
-      "target": "WPS",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-      "artifactByteLength": 4993,
-      "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-section-breaks",
-      "target": "LibreOffice",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-      "artifactByteLength": 4993,
-      "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
       "fixtureId": "docx-t2-floating-object-warning",
       "target": "Word",
-      "status": "pending",
-      "exportArtifact": "fixtures/docx/exports/docx-t2-floating-object-warning.docx",
-      "artifactByteLength": 4720,
-      "artifactSha256": "a0cc2d82f8732c2d02c2bd02361e6fe4d61dceeffea3c115297cc44aa28dfec1",
-      "requiredEvidence": [
-        "app version and machine/date",
-        "open result and repair prompt state",
-        "edit/save/reopen result",
-        "main visual difference notes",
-        "artifact path and SHA-256 match this run"
-      ]
-    },
-    {
-      "fixtureId": "docx-t2-floating-object-warning",
-      "target": "LibreOffice",
       "status": "pending",
       "exportArtifact": "fixtures/docx/exports/docx-t2-floating-object-warning.docx",
       "artifactByteLength": 4720,
@@ -516,19 +252,6 @@
           "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
         },
         {
-          "fixtureId": "docx-t1-paragraphs",
-          "app": "LibreOffice",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-paragraphs.docx",
-          "artifactByteLength": 4889,
-          "artifactSha256": "e02ab84410d40de07e7bbe65d8ec3e1948e3f14bb6f846a31afcd8084a744191",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
           "fixtureId": "docx-t1-run-styles",
           "app": "Word",
           "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
@@ -542,60 +265,8 @@
           "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
         },
         {
-          "fixtureId": "docx-t1-run-styles",
-          "app": "WPS",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-          "artifactByteLength": 5291,
-          "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t1-run-styles",
-          "app": "LibreOffice",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-run-styles.docx",
-          "artifactByteLength": 5291,
-          "artifactSha256": "abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
           "fixtureId": "docx-t1-paragraph-formatting",
           "app": "Word",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
-          "artifactByteLength": 5144,
-          "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t1-paragraph-formatting",
-          "app": "WPS",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
-          "artifactByteLength": 5144,
-          "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t1-paragraph-formatting",
-          "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t1-paragraph-formatting.docx",
           "artifactByteLength": 5144,
           "artifactSha256": "d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e",
@@ -620,34 +291,8 @@
           "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
         },
         {
-          "fixtureId": "docx-t1-headings",
-          "app": "LibreOffice",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-headings.docx",
-          "artifactByteLength": 4961,
-          "artifactSha256": "c98e14109c7c15055d664ea2e2e7da1ba716e05d05fcd25cbb76fa4c8c52af3e",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
           "fixtureId": "docx-t1-lists",
           "app": "Word",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-lists.docx",
-          "artifactByteLength": 5651,
-          "artifactSha256": "d6245e206767bc9b700d227c12487d3ce743ac903a1b8d85173151d52793ef87",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t1-lists",
-          "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t1-lists.docx",
           "artifactByteLength": 5651,
           "artifactSha256": "d6245e206767bc9b700d227c12487d3ce743ac903a1b8d85173151d52793ef87",
@@ -672,34 +317,8 @@
           "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
         },
         {
-          "fixtureId": "docx-t1-table-basic",
-          "app": "LibreOffice",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-table-basic.docx",
-          "artifactByteLength": 5376,
-          "artifactSha256": "abe71d33ac03eb87272411e393d0c42b24c43c40f8f012efb7456af818306dbd",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
           "fixtureId": "docx-t1-inline-image",
           "app": "Word",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-inline-image.docx",
-          "artifactByteLength": 5987,
-          "artifactSha256": "c049724c884d7b5e100f54efc70b6fa39c4bcf26b43127ae10f1654ffb8c2174",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t1-inline-image",
-          "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t1-inline-image.docx",
           "artifactByteLength": 5987,
           "artifactSha256": "c049724c884d7b5e100f54efc70b6fa39c4bcf26b43127ae10f1654ffb8c2174",
@@ -724,34 +343,8 @@
           "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
         },
         {
-          "fixtureId": "docx-t1-page-setup",
-          "app": "LibreOffice",
-          "exportArtifact": "fixtures/docx/exports/docx-t1-page-setup.docx",
-          "artifactByteLength": 4823,
-          "artifactSha256": "fc27dea6a16a85204fa5890f3fa970f08d6c140eb5d58ee32ee78518639f23da",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
           "fixtureId": "docx-t2-header-footer",
           "app": "Word",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-header-footer.docx",
-          "artifactByteLength": 4756,
-          "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t2-header-footer",
-          "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t2-header-footer.docx",
           "artifactByteLength": 4756,
           "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
@@ -776,34 +369,8 @@
           "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
         },
         {
-          "fixtureId": "docx-t2-page-number",
-          "app": "LibreOffice",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-page-number.docx",
-          "artifactByteLength": 4756,
-          "artifactSha256": "dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
           "fixtureId": "docx-t2-comments",
           "app": "Word",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-comments.docx",
-          "artifactByteLength": 4745,
-          "artifactSha256": "bba6063e7ee21c5b13624d87499822d93eb20a825b3aee33d04b2e810f26f855",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t2-comments",
-          "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t2-comments.docx",
           "artifactByteLength": 4745,
           "artifactSha256": "bba6063e7ee21c5b13624d87499822d93eb20a825b3aee33d04b2e810f26f855",
@@ -828,19 +395,6 @@
           "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
         },
         {
-          "fixtureId": "docx-t2-links",
-          "app": "LibreOffice",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-links.docx",
-          "artifactByteLength": 4980,
-          "artifactSha256": "8c8b7f2db79d3f3bd9346ebd801a6fc375c797baf26095c7c78a535a1c850874",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
           "fixtureId": "docx-t2-section-breaks",
           "app": "Word",
           "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
@@ -854,47 +408,8 @@
           "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
         },
         {
-          "fixtureId": "docx-t2-section-breaks",
-          "app": "WPS",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-          "artifactByteLength": 4993,
-          "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t2-section-breaks",
-          "app": "LibreOffice",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-section-breaks.docx",
-          "artifactByteLength": 4993,
-          "artifactSha256": "19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
           "fixtureId": "docx-t2-floating-object-warning",
           "app": "Word",
-          "exportArtifact": "fixtures/docx/exports/docx-t2-floating-object-warning.docx",
-          "artifactByteLength": 4720,
-          "artifactSha256": "a0cc2d82f8732c2d02c2bd02361e6fe4d61dceeffea3c115297cc44aa28dfec1",
-          "result": "pending",
-          "editable": "pending",
-          "repairPrompt": "pending",
-          "mainVisualDifference": "pending",
-          "blockingIssue": "TODO: record missing repair prompt, editability, save/reopen, or visual difference evidence.",
-          "evidence": "TODO: record app version, machine/date, artifact path, open/edit/save/reopen steps, and visual notes."
-        },
-        {
-          "fixtureId": "docx-t2-floating-object-warning",
-          "app": "LibreOffice",
           "exportArtifact": "fixtures/docx/exports/docx-t2-floating-object-warning.docx",
           "artifactByteLength": 4720,
           "artifactSha256": "a0cc2d82f8732c2d02c2bd02361e6fe4d61dceeffea3c115297cc44aa28dfec1",
@@ -959,24 +474,6 @@
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
             "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 20:19-20:51 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. Source artifact fixtures/docx/exports/docx-t1-paragraphs.docx byteLength 4889 sha256 e02ab84410d40de07e7bbe65d8ec3e1948e3f14bb6f846a31afcd8084a744191 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t1-paragraphs-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t1_paragraphs, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t1_paragraphs. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t1_paragraphs; edited copy byteLength 10007 sha256 6ffb1a6db8249d1ef1c8dd6b79a6cbba414033c96aa0e3bf6d3915066b5b2f00. The source artifact hash remained e02ab84410d40de07e7bbe65d8ec3e1948e3f14bb6f846a31afcd8084a744191."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
-            "evidence": "not-run"
           }
         ],
         "diagnostics": {
@@ -1028,24 +525,6 @@
             "repairPrompt": "pending",
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
-            "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "External WPS evidence artifact does not match current export artifact.",
-            "evidence": "ignored stale WPS evidence; current artifact SHA-256: abe141e09c196afcb14d210711fecb303ef258f034780a84b42a1d8684619912; external artifact path: fixtures/docx/exports/docx-t1-run-styles.docx; external byteLength: 5247; external SHA-256: bfc4b2fbfbd3d1cdf9cc246f1b5490022f1a25a1583b0b27fbd9a8eccc4ea551"
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
             "evidence": "not-run"
           }
         ],
@@ -1099,24 +578,6 @@
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
             "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "External WPS evidence artifact does not match current export artifact.",
-            "evidence": "ignored stale WPS evidence; current artifact SHA-256: d5be9ea312dc4bfb55e621ce19a194820f4cc4d281a47bc75816ce5de108111e; external artifact path: fixtures/docx/exports/docx-t1-paragraph-formatting.docx; external byteLength: 5144; external SHA-256: 306f8e07bce425f5dec7a1a1f7f9fdbcda8982529cbd9cb6695459cc71686621"
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
-            "evidence": "not-run"
           }
         ],
         "diagnostics": {
@@ -1168,24 +629,6 @@
             "repairPrompt": "pending",
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
-            "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 20:19-20:51 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. Source artifact fixtures/docx/exports/docx-t1-headings.docx byteLength 4961 sha256 c98e14109c7c15055d664ea2e2e7da1ba716e05d05fcd25cbb76fa4c8c52af3e was copied to /tmp/jword-gate5-wps-compat-batch/docx-t1-headings-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t1_headings, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t1_headings. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t1_headings; edited copy byteLength 10031 sha256 cc5e58b702f76f4d68091648e246598730f4c35cd9122c3acc6e676e76797c60. The source artifact hash remained c98e14109c7c15055d664ea2e2e7da1ba716e05d05fcd25cbb76fa4c8c52af3e."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
             "evidence": "not-run"
           }
         ],
@@ -1239,24 +682,6 @@
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
             "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 20:19-20:51 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. Source artifact fixtures/docx/exports/docx-t1-lists.docx byteLength 5651 sha256 d6245e206767bc9b700d227c12487d3ce743ac903a1b8d85173151d52793ef87 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t1-lists-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t1_lists, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t1_lists. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t1_lists; edited copy byteLength 10768 sha256 d712b621795b015f93119ec32712989d12911d13103e26c74d0e3d044e43b9d3. The source artifact hash remained d6245e206767bc9b700d227c12487d3ce743ac903a1b8d85173151d52793ef87."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
-            "evidence": "not-run"
           }
         ],
         "diagnostics": {
@@ -1308,24 +733,6 @@
             "repairPrompt": "pending",
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
-            "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 20:19-20:51 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. Source artifact fixtures/docx/exports/docx-t1-table-basic.docx byteLength 5376 sha256 abe71d33ac03eb87272411e393d0c42b24c43c40f8f012efb7456af818306dbd was copied to /tmp/jword-gate5-wps-compat-batch/docx-t1-table-basic-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t1_table_basic, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t1_table_basic. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t1_table_basic; edited copy byteLength 10285 sha256 13ebeef618cac0982651184ad872a5b8ba120b556eff1ec534c732075e50c431. The source artifact hash remained abe71d33ac03eb87272411e393d0c42b24c43c40f8f012efb7456af818306dbd."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
             "evidence": "not-run"
           }
         ],
@@ -1379,24 +786,6 @@
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
             "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 20:19-20:51 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. Source artifact fixtures/docx/exports/docx-t1-inline-image.docx byteLength 5987 sha256 c049724c884d7b5e100f54efc70b6fa39c4bcf26b43127ae10f1654ffb8c2174 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t1-inline-image-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t1_inline_image, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t1_inline_image. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t1_inline_image; edited copy byteLength 10564 sha256 fc0460a433392c161e62cd0235a62e37fd05f219b1742d049eb217a6d43eb1f4. The source artifact hash remained c049724c884d7b5e100f54efc70b6fa39c4bcf26b43127ae10f1654ffb8c2174."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
-            "evidence": "not-run"
           }
         ],
         "diagnostics": {
@@ -1448,24 +837,6 @@
             "repairPrompt": "pending",
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
-            "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 20:19-20:51 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. Source artifact fixtures/docx/exports/docx-t1-page-setup.docx byteLength 4823 sha256 fc27dea6a16a85204fa5890f3fa970f08d6c140eb5d58ee32ee78518639f23da was copied to /tmp/jword-gate5-wps-compat-batch/docx-t1-page-setup-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t1_page_setup, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t1_page_setup. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t1_page_setup; edited copy byteLength 10010 sha256 df6f3f287f685ddfaffadf50719207c104dd0ef5403765f72d55814b830bb11c. The source artifact hash remained fc27dea6a16a85204fa5890f3fa970f08d6c140eb5d58ee32ee78518639f23da."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
             "evidence": "not-run"
           }
         ],
@@ -1519,24 +890,6 @@
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
             "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 21:04-21:34 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. WPS-only Gate 5 compatibility evidence. Source artifact fixtures/docx/exports/docx-t2-header-footer.docx byteLength 4756 sha256 dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a was copied to /tmp/jword-gate5-wps-compat-batch/docx-t2-header-footer-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t2_header_footer, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t2_header_footer. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t2_header_footer; edited copy byteLength 9991 sha256 b55665f9e3f05299984bc3638325243f803a5d5d4f2c3086e9a451e603162671. The source artifact hash remained dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
-            "evidence": "not-run"
           }
         ],
         "diagnostics": {
@@ -1588,24 +941,6 @@
             "repairPrompt": "pending",
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
-            "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 21:04-21:34 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. WPS-only Gate 5 compatibility evidence. Source artifact fixtures/docx/exports/docx-t2-page-number.docx byteLength 4756 sha256 dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a was copied to /tmp/jword-gate5-wps-compat-batch/docx-t2-page-number-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t2_page_number, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t2_page_number. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t2_page_number; edited copy byteLength 9992 sha256 6661f088d693a6efae8bf8f03175d5e9304f281ea9d578039d3e7ca1fccc81dd. The source artifact hash remained dbaf6e325f0f40e6c933b0f24c7f231b5d8d6165f65a3163dea8f1867ed4d29a."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
             "evidence": "not-run"
           }
         ],
@@ -1659,24 +994,6 @@
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
             "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 21:04-21:34 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. WPS-only Gate 5 compatibility evidence. Source artifact fixtures/docx/exports/docx-t2-comments.docx byteLength 4745 sha256 bba6063e7ee21c5b13624d87499822d93eb20a825b3aee33d04b2e810f26f855 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t2-comments-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t2_comments, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t2_comments. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t2_comments; edited copy byteLength 9980 sha256 0c8c008c29f8d78278da17f6a057b733249f513cf58d65e2af7dba1110794484. The source artifact hash remained bba6063e7ee21c5b13624d87499822d93eb20a825b3aee33d04b2e810f26f855."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
-            "evidence": "not-run"
           }
         ],
         "diagnostics": {
@@ -1728,24 +1045,6 @@
             "repairPrompt": "pending",
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
-            "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 21:04-21:34 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. WPS-only Gate 5 compatibility evidence. Source artifact fixtures/docx/exports/docx-t2-links.docx byteLength 4980 sha256 8c8b7f2db79d3f3bd9346ebd801a6fc375c797baf26095c7c78a535a1c850874 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t2-links-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t2_links, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t2_links. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t2_links; edited copy byteLength 10087 sha256 75eee0ba2eebbfc2433d4ec3214a66d4595e1cbb58c1282fe7408faeb1e3f3d1. The source artifact hash remained 8c8b7f2db79d3f3bd9346ebd801a6fc375c797baf26095c7c78a535a1c850874."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
             "evidence": "not-run"
           }
         ],
@@ -1799,24 +1098,6 @@
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
             "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "D-2 多 section 导出修复后 artifact hash 已变化，旧 WPS 手工证据失效，需重新打开验证。",
-            "evidence": "pending: previous WPS evidence was bound to artifact SHA-256 409498a0510122e9956b6dc0f6f3d0d50b3ddd1be731ec808155504a665beaf2; current artifact SHA-256 is 19efa454a0c300f266c668e59bcfc722d4ff32f579cf1d6aa9d73e9303a34925."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
-            "evidence": "not-run"
           }
         ],
         "diagnostics": {
@@ -1868,24 +1149,6 @@
             "repairPrompt": "pending",
             "mainVisualDifference": "pending",
             "blockingIssue": "Word is not installed on this machine.",
-            "evidence": "not-run"
-          },
-          {
-            "app": "WPS",
-            "result": "pass",
-            "editable": "pass",
-            "repairPrompt": "none",
-            "mainVisualDifference": "none",
-            "blockingIssue": "",
-            "evidence": "2026-05-25 21:04-21:34 CST +0800 on jianmacmini.local macOS 26.4.1: WPS Office 12.1.25895 (25895), bundle com.kingsoft.wpsoffice.mac. WPS-only Gate 5 compatibility evidence. Source artifact fixtures/docx/exports/docx-t2-floating-object-warning.docx byteLength 4720 sha256 a0cc2d82f8732c2d02c2bd02361e6fe4d61dceeffea3c115297cc44aa28dfec1 was copied to /tmp/jword-gate5-wps-compat-batch/docx-t2-floating-object-warning-wps-edit-copy.docx; before edit the copy had the same sha256 and byteLength as the source. WPS opened the copy with no visible repair/recovery prompt, accepted typed text WPS_EDIT_PROOF_docx_t2_floating_object_warning, saved with Ctrl+S, closed, and reopened; the reopened WPS window visibly contained WPS_EDIT_PROOF_docx_t2_floating_object_warning. zip inspection of the saved copy showed word/document.xml contains WPS_EDIT_PROOF_docx_t2_floating_object_warning; edited copy byteLength 9978 sha256 796826b7270771473848006b3b8ddb15794f398e34af20fe9792ea3756482b7f. The source artifact hash remained a0cc2d82f8732c2d02c2bd02361e6fe4d61dceeffea3c115297cc44aa28dfec1."
-          },
-          {
-            "app": "LibreOffice",
-            "result": "pending",
-            "editable": "pending",
-            "repairPrompt": "pending",
-            "mainVisualDifference": "pending",
-            "blockingIssue": "LibreOffice is not installed on this machine.",
             "evidence": "not-run"
           }
         ],

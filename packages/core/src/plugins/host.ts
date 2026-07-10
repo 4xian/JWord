@@ -3,7 +3,7 @@
  * 边界：不直接修改 Y.Doc，不访问 document-store，不绘制 DOM 或 canvas。
  * 协作模块：编辑器门面、事务流水线、只读投影、选择区和插件公开类型。
  * 性能/安全约束：所有插件回调均进入错误隔离；插件命令最终仍通过既有 transaction pipeline。
- * Specs：docs/superpowers/plans/2026-07-06-gate7-plugin-api-m1-design.md#8-m2-m6-交付切分。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { DEFAULT_HISTORY_ORIGIN } from '../operations/history'
@@ -13,6 +13,7 @@ import type { DocumentLayout, LayoutRect } from '../layout/runtime'
 import type { DocumentProjection } from '../model/projection'
 import type { SelectionState } from '../model/selection'
 import type { Command, OperationKind, TransactionDiagnosticSource, TransactionEvent, TransactionResult } from '../operations/transaction'
+import type { ResourceAdapter } from '../resources/types'
 import type { JWordErrorDetails } from '../shared/errors'
 import type { Editor, EditorCommandOptions } from '../editor/types'
 import type { JWordDiagnosticsSnapshot, JWordTelemetrySink } from '../editor/observability'
@@ -39,9 +40,11 @@ import type {
   PluginMountEvent
 } from './types'
 import { BUILTIN_PLUGIN_DEFINITIONS } from './builtin'
+import { PluginAdapterRuntime } from './adapter-registry'
 
 interface PluginHostOptions {
   readonly plugins?: readonly PluginDefinition[] | undefined
+  readonly resourceAdapter?: ResourceAdapter | undefined
   readonly readProjection: () => DocumentProjection
   readonly emitDiagnostic: (diagnostic: PluginDiagnostic) => void
   readonly emitTelemetry?: JWordTelemetrySink | undefined
@@ -68,6 +71,7 @@ interface RegisteredDecorationProvider {
   readonly providerName: string
   readonly read: (input: RuntimeDecorationInput) => readonly PluginDecoration[]
 }
+
 
 interface RegisteredLifecycleListener {
   readonly pluginName: string
@@ -111,6 +115,7 @@ export class PluginHost {
   private readonly middlewares: RegisteredCommandMiddleware[] = []
   private readonly keyBindings: RegisteredKeyBinding[] = []
   private readonly decorationProviders: RegisteredDecorationProvider[] = []
+  private readonly adapterRuntime: PluginAdapterRuntime
   private readonly listeners: RegisteredLifecycleListener[] = []
   private readonly disposables: Array<Readonly<{ pluginName: string, disposable: PluginDisposable }>> = []
   private readonly diagnostics: PluginDiagnostic[] = []
@@ -126,6 +131,10 @@ export class PluginHost {
     this.readProjection = options.readProjection
     this.emitDiagnostic = options.emitDiagnostic
     this.emitTelemetry = options.emitTelemetry
+    this.adapterRuntime = new PluginAdapterRuntime({
+      resourceAdapter: options.resourceAdapter,
+      reportDiagnostic: (diagnostic) => this.reportDiagnostic(diagnostic)
+    })
   }
 
   /** 读取当前插件诊断快照。 */
@@ -355,6 +364,7 @@ export class PluginHost {
     this.middlewares.length = 0
     this.keyBindings.length = 0
     this.decorationProviders.length = 0
+    this.adapterRuntime.dispose()
     this.listeners.length = 0
   }
 
@@ -383,6 +393,7 @@ export class PluginHost {
       name: plugin.name,
       version: plugin.version,
       editor,
+      adapters: this.adapterRuntime.createRegistry(plugin.name),
       registerCommand: (command) => this.registerCommand(plugin.name, command),
       interceptCommand: (middleware) => this.interceptCommand(plugin.name, middleware),
       registerKeyBinding: (binding) => this.registerKeyBinding(plugin.name, binding),
@@ -643,6 +654,17 @@ function removeEntry<T>(entries: T[], entry: T): void {
   }
 }
 
+/** 从未知对象读取字符串字段。 */
+function readStringProperty(value: unknown, key: string): string | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+
+  const property = (value as Readonly<Record<string, unknown>>)[key]
+
+  return typeof property === 'string' ? property : undefined
+}
+
 /** 判断插件命令返回值是否已经是事务结果。 */
 function isTransactionResult(value: Command | TransactionResult): value is TransactionResult {
   return 'diagnostic' in value && 'projection' in value && 'dirty' in value
@@ -820,7 +842,16 @@ function normalizeKeyBindingInput(input: RuntimeKeyBindingInput): string {
 
 /** 读取未知错误的中文诊断消息。 */
 function readErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : '插件回调执行失败'
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return readStringProperty(error, 'message') ?? '插件回调执行失败'
+}
+
+/** 读取未知错误的稳定错误码。 */
+function readErrorCode(error: unknown): string | undefined {
+  return readStringProperty(error, 'code')
 }
 
 /** 将未知错误转换为 JSON 兼容诊断详情。 */

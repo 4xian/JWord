@@ -3,7 +3,7 @@
  * 边界：只消费稳定 ProviderAdapter、授权 entitlement 和结构化 Editor facade，不导出具体 provider 或示例运行时类型。
  * 协作模块：packages/collab/src/index.ts、packages/license 和 core 暴露的协作 update facade。
  * 性能/安全约束：初始化先完成授权和 provider 检查；失败只返回 diagnostic，不连接 provider、不读取文档内容。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-625定义-connectjwordcollaborationeditor-options-公开入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { assertJWordFeatureEntitled } from '@4xian/jword-license'

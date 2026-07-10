@@ -3,7 +3,7 @@
  * 边界：只描述诊断 code 的稳定语义，不执行 OPC、XML、mapping 或 worker 逻辑。
  * 协作模块：index.ts、export.ts、worker.ts 和 fixture/兼容矩阵复用这些 code。
  * 性能/安全约束：纯常量与类型定义，无副作用，避免把运行时依赖拉入首屏。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-54建立统一-warningerror-schema。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export type DocxDiagnosticSeverity = 'info' | 'warning' | 'error'

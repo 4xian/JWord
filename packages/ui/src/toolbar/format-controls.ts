@@ -3,7 +3,7 @@
  * 边界：只处理 run 格式命令，不处理段落和插入类命令。
  * 协作模块：controller 提供颜色会话状态，toolbar-state-sync 提供统一绑定上下文。
  * 性能/安全约束：格式变更继续走 editor facade/transaction pipeline，不生成第二套编辑状态。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

@@ -5,7 +5,7 @@
  * 边界：Node 环境只用模拟 IndexedDB provider 验证 adapter 契约，真实恢复仍走浏览器验收。
  * 协作模块：packages/persistence/src/indexeddb-adapter.ts、y-indexeddb 和 examples/collab 浏览器验收。
  * 约束：真实 IndexedDB reload 恢复必须由 Playwright/Kimi 浏览器路径补证。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-4---offline-recovery-与-indexeddb-persistencestep-65--612。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'

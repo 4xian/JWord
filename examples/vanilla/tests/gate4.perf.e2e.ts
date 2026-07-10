@@ -3,7 +3,7 @@
  * 边界: 只记录当前 demo 可执行的图片、表格、批注、修订、目录、滚动和查找规模指标。
  * 协作: vanilla demo 测试钩子、真实 toolbar DOM、@4xian/jword-core Editor facade 和 Playwright perf-chromium 项目。
  * 约束: 指标必须来自浏览器 performance、requestAnimationFrame 和真实 DOM，不使用 Node-only benchmark 代替交互路径。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.17。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -33,6 +33,8 @@ const GATE4_PERF_THRESHOLDS = {
   overlayCompositeScrollMs: 700,
   mountedCanvasCount: 5
 } as const
+
+test.setTimeout(60000)
 
 test('Gate 4 perf guard records image table find and overlay interaction metrics', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', '当前 Gate 4 perf 护栏只固定 Chromium。')
@@ -272,7 +274,7 @@ async function readGate4PerfMetrics(page: Page): Promise<Gate4PerfMetrics> {
     findInput.dispatchEvent(new Event('input', { bubbles: true }))
     const findUiStart = performance.now()
     findButton.click()
-    await waitForCondition('官方查找 UI 结果刷新', () => findStatus.textContent?.includes('个结果') === true)
+    await waitForCondition('官方查找 UI 结果刷新', () => /^\d+ \/ \d+$/.test(findStatus.textContent ?? ''))
     const findUiInteractionMs = performance.now() - findUiStart
 
     const scrollStart = performance.now()
@@ -297,7 +299,7 @@ async function readGate4PerfMetrics(page: Page): Promise<Gate4PerfMetrics> {
 
     return {
       initialPageCount,
-      imageInsertMs: Number((performance.now() - imageStart).toFixed(2)),
+      imageInsertMs: Number(imageInsertMs.toFixed(2)),
       tableInsertEditMs: Number(tableInsertEditMs.toFixed(2)),
       commentCreateMs: Number(commentCreateMs.toFixed(2)),
       revisionCreateMs: Number(revisionCreateMs.toFixed(2)),

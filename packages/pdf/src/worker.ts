@@ -3,7 +3,7 @@
  * 边界：只负责接收 worker 请求、调用公开请求处理器并回发响应，不实现 PDF 绘制。
  * 协作模块：worker-api.ts 的 PdfWorkerRequest/PdfWorkerResponse 和 handlePdfWorkerRequest。
  * 性能/安全约束：成功导出时转移 ArrayBuffer；当前未实现导出时只返回稳定错误响应。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-21---建立-packagespdf-与-pdf-worker。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

@@ -5,7 +5,7 @@
  * 边界：只覆盖调试与冻结对象断言，不覆盖分页、换行或表格主体行为。
  * 协作模块：布局运行时、页面配置、字体管理器与共享测试辅助函数。
  * 性能/安全约束：测试不访问 DOM，不改变 layout 输出，只承接原 runtime.test 断言。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

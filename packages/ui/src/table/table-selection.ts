@@ -3,7 +3,7 @@
  * 边界：不执行表格结构命令，不处理行列尺寸拖拽提交。
  * 协作模块：table controller 注入状态和生命周期，controller-helpers 提供表格 hit-test。
  * 性能/安全约束：只通过 editor facade 设置 selection/focus，不绕过 core transaction pipeline。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 S11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor, SelectionState } from '@4xian/jword-core'
 import type { JWordTablePanelElements } from '../types'
@@ -131,12 +131,19 @@ function handleGlobalKeyDown(options: TableSelectionEventsOptions, event: Keyboa
     return
   }
 
+  const shouldRestoreInsertTriggerFocus = event.target instanceof Node
+    && (options.dom.host.contains(event.target) || options.dom.customSizeDialog.contains(event.target))
+
   options.state.insertMenuOpen = false
   options.state.customSizeDialogOpen = false
   options.state.helperAnchorsVisible = false
   options.state.quickToolsVisible = false
   options.closeContextMenu()
   options.refresh()
+
+  if (shouldRestoreInsertTriggerFocus) {
+    options.dom.insertTriggerButton.focus()
+  }
 }
 
 /** 判断当前临时浮层是否已经全部关闭。 */

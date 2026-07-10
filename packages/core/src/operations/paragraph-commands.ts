@@ -3,7 +3,7 @@
  * 边界：只生成 setParagraphProperties 与 setRunProperties 操作，不执行事务。
  * 协作模块：toolbar、快捷键和 editor facade 通过 command-builders 聚合入口复用。
  * 性能/安全约束：只读取当前选区覆盖的段落，避免无变化 operation。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#step-37实现基础-commands加粗斜体下划线删除线字体字号颜色背景色对齐缩进。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { ParagraphAlignment } from '../model/formatting-types'

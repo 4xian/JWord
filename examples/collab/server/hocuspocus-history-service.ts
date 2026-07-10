@@ -3,7 +3,7 @@
  * 边界：不再复制服务端 history 实现；真实逻辑只存在于正式 server 包。
  * 协作：@4xian/jword-collab-server 提供 storage-backed history service 与 document 级事务边界。
  * 约束：该文件仅供历史测试和本地 demo 兼容，不作为第三方集成 API。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.29。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export {

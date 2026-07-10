@@ -3,7 +3,7 @@
  * 边界：不创建 DOM，不绑定事件，只负责状态归一化和文案生成。
  * 协作模块：controller 调用这里构建状态与播报文案，dom 只消费结果。
  * 性能/安全约束：复用现有 facade 能力，不引入第二套文档状态或命令语义。
- * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md#phase-1---冻结当前可观察行为。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   Block,
@@ -11,6 +11,7 @@ import type {
   Editor,
   FormattingStateValue,
   PageConfig,
+  PageOrientation,
   PagePreset,
   Paragraph,
   ParagraphAlignment,
@@ -44,7 +45,8 @@ export interface ToolbarState {
   readonly canRedo: boolean
   readonly runFormatEnabled: boolean
   readonly paragraphFormatEnabled: boolean
-  readonly pagePresetValue: PagePreset
+  readonly pagePresetValue: PagePreset | 'custom'
+  readonly pageOrientationValue: PageOrientation
   readonly boldPressed: ToolbarPressedState
   readonly italicPressed: ToolbarPressedState
   readonly underlinePressed: ToolbarPressedState
@@ -136,6 +138,7 @@ export function buildToolbarState(editor: Editor): ToolbarState {
     runFormatEnabled: formattingState.run !== null,
     paragraphFormatEnabled: formattingState.paragraph !== null,
     pagePresetValue: readToolbarPagePresetValue(editor),
+    pageOrientationValue: editor.getPageConfig().orientation,
     boldPressed: readPressedState(formattingState.run?.bold ?? null),
     italicPressed: readPressedState(formattingState.run?.italic ?? null),
     underlinePressed: readPressedState(formattingState.run?.underline ?? null),
@@ -268,8 +271,22 @@ export function readPagePresetLabel(value: PagePreset): string {
       return 'A4'
     case 'a5':
       return 'A5'
+    case 'b5':
+      return 'B5'
     case 'letter':
       return 'Letter'
+    case 'legal':
+      return 'Legal'
+    case 'envelope3':
+      return '3号信封'
+    case 'envelope5':
+      return '5号信封'
+    case 'envelope6':
+      return '6号信封'
+    case 'envelope7':
+      return '7号信封'
+    case 'envelope9':
+      return '9号信封'
   }
 }
 
@@ -361,10 +378,8 @@ function createFormattingState(editor: Editor, selection: SelectionState): Selec
 }
 
 /** 把 runtime page preset 规范化到工具栏可显示的预设值。 */
-function readToolbarPagePresetValue(editor: Editor): PagePreset {
-  const preset = editor.getPageConfig().preset
-
-  return preset === 'custom' ? 'a4' : preset
+function readToolbarPagePresetValue(editor: Editor): PagePreset | 'custom' {
+  return editor.getPageConfig().preset
 }
 
 /** 解析当前选区映射到的 paragraph/run 上下文。 */

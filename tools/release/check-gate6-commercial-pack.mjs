@@ -3,7 +3,7 @@
  * 边界：只审计包清单、导出映射、文件白名单、说明文档和打包内容，不发布包。
  * 协作模块：packages/collab、packages/collab-server、packages/license、packages/persistence 和 Gate 6 第三方 smoke。
  * 约束：商业包必须面向 restricted registry，tarball 只包含 dist、types、README 和 package metadata。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-652建立私有-registry--npm-pack-检查。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs'

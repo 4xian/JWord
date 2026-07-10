@@ -3,8 +3,9 @@
  * 边界：只描述 state、dom、controller 与宿主 adapter 的协作形状，不访问 editor 或 window。
  * 协作模块：link/state、link/dom、link/controller 通过这里对齐输入输出。
  * 性能/安全约束：纯类型模块，无副作用，可在非浏览器环境安全导入。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
+import type { ResolvedJWordUiI18n } from '../i18n'
 import type { JWordReadonlyMode } from '../types'
 
 /** link dialog 的工作模式。 */
@@ -63,6 +64,7 @@ export interface CreateLinkControllerOptions {
     readonly removeLink?: (link: JWordLinkDraft) => Promise<void> | void
   } | undefined
   readonly policy?: JWordLinkUrlPolicy | undefined
+  readonly i18n?: ResolvedJWordUiI18n
 }
 
 /** link panel DOM 句柄。 */
@@ -87,5 +89,6 @@ export interface LinkControllerHandle {
   openEditDialog(): void
   toggleQuickTools(link: JWordLinkDraft): void
   setActiveLink(link: JWordLinkDraft | null): void
+  setI18n(i18n: ResolvedJWordUiI18n): void
   destroy(): void
 }

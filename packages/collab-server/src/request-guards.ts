@@ -3,7 +3,7 @@
  * 边界：只调用宿主注入 hook 并归一默认拒绝策略，不读取请求体、不访问 history storage。
  * 协作模块：index.ts 和 auto-insert-relay.ts 在进入 license/storage/relay 前复用这里的守卫。
  * 性能/安全约束：hook 拒绝时调用方必须立即停止后续 license、storage 或 relay 操作。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-631。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

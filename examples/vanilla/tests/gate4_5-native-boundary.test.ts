@@ -3,7 +3,7 @@
  * 边界：只做源码边界扫描，不验证 native 包内部格式语义。
  * 协作：examples/vanilla/src/demo-native.ts、examples/vanilla/src/main.ts 和 @4xian/jword-native 公开 API。
  * 约束：vanilla 不能直接读取 packages/native/src、core 私有 store，也不能把 native 放进首屏静态 import。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.5 Step 4.5.6-4.5.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

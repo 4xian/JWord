@@ -5,7 +5,7 @@
  * 边界：只服务 packages/core/test/editor 下的测试文件，不进入生产代码导出面。
  * 协作模块：文档投影类型与门面运行时测试。
  * 性能/安全约束：辅助函数只读取只读投影，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentProjection } from '../../src/model/projection'

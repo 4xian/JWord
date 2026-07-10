@@ -3,7 +3,7 @@
  * 边界：只负责 undo/redo、tracked origin 和 stack metadata，不处理 UI、快捷键、布局或持久化。
  * 协作模块：transaction pipeline 负责产生状态变更，selection 负责提供恢复快照，Editor Facade 后续负责串联调用。
  * 性能/安全约束：默认只跟踪本地用户 origin，不访问 DOM，不把远端或自动插入默认塞进用户 undo 栈。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#39-history。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'

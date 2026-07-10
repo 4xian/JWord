@@ -5,7 +5,7 @@
  * 边界：不接入真实网络 provider、IndexedDB、DOM 或 core 内部 store。
  * 协作模块：后续 hocuspocus/y-websocket 适配器应复用同一 ProviderAdapter 契约。
  * 约束：测试先行，新增协同行为必须先观察红灯再实现。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-6--collaborationauto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, expectTypeOf, it } from 'vitest'

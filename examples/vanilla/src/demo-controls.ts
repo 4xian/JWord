@@ -3,7 +3,7 @@
  * 边界：不实现官方 toolbar、assistive mirror 或格式同步；这里只处理 demo-only 行为。
  * 协作模块：`@4xian/jword-core` Editor facade、fixtures/plain-text 与 `window.__jwordDemo` 测试钩子。
  * 性能/安全约束：避免在 demo-only 控件里访问 core 私有状态；只通过公开 facade 读写文档与选区。
- * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createGate2FixtureEditorText } from '../../../fixtures/plain-text/gate2-fixture.mjs'
 

@@ -3,7 +3,7 @@
  * 边界：只处理诊断 code/severity/recoverable/message 的稳定转换，不读取 provider、IndexedDB 或 Y.Doc。
  * 协作：hocuspocus-runtime.ts 在 readOfflineState 中复用这里的映射。
  * 约束：保持 demo 对外诊断命名稳定，不把 persistence 内部 code 泄漏成 UI 契约。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { OfflineDiagnosticSnapshot } from '../runtime'
 

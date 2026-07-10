@@ -3,7 +3,7 @@
  * 边界：只允许测试、demo 和 dry-run smoke 引用，不进入可发布包源码。
  * 协作模块：packages/license 的测试签发 helper、Gate 5/6 示例和发布 dry-run 脚本。
  * 性能/安全约束：这是公开测试私钥，禁止用于真实客户授权或发布环境。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#34-lic-1-license-密码学签名phase-1f-m-l按-d1-执行。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 /** RFC 8032 测试 seed，只能用于 insecure-test-only 授权 fixture。 */

@@ -3,7 +3,7 @@
  * 边界：只写 package graph、T1 文本/段落/run 格式、列表、基础表格和 inline data URL 图片。
  * 协作模块：index.ts 的 exportDocx 入口、inspectDocxPackage 和后续 roundtrip diff 复用本模块输出。
  * 性能/安全约束：不访问 DOM，不读取磁盘，不引入 Node-only API，media 只消费 projection 中已内联的 data URL。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-18---实现-t1-docx-export列表表格图片。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

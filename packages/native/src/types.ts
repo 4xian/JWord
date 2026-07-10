@@ -3,7 +3,7 @@
  * 边界：只包含类型与错误对象，不执行 zip 读写、资源转换或 schema migration。
  * 协作模块：index.ts、worker.ts、外部宿主和测试 fixture。
  * 性能/安全约束：公开类型保持 JSON-compatible，不暴露内部可写状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---4xianjword-native-公开-api-与-worker。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Document } from '@4xian/jword-core'
 

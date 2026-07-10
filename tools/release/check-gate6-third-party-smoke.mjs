@@ -3,7 +3,7 @@
  * 边界：只从当前 workspace 打包并安装公开包，再运行公开 API 演示；不发布包、不读取源码路径。
  * 协作模块：packages/core、packages/ui、packages/native、packages/collab、packages/collab-server、packages/license 和 packages/persistence。
  * 约束：smoke 项目必须从空目录安装包，并演示协作连接、自动插入、历史版本和未授权失败路径。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-651补第三方集成-readme-草稿和-smoke-script。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs'

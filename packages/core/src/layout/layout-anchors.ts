@@ -3,7 +3,7 @@
  * 边界：不测量文本、不排布表格、不生成最终 DocumentLayout。
  * 协作模块：engine 调用 section 起点逻辑，inline-layout 调用 inline 边界锚点逻辑。
  * 性能/安全约束：只修改当前 layout cursor 和可变页盒，不访问 DOM、不绘制 Canvas。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Inline, Paragraph, Section } from '../model/types'

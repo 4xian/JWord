@@ -3,7 +3,7 @@
  * 边界：只读取只读 projection 或隔离 Y.Doc update，不执行编辑命令、不连接 provider。
  * 协作：hocuspocus-runtime.ts、hocuspocus-text-command.ts 和格式化 debug helper 共享这里的文本定位。
  * 约束：不暴露 Yjs 可写容器；所有返回值都是 demo 可序列化数据或 core TextPosition。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createDocumentProjection } from '@4xian/jword-core'
 import type { DocumentProjection, Run, TextPosition, TextRange } from '@4xian/jword-core'

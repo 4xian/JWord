@@ -3,7 +3,7 @@
  * 边界：不承载输入、渲染、布局查询和文档编辑细节。
  * 协作模块：文档存储、事务流水线、历史记录、布局配置和编辑器分层运行时。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createDocumentStore } from '../model/document-store'
 import type { DocumentStore } from '../model/document-store'
@@ -23,6 +23,8 @@ import type { TextPosition, TransactionEvent } from '../operations/transaction'
 import type { ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
 import { createPluginHost, type PluginHost } from '../plugins/host'
 import type { PluginDiagnostic } from '../plugins/types'
+import { createEmptyJWordOperationSummary, createJWordOperationSummary } from './observability'
+import type { JWordDiagnosticsOperationSummary } from './observability'
 import { DEFAULT_EDITOR_LABEL, DOCUMENT_CREATE_ORIGIN } from './constants'
 import { normalizeEditorUser } from './current-user'
 import type { Editor, EditorDocumentInput, EditorEvent, EditorEventListener, EditorOptions, MountedEditorDom, RenderReason } from './types'
@@ -45,6 +47,7 @@ export abstract class JWordEditorState {
   protected readonly resourceUrlPolicy: ResourceUrlPolicy | undefined
   protected readonly currentUser: EditorUser
   protected readonly pluginHost: PluginHost
+  protected operationSummary: JWordDiagnosticsOperationSummary = createEmptyJWordOperationSummary()
   protected readonly initialFocusPosition: InitialFocusPosition
   protected pageConfig: PageConfig
   protected fontManager: FontManager = createFontManager()
@@ -89,6 +92,7 @@ export abstract class JWordEditorState {
     this.resourceUrlPolicy = options?.resourceUrlPolicy
     this.pluginHost = createPluginHost({
       plugins: options?.plugins,
+      resourceAdapter: options?.resourceAdapter,
       readProjection: () => this.currentProjection,
       emitDiagnostic: (diagnostic) => {
         this.emitPluginDiagnostic(diagnostic)
@@ -153,6 +157,7 @@ export abstract class JWordEditorState {
 
   /** 应用 transaction pipeline 事件到本实例状态和订阅者。 */
   protected handleTransactionEvent(event: TransactionEvent): void {
+    this.operationSummary = createJWordOperationSummary(this.operationSummary, event)
     this.currentProjection = event.projection
     this.layoutNeedsRefresh = true
     this.mountedTextMirrorNeedsRefresh = true
@@ -234,9 +239,10 @@ function createNextPageConfig(current: PageConfig, input: PageConfigInput): Page
   const shouldUseCustomSize = input.widthTwips !== undefined
     || input.heightTwips !== undefined
     || (current.preset === 'custom' && input.preset === undefined)
-  const marginTwips = mergePageMargins(current.marginTwips, input.marginTwips)
 
   if (shouldUseCustomSize) {
+    const marginTwips = mergePageMargins(current.marginTwips, input.marginTwips)
+
     return createPageConfig({
       widthTwips: input.widthTwips ?? current.widthTwips,
       heightTwips: input.heightTwips ?? current.heightTwips,
@@ -246,10 +252,14 @@ function createNextPageConfig(current: PageConfig, input: PageConfigInput): Page
     })
   }
 
+  const marginTwips = input.preset === undefined
+    ? mergePageMargins(current.marginTwips, input.marginTwips)
+    : input.marginTwips
+
   return createPageConfig({
     preset: resolveNextPreset(current, input),
     orientation: input.orientation ?? current.orientation,
-    marginTwips,
+    ...(marginTwips === undefined ? {} : { marginTwips }),
     scale: input.scale ?? current.scale
   })
 }

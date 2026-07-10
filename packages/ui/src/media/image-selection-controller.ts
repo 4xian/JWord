@@ -3,14 +3,16 @@
  * 边界：只消费 editor facade、layout 和 media command adapter，不改写 selection/right-click 模块，不旁路 core transaction pipeline。
  * 协作模块：create-ui 负责装配生命周期，core-command-adapter 负责尺寸/旋转/删除命令桥接，image-selection-* 模块负责 DOM、几何和会话细节。
  * 性能/安全约束：覆盖层只在已选中图片时存在，DOM 直接挂在 canvas container 内，缩放和拖拽统一通过 transaction pipeline 提交。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createSelectionState, type Editor } from '@4xian/jword-core'
 import type { JWordMediaCommandAdapter, JWordReadonlyMode, JWordSelectedImageTarget } from '../types'
+import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 import {
   bindImageSelectionEvents,
   createImageSelectionDom,
   hideSelection,
+  localizeImageSelectionDom,
   resizeLayer,
   syncDropCaret,
   syncImageSelectionOverlay,
@@ -22,9 +24,7 @@ import {
   resolveImageSelectionSnapshot,
   type ImageSelectionSnapshot
 } from './image-overlay-geometry'
-import {
-  createResizeSession, updateResizePreview, type ResizeSession
-} from './image-resize-session'
+import { createResizeSession, updateResizePreview, type ResizeSession } from './image-resize-session'
 import {
   createDragGhostSession, hideGhost, resolveDragDropPreview,
   resolvePointerAnchorFromClientPoint, updateGhostPreview,
@@ -37,9 +37,11 @@ interface CreateImageSelectionControllerOptions {
   readonly editorHost: HTMLElement
   readonly commands: JWordMediaCommandAdapter | undefined
   readonly readonly?: JWordReadonlyMode
+  readonly i18n?: ResolvedJWordUiI18n
 }
 
 interface ImageSelectionControllerHandle {
+  setI18n(i18n: ResolvedJWordUiI18n): void
   refresh(): void
   destroy(): void
 }
@@ -62,7 +64,7 @@ export function createImageSelectionController(
     return null
   }
   const canvasContainer = mountedCanvasContainer
-  const dom = createImageSelectionDom(canvasContainer)
+  const dom = createImageSelectionDom(canvasContainer, options.i18n ?? resolveJWordUiI18n())
   const signalController = new AbortController()
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   let currentSnapshot: ImageSelectionSnapshot | null = null
@@ -386,6 +388,10 @@ export function createImageSelectionController(
   refresh()
 
   return {
+    setI18n(nextI18n): void {
+      localizeImageSelectionDom(dom, nextI18n)
+      refresh()
+    },
     refresh,
     destroy
   }

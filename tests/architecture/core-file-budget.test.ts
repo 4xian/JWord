@@ -5,7 +5,7 @@
  * 边界：只检查 packages/core/src 与 packages/core/test 的 TypeScript 文件行数，不处理其他包。
  * 协作模块：core 领域目录与 focused core 测试共同满足此门禁。
  * 约束：超过 1000 行的 core 文件必须拆分，历史超标文件先登记后在 Phase 5 收紧。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-0---工程基座与边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readdirSync, readFileSync } from 'node:fs'

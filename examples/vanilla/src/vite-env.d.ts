@@ -3,11 +3,11 @@
  * 边界：只覆盖 demo 侧 CSS import，不暴露编辑器运行时 API。
  * 协作模块：examples/vanilla/src/main.ts 与 Vite client 类型。
  * 性能/安全约束：只提供类型声明，没有运行时副作用。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 /// <reference types="vite/client" />
 
-import type { Editor, RevisionMetadata, SelectionState } from '@4xian/jword-core'
+import type { Editor, JWordDiagnosticsSnapshot, RevisionMetadata, SelectionState } from '@4xian/jword-core'
 
 export interface JWordDemoSelectionInput {
   readonly sectionId: string
@@ -55,7 +55,7 @@ declare global {
       readonly readonly: boolean
       readonly destroy: () => void
       readonly editor: Editor
-      readonly selectTextRange: (input: JWordDemoSelectionInput) => SelectionState
+      readonly selectTextRange?: (input: JWordDemoSelectionInput) => SelectionState
       readonly selectImageByResourceId: (resourceId: string) => void
       readonly media: {
         getFixtureUrl(): string
@@ -84,12 +84,17 @@ declare global {
       readonly comments: {
         readThreadCount(): number
       }
-      readonly native: {
+      readonly native?: {
         save(): Promise<Blob | null>
         openSelectedFile(): Promise<boolean>
         readStatus(): string
         readWarnings(): readonly JWordDemoNativeWarning[]
         readLastSavedByteLength(): number | null
+        readRuntimeLoaded(): boolean
+      }
+      readonly devtools: {
+        isAttached(): boolean
+        refresh(): JWordDiagnosticsSnapshot
       }
       readonly link: {
         seedFirstRunLink(target: string): boolean

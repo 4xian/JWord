@@ -3,7 +3,7 @@
  * 边界：只提供 request id、AbortSignal 和提交权限判断，不执行 DOCX/PDF 互通。
  * 协作模块：examples/docx/src/main.ts、DOCX/PDF runtime 的 signal 选项和真实浏览器验收脚本。
  * 性能/安全约束：新任务开始时取消旧任务，旧任务完成后不得再写入 editor 或输出面板。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export type DocxDemoTaskKind = 'import' | 'export-docx' | 'export-pdf'

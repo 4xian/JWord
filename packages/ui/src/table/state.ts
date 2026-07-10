@@ -3,7 +3,7 @@
  * 边界：只处理行列输入、按钮可用性和摘要文案，不访问 DOM，也不调用 editor 或宿主 adapter。
  * 协作模块：table controller 维护状态，table dom 只消费这里归一化后的数据。
  * 性能/安全约束：状态保持轻量可序列化，避免把 projection 细节长期缓存在 UI 层。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordTableBorderPreset,

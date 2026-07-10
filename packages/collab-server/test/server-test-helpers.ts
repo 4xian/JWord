@@ -5,7 +5,7 @@
  * 边界：只服务 packages/collab-server/test 下的测试，不进入正式包导出面。
  * 协作模块：server.test.ts 复用这些 helper 构造 HTTP 请求和可计数 history storage。
  * 约束：helper 必须保持无全局副作用，避免测试间共享可变状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md 第六阶段正式服务端包导出分级。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

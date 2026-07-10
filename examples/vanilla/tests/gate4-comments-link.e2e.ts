@@ -3,7 +3,7 @@
  * 边界: 只覆盖 vanilla demo 中官方 comments/link UI 到 core projection 的公开链路，不测试 controller 私有状态。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/comments、packages/ui/src/link 与 core command builders。
  * 约束: 所有断言来自真实 DOM、window.__jwordDemo 公开 facade 或 editor projection；不绕过 transaction pipeline 修改状态。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.8-4.10、Step 4.17。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'

@@ -3,7 +3,7 @@
  * 边界：只处理首个 paragraph 的批注创建和范围文本读取，不实现批注侧栏或权限模型。
  * 协作：hocuspocus-runtime.ts 通过本 helper 触发 core comment command 并读取稳定 range 快照。
  * 约束：批注写入必须走 Editor transaction pipeline；debug 快照只用于 Gate 6 真实 provider 并发验收。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   buildAddCommentThreadCommand,

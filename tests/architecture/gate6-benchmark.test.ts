@@ -5,7 +5,7 @@
  * 边界：只验证 benchmark 脚本结构、runner 接入和输出字段，不执行耗时 benchmark。
  * 协作模块：benchmarks/gate6-collab-benchmark.mjs、tools/bench/run-bench.mjs、packages/collab、packages/persistence 和 packages/core。
  * 约束：Gate 6 benchmark 必须用真实浏览器 IndexedDB 探针计量 restore 时间，不能用内存 adapter 冒充离线缓存。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-6--collaborationauto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync } from 'node:fs'
 

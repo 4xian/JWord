@@ -3,7 +3,7 @@
  * 边界：不创建 table controller DOM，不直接执行表格命令。
  * 协作模块：ui-lifecycle 读取默认配置后交给 table/controller。
  * 性能/安全约束：默认命令适配器仍通过 core command builders 进入 transaction pipeline。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createCoreTableCommandAdapter } from './table/core-command-adapter'
 import type { JWordTableOptions } from './types'
@@ -15,7 +15,6 @@ export function resolveTableOptions(table: JWordTableOptions | undefined): JWord
   }
 
   return Object.freeze({
-    title: '表格',
     description: '默认表格工具使用 core 表格命令适配器。',
     commands: createCoreTableCommandAdapter()
   } satisfies JWordTableOptions)

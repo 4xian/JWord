@@ -3,7 +3,7 @@
  * 边界：只模拟两端文档、awareness、offline、version history 和 auto insert 状态，不实现真实网络协同。
  * 协作：examples/collab/src/main.ts 和 Playwright smoke 测试。
  * 约束：所有状态留在 demo host，不写入 core，不声明 Hocuspocus、双窗口或真实离线同步完成。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { JWordAwarenessRangeSnapshot } from '@4xian/jword-collab'
 
@@ -135,6 +135,8 @@ export interface CollabDemoDebugApi {
   readonly simulateDisconnect: () => OfflineStateSnapshot
   readonly simulateReconnect: () => OfflineStateSnapshot
   readonly undoLocalUserEdit: () => CollabStateSnapshot
+  readonly updateClientText: (clientId: string, text: string, previousText?: string) => CollabStateSnapshot
+  readonly updateClientSelection: (clientId: string, selectionStart: number, selectionEnd: number) => AwarenessStateSnapshot
   readonly formatClientRange: (clientId: string, start: number, end: number) => CollabStateSnapshot
   readonly addCommentRange: (clientId: string, start: number, end: number, text: string) => CommentRangeCreateSnapshot
   readonly importDocxForCollabAcceptance: (

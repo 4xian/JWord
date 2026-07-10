@@ -5,7 +5,7 @@
  * 边界：只覆盖公开门面方法，不测试 DOM 挂载生命周期、输入事件或渲染器。
  * 协作模块：编辑器运行时、选择模型、事务管线和布局查询。
  * 性能/安全约束：测试只把本地夹具文本传入核心层，核心层不自行读取磁盘。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFile } from 'node:fs/promises'

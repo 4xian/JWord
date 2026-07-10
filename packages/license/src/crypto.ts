@@ -3,7 +3,7 @@
  * 边界：仅服务 packages/license 内部 token codec，不读取授权业务字段、不暴露为包级公开入口。
  * 协作模块：index.ts 通过这些纯函数完成 token 签发 fixture 与运行时验签。
  * 性能/安全约束：实现保持同步纯函数，浏览器和 Node 均不依赖第三方包或 Node 内置 crypto。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#34-lic-1-license-密码学签名phase-1f-m-l按-d1-执行。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 const BASE64URL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'

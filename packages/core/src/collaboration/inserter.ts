@@ -3,7 +3,7 @@
  * 边界：只依赖公开 Editor facade，不访问 Y.Doc、store internals、provider 或 DOM。
  * 协作模块：Editor facade、transaction pipeline、history 和后续 packages/collab provider adapter。
  * 性能/安全约束：默认使用 auto-inserter origin，不进入用户 undo；flush 时才解析稳定 AnchorRef/RangeRef。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-6---auto-inserter-主通道。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Editor, EditorCommandOptions } from '../editor/runtime'

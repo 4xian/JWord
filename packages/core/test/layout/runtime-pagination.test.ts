@@ -5,7 +5,7 @@
  * 边界：只测试 DocumentProjection 到分页布局盒的纯派生，不覆盖画布渲染器或 DOM 调度。
  * 协作模块：布局运行时、页面配置、字体管理器与共享测试辅助函数。
  * 性能/安全约束：测试不读取 Y.Doc，不访问 DOM，不放宽 Phase 5 文件拆分预算。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

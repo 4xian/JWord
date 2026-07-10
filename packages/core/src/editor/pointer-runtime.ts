@@ -3,7 +3,7 @@
  * 边界：不处理键盘输入，不创建公开外观类型。
  * 协作模块：输入运行时、布局运行时、渲染辅助函数和文本运行时辅助函数。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { hitTestDocumentLayout, hitTestDocumentLayoutTextHit } from '../layout/runtime'
 import type { TextPosition } from '../operations/transaction'

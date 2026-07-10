@@ -3,7 +3,7 @@
  * 边界：只运行本地合成文档样本，不读取真实 DOCX/PDF 二进制 fixture，不声明输入响应指标。
  * 协作模块：packages/docx、packages/pdf、packages/core 和 tools/bench/run-bench.mjs。
  * 约束：输出必须是可机器读取 JSON，指标字段保持稳定用于计划回写和后续趋势比较。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { performance } from 'node:perf_hooks'
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads'

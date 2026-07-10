@@ -3,7 +3,7 @@
  * 边界：不执行 DOCX/PDF 互通，不启动外部办公软件。
  * 协作模块：run-gate5-docx-compatibility.mjs 使用这些纯工具完成输入校验和输出。
  * 约束：工具函数只做确定性解析和文件存在性判断，不把缺失证据伪装成通过。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync } from 'node:fs'

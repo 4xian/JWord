@@ -5,7 +5,7 @@
  * 边界：只覆盖 core mounted runtime 的辅助 DOM 文本镜像，不测试 UI 包独立 text mirror 控制器。
  * 协作模块：input runtime 提交事务，layout runtime 安排延迟辅助 DOM 同步。
  * 性能/安全约束：大文档输入不得在同一 input 事件内串联全文写入 DOM，避免阻塞浏览器热路径。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#39-phase-4-性能专项输入热路径-p95--50ms。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

@@ -3,7 +3,7 @@
  * 边界：只处理 demo 入口依赖的 alias，不改变包本身的导出配置。
  * 协作：examples/vanilla package scripts、packages/core/src/index.ts、packages/ui/src/index.ts。
  * 约束：统一走源码 alias，避免 linked package 在 Vite build 中回落到不完整的声明图。
- * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { fileURLToPath } from 'node:url'
 
@@ -31,6 +31,10 @@ export function createVanillaDemoViteConfig() {
         {
           find: '@4xian/jword-native',
           replacement: fileURLToPath(new URL('../../packages/native/src/index.ts', import.meta.url))
+        },
+        {
+          find: '@4xian/jword-devtools',
+          replacement: fileURLToPath(new URL('../../packages/devtools/src/index.ts', import.meta.url))
         },
         {
           find: '@4xian/jword-ui',

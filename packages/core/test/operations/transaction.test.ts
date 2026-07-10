@@ -5,7 +5,7 @@
  * 边界：只测试 Command/Operation 包装、transact 外壳和 adapter 调用，不测试布局、渲染或输入。
  * 协作模块：后续 history、selection 和 Editor Facade 会复用同一事务入口。
  * 性能/安全约束：测试只依赖内存中的 Y.Doc，不触发 DOM 或外部 I/O。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

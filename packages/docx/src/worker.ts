@@ -3,7 +3,7 @@
  * 边界：只负责接收 worker 请求、调用公开 DOCX API 并回发响应，不直接访问 core store 或 Y.Doc。
  * 协作模块：index.ts 的 DocxWorkerRequest/DocxWorkerEvent、importDocx、exportDocx 和 inspectDocxPackage。
  * 性能/安全约束：成功导出与含媒体导入时转移 ArrayBuffer；取消请求返回稳定错误事件。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

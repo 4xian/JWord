@@ -5,7 +5,7 @@
  * 边界：只覆盖 Gate 5 已有 DOCX fixture 的 JWord 导入后 Gate 6 内存路径，不声明真实 provider、IndexedDB 或双窗口完成。
  * 协作模块：packages/docx、packages/core、packages/persistence 和 fixtures/collab registry。
  * 约束：T1 fixture 必须无 warning；T2 warning fixture 必须保留可诊断降级信息但仍能进入普通 JWord 文档路径。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-6--collaborationauto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { readFileSync } from 'node:fs'
 

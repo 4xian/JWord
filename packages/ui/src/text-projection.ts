@@ -3,7 +3,7 @@
  * 边界：只读 core DocumentProjection，不访问 DOM，不执行 editor 命令。
  * 协作模块：ui-lifecycle、comments-rail 与 link-overlay 复用这些纯读取函数。
  * 性能/安全约束：保持同步轻量读取，所有写入仍由 editor transaction pipeline 处理。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   Block,

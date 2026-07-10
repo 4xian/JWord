@@ -1,0 +1,20 @@
+{
+  "name": "@4xian/jword-example-vue2",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@4xian/jword-core": "workspace:*",
+    "@4xian/jword-native": "workspace:*",
+    "@4xian/jword-ui": "workspace:*",
+    "vue": "2.7.16"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue2": "2.3.4"
+  }
+}

@@ -5,7 +5,7 @@
  * 边界：只验证 license 包的 feature matrix、稳定诊断和离线宽限判断，不触碰 DOCX/PDF 运行时。
  * 协作模块：packages/docx、packages/pdf、examples/docx 和后续商业包发布检查复用这些类型与错误码。
  * 约束：授权判断必须是纯函数；未授权、过期、feature 不匹配和服务不可用都要返回稳定 code。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-535接入-4xianjword-license-entitlement-校验。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

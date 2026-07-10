@@ -5,7 +5,7 @@
  * 边界：只 mock fetch 与 Y.Doc，不启动浏览器、Vite、Hocuspocus 或 IndexedDB。
  * 协作：examples/collab/src/runtime/hocuspocus-server-history.ts 和 persistence diagnostic 契约。
  * 约束：API 失败时不得抛出未处理异常，也不得覆盖当前可写文档。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { JWordPersistenceDiagnostic } from '@4xian/jword-persistence'
 import { afterEach, describe, expect, it, vi } from 'vitest'

@@ -3,9 +3,13 @@
  * 边界：只处理装配期 DOM 宿主与键盘监听，不创建业务 controller 状态。
  * 协作模块：ui-lifecycle 调用这里获得 toolbarHost，heading-outline-setup 复用 editor shell 解析。
  * 性能/安全约束：无顶层 DOM 访问，所有监听都通过 AbortController 可销毁。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { CreateJWordUiOptions } from './types'
+import {
+  acquireJWordUiShellLayout,
+  resolveJWordUiEditorShell
+} from './ui-shell-layout'
 
 export interface ResolvedToolbarMount {
   readonly host: HTMLElement
@@ -34,32 +38,18 @@ export function resolveToolbarMount(options: CreateJWordUiOptions): ResolvedTool
 
   const ownerDocument = editorHost.ownerDocument
   const host = ownerDocument.createElement('div')
-  const previousEditorDisplay = editorHost.style.display
-  const previousEditorFlexDirection = editorHost.style.flexDirection
-  const previousShellFlex = editorShell.style.flex
-  const previousShellHeight = editorShell.style.height
-  const previousShellMinHeight = editorShell.style.minHeight
+  const shellLayout = acquireJWordUiShellLayout(editorHost)
 
   host.setAttribute('data-jword-toolbar-host', 'true')
   host.style.flex = '0 0 auto'
   host.style.width = '100%'
-  host.style.marginBottom = '8px'
-  editorHost.style.display = 'flex'
-  editorHost.style.flexDirection = 'column'
-  editorShell.style.flex = '1 1 auto'
-  editorShell.style.height = 'auto'
-  editorShell.style.minHeight = '0'
   editorHost.insertBefore(host, editorShell)
 
   return {
     host,
     cleanup(): void {
       host.remove()
-      editorHost.style.display = previousEditorDisplay
-      editorHost.style.flexDirection = previousEditorFlexDirection
-      editorShell.style.flex = previousShellFlex
-      editorShell.style.height = previousShellHeight
-      editorShell.style.minHeight = previousShellMinHeight
+      shellLayout.cleanup()
     }
   }
 }
@@ -112,9 +102,5 @@ function isFindReplaceShortcutTarget(target: EventTarget | null, shortcutHosts: 
 
 /** 读取 editor.mount 创建的 jw-editor 根节点。 */
 export function resolveEditorShell(editorHost: HTMLElement): HTMLElement | null {
-  if (editorHost.matches('[data-jword-editor]')) {
-    return editorHost
-  }
-
-  return editorHost.querySelector<HTMLElement>('[data-jword-editor]')
+  return resolveJWordUiEditorShell(editorHost)
 }

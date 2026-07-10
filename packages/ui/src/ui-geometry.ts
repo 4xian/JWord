@@ -3,7 +3,7 @@
  * 边界：只读取 editor layout、selection rect 和 canvas 宿主，不创建业务 UI。
  * 协作模块：heading-outline-setup、find-replace 装配与 comments-rail 共享正文定位逻辑。
  * 性能/安全约束：仅在用户导航或显式刷新时读取 layout，事务热路径避免无条件调用。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   createSelectionState,

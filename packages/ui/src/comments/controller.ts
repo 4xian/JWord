@@ -3,12 +3,13 @@
  * 边界：不直接访问 core，不依赖 selection-actions 或 toolbar 的内部实现，只暴露可供主进程 wiring 的公开方法。
  * 协作模块：comments/state 负责纯状态和权限，comments/dom 负责节点结构与渲染，宿主 adapter 负责真正持久化。
  * 性能/安全约束：只维护一份最小本地 UI state，事件监听统一可销毁，失败时不抛出未处理异常。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.8-4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
   createCommentsSidebarDom,
   destroyCommentsSidebar,
+  localizeCommentsSidebarDom,
   renderCommentsSidebar
 } from './dom'
 import {
@@ -46,6 +47,7 @@ import type {
   JWordCommentThread,
   JWordCommentUpdateThreadRequest
 } from './types'
+import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 
 /** 创建 comments controller。 */
 export function createCommentsController(options: CreateCommentsControllerOptions): CommentsControllerHandle {
@@ -61,6 +63,7 @@ export function createCommentsController(options: CreateCommentsControllerOption
   const readonlyMode = viewContext.readonly
   let state = createCommentsState(options.threads ?? [])
   let lastCreateAnchor: JWordCommentAnchorState | null = null
+  let i18n = options.i18n ?? resolveJWordUiI18n()
 
   bindEvents()
   render()
@@ -111,6 +114,12 @@ export function createCommentsController(options: CreateCommentsControllerOption
     focusDraft(): void {
       focusActiveDraftInput()
     },
+    /** 动态刷新批注文案。 */
+    setI18n(nextI18n: ResolvedJWordUiI18n): void {
+      i18n = nextI18n
+      localizeCommentsSidebarDom(dom, i18n)
+      render()
+    },
     /** 销毁 controller。 */
     destroy(): void {
       signalController.abort()
@@ -125,7 +134,7 @@ export function createCommentsController(options: CreateCommentsControllerOption
     dom.composerInput.readOnly = readonlyMode
     dom.replyInput.readOnly = readonlyMode
     dom.editInput.readOnly = readonlyMode
-    renderCommentsSidebar(dom, readCommentsViewState(state, viewContext))
+    renderCommentsSidebar(dom, readCommentsViewState(state, viewContext), i18n)
   }
 
   /** 为当前 controller 绑定事件。 */

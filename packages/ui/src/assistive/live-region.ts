@@ -3,7 +3,7 @@
  * 边界：只管理宿主元素属性、最近一次播报文案和销毁态，不生成业务文案，也不订阅 editor。
  * 协作模块：后续 createJWordUi 负责在 selection、transaction、destroy 生命周期里调用这里的 announce。
  * 性能/安全约束：不在顶层访问 DOM，只在调用 createLiveRegion 时写入传入宿主，重复文案默认去重避免刷屏。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md#67-a11y-验收。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export interface LiveRegionAnnounceOptions {

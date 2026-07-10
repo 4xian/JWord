@@ -5,7 +5,7 @@
  * 边界：只覆盖 exportPdfFromLayout 授权 fail-fast，不扩展 PDF 渲染能力。
  * 协作模块：packages/pdf/src/index.ts、core layout 和 packages/license 稳定诊断。
  * 约束：缺授权时必须在映射 layout 或生成 PDF 字节前失败，错误不携带文档内容。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-5-commercial-readiness。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

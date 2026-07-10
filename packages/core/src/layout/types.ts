@@ -3,7 +3,7 @@
  * 边界：只描述分页布局的数据结构，不执行布局、不访问 DOM、不读取 Y.Doc。
  * 协作模块：engine、incremental、query、renderer 和 editor facade 通过这些类型共享边界。
  * 性能/安全约束：保持类型可序列化和 framework-agnostic，禁止引入运行时副作用。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { FontManager, ResolvedFontStyle } from './font-manager'

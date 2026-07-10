@@ -3,6 +3,6 @@
  * 边界: 不承载测试逻辑，不改变 Playwright 执行入口的公开命名语义。
  * 协作: 相邻的键盘、选区、剪贴板、输入法和大夹具拆分文件。
  * 约束: Phase 5 纯拆分入口，禁止夹带行为变更。
- * Specs: docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 export {}

@@ -3,7 +3,7 @@
  * 边界：只校验 relay 请求体和 automation.autoInsert 授权，不执行 AI 生成、不写入文档、不访问 history storage。
  * 协作模块：index.ts 路由到本模块；packages/license 提供 Gate 6 autoInsert feature key。
  * 性能/安全约束：未授权时不接受 chunk；响应只返回 relay 元数据，不回显用户文档内容或完整 chunk。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-633。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

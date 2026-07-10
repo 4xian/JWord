@@ -1225,6 +1225,87 @@
       ]
     },
     {
+      "code": "PLUGIN_ADAPTER_DUPLICATE",
+      "owner": "core",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "use-first-registered-adapter",
+      "description": "Core plugin host detected more than one adapter for the same slot and will use the first registered adapter.",
+      "domains": [
+        "core",
+        "plugin",
+        "adapter"
+      ]
+    },
+    {
+      "code": "PLUGIN_ADAPTER_FAILED",
+      "owner": "core",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "isolate-plugin-adapter",
+      "description": "Core plugin host isolated a plugin adapter failure without corrupting editor state.",
+      "domains": [
+        "core",
+        "plugin",
+        "adapter"
+      ]
+    },
+    {
+      "code": "PLUGIN_ADAPTER_UNAVAILABLE",
+      "owner": "core",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "skip-adapter-dependent-action",
+      "description": "Core plugin host could not resolve a requested adapter from the plugin registry.",
+      "domains": [
+        "core",
+        "plugin",
+        "adapter"
+      ]
+    },
+    {
+      "code": "PLUGIN_IMPORT_REJECTED",
+      "owner": "core",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "keep-document-unchanged",
+      "description": "Plugin import adapter rejected an import request and the current document remains unchanged.",
+      "domains": [
+        "core",
+        "plugin",
+        "adapter",
+        "import"
+      ]
+    },
+    {
+      "code": "PLUGIN_EXPORT_REJECTED",
+      "owner": "core",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "return-export-error-without-download",
+      "description": "Plugin export adapter rejected an export request and no browser download is triggered by core.",
+      "domains": [
+        "core",
+        "plugin",
+        "adapter",
+        "export"
+      ]
+    },
+    {
+      "code": "PLUGIN_COLLAB_PROVIDER_REJECTED",
+      "owner": "core",
+      "severity": "warning",
+      "recoverable": true,
+      "fallback": "block-provider-attachment",
+      "description": "Plugin collaboration provider adapter rejected provider creation or attachment without exposing provider internals.",
+      "domains": [
+        "core",
+        "plugin",
+        "adapter",
+        "collaboration"
+      ]
+    },
+    {
       "code": "PLUGIN_COMMAND_DUPLICATE",
       "owner": "core",
       "severity": "error",

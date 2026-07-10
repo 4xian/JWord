@@ -3,7 +3,7 @@
  * 边界：只做只读遍历和顺序判定，不构造 command、不写入 Y.Doc、不访问 DOM。
  * 协作模块：command builder 和 formatting state 共享这里的选区解析结果，避免各自重写遍历逻辑。
  * 性能/安全约束：按当前 projection 做一次轻量 DFS，适合 Gate 3 toolbar 基础能力，不缓存可写引用。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { countGraphemes } from '../shared/grapheme'
@@ -232,10 +232,14 @@ function createProjectionIndex(projection: DocumentProjection): ProjectionIndex 
         const paragraphTarget = createSelectedParagraphTarget(block, currentParagraphOrder, firstRunOrder)
 
         paragraphs.push(paragraphTarget)
-        paragraphById.set(block.id, paragraphTarget)
+        if (!paragraphById.has(block.id)) {
+          paragraphById.set(block.id, paragraphTarget)
+        }
         for (const runTarget of paragraphRunTargets) {
           runs.push(runTarget)
-          runById.set(runTarget.run.id, runTarget)
+          if (!runById.has(runTarget.run.id)) {
+            runById.set(runTarget.run.id, runTarget)
+          }
         }
 
         continue

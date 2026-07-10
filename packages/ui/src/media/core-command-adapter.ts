@@ -3,7 +3,7 @@
  * 边界：只负责参数映射、命令执行和最小成功/延期文案，不实现上传适配器或 DOM。
  * 协作模块：media controller 通过该桥接层真正写入 editor，examples/vanilla 和未来宿主都可直接复用。
  * 性能/安全约束：所有图片写入仍走 editor facade 的 transaction pipeline，不旁路修改 projection。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

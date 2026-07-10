@@ -5,7 +5,7 @@
  * 边界：只覆盖内存 Y.Doc update，不接 provider、IndexedDB、WebSocket 或浏览器 DOM。
  * 协作模块：collab provider、persistence update log 和 Editor facade 后续复用同一 apply update 入口。
  * 性能/安全约束：测试只使用小型内存文档，禁止保存 projection JSON 作为协同真源。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---core-协同-hookorigin-和-history-scope。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'

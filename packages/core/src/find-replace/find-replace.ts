@@ -3,7 +3,7 @@
  * 边界：只处理 projection 文本扫描和 Command 生成，不直接改 projection、不访问 DOM。
  * 协作模块：Editor facade 提供 TextAnchor、RangeRef 快照、snapshot 定位和 executeCommand。
  * 性能/安全约束：结果位置保存 TextRangeRecord；替换写入只通过 deleteRange/insertText operation。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createSelectionState } from '../model/selection'

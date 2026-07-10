@@ -3,7 +3,7 @@
  * 边界：不执行 editor command，不持有第二套 selection，只围绕 DOM 事件更新 controller 运行态。
  * 协作模块：selection-actions/controller 装配入口、selection-actions/dom DOM 句柄。
  * 性能/安全约束：查询范围限定在 editorHost 内，不持有第二套文档状态。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor, SelectionState } from '@4xian/jword-core'
 import { cloneSelection } from '../toolbar/state'

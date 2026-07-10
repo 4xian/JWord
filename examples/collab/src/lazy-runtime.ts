@@ -3,7 +3,7 @@
  * 边界：只负责动态 import 与 runtime 装配，不接 DOM、不注册事件、不声明真实 provider/offline 完成。
  * 协作：main.ts、runtime/provider-runtime、runtime/offline-runtime、runtime/history-runtime 和 runtime.ts。
  * 约束：provider/offline/history 分片必须通过动态 import 进入 demo，避免首屏静态拉入。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { CollabDemoRuntime } from './runtime'
 import type { HocuspocusDemoRuntimeOptions } from './runtime/hocuspocus-runtime'

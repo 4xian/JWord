@@ -3,7 +3,7 @@
  * 边界：只编排自动 package graph、roundtrip diff 和外部输入的 validator/人工应用结果，不启动办公套件或联网安装工具。
  * 协作模块：inspectDocxPackage、diffDocxRoundtrip、fixtures/docx 兼容矩阵后续消费本报告。
  * 性能/安全约束：报告必须保留未执行项的 pending 状态，不用兼容百分比替代证据。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {
@@ -19,7 +19,7 @@ export type DocxCompatibilityAutomatedCheckKind =
   | 'roundtrip-diff'
   | 'open-xml-validator'
 
-export type DocxCompatibilityAppName = 'Word' | 'WPS' | 'LibreOffice'
+export type DocxCompatibilityAppName = 'Word'
 
 export interface CreateDocxCompatibilityReportOptions extends ImportDocxOptions {
   readonly fixtureId: string
@@ -79,7 +79,7 @@ export interface DocxOpenXmlValidationResult {
   readonly diagnostics: readonly DocxOpenXmlValidationDiagnostic[]
 }
 
-const DEFAULT_APP_NAMES = ['Word', 'WPS', 'LibreOffice'] satisfies readonly DocxCompatibilityAppName[]
+const DEFAULT_APP_NAMES = ['Word'] satisfies readonly DocxCompatibilityAppName[]
 
 /** 创建 DOCX 兼容验证报告。 */
 export async function createDocxCompatibilityReport(

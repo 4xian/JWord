@@ -3,7 +3,7 @@
  * 边界：不保存 controller 状态，不直接执行 editor 命令。
  * 协作模块：table controller 调用这些纯辅助函数，table state 提供按钮可用态判断。
  * 性能/安全约束：只做轻量 DOM 和布局读写，不引入框架依赖，不绕过 editor transaction。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   cssPxToTwips,
@@ -15,6 +15,11 @@ import {
   type SelectionState
 } from '@4xian/jword-core'
 import type { JWordTablePanelElements, JWordTableSelectionTarget } from '../types'
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import {
   canDeleteTargetColumn,
   canDeleteTargetRow,
@@ -143,21 +148,24 @@ export function readPreviewDimension(value: string | undefined, fallback: number
 }
 
 /** 创建表格专用右键菜单。 */
-export function createTableContextMenu(host: HTMLElement): TableContextMenuElements {
+export function createTableContextMenu(
+  host: HTMLElement,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
+): TableContextMenuElements {
   const root = document.createElement('div')
   const group = document.createElement('div')
   const editGroup = document.createElement('div')
   const structureGroup = document.createElement('div')
-  const copyButton = createContextMenuButton('clipboard.copy', '复制')
-  const cutButton = createContextMenuButton('clipboard.cut', '剪切')
-  const pasteButton = createContextMenuButton('clipboard.paste', '粘贴')
-  const insertRowBeforeButton = createContextMenuButton('table.insert-row-before', '上方插入行')
-  const insertRowAfterButton = createContextMenuButton('table.insert-row-after', '下方插入行')
-  const deleteRowButton = createContextMenuButton('table.delete-row', '删除行')
-  const insertColumnBeforeButton = createContextMenuButton('table.insert-column-before', '左侧插入列')
-  const insertColumnAfterButton = createContextMenuButton('table.insert-column-after', '右侧插入列')
-  const deleteColumnButton = createContextMenuButton('table.delete-column', '删除列')
-  const mergeRightButton = createContextMenuButton('table.merge-right', '向右合并')
+  const copyButton = createContextMenuButton('clipboard.copy', readTableText(i18n, 'copy', '复制'))
+  const cutButton = createContextMenuButton('clipboard.cut', readTableText(i18n, 'cut', '剪切'))
+  const pasteButton = createContextMenuButton('clipboard.paste', readTableText(i18n, 'paste', '粘贴'))
+  const insertRowBeforeButton = createContextMenuButton('table.insert-row-before', readTableText(i18n, 'insertRowBefore', '上方插入行'))
+  const insertRowAfterButton = createContextMenuButton('table.insert-row-after', readTableText(i18n, 'insertRowAfter', '下方插入行'))
+  const deleteRowButton = createContextMenuButton('table.delete-row', readTableText(i18n, 'deleteRow', '删除行'))
+  const insertColumnBeforeButton = createContextMenuButton('table.insert-column-before', readTableText(i18n, 'insertColumnBefore', '左侧插入列'))
+  const insertColumnAfterButton = createContextMenuButton('table.insert-column-after', readTableText(i18n, 'insertColumnAfter', '右侧插入列'))
+  const deleteColumnButton = createContextMenuButton('table.delete-column', readTableText(i18n, 'deleteColumn', '删除列'))
+  const mergeRightButton = createContextMenuButton('table.merge-right', readTableText(i18n, 'mergeRight', '向右合并'))
 
   root.className = 'jw-context-menu'
   root.hidden = true
@@ -184,6 +192,20 @@ export function createTableContextMenu(host: HTMLElement): TableContextMenuEleme
     deleteColumnButton,
     mergeRightButton
   }
+}
+
+/** 动态刷新表格右键菜单文案。 */
+export function localizeTableContextMenu(menu: TableContextMenuElements, i18n: ResolvedJWordUiI18n): void {
+  setContextMenuButtonText(menu.copyButton, readTableText(i18n, 'copy', '复制'))
+  setContextMenuButtonText(menu.cutButton, readTableText(i18n, 'cut', '剪切'))
+  setContextMenuButtonText(menu.pasteButton, readTableText(i18n, 'paste', '粘贴'))
+  setContextMenuButtonText(menu.insertRowBeforeButton, readTableText(i18n, 'insertRowBefore', '上方插入行'))
+  setContextMenuButtonText(menu.insertRowAfterButton, readTableText(i18n, 'insertRowAfter', '下方插入行'))
+  setContextMenuButtonText(menu.deleteRowButton, readTableText(i18n, 'deleteRow', '删除行'))
+  setContextMenuButtonText(menu.insertColumnBeforeButton, readTableText(i18n, 'insertColumnBefore', '左侧插入列'))
+  setContextMenuButtonText(menu.insertColumnAfterButton, readTableText(i18n, 'insertColumnAfter', '右侧插入列'))
+  setContextMenuButtonText(menu.deleteColumnButton, readTableText(i18n, 'deleteColumn', '删除列'))
+  setContextMenuButtonText(menu.mergeRightButton, readTableText(i18n, 'mergeRight', '向右合并'))
 }
 
 /** 创建表格行列尺寸拖拽 handle 容器。 */
@@ -245,7 +267,8 @@ export function syncResizeHandles(
   table: TableLayoutBox | null,
   targetAvailable: boolean,
   busy: boolean,
-  onPointerDown: (event: PointerEvent) => void
+  onPointerDown: (event: PointerEvent) => void,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
 ): void {
   layer.hidden = !targetAvailable || geometry === null || table === null
   layer.replaceChildren()
@@ -276,7 +299,8 @@ export function syncResizeHandles(
     handle.style.height = `${Math.max(6, Math.round(geometry.height))}px`
     handle.style.borderRadius = '0'
     handle.style.cursor = 'col-resize'
-    handle.setAttribute('aria-label', `调整第 ${columnIndex + 1} 列宽度`)
+    handle.setAttribute('aria-label', readTableText(i18n, 'resizeColumn', '调整第 {index} 列宽度')
+      .replace('{index}', String(columnIndex + 1)))
     handle.setAttribute('data-jword-table-resize-handle', `column-${columnIndex}`)
     handle.addEventListener('pointerdown', onPointerDown)
     layer.append(handle)
@@ -299,7 +323,8 @@ export function syncResizeHandles(
     handle.style.height = '2px'
     handle.style.borderRadius = '0'
     handle.style.cursor = 'row-resize'
-    handle.setAttribute('aria-label', `调整第 ${rowIndex + 1} 行高度`)
+    handle.setAttribute('aria-label', readTableText(i18n, 'resizeRow', '调整第 {index} 行高度')
+      .replace('{index}', String(rowIndex + 1)))
     handle.setAttribute('data-jword-table-resize-handle', `row-${rowIndex}`)
     handle.addEventListener('pointerdown', onPointerDown)
     layer.append(handle)
@@ -579,9 +604,27 @@ function createContextMenuButton(actionId: string, text: string): HTMLButtonElem
   button.type = 'button'
   button.className = 'jw-context-menu__button'
   button.setAttribute('data-jword-context-action', actionId)
+  button.title = text
+  button.setAttribute('aria-label', text)
   label.className = 'jw-context-menu__label'
   label.textContent = text
   button.append(label)
 
   return button
+}
+
+/** 更新右键菜单按钮文案。 */
+function setContextMenuButtonText(button: HTMLButtonElement, text: string): void {
+  const label = button.querySelector<HTMLElement>('.jw-context-menu__label')
+
+  if (label !== null) {
+    label.textContent = text
+  }
+  button.title = text
+  button.setAttribute('aria-label', text)
+}
+
+/** 读取表格工具文案。 */
+function readTableText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
+  return readJWordUiText(i18n, `menu.table.${key}`, fallback)
 }

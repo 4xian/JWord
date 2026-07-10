@@ -3,7 +3,7 @@
  * 边界：只覆盖 Hocuspocus provider 下 AI/local 与 AI/remote 并发，不扩展历史、DOCX 或生产持久化矩阵。
  * 协作：examples/collab/src/runtime/hocuspocus-runtime.ts、Hocuspocus 本地服务和 Playwright chromium 项目。
  * 约束：测试启动独立 Vite 服务；每个场景记录初始文档、操作序列、origin 预期和最终 projection 摘要。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { ChildProcess } from 'node:child_process'
@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 import { createCollabHocuspocusServiceForTest, type CollabHocuspocusService } from './collab-hocuspocus-service'
 
-const collabDemoUrl = 'http://127.0.0.1:4193'
+let collabDemoUrl = 'http://127.0.0.1:4193'
 const collabDemoDirectory = fileURLToPath(new URL('..', import.meta.url))
 const viteExecutablePath = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url))
 const autoInsertTokens = ['协同', '版本', '离线', '回放']
@@ -24,13 +24,16 @@ test.setTimeout(120000)
 let serverProcess: ChildProcess | null = null
 let hocuspocusService: CollabHocuspocusService | null = null
 
-test.beforeAll(async () => {
+test.beforeAll(async ({ browserName }) => {
   test.setTimeout(120000)
+  const collabDemoPort = readCollabDemoPort(browserName)
+
+  collabDemoUrl = `http://127.0.0.1:${collabDemoPort}`
   serverProcess = spawn(viteExecutablePath, [
     '--host',
     '127.0.0.1',
     '--port',
-    '4193',
+    String(collabDemoPort),
     '--strictPort'
   ], {
     cwd: collabDemoDirectory,
@@ -43,6 +46,18 @@ test.beforeAll(async () => {
 
   await waitForCollabDemoServer()
 })
+
+/** 按浏览器项目分配独立 demo 端口，避免并行项目互相复用和关闭 Vite。 */
+function readCollabDemoPort(browserName: string): number {
+  if (browserName === 'firefox') {
+    return 4197
+  }
+  if (browserName === 'webkit') {
+    return 4198
+  }
+
+  return 4193
+}
 
 test.afterAll(() => {
   serverProcess?.kill()
@@ -65,8 +80,8 @@ test('Gate 6 provider AI 在 anchor 流式插入时本地前方输入不丢不�
   const initialText = 'anchor'
   const localPrefix = 'local '
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a'))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b'))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -74,22 +89,24 @@ test('Gate 6 provider AI 在 anchor 流式插入时本地前方输入不丢不�
     timeout: 10000
   })
 
-  await writeClientText(clientA, '#jword-collab-client-a', initialText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(initialText, {
+  await writeClientText(clientA, 'client-a', initialText)
+  await expectClientText(clientB, 'client-b', initialText, {
     timeout: 10000
   })
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.startAutoInsert())
   await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(1)
-  await writeClientText(clientA, '#jword-collab-client-a', `${localPrefix}${await readFirstClientText(clientA)}`)
-  await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(autoInsertTokens.length)
+  await writeClientText(clientA, 'client-a', `${localPrefix}${await readFirstClientText(clientA)}`)
+  await expect.poll(() => readAutoInsertInsertedCount(clientA), {
+    timeout: 10000
+  }).toBeGreaterThanOrEqual(autoInsertTokens.length)
 
   const expectedBeforeUndo = `${localPrefix}${initialText}${autoInsertTokens.join('')}`
 
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(expectedBeforeUndo, {
+  await expectClientText(clientA, 'client-a', expectedBeforeUndo, {
     timeout: 10000
   })
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(expectedBeforeUndo, {
+  await expectClientText(clientB, 'client-b', expectedBeforeUndo, {
     timeout: 10000
   })
   expect(countOccurrences(await readFirstClientText(clientA), 'local')).toBe(1)
@@ -101,10 +118,10 @@ test('Gate 6 provider AI 在 anchor 流式插入时本地前方输入不丢不�
   const expectedAfterUndo = `${initialText}${autoInsertTokens.join('')}`
 
   expect(undoText).toBe(expectedAfterUndo)
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(expectedAfterUndo, {
+  await expectClientText(clientA, 'client-a', expectedAfterUndo, {
     timeout: 10000
   })
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(expectedAfterUndo, {
+  await expectClientText(clientB, 'client-b', expectedAfterUndo, {
     timeout: 10000
   })
 
@@ -126,8 +143,8 @@ test('Gate 6 provider AI 替换 range 时本地后方输入不被覆盖', async 
   const localSuffix = ' local'
   const targetEnd = 'target'.length
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a'))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b'))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -135,8 +152,8 @@ test('Gate 6 provider AI 替换 range 时本地后方输入不被覆盖', async 
     timeout: 10000
   })
 
-  await writeClientText(clientA, '#jword-collab-client-a', initialText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(initialText, {
+  await writeClientText(clientA, 'client-a', initialText)
+  await expectClientText(clientB, 'client-b', initialText, {
     timeout: 10000
   })
 
@@ -145,15 +162,17 @@ test('Gate 6 provider AI 替换 range 时本地后方输入不被覆盖', async 
     rangeEnd: targetEnd
   })
   await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(1)
-  await writeClientText(clientA, '#jword-collab-client-a', `${await readFirstClientText(clientA)}${localSuffix}`)
-  await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(autoInsertTokens.length)
+  await writeClientText(clientA, 'client-a', `${await readFirstClientText(clientA)}${localSuffix}`)
+  await expect.poll(() => readAutoInsertInsertedCount(clientA), {
+    timeout: 10000
+  }).toBeGreaterThanOrEqual(autoInsertTokens.length)
 
   const expectedBeforeUndo = `${autoInsertTokens.join('')} tail${localSuffix}`
 
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(expectedBeforeUndo, {
+  await expectClientText(clientA, 'client-a', expectedBeforeUndo, {
     timeout: 10000
   })
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(expectedBeforeUndo, {
+  await expectClientText(clientB, 'client-b', expectedBeforeUndo, {
     timeout: 10000
   })
 
@@ -161,10 +180,10 @@ test('Gate 6 provider AI 替换 range 时本地后方输入不被覆盖', async 
   const expectedAfterUndo = `${autoInsertTokens.join('')} tail`
 
   expect(undoText).toBe(expectedAfterUndo)
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(expectedAfterUndo, {
+  await expectClientText(clientA, 'client-a', expectedAfterUndo, {
     timeout: 10000
   })
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(expectedAfterUndo, {
+  await expectClientText(clientB, 'client-b', expectedAfterUndo, {
     timeout: 10000
   })
 
@@ -184,8 +203,8 @@ test('Gate 6 provider 用户删除 AI anchor 所在正文后返回 anchor unreso
   const roomId = `${started.roomPrefix}-${Date.now()}`
   const initialText = 'anchor'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a'))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b'))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -193,21 +212,21 @@ test('Gate 6 provider 用户删除 AI anchor 所在正文后返回 anchor unreso
     timeout: 10000
   })
 
-  await writeClientText(clientA, '#jword-collab-client-a', initialText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(initialText, {
+  await writeClientText(clientA, 'client-a', initialText)
+  await expectClientText(clientB, 'client-b', initialText, {
     timeout: 10000
   })
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.startAutoInsert())
   await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(1)
-  await writeClientText(clientA, '#jword-collab-client-a', '')
+  await writeClientText(clientA, 'client-a', '')
 
   await expect.poll(() => readAutoInsertDiagnosticCodes(clientA)).toContain('COLLAB_AUTO_INSERTER_ANCHOR_UNRESOLVED')
   await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBe(1)
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue('', {
+  await expectClientText(clientA, 'client-a', '', {
     timeout: 10000
   })
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue('', {
+  await expectClientText(clientB, 'client-b', '', {
     timeout: 10000
   })
 
@@ -228,8 +247,8 @@ test('Gate 6 provider AI 写入时远端同段输入最终不丢不重复', asyn
   const initialText = 'remote-base'
   const remoteText = 'remote-user'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a'))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b'))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -237,16 +256,18 @@ test('Gate 6 provider AI 写入时远端同段输入最终不丢不重复', asyn
     timeout: 10000
   })
 
-  await writeClientText(clientA, '#jword-collab-client-a', initialText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(initialText, {
+  await writeClientText(clientA, 'client-a', initialText)
+  await expectClientText(clientB, 'client-b', initialText, {
     timeout: 10000
   })
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.startAutoInsert())
   await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(1)
   await expect.poll(() => readSecondClientText(clientB)).toContain(autoInsertTokens[0])
-  await writeClientText(clientB, '#jword-collab-client-b', `${await readSecondClientText(clientB)}${remoteText}`)
-  await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(autoInsertTokens.length)
+  await writeClientText(clientB, 'client-b', `${await readSecondClientText(clientB)}${remoteText}`)
+  await expect.poll(() => readAutoInsertInsertedCount(clientA), {
+    timeout: 10000
+  }).toBeGreaterThanOrEqual(autoInsertTokens.length)
 
   const finalText = await waitForClientsToConverge(clientA, clientB)
 
@@ -273,8 +294,8 @@ test('Gate 6 provider AI 写入时远端删除相邻文本后最终不残留删�
   const initialText = 'keep tail'
   const deletedText = ' tail'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a'))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b'))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -282,8 +303,8 @@ test('Gate 6 provider AI 写入时远端删除相邻文本后最终不残留删�
     timeout: 10000
   })
 
-  await writeClientText(clientA, '#jword-collab-client-a', initialText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(initialText, {
+  await writeClientText(clientA, 'client-a', initialText)
+  await expectClientText(clientB, 'client-b', initialText, {
     timeout: 10000
   })
 
@@ -292,10 +313,12 @@ test('Gate 6 provider AI 写入时远端删除相邻文本后最终不残留删�
   await expect.poll(() => readSecondClientText(clientB)).toContain(autoInsertTokens[0])
   await writeClientText(
     clientB,
-    '#jword-collab-client-b',
+    'client-b',
     `${await readSecondClientText(clientB)}`.replace(deletedText, '')
   )
-  await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(autoInsertTokens.length)
+  await expect.poll(() => readAutoInsertInsertedCount(clientA), {
+    timeout: 10000
+  }).toBeGreaterThanOrEqual(autoInsertTokens.length)
 
   const finalText = await waitForClientsToConverge(clientA, clientB)
 
@@ -321,8 +344,8 @@ test('Gate 6 provider AI 写入期间断开再恢复后远端收敛', async ({ b
   const roomId = `${started.roomPrefix}-${Date.now()}`
   const initialText = 'reconnect'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a'))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b'))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -330,8 +353,8 @@ test('Gate 6 provider AI 写入期间断开再恢复后远端收敛', async ({ b
     timeout: 10000
   })
 
-  await writeClientText(clientA, '#jword-collab-client-a', initialText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(initialText, {
+  await writeClientText(clientA, 'client-a', initialText)
+  await expectClientText(clientB, 'client-b', initialText, {
     timeout: 10000
   })
 
@@ -339,7 +362,9 @@ test('Gate 6 provider AI 写入期间断开再恢复后远端收敛', async ({ b
   await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(1)
   await clientA.evaluate(() => window.__jwordCollabDemo?.simulateDisconnect())
   await expect.poll(() => readOfflineLastEvent(clientA)).toBe('offline-disconnected')
-  await expect.poll(() => readAutoInsertInsertedCount(clientA)).toBeGreaterThanOrEqual(autoInsertTokens.length)
+  await expect.poll(() => readAutoInsertInsertedCount(clientA), {
+    timeout: 10000
+  }).toBeGreaterThanOrEqual(autoInsertTokens.length)
   await expect.poll(() => readOfflineQueuedOperations(clientA)).toBeGreaterThan(0)
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.simulateReconnect())
@@ -389,6 +414,7 @@ async function waitForCollabDemoServer(): Promise<void> {
 /** 构造真实 Hocuspocus provider demo URL。 */
 function createHocuspocusDemoUrl(
   webSocketUrl: string,
+  historyHttpUrl: string,
   roomId: string,
   clientId: string
 ): string {
@@ -396,67 +422,80 @@ function createHocuspocusDemoUrl(
 
   url.searchParams.set('provider', 'hocuspocus')
   url.searchParams.set('ws', webSocketUrl)
+  url.searchParams.set('history', historyHttpUrl)
   url.searchParams.set('room', roomId)
   url.searchParams.set('client', clientId)
 
   return url.href
 }
 
-/** 用真实 input 事件写入 textarea，确保进入 demo runtime。 */
-async function writeClientText(page: Page, selector: string, value: string): Promise<void> {
-  await beginClientTextEdit(page, selector)
-  await commitPreparedClientText(page, selector, value)
-}
+/** 通过 debug API 写入 client 正文，确保进入 demo runtime。 */
+async function writeClientText(page: Page, clientId: string, value: string): Promise<void> {
+  const previousText = await readClientText(page, clientId) ?? ''
 
-/** 捕获 textarea 本地编辑前的可见文本基线。 */
-async function beginClientTextEdit(page: Page, selector: string): Promise<void> {
-  await page.locator(selector).evaluate((element, nextValue) => {
-    if (!(element instanceof HTMLTextAreaElement)) {
-      return
-    }
-
-    element.dispatchEvent(new InputEvent('beforeinput', {
-      bubbles: true,
-      data: nextValue,
-      inputType: 'insertText'
-    }))
-  }, null)
-}
-
-/** 提交已经捕获基线的 textarea 文本变更。 */
-async function commitPreparedClientText(page: Page, selector: string, value: string): Promise<void> {
-  await page.locator(selector).evaluate((element, nextValue) => {
-    if (!(element instanceof HTMLTextAreaElement)) {
-      return
-    }
-
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
-
-    setter?.call(element, nextValue)
-    element.dispatchEvent(new InputEvent('input', {
-      bubbles: true,
-      data: nextValue,
-      inputType: 'insertText'
-    }))
-  }, value)
+  await updateClientText(page, clientId, value, previousText)
 }
 
 /** 读取第一个 client 文本。 */
 async function readFirstClientText(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
+  const text = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readCollabState().clients[0]?.text ?? null
   })
+
+  return normalizeCollabText(text)
 }
 
 /** 读取第二个 client 文本。 */
 async function readSecondClientText(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
+  const text = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readCollabState().clients[1]?.text ?? null
   })
+
+  return normalizeCollabText(text)
+}
+
+/** 按 client id 读取对应页面的正文快照。 */
+async function readClientText(page: Page, clientId: string): Promise<string | null> {
+  return clientId === 'client-a'
+    ? readFirstClientText(page)
+    : readSecondClientText(page)
+}
+
+/** 断言指定 client 正文最终等于预期文本。 */
+async function expectClientText(
+  page: Page,
+  clientId: string,
+  expectedText: string,
+  options: ClientTextExpectationOptions = {}
+): Promise<void> {
+  await expect.poll(() => readClientText(page, clientId), options).toBe(expectedText)
+}
+
+/** 通过 demo debug API 写入指定 provider client 的正文。 */
+async function updateClientText(
+  page: Page,
+  clientId: string,
+  text: string,
+  previousText?: string
+): Promise<void> {
+  await page.evaluate((input) => {
+    const debugWindow = window as unknown as CollabDebugWindow
+
+    debugWindow.__jwordCollabDemo?.updateClientText(input.clientId, input.text, input.previousText)
+  }, {
+    clientId,
+    text,
+    previousText
+  })
+}
+
+/** 去除 editor 投影为单段文档补出的首尾换行。 */
+function normalizeCollabText(text: string | null): string | null {
+  return text?.replace(/^\n|\n$/gu, '') ?? null
 }
 
 /** 等待两个浏览器页面收敛到同一正文。 */
@@ -517,11 +556,13 @@ async function readOfflineQueuedOperations(page: Page): Promise<number | null> {
 
 /** 通过 demo debug API 撤销当前页面的本地用户输入。 */
 async function undoLocalUserEdit(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
+  const text = await page.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.undoLocalUserEdit().clients[0]?.text ?? null
   })
+
+  return normalizeCollabText(text)
 }
 
 /** 统计字符串里目标片段出现次数。 */
@@ -544,6 +585,7 @@ interface CollabDebugApi {
   readonly simulateDisconnect: () => void
   readonly simulateReconnect: () => void
   readonly undoLocalUserEdit: () => CollabStateSnapshot
+  readonly updateClientText: (clientId: string, text: string, previousText?: string) => CollabStateSnapshot
 }
 
 interface AutoInsertStartInput {
@@ -566,4 +608,8 @@ interface CollabStateSnapshot {
 interface OfflineStateSnapshot {
   readonly queuedOperations: number
   readonly lastEvent: string
+}
+
+interface ClientTextExpectationOptions {
+  readonly timeout?: number
 }

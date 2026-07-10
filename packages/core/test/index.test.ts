@@ -5,7 +5,7 @@
  * 边界：只检查导出符号、错误码类型和 history 返回类型，不测试内部 fixture helper 或未实现 Future API。
  * 协作模块：Editor facade、错误码体系、history facade 和外部 TypeScript 消费方复用根入口。
  * 性能/安全约束：测试只导入包内入口，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md#44-api-治理。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, expectTypeOf, it } from 'vitest'

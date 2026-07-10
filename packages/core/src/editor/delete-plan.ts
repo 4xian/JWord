@@ -3,7 +3,7 @@
  * 边界：只生成删除相关 operation 并复用事务入口，不处理键盘事件分发。
  * 协作模块：runtime-selection、selection-targets、图片命令构建器与 transaction pipeline。
  * 性能/安全约束：删除前只遍历选区命中的 run 和 projection 引用计数，不直接写 Projection。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { buildDeleteSelectedImageCommand } from '../operations/command-builders'

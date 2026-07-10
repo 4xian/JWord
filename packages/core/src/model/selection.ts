@@ -3,7 +3,7 @@
  * 边界：只处理 anchor/focus、direction、affinity 和恢复快照，不读取 DOM、不做 hit-test、不触发布局。
  * 协作模块：输入系统、历史模块、批注、修订和远端光标后续复用同一套 AnchorRef/RangeRef。
  * 性能/安全约束：选择区对象冻结后只读，不持有可写 Yjs 容器，不访问浏览器环境。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

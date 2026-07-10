@@ -3,7 +3,7 @@
  * 边界：只测 core 公开 Editor facade、layout 和 canvas 渲染 helper，不访问浏览器 DOM，不声明最终 P95 达标。
  * 协作模块：fixtures/plain-text/gate2-large-fixture.mjs、packages/core 和 tools/bench/run-bench.mjs。
  * 约束：输出必须是可机器读取 JSON；本脚本先固化基线，P95 < 50ms 门禁在专项优化达标后再写入 perf e2e。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#39-phase-4-性能专项输入热路径-p95--50ms。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { performance } from 'node:perf_hooks'
 

@@ -5,7 +5,7 @@
  * 边界：只被 architecture tests 消费，不执行办公套件或 Open XML validator。
  * 协作模块：Gate 5 兼容 runner 测试和 tools/compat/run-gate5-docx-compatibility.mjs。
  * 约束：辅助函数只运行本地 runner 并读取生成 artifact 证据，不伪造兼容结果。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { execFileSync } from 'node:child_process'
@@ -22,9 +22,7 @@ export interface Gate5CompatibilityRunnerDryRunReport {
   }
   readonly toolAvailability: {
     readonly openXmlValidator: Gate5CompatibilityRunnerToolStatus
-    readonly libreOffice: Gate5CompatibilityRunnerToolStatus
     readonly word: Gate5CompatibilityRunnerToolStatus
-    readonly wps: Gate5CompatibilityRunnerToolStatus
   }
 }
 

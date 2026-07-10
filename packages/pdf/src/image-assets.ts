@@ -3,7 +3,7 @@
  * 边界：只处理 data URL、Blob 与 ArrayBuffer 输入，不执行 PDF 绘制、不访问 worker 生命周期。
  * 协作模块：index.ts 的 PDF renderer 与 worker 入口共同复用图片资产解析。
  * 性能/安全约束：只接受 PNG/JPEG，返回独立字节视图，避免把不支持格式静默写入 PDF。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#313-发布no-alias-消费闭环phase-6m按-d2-执行。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { PdfErrorCode } from './diagnostics.js'

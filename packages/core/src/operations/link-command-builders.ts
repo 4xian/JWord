@@ -3,7 +3,7 @@
  * 边界：只生成命令和操作，不执行事务、不改投影，也不处理宿主打开行为。
  * 协作模块：选区目标、链接策略、事务流水线与投影共同提供链接闭环。
  * 性能/安全约束：builder 只遍历当前选区命中的 run，并复用现有 split-run 事务语义。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-3---批注与超链接step-48-410。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { isAllowedLinkUrl } from '../link/policy'

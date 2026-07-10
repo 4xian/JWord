@@ -3,7 +3,7 @@
  * 边界：只作为 Node CLI 包装，不承载 provider adapter、浏览器 UI 或持久化逻辑。
  * 协作：hocuspocus-service.ts 提供服务控制器，开发者可与 examples/collab Vite demo 同时启动。
  * 约束：仅用于本地开发；依赖 Node 22+ 的 TypeScript strip types 能力。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createCollabHocuspocusService } from './hocuspocus-service.ts'
 

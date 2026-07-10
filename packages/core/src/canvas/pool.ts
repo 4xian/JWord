@@ -3,7 +3,7 @@
  * 边界：只管理 canvas 对象尺寸和复用队列，不创建 DOM、不做布局、不执行绘制。
  * 协作模块：视口虚拟器 决定哪些页保留真实 canvas，画布渲染器 通过本模块获取和释放页面 canvas。
  * 性能/安全约束：离屏 canvas 必须缩到 1x1，避免非可视页继续占用大尺寸图形资源。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-分页-canvas-渲染。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createJWordError } from '../shared/errors'

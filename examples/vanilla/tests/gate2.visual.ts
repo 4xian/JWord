@@ -3,7 +3,7 @@
  * 边界: 只做浏览器视觉验收，固定少量 Gate 2 修复样张，不把 Gate 3 手势语义算作 Gate 2 证据。
  * 协作: vanilla demo 测试钩子和 canvas renderer。
  * 约束: 通过像素采样证明首/中/末页非空以及中段窗口页已绘制，避免人工打开页面。
- * Specs: docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'

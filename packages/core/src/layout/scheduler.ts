@@ -3,7 +3,7 @@
  * 边界：只计算页索引调度，不执行 layout、不读取 Y.Doc、不访问 DOM、不创建计时器。
  * 协作模块：Editor、worker 或后续 idle scheduler 可按本模块结果调度当前页和后续页重排。
  * 性能/安全约束：调度结果不可变，避免一次性重排所有页成为默认路径。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-2---分页-layout-与-canvas-render。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export interface LayoutScheduleInput {

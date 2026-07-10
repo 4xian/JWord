@@ -3,7 +3,7 @@
  * 边界：只维护 comments、commentRanges 和 document.commentIds，不处理 UI 展示或文本锚点迁移。
  * 协作模块：operation-adapter 负责分发，adapter-location 负责文本拆分时的范围迁移。
  * 性能/安全约束：不访问 DOM，不触发布局渲染；只替换目标批注记录。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

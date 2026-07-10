@@ -3,7 +3,7 @@
  * 边界：只处理纯字符串边界计算，不访问 DOM、不读取文档状态、不承载编辑语义。
  * 协作模块：position 和 operation-adapter 用它在公开 grapheme index 与 Y.Text UTF-16 index 之间转换。
  * 性能/安全约束：Gate 1 只覆盖小文本片段，按需分段即可；非法边界统一抛 JWordError。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createJWordError } from './errors'

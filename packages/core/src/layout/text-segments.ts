@@ -3,7 +3,7 @@
  * 边界：只处理纯文本分段和字体度量，不访问 DOM、不绘制 Canvas、不读取文档状态。
  * 协作模块：engine 使用这里生成 TextFragment，query 通过 advanceTwips 做片段内部命中。
  * 性能/安全约束：只对当前 inline 文本做线性扫描，避免逐字符 Canvas 绘制拉开英文单词。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { segmentGraphemes } from '../shared/grapheme'

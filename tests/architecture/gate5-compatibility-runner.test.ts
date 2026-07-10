@@ -4,14 +4,14 @@
  * 职责：约束 Gate 5 DOCX 兼容矩阵本地运行入口。
  * 边界：只验证 runner 的 dry-run 发现能力，不执行 Open XML validator 或办公套件。
  * 协作模块：tools/compat/run-gate5-docx-compatibility.mjs、fixtures/docx/registry.json 和 compatibility-matrix.json。
- * 约束：缺少外部工具时必须显式保留 pending，不允许伪造 Word/WPS/LibreOffice 或 validator 通过。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 约束：缺少外部工具时必须显式保留 pending，不允许伪造 Microsoft Word 或 validator 通过。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -38,9 +38,7 @@ describe('Gate 5 DOCX compatibility runner', () => {
       }
     })
     expect(report.toolAvailability.openXmlValidator.status).toMatch(/^(available|missing)$/)
-    expect(report.toolAvailability.libreOffice.status).toMatch(/^(available|missing)$/)
     expect(report.toolAvailability.word.status).toMatch(/^(available|missing)$/)
-    expect(report.toolAvailability.wps.status).toMatch(/^(available|missing)$/)
     expect('compatibilityPercent' in report).toBe(false)
   })
 
@@ -133,18 +131,6 @@ describe('Gate 5 DOCX compatibility runner', () => {
             'main visual difference notes',
             'artifact path and SHA-256 match this run'
           ]
-        }),
-        expect.objectContaining({
-          target: 'WPS',
-          status: 'pending',
-          exportArtifact: runStylesResult?.exportArtifact,
-          artifactSha256: runStylesResult?.exportArtifactEvidence.sha256
-        }),
-        expect.objectContaining({
-          target: 'LibreOffice',
-          status: 'pending',
-          exportArtifact: runStylesResult?.exportArtifact,
-          artifactSha256: runStylesResult?.exportArtifactEvidence.sha256
         })
       ])
     )
@@ -170,7 +156,7 @@ describe('Gate 5 DOCX compatibility runner', () => {
       })
     }
 
-    expect(publicApiDocument).toContain('Microsoft Word 桌面版与 LibreOffice 仍为 `pending/not-run`')
+    expect(publicApiDocument).toContain('Microsoft Word 桌面版仍为 `pending/not-run`')
     expect(publicApiDocument).toContain('不得声明已完成 Word 桌面版兼容验证')
   })
 
@@ -193,9 +179,9 @@ describe('Gate 5 DOCX compatibility runner', () => {
 
     const report = JSON.parse(readFileSync(outputPath, 'utf8')) as Gate5CompatibilityRunnerResultDocument
     const runStylesResult = report.results.find((result) => result.fixtureId === 'docx-t1-run-styles')
-    const wpsTemplate = report.evidenceTemplates.manualCompatibilityResults.results.find((result) =>
+    const wordTemplate = report.evidenceTemplates.manualCompatibilityResults.results.find((result) =>
       result.fixtureId === 'docx-t1-run-styles' &&
-      result.app === 'WPS'
+      result.app === 'Word'
     )
     const validatorTemplate = report.evidenceTemplates.openXmlValidationResults.results.find((result) =>
       result.fixtureId === 'docx-t1-run-styles'
@@ -206,9 +192,9 @@ describe('Gate 5 DOCX compatibility runner', () => {
       schemaVersion: 1,
       scope: 'docx-office-manual-compatibility-results'
     })
-    expect(wpsTemplate).toEqual({
+    expect(wordTemplate).toEqual({
       fixtureId: 'docx-t1-run-styles',
-      app: 'WPS',
+      app: 'Word',
       exportArtifact: runStylesResult?.exportArtifactEvidence.path,
       artifactByteLength: runStylesResult?.exportArtifactEvidence.byteLength,
       artifactSha256: runStylesResult?.exportArtifactEvidence.sha256,
@@ -326,7 +312,7 @@ describe('Gate 5 DOCX compatibility runner', () => {
       results: [
         {
           fixtureId: 'docx-t1-run-styles',
-          app: 'WPS',
+          app: 'Word',
           exportArtifact: artifactEvidence.path,
           artifactByteLength: artifactEvidence.byteLength,
           artifactSha256: artifactEvidence.sha256,
@@ -335,7 +321,7 @@ describe('Gate 5 DOCX compatibility runner', () => {
           repairPrompt: 'none',
           mainVisualDifference: 'none',
           blockingIssue: '',
-          evidence: 'manual WPS open/edit/save evidence'
+          evidence: 'manual Word open/edit/save evidence'
         }
       ]
     })}\n`)
@@ -352,16 +338,16 @@ describe('Gate 5 DOCX compatibility runner', () => {
 
     const report = JSON.parse(readFileSync(outputPath, 'utf8')) as Gate5CompatibilityRunnerResultDocument
     const runStylesResult = report.results.find((result) => result.fixtureId === 'docx-t1-run-styles')
-    const wpsResult = runStylesResult?.report.appResults.find((result) => result.app === 'WPS')
+    const wordResult = runStylesResult?.report.appResults.find((result) => result.app === 'Word')
 
-    expect(wpsResult).toEqual({
-      app: 'WPS',
+    expect(wordResult).toEqual({
+      app: 'Word',
       result: 'pass',
       editable: 'pass',
       repairPrompt: 'none',
       mainVisualDifference: 'none',
       blockingIssue: '',
-      evidence: 'manual WPS open/edit/save evidence'
+      evidence: 'manual Word open/edit/save evidence'
     })
   })
 
@@ -375,13 +361,13 @@ describe('Gate 5 DOCX compatibility runner', () => {
       results: [
         {
           fixtureId: 'docx-t1-run-styles',
-          app: 'WPS',
+          app: 'Word',
           result: 'pass',
           editable: 'pass',
           repairPrompt: 'none',
           mainVisualDifference: 'none',
           blockingIssue: '',
-          evidence: 'unbound WPS evidence without artifact hash'
+          evidence: 'unbound Word evidence without artifact hash'
         }
       ]
     })}\n`)
@@ -398,22 +384,22 @@ describe('Gate 5 DOCX compatibility runner', () => {
 
     const report = JSON.parse(readFileSync(outputPath, 'utf8')) as Gate5CompatibilityRunnerResultDocument
     const runStylesResult = report.results.find((result) => result.fixtureId === 'docx-t1-run-styles')
-    const wpsResult = runStylesResult?.report.appResults.find((result) => result.app === 'WPS')
-    const wpsRequest = report.evidenceRequests.find((request) =>
+    const wordResult = runStylesResult?.report.appResults.find((result) => result.app === 'Word')
+    const wordRequest = report.evidenceRequests.find((request) =>
       request.fixtureId === 'docx-t1-run-styles' &&
-      request.target === 'WPS'
+      request.target === 'Word'
     )
 
-    expect(wpsResult).toMatchObject({
-      app: 'WPS',
+    expect(wordResult).toMatchObject({
+      app: 'Word',
       result: 'pending',
       editable: 'pending',
       repairPrompt: 'pending',
       mainVisualDifference: 'pending',
-      blockingIssue: 'External WPS evidence does not declare current export artifact binding.'
+      blockingIssue: 'External Word evidence does not declare current export artifact binding.'
     })
-    expect(wpsResult?.evidence).toContain('ignored unbound WPS evidence')
-    expect(wpsRequest).toMatchObject({
+    expect(wordResult?.evidence).toContain('ignored unbound Word evidence')
+    expect(wordRequest).toMatchObject({
       status: 'missing-artifact-binding',
       artifactSha256: runStylesResult?.exportArtifactEvidence.sha256
     })
@@ -430,7 +416,7 @@ describe('Gate 5 DOCX compatibility runner', () => {
       results: [
         {
           fixtureId: 'docx-t1-run-styles',
-          app: 'WPS',
+          app: 'Word',
           exportArtifact: artifactEvidence.path,
           artifactByteLength: artifactEvidence.byteLength,
           artifactSha256: artifactEvidence.sha256,
@@ -439,7 +425,7 @@ describe('Gate 5 DOCX compatibility runner', () => {
           repairPrompt: 'none',
           mainVisualDifference: 'none',
           blockingIssue: '',
-          evidence: 'invalid WPS evidence with unsupported result value'
+          evidence: 'invalid Word evidence with unsupported result value'
         }
       ]
     })}\n`)
@@ -456,15 +442,15 @@ describe('Gate 5 DOCX compatibility runner', () => {
 
     const report = JSON.parse(readFileSync(outputPath, 'utf8')) as Gate5CompatibilityRunnerResultDocument
     const runStylesResult = report.results.find((result) => result.fixtureId === 'docx-t1-run-styles')
-    const wpsResult = runStylesResult?.report.appResults.find((result) => result.app === 'WPS')
-    const wpsRequest = report.evidenceRequests.find((request) =>
+    const wordResult = runStylesResult?.report.appResults.find((result) => result.app === 'Word')
+    const wordRequest = report.evidenceRequests.find((request) =>
       request.fixtureId === 'docx-t1-run-styles' &&
-      request.target === 'WPS'
+      request.target === 'Word'
     )
 
-    expect(wpsResult?.result).toBe('pending')
-    expect(wpsResult?.evidence).not.toContain('invalid WPS evidence')
-    expect(wpsRequest?.status).toBe('pending')
+    expect(wordResult?.result).toBe('pending')
+    expect(wordResult?.evidence).not.toContain('invalid Word evidence')
+    expect(wordRequest?.status).toBe('pending')
     expect(report.evidenceInputDiagnostics).toEqual([
       {
         source: 'manual-compatibility-results',
@@ -485,14 +471,14 @@ describe('Gate 5 DOCX compatibility runner', () => {
       results: [
         {
           fixtureId: 'docx-t1-run-styles',
-          app: 'WPS',
+          app: 'Word',
           artifactSha256: '0'.repeat(64),
           result: 'pass',
           editable: 'pass',
           repairPrompt: 'none',
           mainVisualDifference: 'none',
           blockingIssue: '',
-          evidence: 'stale WPS evidence from another export'
+          evidence: 'stale Word evidence from another export'
         }
       ]
     })}\n`)
@@ -509,22 +495,22 @@ describe('Gate 5 DOCX compatibility runner', () => {
 
     const report = JSON.parse(readFileSync(outputPath, 'utf8')) as Gate5CompatibilityRunnerResultDocument
     const runStylesResult = report.results.find((result) => result.fixtureId === 'docx-t1-run-styles')
-    const wpsResult = runStylesResult?.report.appResults.find((result) => result.app === 'WPS')
-    const wpsRequest = report.evidenceRequests.find((request) =>
+    const wordResult = runStylesResult?.report.appResults.find((result) => result.app === 'Word')
+    const wordRequest = report.evidenceRequests.find((request) =>
       request.fixtureId === 'docx-t1-run-styles' &&
-      request.target === 'WPS'
+      request.target === 'Word'
     )
 
-    expect(wpsResult).toMatchObject({
-      app: 'WPS',
+    expect(wordResult).toMatchObject({
+      app: 'Word',
       result: 'pending',
       editable: 'pending',
       repairPrompt: 'pending',
       mainVisualDifference: 'pending',
-      blockingIssue: 'External WPS evidence artifact does not match current export artifact.'
+      blockingIssue: 'External Word evidence artifact does not match current export artifact.'
     })
-    expect(wpsResult?.evidence).toContain('ignored stale WPS evidence')
-    expect(wpsRequest).toMatchObject({
+    expect(wordResult?.evidence).toContain('ignored stale Word evidence')
+    expect(wordRequest).toMatchObject({
       status: 'stale-artifact-evidence',
       artifactSha256: runStylesResult?.exportArtifactEvidence.sha256
     })

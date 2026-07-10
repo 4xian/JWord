@@ -3,7 +3,7 @@
  * 边界：不理解 .jword 业务结构，不读取 zip，也不产生诊断。
  * 协作模块：index.ts 保存打开流程和 messages.ts worker 消息 helper。
  * 性能/安全约束：字节 helper 总是返回独立 ArrayBuffer，避免共享外部可变视图。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-45---jword-原生保存与打开。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 export type JsonRecord = Record<string, unknown>
 

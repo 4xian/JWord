@@ -5,7 +5,7 @@
  * 边界：只检查脚本源码契约，不执行 Vite build 或读取 dist 产物。
  * 协作模块：tools/size/check-gate6-collab-bundle.mjs、examples/vanilla 和 examples/collab。
  * 约束：免费 vanilla 首屏不得包含协作高级代码；collab 示例的高级 runtime 必须保持按需加载。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-653。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'

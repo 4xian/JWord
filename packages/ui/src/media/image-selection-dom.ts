@@ -3,11 +3,16 @@
  * 边界：不读取 editor、不执行 media command、不计算 drop 锚点。
  * 协作模块：image-selection-controller 负责装配，image-resize-session 提供预览尺寸。
  * 性能/安全约束：DOM 只挂载到已存在 canvas container 内，不做顶层 DOM 访问。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { twipsToCssPx } from '@4xian/jword-core'
 
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import { createToolbarIcon } from '../toolbar/icons'
 import type { DragDropPreview } from './image-drag-drop'
 import type { ImageOverlayRect, ImageSelectionSnapshot } from './image-overlay-geometry'
@@ -33,6 +38,10 @@ export interface ImageSelectionDom {
   readonly rotateButton: HTMLButtonElement
   readonly resetButton: HTMLButtonElement
   readonly deleteButton: HTMLButtonElement
+  readonly downloadButton: HTMLButtonElement
+  readonly cropButton: HTMLButtonElement
+  readonly layoutButton: HTMLButtonElement
+  readonly commentButton: HTMLButtonElement
   readonly handles: Readonly<Record<ResizeHandleId, HTMLButtonElement>>
 }
 
@@ -48,7 +57,10 @@ export const RESIZE_HANDLE_IDS: readonly ResizeHandleId[] = Object.freeze([
 ])
 
 /** 创建 overlay DOM。 */
-export function createImageSelectionDom(canvasContainer: HTMLElement): ImageSelectionDom {
+export function createImageSelectionDom(
+  canvasContainer: HTMLElement,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
+): ImageSelectionDom {
   const layer = canvasContainer.ownerDocument.createElement('div')
   const selection = canvasContainer.ownerDocument.createElement('div')
   const toolbar = canvasContainer.ownerDocument.createElement('div')
@@ -67,13 +79,13 @@ export function createImageSelectionDom(canvasContainer: HTMLElement): ImageSele
   ghost.hidden = true
   dropCaret.hidden = true
 
-  const rotateButton = createImageSelectionToolButton('rotate', '旋转', false)
-  const resetButton = createImageSelectionToolButton('reset', '重置', false)
-  const deleteButton = createImageSelectionToolButton('trash', '删除', false)
-  const downloadButton = createImageSelectionToolButton('download', '下载暂未开放', true)
-  const cropButton = createImageSelectionToolButton('crop', '裁剪暂未开放', true)
-  const layoutButton = createImageSelectionToolButton('layout', '版式暂未开放', true)
-  const commentButton = createImageSelectionToolButton('comment', '评论暂未开放', true)
+  const rotateButton = createImageSelectionToolButton('rotate', readMediaText(i18n, 'rotate', '旋转'), false)
+  const resetButton = createImageSelectionToolButton('reset', readMediaText(i18n, 'reset', '重置'), false)
+  const deleteButton = createImageSelectionToolButton('trash', readMediaText(i18n, 'delete', '删除'), false)
+  const downloadButton = createImageSelectionToolButton('download', readMediaText(i18n, 'downloadUnavailable', '下载暂未开放'), true)
+  const cropButton = createImageSelectionToolButton('crop', readMediaText(i18n, 'cropUnavailable', '裁剪暂未开放'), true)
+  const layoutButton = createImageSelectionToolButton('layout', readMediaText(i18n, 'layoutUnavailable', '版式暂未开放'), true)
+  const commentButton = createImageSelectionToolButton('comment', readMediaText(i18n, 'commentUnavailable', '评论暂未开放'), true)
 
   rotateButton.setAttribute('data-jword-image-toolbar-action', 'rotate')
   resetButton.setAttribute('data-jword-image-toolbar-action', 'reset')
@@ -99,7 +111,7 @@ export function createImageSelectionDom(canvasContainer: HTMLElement): ImageSele
     handle.type = 'button'
     handle.className = `jw-image-selection__handle jw-image-selection__handle--${handleId}`
     handle.setAttribute('data-jword-image-resize-handle', handleId)
-    handle.setAttribute('aria-label', readResizeHandleLabel(handleId))
+    handle.setAttribute('aria-label', readResizeHandleLabel(i18n, handleId))
 
     return [handleId, handle]
   })) as Record<ResizeHandleId, HTMLButtonElement>
@@ -124,7 +136,26 @@ export function createImageSelectionDom(canvasContainer: HTMLElement): ImageSele
     rotateButton,
     resetButton,
     deleteButton,
+    downloadButton,
+    cropButton,
+    layoutButton,
+    commentButton,
     handles
+  }
+}
+
+/** 动态刷新图片 overlay 工具文案。 */
+export function localizeImageSelectionDom(dom: ImageSelectionDom, i18n: ResolvedJWordUiI18n): void {
+  setButtonLabel(dom.rotateButton, readMediaText(i18n, 'rotate', '旋转'))
+  setButtonLabel(dom.resetButton, readMediaText(i18n, 'reset', '重置'))
+  setButtonLabel(dom.deleteButton, readMediaText(i18n, 'delete', '删除'))
+  setButtonLabel(dom.downloadButton, readMediaText(i18n, 'downloadUnavailable', '下载暂未开放'))
+  setButtonLabel(dom.cropButton, readMediaText(i18n, 'cropUnavailable', '裁剪暂未开放'))
+  setButtonLabel(dom.layoutButton, readMediaText(i18n, 'layoutUnavailable', '版式暂未开放'))
+  setButtonLabel(dom.commentButton, readMediaText(i18n, 'commentUnavailable', '评论暂未开放'))
+
+  for (const handleId of RESIZE_HANDLE_IDS) {
+    dom.handles[handleId].setAttribute('aria-label', readResizeHandleLabel(i18n, handleId))
   }
 }
 
@@ -265,23 +296,34 @@ function applySelectionRect(selection: HTMLElement, rect: ImageOverlayRect, widt
 }
 
 /** 读取缩放手柄可见名称。 */
-function readResizeHandleLabel(handleId: ResizeHandleId): string {
+function readResizeHandleLabel(i18n: ResolvedJWordUiI18n, handleId: ResizeHandleId): string {
   switch (handleId) {
     case 'top-left':
-      return '左上缩放'
+      return readMediaText(i18n, 'resizeTopLeft', '左上缩放')
     case 'top-center':
-      return '顶部缩放'
+      return readMediaText(i18n, 'resizeTop', '顶部缩放')
     case 'top-right':
-      return '右上缩放'
+      return readMediaText(i18n, 'resizeTopRight', '右上缩放')
     case 'middle-left':
-      return '左侧缩放'
+      return readMediaText(i18n, 'resizeLeft', '左侧缩放')
     case 'middle-right':
-      return '右侧缩放'
+      return readMediaText(i18n, 'resizeRight', '右侧缩放')
     case 'bottom-left':
-      return '左下缩放'
+      return readMediaText(i18n, 'resizeBottomLeft', '左下缩放')
     case 'bottom-center':
-      return '底部缩放'
+      return readMediaText(i18n, 'resizeBottom', '底部缩放')
     case 'bottom-right':
-      return '右下缩放'
+      return readMediaText(i18n, 'resizeBottomRight', '右下缩放')
   }
+}
+
+/** 更新图片 overlay 图标按钮标签。 */
+function setButtonLabel(button: HTMLButtonElement, label: string): void {
+  button.title = label
+  button.setAttribute('aria-label', label)
+}
+
+/** 读取图片 overlay 文案。 */
+function readMediaText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
+  return readJWordUiText(i18n, `menu.media.${key}`, fallback)
 }

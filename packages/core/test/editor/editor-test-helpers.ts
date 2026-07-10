@@ -5,7 +5,7 @@
  * 边界：只服务 packages/core/test/editor 下的拆分测试，不承载生产逻辑。
  * 协作模块：input-runtime-* 测试通过这里复用 hidden textarea、clipboard 和 pointer 测试工具。
  * 性能/安全约束：仅在 jsdom 测试环境运行，不访问网络或磁盘，不直接写 projection。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { expect } from 'vitest'

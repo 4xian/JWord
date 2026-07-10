@@ -3,7 +3,7 @@
  * 边界：只处理 SDK 侧 history HTTP/fallback 与离线状态快照，不连接 provider、不创建 awareness。
  * 协作模块：client-sdk.ts 注入 editor/options/localUser；client-types.ts 提供公开 handle 和版本类型。
  * 性能/安全约束：history 失败只记录诊断并降级到内存版本，不泄漏 update payload 给 preview 元数据。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-625定义-connectjwordcollaborationeditor-options-公开入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

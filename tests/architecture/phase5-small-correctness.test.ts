@@ -5,7 +5,7 @@
  * 边界：只覆盖审查计划点名的小型修复源代码护栏，不替代各包 focused 行为测试。
  * 协作模块：core layout/editor/model、ui paste/toolbar、collab hocuspocus、pdf/docx 导出链路。
  * 约束：通过源码断言防止审查已修问题回流，不放宽 architecture 门禁。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-5---p3-改进与技术债清理。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

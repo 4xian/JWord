@@ -5,7 +5,7 @@
  * 边界：只覆盖 demo Hocuspocus text command、格式 helper 与 Y.Doc 收敛，不接浏览器 DOM 或 IndexedDB。
  * 协作：examples/collab/server/hocuspocus-service.ts、hocuspocus-text-command.ts 和 core shared editor。
  * 约束：随机序列固定 seed，至少 200 轮，失败时保留场景、轮次、文本和格式快照。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { afterEach, describe, expect, it } from 'vitest'
 import * as Y from 'yjs'

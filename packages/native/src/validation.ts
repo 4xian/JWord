@@ -3,7 +3,7 @@
  * 边界：不读取 zip entry 字节、不执行 schema migration，也不修改 document model。
  * 协作模块：index.ts 的 load/validate 流程、types.ts 稳定诊断类型和 core Document 公开模型。
  * 性能/安全约束：只遍历已解析 JSON，资源缺失的字节级诊断继续由 checksum 校验负责。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-3---resource-package-与完整性诊断。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Document } from '@4xian/jword-core'
 

@@ -3,7 +3,7 @@
  * 边界：只验证示例入口文件、Vite alias、关键控件和样式禁用项，不覆盖真实浏览器交互。
  * 协作模块：examples/docx、packages/core、packages/ui、packages/docx 和 packages/pdf。
  * 约束：测试先行，手动验收入口必须可构建且不把互通逻辑混入 vanilla 首屏。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-25---建立-examplesdocx-手动验收入口。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -80,7 +80,7 @@ describe('docx demo host contract', () => {
     }
   })
 
-  it('样式不使用 grid 或 gap，并保留移动端断点', () => {
+  it('样式不使用 grid 或 gap，并保留窄屏断点', () => {
     const css = readWorkspaceText('examples/docx/src/styles.css')
 
     expect(css).not.toMatch(/\bdisplay\s*:\s*grid\b/u)

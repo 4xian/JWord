@@ -3,7 +3,7 @@
  * 边界：不把 DOCX 映射成 JWord 文档，不写出 ZIP，不访问 Y.Doc 或 DOM。
  * 协作模块：import.ts、compatibility.ts 和 worker.ts 通过这里共享 inspect/index 能力。
  * 性能/安全约束：只保留 JSON-compatible 诊断和 opaque preservation 元数据。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-5---实现-opc-package-reader-与-xml-解析骨架。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import JSZip from 'jszip'

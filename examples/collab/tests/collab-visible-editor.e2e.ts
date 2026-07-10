@@ -3,7 +3,7 @@
  * 边界：只覆盖 Hocuspocus provider 下双页 editor 输入与自动插入，不扩展历史、DOCX 或离线矩阵。
  * 协作：examples/collab/src/main.ts、Hocuspocus 本地服务和 Playwright chromium 项目。
  * 约束：测试只通过真实 editor 输入层和 debug API 观察状态，不使用 textarea harness 作为主编辑入口。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md 第六阶段第三方集成演示。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test, type Page } from '@playwright/test'
 import { spawn, type ChildProcess } from 'node:child_process'

@@ -3,7 +3,7 @@
  * 边界：不处理键盘输入和剪贴板输入，不创建文档模型。
  * 协作模块：外观运行时、布局引擎、视口虚拟化器和渲染辅助函数。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { getCaretRect as getLayoutCaretRect, getSelectionRects as getLayoutSelectionRects, layoutDocumentIncrementally } from '../layout/runtime'
 import type { DocumentLayout, LayoutRect } from '../layout/runtime'

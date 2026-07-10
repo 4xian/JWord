@@ -3,10 +3,11 @@
  * 边界：不绑定事件、不执行表格命令，只根据当前状态和 editor 只读投影刷新视图。
  * 协作模块：table controller 持有生命周期，controller-helpers 提供几何与浮层同步，state 提供按钮可用态。
  * 性能/安全约束：只读取 editor projection/layout，不直接修改文档，所有写入仍由 table actions 走 transaction pipeline。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 S11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor } from '@4xian/jword-core'
 import type { JWordTablePanelElements, JWordTableSelectionTarget } from '../types'
+import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 import { renderTablePanel } from './dom'
 import {
   findTableBox,
@@ -65,6 +66,7 @@ export interface TableStateSyncOptions {
   readonly contextMenu: TableContextMenuElements
   readonly resizeHandlesLayer: HTMLElement
   readonly resizePreview: HTMLElement
+  readonly i18n?: ResolvedJWordUiI18n
   readTarget(): JWordTableSelectionTarget | null
   startResizeSession(
     event: PointerEvent,
@@ -96,6 +98,8 @@ export function refreshTableControllerState(
   state: TableControllerState,
   options: TableStateSyncOptions
 ): void {
+  const i18n = options.i18n ?? resolveJWordUiI18n()
+
   if (options.readonlyMode) {
     state.helperAnchorsVisible = false
     state.quickToolsVisible = false
@@ -117,7 +121,7 @@ export function refreshTableControllerState(
       busy: true
     })
     syncOverlay(options.dom, null, false)
-    syncResizeHandles(options.resizeHandlesLayer, null, null, false, true, () => {})
+    syncResizeHandles(options.resizeHandlesLayer, null, null, false, true, () => {}, i18n)
     syncTableContextMenu(options.contextMenu, null, null, true)
     syncResizePreview(options.resizePreview, null)
     return
@@ -163,7 +167,8 @@ export function refreshTableControllerState(
     state.busy,
     (event) => {
       options.startResizeSession(event, target, tableBox, overlayGeometry)
-    }
+    },
+    i18n
   )
   syncTableContextMenu(options.contextMenu, state.contextMenuTarget, target ?? options.readTarget(), state.busy)
   if (state.resizeSession === null) {

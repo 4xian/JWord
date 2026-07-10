@@ -3,9 +3,9 @@
  *
  * 职责：锁定 Phase 5 超大文件拆分专项的机器验收条件。
  * 边界：只检查已进入拆分执行的文件，不替代 package 级行为测试。
- * 协作模块：remediation plan Phase 5 清单、packages/ui/src/create-ui.ts、packages/core/src/operations/command-builders.ts、packages/core/src/editor/text-editing-runtime.ts、packages/core/src/operations/operation-adapter.ts、packages/ui/src/toolbar/controller.ts、packages/core/src/model/document-store.ts、packages/native/src/index.ts、packages/core/src/layout/engine.ts、packages/ui/src/media/image-selection-controller.ts、packages/ui/src/selection-actions/controller.ts、packages/ui/src/table/controller.ts、packages/core/test/editor/input-runtime.test.ts、packages/core/test/layout/runtime.test.ts、packages/core/test/editor/facade-runtime.test.ts、examples/vanilla/tests/gate3-toolbar.e2e.ts、examples/vanilla/tests/gate3-input.e2e.ts 与拆分后的内部模块。
+ * 协作模块：当前 Phase 5 拆分边界、packages/ui/src/create-ui.ts、packages/core/src/operations/command-builders.ts、packages/core/src/editor/text-editing-runtime.ts、packages/core/src/operations/operation-adapter.ts、packages/ui/src/toolbar/controller.ts、packages/core/src/model/document-store.ts、packages/native/src/index.ts、packages/core/src/layout/engine.ts、packages/ui/src/media/image-selection-controller.ts、packages/ui/src/selection-actions/controller.ts、packages/ui/src/table/controller.ts、packages/core/test/editor/input-runtime.test.ts、packages/core/test/layout/runtime.test.ts、packages/core/test/editor/facade-runtime.test.ts、examples/vanilla/tests/gate3-toolbar.e2e.ts、examples/vanilla/tests/gate3-input.e2e.ts 与拆分后的内部模块。
  * 约束：拆分批次只允许收敛文件体量和目标结构，公开导出面保持不变。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'

@@ -5,7 +5,7 @@
  * 边界：只覆盖命令流水线、operation adapter 与 undo 协同，不覆盖 DOM 输入、布局或渲染。
  * 协作模块：operation adapter、transaction pipeline 与 history 共同保证删除原子性。
  * 性能/安全约束：测试只使用内存 Y.Doc，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#31-g1-02-deleterange-跨-run--跨块phase-1b-m-l。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

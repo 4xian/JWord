@@ -3,7 +3,7 @@
  * 边界：只读取调用方提供的 payload JSON 和 Ed25519 私钥，不联网、不写入仓库、不发布包。
  * 协作模块：packages/license 的 JWL1 token codec 与商业发布 dry-run 复用相同签名输入格式。
  * 约束：私钥只能来自 JWORD_LICENSE_PRIVATE_KEY_PEM 或 JWORD_LICENSE_PRIVATE_KEY_PATH，禁止把真实私钥提交进仓库。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#34-lic-1-license-密码学签名phase-1f-m-l按-d1-执行。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createPrivateKey, sign } from 'node:crypto'
 import { readFileSync } from 'node:fs'

@@ -3,7 +3,7 @@
  * 边界：不实现滚动动画、不持有第二套文档状态、不改写 projection。
  * 协作模块：核心标题结构辅助函数、编辑器选区门面和目录节点。
  * 性能/安全约束：每次刷新重新读取 projection；点击后只设置稳定选区，后续滚动交给宿主或浏览器布局层。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
@@ -16,17 +16,25 @@ import {
   type TextRange,
   type TextPosition
 } from '@4xian/jword-core'
-import { createHeadingOutlineDom, destroyHeadingOutlineDom, renderHeadingOutlineDom } from './dom'
+import {
+  createHeadingOutlineDom,
+  destroyHeadingOutlineDom,
+  localizeHeadingOutlineDom,
+  renderHeadingOutlineDom
+} from './dom'
+import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 import type { HeadingOutlineDom } from './dom'
 
 export interface CreateHeadingOutlineControllerOptions {
   readonly editor: Editor
   readonly host: HTMLElement
   readonly scrollToRange?: (range: TextRange) => void
+  readonly i18n?: ResolvedJWordUiI18n
 }
 
 export interface HeadingOutlineControllerHandle {
   readonly elements: HeadingOutlineDom
+  setI18n(i18n: ResolvedJWordUiI18n): void
   hasItems(): boolean
   isVisible(): boolean
   toggleVisible(): void
@@ -40,7 +48,8 @@ export interface HeadingOutlineControllerHandle {
 export function createHeadingOutlineController(
   options: CreateHeadingOutlineControllerOptions
 ): HeadingOutlineControllerHandle {
-  const dom = createHeadingOutlineDom(options.host)
+  let i18n = options.i18n ?? resolveJWordUiI18n()
+  const dom = createHeadingOutlineDom(options.host, i18n)
   const signalController = new AbortController()
   let destroyed = false
   let visible = false
@@ -86,7 +95,8 @@ export function createHeadingOutlineController(
       activeItemId,
       collapsedItemIds,
       activateItem,
-      toggleItemCollapsed
+      toggleItemCollapsed,
+      i18n
     )
   }
 
@@ -110,7 +120,7 @@ export function createHeadingOutlineController(
     }
 
     activeItemId = nextActiveItemId
-    renderHeadingOutlineDom(dom, items, activeItemId, collapsedItemIds, activateItem, toggleItemCollapsed)
+    renderHeadingOutlineDom(dom, items, activeItemId, collapsedItemIds, activateItem, toggleItemCollapsed, i18n)
   }
 
   /** 切换目录项折叠状态。 */
@@ -169,6 +179,11 @@ export function createHeadingOutlineController(
 
   return {
     elements: dom,
+    setI18n(nextI18n): void {
+      i18n = nextI18n
+      localizeHeadingOutlineDom(dom, i18n)
+      refresh()
+    },
     isVisible,
     hasItems,
     toggleVisible,

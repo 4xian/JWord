@@ -3,7 +3,7 @@
  * 边界：只依赖 core editor facade 和 document projection，不执行命令、不绑定 DOM。
  * 协作模块：toolbar/controller 与 selection-actions/controller 在 run 格式命令后复用。
  * 性能/安全约束：仅处理文本段落选区；无法解析时安静跳过，避免制造错误选区。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区格式化闭环。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   countGraphemes,

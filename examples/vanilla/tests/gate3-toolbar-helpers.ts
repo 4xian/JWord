@@ -3,7 +3,7 @@
  * 边界: 只服务 examples/vanilla/tests 下的工具栏 e2e，不进入生产代码导出面。
  * 协作: Playwright 页面、vanilla demo 测试钩子和编辑器公开门面。
  * 约束: 辅助函数只读公开门面或驱动真实 DOM 控件，不伪造核心状态。
- * Specs: docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md §3.10 T4。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { expect } from '@playwright/test'

@@ -5,7 +5,7 @@
  * 边界：只覆盖类型约束可承载的对象样例，不测试事务、布局、渲染或输入。
  * 协作模块：后续事务、投影、布局和互通包可复用这些对象样例扩展测试。
  * 约束：测试直接导入 src/model，不要求公开入口导出，也不访问浏览器 DOM。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/02-technical-decisions.md#25-文档模型决策。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

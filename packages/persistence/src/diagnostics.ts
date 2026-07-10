@@ -3,7 +3,7 @@
  * 边界：只定义离线、版本历史和快照诊断元数据，不访问 IndexedDB、Y.Doc 或 provider。
  * 协作模块：index.ts、后续 IndexedDB adapter、collab provider 和 diagnostics registry 复用这些 code。
  * 性能/安全约束：纯类型与常量，无副作用，避免把浏览器运行时依赖拉入包入口。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-614建立-gate-6-fixture-registry-和-diagnostics-registry。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export type JWordPersistenceDiagnosticSeverity = 'info' | 'warning' | 'error'

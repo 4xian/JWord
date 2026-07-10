@@ -3,7 +3,7 @@
  * 边界：只封装 Node 服务启动、关闭和 demo room 元数据，不接入浏览器 UI、IndexedDB 或 core 内部 store。
  * 协作：@4xian/jword-collab-server 负责正式 WebSocket 和 history HTTP 服务，examples/collab 只保留启动胶水。
  * 约束：仅用于本地 demo；不改变 core 或浏览器包运行要求。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   GATE6_COLLAB_FEATURES,

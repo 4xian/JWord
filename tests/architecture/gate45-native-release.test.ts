@@ -5,7 +5,7 @@
  * 边界：只检查 package.json 与 release 审计脚本，不运行 npm pack。
  * 协作模块：packages/native/package.json、packages/native/README.md、packages/native/fixtures、tools/release/check-native-pack.mjs。
  * 约束：native 包发布内容必须包含 dist、README 和 fixtures，且不暴露 src 或 test。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-6---benchmarkbundle-和文档计划。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync } from 'node:fs'
 

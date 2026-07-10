@@ -3,7 +3,7 @@
  * 边界：只显示现有 revision metadata、点击恢复选区并调用 core 修订命令，不创建修订。
  * 协作模块：revisions DOM、core editor facade 和 create-ui 装配入口。
  * 性能/安全约束：点击时只读取当前 projection，不旁路修改文档模型。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.14。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
@@ -16,18 +16,22 @@ import {
 import {
   createRevisionPanelDom,
   destroyRevisionPanelDom,
+  localizeRevisionPanelDom,
   renderRevisionPanel
 } from './dom'
+import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 import type { JWordRevisionPanelElements } from '../types'
 
 export interface CreateRevisionControllerOptions {
   readonly editor: Editor
   readonly host: HTMLElement
+  readonly i18n?: ResolvedJWordUiI18n
   readonly announce?: (message: string) => void
 }
 
 export interface RevisionControllerHandle {
   readonly elements: JWordRevisionPanelElements
+  setI18n(i18n: ResolvedJWordUiI18n): void
   refresh(): void
   destroy(): void
 }
@@ -38,7 +42,8 @@ export interface RevisionControllerHandle {
 export function createRevisionController(
   options: CreateRevisionControllerOptions
 ): RevisionControllerHandle {
-  const elements = createRevisionPanelDom(options.host)
+  let i18n = options.i18n ?? resolveJWordUiI18n()
+  const elements = createRevisionPanelDom(options.host, i18n)
   const signalController = new AbortController()
   let selectedId: string | null = null
   let destroyed = false
@@ -125,7 +130,7 @@ export function createRevisionController(
     renderRevisionPanel(elements, {
       revisions: options.editor.getProjection().document.revisions ?? [],
       selectedId
-    })
+    }, i18n)
   }
 
   /** 销毁 controller。 */
@@ -146,6 +151,11 @@ export function createRevisionController(
 
   return {
     elements,
+    setI18n(nextI18n): void {
+      i18n = nextI18n
+      localizeRevisionPanelDom(elements, i18n)
+      refresh()
+    },
     refresh,
     destroy
   }

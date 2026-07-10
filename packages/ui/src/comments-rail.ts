@@ -3,7 +3,7 @@
  * 边界：只管理 comments UI 与 core comment command 的桥接，不实现 comments controller DOM 细节。
  * 协作模块：ui-lifecycle 调用这里创建默认 rail、同步线程和滚动到批注锚点。
  * 性能/安全约束：几何同步仅在显式刷新、滚动或批注交互后触发，写入仍走 editor command pipeline。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   buildDeleteCommentThreadCommand,

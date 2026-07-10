@@ -3,7 +3,7 @@
  * 边界：只处理浏览器 Worker 生命周期、消息协议、progress/warning/error 转换，不实现 DOCX 导入导出语义。
  * 协作模块：examples/docx/src/main.ts、@4xian/jword-docx/worker 和 DOCX worker message contract。
  * 性能/安全约束：按需创建 worker，取消时发送稳定 cancel 消息，销毁时终止 worker。
- * Specs：docs/superpowers/reports/2026-07-02-gate45-gate5-review.md#八横切问题跨包。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

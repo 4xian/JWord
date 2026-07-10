@@ -5,7 +5,7 @@
  * 边界：通过临时 workspace 调用 check-package-versions.mjs CLI，不读取真实 package.json。
  * 协作模块：tools/lint/check-package-versions.mjs、pnpm-workspace.yaml 与 monorepo package manifest。
  * 性能/安全约束：测试只写入系统临时目录，失败输出必须定位到具体 package manifest 字段。
- * Specs：docs/superpowers/reports/2026-07-02-gate0-gate1-review.md#g0-07-check-package-versionsmjs-只检查根-packagejson。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { execFile } from 'node:child_process'

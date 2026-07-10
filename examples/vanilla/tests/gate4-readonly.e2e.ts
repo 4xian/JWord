@@ -3,7 +3,7 @@
  * 边界: 只覆盖 vanilla demo 的 createJWordUi({ readonly }) 装配、DOM 输入阻断和只读导航入口。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/readonly、toolbar、selection-actions、find-replace 与 link controller。
  * 约束: 断言来自真实 DOM、window.__jwordDemo 公开 facade 和 editor projection，不读取 controller 私有状态。
- * Specs: docs/superpowers/plans/2026-05-24-jword-global-readonly-mode.md Task 5。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'

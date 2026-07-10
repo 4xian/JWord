@@ -5,7 +5,7 @@
  * 边界：只覆盖 editor/rendering 的 dirty page helper，不执行事务、不重新排版、不访问 DOM。
  * 协作模块：Editor layout runtime 在 executeCommand 前调用本 helper 缩小增量布局页范围。
  * 性能/安全约束：测试使用带 getter 计数的合成页面，锁定首屏输入不扫描全部页面。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#39-phase-4-性能专项输入热路径-p95--50ms。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

@@ -2,10 +2,10 @@
  * @vitest-environment node
  *
  * 职责：覆盖 Gate 5 Iteration 20 的 DOCX 兼容验证报告契约。
- * 边界：只验证自动检查与人工兼容记录的结构化入口，不伪造真实 Word/WPS/LibreOffice 结果。
+ * 边界：只验证自动检查与人工兼容记录的结构化入口，不伪造真实 Microsoft Word 结果。
  * 协作模块：packages/docx/src/compatibility.ts、inspectDocxPackage 和 roundtrip diff。
  * 约束：报告不使用兼容百分比；未执行的 Open XML validator 和办公套件检查必须显式标记为 pending。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { DocumentProjection } from '@4xian/jword-core'
@@ -61,24 +61,6 @@ describe('@4xian/jword-docx compatibility report', () => {
         mainVisualDifference: 'pending',
         blockingIssue: 'pending',
         evidence: 'not-run'
-      },
-      {
-        app: 'WPS',
-        result: 'pending',
-        editable: 'pending',
-        repairPrompt: 'pending',
-        mainVisualDifference: 'pending',
-        blockingIssue: 'pending',
-        evidence: 'not-run'
-      },
-      {
-        app: 'LibreOffice',
-        result: 'pending',
-        editable: 'pending',
-        repairPrompt: 'pending',
-        mainVisualDifference: 'pending',
-        blockingIssue: 'pending',
-        evidence: 'not-run'
       }
     ])
     expect(report.diagnostics).toEqual({
@@ -119,24 +101,6 @@ describe('@4xian/jword-docx compatibility report', () => {
         mainVisualDifference: 'pass',
         blockingIssue: '',
         evidence: 'manual-word-open-save'
-      },
-      {
-        app: 'WPS',
-        result: 'pending',
-        editable: 'pending',
-        repairPrompt: 'pending',
-        mainVisualDifference: 'pending',
-        blockingIssue: 'pending',
-        evidence: 'not-run'
-      },
-      {
-        app: 'LibreOffice',
-        result: 'pending',
-        editable: 'pending',
-        repairPrompt: 'pending',
-        mainVisualDifference: 'pending',
-        blockingIssue: 'pending',
-        evidence: 'not-run'
       }
     ])
   })

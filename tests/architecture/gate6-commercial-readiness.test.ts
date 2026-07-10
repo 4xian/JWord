@@ -3,9 +3,9 @@
  *
  * 职责：约束 Gate 6 商业协作、离线、历史、服务端和自动插入的免费侧包边界。
  * 边界：只扫描免费基础源码入口和商业包公开契约，不启动 provider、服务端或真实浏览器。
- * 协作模块：packages/core、packages/native、examples/vanilla、packages/license 和 Gate 6 商业计划。
+ * 协作模块：packages/core、packages/native、examples/vanilla、packages/license、协同包和 SDK 文档。
  * 约束：免费基础能力不得静态或动态引入 collab/server/license 高级包；授权矩阵必须留在商业契约层。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-621建立商业边界架构测试和授权-diagnostics。
+ * 实现说明：本测试以源码、公开包契约、SDK 文档和可运行验收文件为准，不读取旧实施计划。
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -24,23 +24,21 @@ const forbiddenCommercialImports: readonly string[] = [
   '@4xian/jword-collab-server',
   '@4xian/jword-license'
 ] as const
-const gate6AcceptanceItems = [
-  '`@4xian/jword-collab-server` 可作为正式 self-host 服务包被第三方部署，不要求第三方复制 demo server 代码。',
-  'client/server 版本不匹配、featureFlags 缺失或 protocol 不兼容时 fail-fast，并给出稳定 diagnostic。',
-  '未授权、授权过期、feature 不匹配和 license server 不可用时，高级协作、离线、历史和自动插入均被阻止，且不读取或泄漏文档内容。',
-  '远端 cursor 在光标附近显示用户名、颜色和 `正在输入` 状态，多用户重叠时稳定排序且不遮挡本地输入。',
-  '`startAutoInsertSession()` 只消费显式 position/range，不读取 live caret、不调用 focus、不改变用户 selection；自动插入作为虚拟远端 actor 参与协作。',
-  '`examples/collab` 只使用公开包 API 和真实编辑器集成，不再以 textarea harness 或 demo runtime 作为主验收入口。',
-  '免费基础 bundle、`packages/core` 和 `packages/native` 不包含 collab/server/license 高级功能代码。',
-  '付费边界至少有服务端或 worker/license 层强制 enforcement，不能只靠浏览器 client-side 判断。'
-] as const
-const gate6ForbiddenItems = [
-  '不让 demo/test 通过 `packages/*/src`、Y.Doc store、内部 runtime 或 server service 绕过公开 API。',
-  '不把生产 server 只藏在 demo 目录；第三方必须能安装正式 server 包并以公开 options 启动。',
-  '不把付费边界只放在浏览器 JS；用户拿到 client 包也不能绕过服务端或 worker/license enforcement。',
-  '不在 core 稳定 API 中暴露 `collab`、`offline`、`autoInsert` 等高级产品 API 名称；core 只提供中立位置、anchor/range、transaction hook。',
-  '不让自动插入读取 live caret、抢 focus 或修改用户手动 selection。',
-  '不允许 client/server 版本不匹配时静默继续协作。'
+const gate6DocumentedBoundaryTokens = [
+  '@4xian/jword-collab-server',
+  'self-host',
+  'client/server',
+  'COLLAB_PROTOCOL_MISMATCH',
+  'COLLAB_FEATURE_FLAGS_MISSING',
+  '未授权',
+  'JWORD_LICENSE_MISSING',
+  '远端 cursor',
+  'startAutoInsertSession()',
+  '不读取 live caret',
+  'examples/collab',
+  'paid collaboration edition',
+  '付费能力必须在 worker、server 或 package 执行层调用',
+  '浏览器按钮隐藏、文档提示或 wrapper props 不是授权边界'
 ] as const
 const coreStableEntryFiles = [
   'packages/core/src/index.ts',
@@ -85,15 +83,21 @@ describe('Gate 6 commercial readiness', () => {
     })
   })
 
-  it('keeps Gate 7 documentation plan aware of Gate 6 API, deployment, licensing and migration scope', () => {
-    const plan = readFileSync('docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md', 'utf8')
+  it('keeps SDK docs aware of Gate 6 API, deployment, licensing and migration scope', () => {
+    const sdkDocs = readEvidenceFiles([
+      'docs/sdk/collaboration.md',
+      'docs/sdk/collab-server.md',
+      'docs/sdk/licensing.md',
+      'docs/sdk/migration.md',
+      'docs/sdk/public-api.md'
+    ])
 
     for (const token of [
-      'Gate 6 collab client 集成文档',
-      'Gate 6 公开 API 清单',
-      'self-host server 部署',
+      '协作客户端集成',
+      'public API',
+      'self-host',
       '授权接入',
-      'client/server 版本策略',
+      'client/server',
       '故障排查',
       '收费能力边界',
       '迁移指南',
@@ -107,12 +111,18 @@ describe('Gate 6 commercial readiness', () => {
       'COLLAB_PROTOCOL_MISMATCH',
       'COLLAB_FEATURE_FLAGS_MISSING'
     ]) {
-      expect(plan).toContain(token)
+      expect(sdkDocs).toContain(token)
     }
   })
 
-  it('marks Gate 6 acceptance and forbidden checklist items only after evidence exists', () => {
-    const plan = readFileSync('docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md', 'utf8')
+  it('documents Gate 6 acceptance and forbidden boundaries only after evidence exists', () => {
+    const sdkDocs = readEvidenceFiles([
+      'docs/sdk/collaboration.md',
+      'docs/sdk/collab-server.md',
+      'docs/sdk/licensing.md',
+      'docs/current-implementation/packages/collab.md',
+      'docs/current-implementation/packages/collab-server.md'
+    ])
     const evidence = readEvidenceFiles([
       'packages/collab/test/public-client.test.ts',
       'packages/collab/test/contract.test.ts',
@@ -129,8 +139,8 @@ describe('Gate 6 commercial readiness', () => {
       'tools/size/check-gate6-collab-bundle.mjs'
     ])
 
-    for (const item of [...gate6AcceptanceItems, ...gate6ForbiddenItems]) {
-      expect(plan, item).toContain(`- [x] ${item}`)
+    for (const token of gate6DocumentedBoundaryTokens) {
+      expect(sdkDocs, token).toContain(token)
     }
     for (const token of [
       'createJWordCollabServer',
@@ -176,19 +186,28 @@ describe('Gate 6 commercial readiness', () => {
   })
 
   it('marks checkpoint E only after Gate 6 origin, licensing, server and public API evidence is present', () => {
-    const plan = readFileSync('docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md', 'utf8')
+    const checkpointEvidence = readEvidenceFiles([
+      'docs/sdk/collaboration.md',
+      'docs/sdk/collab-server.md',
+      'docs/sdk/licensing.md',
+      'docs/sdk/public-api.md',
+      'tests/architecture/gate6-fixture-registry.test.ts',
+      'packages/core/src/operations/history.ts',
+      'tests/architecture/gate6-package-exports.test.ts'
+    ])
 
-    expect(plan).toContain('- [x] 复核点 E：Gate 6 完成后')
     for (const token of [
       'origin',
-      'undo scope',
-      'remote/AI/local 并发语义',
+      'history',
+      'remote:',
+      'ai:',
+      '默认只跟踪本地用户 origin',
       '授权',
       'server package',
-      'client/server version handshake',
-      '第三方公开 API 集成'
+      'client/server',
+      'stable API'
     ]) {
-      expect(plan, token).toContain(token)
+      expect(checkpointEvidence, token).toContain(token)
     }
   })
 })

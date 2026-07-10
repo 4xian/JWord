@@ -3,7 +3,7 @@
  * 边界：不读取核心 JSON part，不执行 schema 迁移，不暴露新的公开 API。
  * 协作模块：打包编解码模块创建 checksums，包读取模块校验 checksums 并汇总资源状态。
  * 性能/安全约束：按需读取 zip entry 字节，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-45---jword-原生保存与打开。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import JSZip from 'jszip'

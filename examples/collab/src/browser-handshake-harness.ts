@@ -3,7 +3,7 @@
  * 边界：只封装 Playwright 页面内 handshake 调用，不导出给第三方宿主作为集成 API。
  * 协作模块：collab-handshake.e2e.ts、@4xian/jword-collab 和 demo Vite package 解析。
  * 约束：不得通过 /@fs 或 workspace src 路径加载协作包。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.47-6.49。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   GATE6_COLLAB_FEATURES,
@@ -11,6 +11,12 @@ import {
   createMemoryCollabProviderAdapter,
   type JWordLicenseFeatureKey
 } from '@4xian/jword-collab'
+import {
+  createInsecureTestOnlyJWordLicenseSignature,
+  type JWordLicenseEntitlement,
+  type JWordLicenseSignaturePayload
+} from '@4xian/jword-license'
+import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
 
 export interface BrowserHandshakeHarnessInput {
   readonly serverUrl: string
@@ -22,6 +28,10 @@ export interface BrowserHandshakeHarnessResult {
   readonly diagnosticCodes: readonly string[]
   readonly providerStatus: string
   readonly handshake: unknown
+}
+
+export interface BrowserHandshakeHarnessApi {
+  readonly runPublicCollabBrowserHandshake: typeof runPublicCollabBrowserHandshake
 }
 
 /** 通过公开 collab client SDK 执行一次浏览器握手。 */
@@ -53,12 +63,7 @@ export async function runPublicCollabBrowserHandshake(
       name: 'Browser User'
     },
     token: 'browser-token',
-    license: {
-      customerId: 'browser-customer',
-      licenseToken: 'browser-license',
-      features: Object.values(GATE6_COLLAB_FEATURES),
-      status: 'valid'
-    },
+    license: createBrowserHandshakeLicense(),
     features: input.features,
     provider
   })
@@ -68,5 +73,34 @@ export async function runPublicCollabBrowserHandshake(
     diagnosticCodes: connection.diagnostics.map((diagnostic) => diagnostic.code),
     providerStatus: provider.status,
     handshake: connection.handshake
+  }
+}
+
+/** 创建浏览器握手测试使用的签名授权。 */
+function createBrowserHandshakeLicense(): JWordLicenseEntitlement {
+  const entitlement: JWordLicenseSignaturePayload = {
+    customerId: 'browser-customer',
+    licenseToken: 'browser-license',
+    features: Object.values(GATE6_COLLAB_FEATURES),
+    issuer: 'jword-browser-handshake-test',
+    issuedAt: '2026-05-01T00:00:00Z',
+    status: 'valid'
+  }
+
+  return {
+    ...entitlement,
+    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.__jwordCollabHandshakeHarness = {
+    runPublicCollabBrowserHandshake
+  }
+}
+
+declare global {
+  interface Window {
+    __jwordCollabHandshakeHarness?: BrowserHandshakeHarnessApi
   }
 }

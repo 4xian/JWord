@@ -5,7 +5,7 @@
  * 边界：只覆盖 core facade 的 mounted scroll 行为，不测试 UI 包、provider 或浏览器用户事件。
  * 协作模块：location API、layout rect 和 mounted canvas container 共同完成普通编辑器跳转。
  * 性能/安全约束：测试不访问网络或真实文件，不把 DOM Range、canvas 坐标或 provider 状态暴露为公开返回值。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 6.24。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

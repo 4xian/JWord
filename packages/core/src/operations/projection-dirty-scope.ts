@@ -3,7 +3,7 @@
  * 边界：只读取上一版只读 projection 和 operation 元数据，不执行事务、不写 Y.Doc、不做布局或渲染。
  * 协作模块：transaction pipeline、model/projection 和 operation 类型定义。
  * 性能/安全约束：只复用未变 section/block 的冻结快照；遇到文档级副作用时回退完整投影，避免复用过期元数据。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#32-状态真源。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 

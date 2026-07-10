@@ -3,7 +3,7 @@
  * 边界：不实现 toolbar DOM、assistive 同步或 demo 场景细节；这些逻辑分别交给 `@4xian/jword-ui` 和 `demo-controls.ts`。
  * 协作模块：`@4xian/jword-core` 的 Editor facade、`@4xian/jword-ui` 的 `createJWordUi(...)` 入口，以及 demo-only 控件模块。
  * 性能/安全约束：只在入口层访问宿主 DOM，不回退到旧的 toolbar 内联实现。
- * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   buildAddRevisionMetadataCommand,
@@ -14,26 +14,17 @@ import {
 } from '@4xian/jword-core'
 import { createJWordUi } from '@4xian/jword-ui'
 
-import { createDemoControls, loadInitialDemoText } from './demo-controls'
+import { loadInitialDemoText } from './demo-controls'
 import { createDemoMediaSupport } from './demo-media'
-import { createNativeDemoPersistence } from './demo-native'
 import { createDemoTableSupport } from './demo-table'
 import type { JWordDemoRevisionInput } from './vite-env'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
 
 const editorHost = requireElement<HTMLElement>('#jword-editor', 'JWord vanilla demo requires #jword-editor.')
-const toolbarHost = requireElement<HTMLElement>('#jword-toolbar', 'JWord vanilla demo requires #jword-toolbar.')
-const demoControlsHost = requireElement<HTMLElement>(
-  '#jword-demo-controls',
-  'JWord vanilla demo requires #jword-demo-controls.'
-)
-const statusHost = requireElement<HTMLElement>('#jword-status', 'JWord vanilla demo requires #jword-status.')
-const assistiveMirrorHost = requireElement<HTMLElement>(
-  '#jword-assistive-mirror',
-  'JWord vanilla demo requires #jword-assistive-mirror.'
-)
-const readonlyMode = new URLSearchParams(window.location.search).get('readonly') === 'true'
+const demoParams = new URLSearchParams(window.location.search)
+const readonlyMode = demoParams.get('readonly') === 'true'
+const devtoolsEnabled = demoParams.get('devtools') === 'true'
 const demoPluginDefinitions = createDemoPluginDefinitions()
 
 const initialDemoText = await loadInitialDemoText()
@@ -60,9 +51,8 @@ editor.mount(editorHost)
 const jwordUi = createJWordUi({
   editor,
   editorHost,
-  toolbarHost,
-  liveRegionHost: statusHost,
-  assistiveMirrorHost,
+  ...readDemoThemeOptions(),
+  ...readDemoI18nOptions(),
   // toolbar: false,
   ...(readonlyMode
     ? {
@@ -94,44 +84,22 @@ const jwordUi = createJWordUi({
   comments: true,
   link: {
     openLink(url) {
-      statusHost.textContent = `打开链接：${url}`
       window.open(url, '_blank', 'noopener,noreferrer')
     }
   },
-  headerFooter: {
-    host: toolbarHost
-  },
-  headingOutline: {
-    host: toolbarHost
-  },
-  findReplace: {
-    host: toolbarHost
-  },
-  revisions: {
-    host: toolbarHost
-  }
+  headerFooter: {},
+  findReplace: {}
+  // revisions: {
+  // }
 })
-const demoControls = createDemoControls({
-  editor,
-  host: demoControlsHost,
-  statusHost,
-  refreshUi: () => {
-    jwordUi.refresh()
-  }
-})
-const nativePersistence = createNativeDemoPersistence({
-  editor,
-  host: demoControlsHost,
-  refreshUi: () => {
-    jwordUi.refresh()
-  }
-})
+const devtoolsHandle = devtoolsEnabled
+  ? await attachDemoDevtools(editor)
+  : null
 
 window.__jwordDemo = Object.freeze({
   readonly: readonlyMode,
   destroy: destroyDemo,
   editor,
-  selectTextRange: demoControls.selectTextRange,
   selectImageByResourceId: (resourceId: string) => {
     selectImageByResourceId(editor, resourceId)
   },
@@ -140,7 +108,10 @@ window.__jwordDemo = Object.freeze({
   comments: {
     readThreadCount: () => editor.getProjection().document.comments?.length ?? 0
   },
-  native: nativePersistence,
+  devtools: {
+    isAttached: () => devtoolsHandle !== null,
+    refresh: () => devtoolsHandle?.refresh() ?? editor.exportDiagnostics()
+  },
   link: {
     /** 为只读浏览器回归预置一段链接文本。 */
     seedFirstRunLink(target: string) {
@@ -240,8 +211,7 @@ function destroyDemo(): void {
   }
 
   demoDestroyed = true
-  demoControls.destroy()
-  nativePersistence.destroy()
+  devtoolsHandle?.destroy()
   demoMedia.destroy()
   demoTable.destroy()
   jwordUi.destroy()
@@ -249,11 +219,51 @@ function destroyDemo(): void {
   editor.destroy()
 }
 
+
+
+/** 读取 demo 查询参数中的主题覆盖，只作为第三方集成示例。 */
+function readDemoThemeOptions() {
+  const theme = demoParams.get('theme')
+
+  if (theme !== 'dark') {
+    return {}
+  }
+
+  return {
+    theme: { name: theme }
+  } as const
+}
+
+/** 读取 demo 查询参数中的 i18n 覆盖，只作为第三方集成示例。 */
+function readDemoI18nOptions() {
+  if (demoParams.get('i18n') !== 'en') {
+    return {}
+  }
+
+  return {
+    i18n: {
+      locale: 'en-US',
+      dir: 'ltr',
+      messages: {
+        'toolbar.ariaLabel': 'JWord editing toolbar',
+        'toolbar.format.bold.label': 'Bold'
+      }
+    }
+  } as const
+}
+
+/** 按查询参数显式懒加载 devtools，避免默认首屏引入调试面板。 */
+async function attachDemoDevtools(editorInstance: typeof editor) {
+  const { attachJWordDevtools } = await import('@4xian/jword-devtools')
+
+  return attachJWordDevtools(editorInstance)
+}
+
 /** 创建 demo-only 插件测试钩子，默认不启用且不影响普通示例。 */
 function createDemoPluginDefinitions(): readonly PluginDefinition[] {
-  const params = new URLSearchParams(window.location.search)
+  const pluginError = demoParams.get('pluginError')
 
-  if (params.get('pluginError') !== 'throwing-command') {
+  if (pluginError !== 'throwing-command' && pluginError !== 'throwing-adapter') {
     return []
   }
 
@@ -267,8 +277,38 @@ function createDemoPluginDefinitions(): readonly PluginDefinition[] {
           throw new Error('demo plugin command failed')
         }
       })
+
+      if (pluginError === 'throwing-adapter') {
+        context.adapters.imports.register({
+          kind: 'import',
+          name: 'demo.throwingPlugin.import',
+          format: 'docx',
+          importDocument() {
+            throw createDemoCodedError('DOCX_LICENSE_DENIED', 'demo plugin adapter failed')
+          }
+        }, { name: 'demo.throwingPlugin.import' })
+        context.registerCommand({
+          name: 'demo.throwingPlugin.adapter',
+          execute() {
+            const adapter = context.adapters.imports.resolveFormat('docx')
+
+            if (adapter.status === 'available') {
+              adapter.registration.adapter.importDocument(new Uint8Array())
+            }
+          }
+        })
+      }
     }
   }]
+}
+
+/** 创建 demo-only 带稳定 code 字段的错误，供 Gate 7 插件错误隔离 smoke 使用。 */
+function createDemoCodedError(code: string, message: string): Error & { readonly code: string } {
+  const error = new Error(message) as Error & { code: string }
+
+  error.code = code
+
+  return error
 }
 
 /**

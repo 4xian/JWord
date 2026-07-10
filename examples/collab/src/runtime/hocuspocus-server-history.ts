@@ -3,7 +3,7 @@
  * 边界：只处理 HTTP JSON、base64 update、版本缓存和本地 restore 应用，不访问 DOM 或 IndexedDB。
  * 协作：hocuspocus-runtime.ts 负责触发记录/预览/恢复，server/hocuspocus-history-api.ts 负责持久化 backend。
  * 约束：readVersionHistory 是同步 debug API，因此异步刷新结果以本地缓存形式暴露。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 import type { JWordPersistenceDiagnostic } from '@4xian/jword-persistence'
@@ -184,7 +184,7 @@ export function createHocuspocusServerHistoryClient(
     const response = await postJson<HistoryApiPreviewResponse>('preview', {
       documentId: options.documentId,
       versionId
-    })
+    }, versionId)
 
     if (response.version === undefined || response.updateBase64 === undefined) {
       return null
@@ -204,7 +204,9 @@ export function createHocuspocusServerHistoryClient(
 
   /** 执行 GET 请求并读取 JSON。 */
   async function fetchJson<Result>(path: string): Promise<Result> {
-    const response = await fetch(`${options.historyApiUrl}/jword-history/${path}`)
+    const response = await fetch(`${options.historyApiUrl}/jword-history/${path}`, {
+      headers: createHistoryHeaders()
+    })
 
     if (!response.ok) {
       throw new Error(`JWord history API GET failed: ${response.status}`)
@@ -214,12 +216,10 @@ export function createHocuspocusServerHistoryClient(
   }
 
   /** 执行 POST 请求并读取 JSON。 */
-  async function postJson<Result>(path: string, body: object): Promise<Result> {
+  async function postJson<Result>(path: string, body: object, versionId?: string): Promise<Result> {
     const response = await fetch(`${options.historyApiUrl}/jword-history/${path}`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json'
-      },
+      headers: createHistoryHeaders(versionId),
       body: JSON.stringify(body)
     })
 
@@ -234,6 +234,15 @@ export function createHocuspocusServerHistoryClient(
   function recordHistoryApiFailure(versionId?: string): void {
     options.recordDiagnostics?.([createHistoryApiFailureDiagnostic(options.documentId, versionId)])
     options.notify()
+  }
+
+  /** 创建 history HTTP metadata headers。 */
+  function createHistoryHeaders(versionId?: string): Record<string, string> {
+    return {
+      'content-type': 'application/json',
+      'x-jword-document-id': options.documentId,
+      ...(versionId === undefined ? {} : { 'x-jword-version-id': versionId })
+    }
   }
 
   return {

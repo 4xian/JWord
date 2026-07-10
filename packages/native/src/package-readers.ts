@@ -3,7 +3,7 @@
  * 边界：不执行保存编码，不执行 schema 迁移落地，不暴露新的公开 API。
  * 协作模块：index.ts 加载/校验入口、package-validation.ts、schema-migrations.ts 和 validation.ts。
  * 性能/安全约束：只按需读取 zip entry 字节，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-45---jword-原生保存与打开。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import JSZip from 'jszip'

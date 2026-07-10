@@ -5,7 +5,7 @@
  * 边界：只验证 worker 消息分发和取消/错误响应，不验证真实 PDF 绘制。
  * 协作模块：packages/pdf/src/worker.ts、handlePdfWorkerRequest 和 core layout。
  * 约束：worker 入口必须可单测，也必须能作为 Rollup 的 worker entry 独立构建。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-21---建立-packagespdf-与-pdf-worker。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

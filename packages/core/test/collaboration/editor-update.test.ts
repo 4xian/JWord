@@ -5,7 +5,7 @@
  * 边界：只覆盖 core facade，不接 provider、IndexedDB、WebSocket、DOM overlay 或示例 UI。
  * 协作模块：packages/collab provider adapter 和 packages/persistence snapshot adapter 后续消费这些 API。
  * 性能/安全约束：不暴露 Y.Doc/store internals，不把 remote 或 auto-inserter 默认混入用户 undo。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---core-协同-hookorigin-和-history-scope。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

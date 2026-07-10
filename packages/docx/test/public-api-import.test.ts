@@ -5,7 +5,7 @@
  * 边界：只覆盖拆分后的 focused public API 行为，不扩大 Gate 5 功能范围。
  * 协作模块：packages/docx/src/index.ts、fixtures helper 和 Gate 5 兼容验证复用这些契约。
  * 约束：测试文件保持小体量，避免一个 public API 文件承载全部 DOCX 纵线。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-5docx-导入导出与-pdf-导出。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor } from '@4xian/jword-core'

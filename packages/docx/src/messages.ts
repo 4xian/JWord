@@ -3,7 +3,7 @@
  * 边界：只处理消息对象形状，不执行 import/export/inspect。
  * 协作模块：worker.ts 和 public API 测试复用这些稳定消息构造器。
  * 性能/安全约束：保持纯函数，避免引入 JSZip、core 或 DOM 依赖。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-26---建立-benchmarkbundle-和回归门禁。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type {

@@ -1,17 +1,17 @@
 /**
  * @vitest-environment node
  *
- * 职责：验证 Gate 5 兼容 runner 对外部证据、validator 命令和 WPS 证据的合并策略。
- * 边界：只运行本地 runner，不执行真实 Word、LibreOffice 或 WPS GUI 自动化。
+ * 职责：验证 Gate 5 兼容 runner 对外部证据、validator 命令和 Microsoft Word 证据的合并策略。
+ * 边界：只运行本地 runner，不执行真实 Microsoft Word GUI 自动化。
  * 协作模块：tools/compat/run-gate5-docx-compatibility.mjs 与 Gate 5 兼容矩阵 artifact。
  * 约束：外部证据必须绑定当前导出 artifact 的 byteLength 与 SHA-256，不能把过期或不完整证据标记为通过。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-20---建立-docx-兼容验证流程。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -290,48 +290,8 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
     expect(validatorCheck?.evidence).toContain('Open XML validator command timed out after 20ms.')
   })
 
-  it('records WPS process evidence without marking compatibility as passed', () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'jword-gate5-wps-process-'))
-    const fakeWpsAppPath = join(tempDir, 'wpsoffice.app')
-    const outputPath = join(tempDir, 'compatibility-results.json')
-    const missingManualResultsPath = join(tempDir, 'missing-manual-results.json')
-    const exportedArtifactPath = resolve('fixtures/docx/exports/docx-t1-run-styles.docx')
-
-    mkdirSync(fakeWpsAppPath)
-
-    execFileSync(process.execPath, [
-      'tools/compat/run-gate5-docx-compatibility.mjs'
-    ], {
-      env: createRunnerTestEnv({
-        GATE5_DOCX_COMPATIBILITY_OUTPUT: outputPath,
-        GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: missingManualResultsPath,
-        GATE5_WPS_APP_PATH: fakeWpsAppPath,
-        GATE5_WPS_PROCESS_LSOF_OUTPUT: [
-          'wpsoffice 26079 jian 82w REG 1,17 5613 76128878 ',
-          exportedArtifactPath
-        ].join('')
-      }),
-      encoding: 'utf8'
-    })
-
-    const report = JSON.parse(readFileSync(outputPath, 'utf8')) as Gate5CompatibilityRunnerResultDocument
-    const runStylesResult = report.results.find((result) => result.fixtureId === 'docx-t1-run-styles')
-    const wpsResult = runStylesResult?.report.appResults.find((result) => result.app === 'WPS')
-
-    expect(wpsResult).toMatchObject({
-      app: 'WPS',
-      result: 'pending',
-      editable: 'pending',
-      repairPrompt: 'pending',
-      mainVisualDifference: 'pending',
-      blockingIssue: 'WPS process opened the exported artifact, but repair prompt, editability, visual difference, and save evidence still require UI verification.'
-    })
-    expect(wpsResult?.evidence).toContain(`WPS app found: ${fakeWpsAppPath}`)
-    expect(wpsResult?.evidence).toContain(`lsof shows WPS opened ${exportedArtifactPath}`)
-  })
-
-  it('merges partial WPS UI evidence without marking compatibility as passed', () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'jword-gate5-partial-wps-ui-'))
+  it('merges partial Word UI evidence without marking compatibility as passed', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jword-gate5-partial-word-ui-'))
     const manualResultsPath = join(tempDir, 'manual-results.json')
     const outputPath = join(tempDir, 'compatibility-results.json')
     const artifactEvidence = readFreshRunStylesArtifactEvidence()
@@ -341,7 +301,7 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
       results: [
         {
           fixtureId: 'docx-t1-run-styles',
-          app: 'WPS',
+          app: 'Word',
           exportArtifact: artifactEvidence.path,
           artifactByteLength: artifactEvidence.byteLength,
           artifactSha256: artifactEvidence.sha256,
@@ -349,8 +309,8 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
           editable: 'pending',
           repairPrompt: 'none',
           mainVisualDifference: 'pending',
-          blockingIssue: 'WPS opened the exported artifact and no repair prompt was visible, but edit/save/reopen evidence is still missing.',
-          evidence: 'partial WPS UI evidence'
+          blockingIssue: 'Word opened the exported artifact and no repair prompt was visible, but edit/save/reopen evidence is still missing.',
+          evidence: 'partial Word UI evidence'
         }
       ]
     })}\n`)
@@ -367,24 +327,24 @@ describe('Gate 5 DOCX compatibility runner external evidence', () => {
 
     const report = JSON.parse(readFileSync(outputPath, 'utf8')) as Gate5CompatibilityRunnerResultDocument
     const runStylesResult = report.results.find((result) => result.fixtureId === 'docx-t1-run-styles')
-    const wpsResult = runStylesResult?.report.appResults.find((result) => result.app === 'WPS')
-    const wpsRequest = report.evidenceRequests.find((request) =>
+    const wordResult = runStylesResult?.report.appResults.find((result) => result.app === 'Word')
+    const wordRequest = report.evidenceRequests.find((request) =>
       request.fixtureId === 'docx-t1-run-styles' &&
-      request.target === 'WPS'
+      request.target === 'Word'
     )
 
-    expect(wpsResult).toEqual({
-      app: 'WPS',
+    expect(wordResult).toEqual({
+      app: 'Word',
       result: 'pending',
       editable: 'pending',
       repairPrompt: 'none',
       mainVisualDifference: 'pending',
-      blockingIssue: 'WPS opened the exported artifact and no repair prompt was visible, but edit/save/reopen evidence is still missing.',
-      evidence: 'partial WPS UI evidence'
+      blockingIssue: 'Word opened the exported artifact and no repair prompt was visible, but edit/save/reopen evidence is still missing.',
+      evidence: 'partial Word UI evidence'
     })
-    expect(wpsRequest).toMatchObject({
+    expect(wordRequest).toMatchObject({
       fixtureId: 'docx-t1-run-styles',
-      target: 'WPS',
+      target: 'Word',
       status: 'pending',
       artifactSha256: artifactEvidence.sha256
     })

@@ -5,7 +5,7 @@
  * 边界：只覆盖公开 UI option、返回句柄和目录项点击定位，不测试滚动动画。
  * 协作模块：packages/ui/src/create-ui.ts、heading controller 与 @4xian/jword-core。
  * 约束：通过公开 elements 和稳定 data selector 断言，不读取 controller 私有状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor, createSelectionState, twipsToCssPx, type Editor } from '@4xian/jword-core'

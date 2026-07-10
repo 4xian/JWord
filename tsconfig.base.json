@@ -18,6 +18,9 @@
       "@4xian/jword-collab/experimental": ["./packages/collab/src/experimental.ts"],
       "@4xian/jword-collab-server": ["./packages/collab-server/src/index.ts"],
       "@4xian/jword-persistence": ["./packages/persistence/src/index.ts"],
+      "@4xian/jword-react": ["./packages/react/src/index.ts"],
+      "@4xian/jword-vue": ["./packages/vue/src/index.ts"],
+      "@4xian/jword-devtools": ["./packages/devtools/src/index.ts"],
       "@4xian/jword-ui": ["./packages/ui/src/index.ts"],
       "@4xian/jword-ui/styles.css": ["./packages/ui/src/styles/toolbar.css"]
     },

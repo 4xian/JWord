@@ -3,7 +3,7 @@
  * 边界：只处理纯文本 diff/rebase，不访问 Y.Doc、provider、DOM 或 IndexedDB。
  * 协作：hocuspocus-runtime.ts 在重连冲突后用 system-recovery 写回合并结果。
  * 约束：合并只补回本地 pending 文本，不生成历史版本、不修改当前文档。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 interface ReconnectTextDiff {

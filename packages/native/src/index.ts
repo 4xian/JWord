@@ -3,7 +3,7 @@
  * 边界：只消费 core 公开 canonical document model 和 resource 类型，不读取 editor 内部 store。
  * 协作模块：package-codec.ts、package-readers.ts、schema-migrations.ts、worker.ts、fixtures/native 和后续 vanilla host。
  * 性能/安全约束：主格式是 document.json，不保存渲染缓存、画布位图、DOM 状态或协同 provider 状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-45---jword-原生保存与打开。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createPackageError, throwFirstUnrecoverableDiagnostic } from './diagnostics.js'

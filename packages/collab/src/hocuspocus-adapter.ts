@@ -3,7 +3,7 @@
  * 边界：只接入 Y.Doc、WebSocket provider、awareness 和诊断事件，不访问 core 内部 store、DOM 节点或 IndexedDB。
  * 协作模块：packages/collab/src/index.ts 负责稳定公共类型，examples/collab/server 提供本地 Hocuspocus 服务。
  * 性能/安全约束：构造阶段不得自动连接；room、token、client metadata 均由宿主传入并在显式 connect 前完成授权。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   HocuspocusProvider,

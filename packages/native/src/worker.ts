@@ -3,7 +3,7 @@
  * 边界：不直接创建 Web Worker，不读取 DOM，不访问 core 内部 store。
  * 协作模块：index.ts 的保存、打开、校验 API 和后续 vanilla 按需 worker host。
  * 性能/安全约束：取消请求通过 AbortController 传递，成功保存时允许转移 ArrayBuffer。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---4xianjword-native-公开-api-与-worker。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   createJWordNativeErrorEvent,

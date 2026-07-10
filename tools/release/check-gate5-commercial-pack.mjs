@@ -3,7 +3,7 @@
  * 边界：只审计 package manifest、export map、files、基础首屏静态依赖和 examples/docx 按需加载，不发布包。
  * 协作模块：packages/docx、packages/pdf、packages/license、examples/vanilla、examples/docx 和 Gate 7 文档计划。
  * 约束：商业高级包必须面向 restricted registry 形态；免费基础入口不能静态依赖 DOCX/PDF/license。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-538建立商业包发布检查。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'

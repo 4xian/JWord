@@ -3,7 +3,7 @@
  * 边界：不实现正则或跨 run 高级检索，高亮只走只读 overlay，不直接改 projection。
  * 协作模块：find-replace DOM、core findTextMatches/buildReplaceMatchCommand/replaceAllMatches 和 editor facade。
  * 性能/安全约束：每次查找按需读取 projection，不缓存 projection 副本；替换只走 editor.executeCommand。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
@@ -18,9 +18,16 @@ import {
   type TextRange,
   type TextPosition
 } from '@4xian/jword-core'
-import { createFindReplaceDom, destroyFindReplaceDom } from './dom'
+import { createFindReplaceDom, destroyFindReplaceDom, localizeFindReplaceDom } from './dom'
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import type { JWordFindReplacePanelElements } from '../types'
 import type { JWordReadonlyMode } from '../types'
+
+const FIND_REPLACE_OVERLAY_MATCH_LIMIT = 24
 
 export interface CreateFindReplaceControllerOptions {
   readonly editor: Editor
@@ -29,11 +36,13 @@ export interface CreateFindReplaceControllerOptions {
   readonly announce?: (message: string) => void
   readonly scrollToRange?: (range: TextRange) => void
   readonly readonly?: JWordReadonlyMode
+  readonly i18n?: ResolvedJWordUiI18n
   readonly findOptions?: FindTextOptions
 }
 
 export interface FindReplaceControllerHandle {
   readonly elements: JWordFindReplacePanelElements
+  setI18n(i18n: ResolvedJWordUiI18n): void
   open(): void
   close(): void
   toggleVisible(): void
@@ -47,7 +56,8 @@ export interface FindReplaceControllerHandle {
 export function createFindReplaceController(
   options: CreateFindReplaceControllerOptions
 ): FindReplaceControllerHandle {
-  const elements = createFindReplaceDom(options.host)
+  let i18n = options.i18n ?? resolveJWordUiI18n()
+  const elements = createFindReplaceDom(options.host, i18n)
   const signalController = new AbortController()
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
   let matches: readonly FindTextMatch[] = []
@@ -67,7 +77,9 @@ export function createFindReplaceController(
   function runFind(): void {
     matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = matches.length === 0 ? -1 : 0
-    lastMessage = matches.length === 0 ? '未找到结果' : `${matches.length} 个结果`
+    lastMessage = matches.length === 0
+      ? readFindReplaceText(i18n, 'noResults', '未找到结果')
+      : readFindReplaceText(i18n, 'resultCount', '{count} 个结果').replace('{count}', String(matches.length))
     focusActiveMatch()
     refresh()
     options.announce?.(lastMessage)
@@ -110,7 +122,7 @@ export function createFindReplaceController(
       : buildReplaceMatchCommand(options.editor, match, elements.replacementInput.value)
 
     if (command === null) {
-      lastMessage = '当前结果无法替换'
+      lastMessage = readFindReplaceText(i18n, 'replaceUnavailable', '当前结果无法替换')
       refresh()
       options.announce?.(lastMessage)
       return
@@ -119,7 +131,10 @@ export function createFindReplaceController(
     options.editor.executeCommand(command)
     matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = Math.min(activeIndex, matches.length - 1)
-    lastMessage = matches.length === 0 ? '已替换，未剩余结果' : `已替换，剩余 ${matches.length} 个结果`
+    lastMessage = matches.length === 0
+      ? readFindReplaceText(i18n, 'replaceNoRemaining', '已替换，未剩余结果')
+      : readFindReplaceText(i18n, 'replaceRemaining', '已替换，剩余 {count} 个结果')
+        .replace('{count}', String(matches.length))
     focusActiveMatch()
     refresh()
     options.announce?.(lastMessage)
@@ -136,7 +151,8 @@ export function createFindReplaceController(
 
     matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = matches.length === 0 ? -1 : 0
-    lastMessage = `已替换 ${result.replacedCount} 个结果`
+    lastMessage = readFindReplaceText(i18n, 'replaceAllResult', '已替换 {count} 个结果')
+      .replace('{count}', String(result.replacedCount))
     focusActiveMatch()
     refresh()
     options.announce?.(lastMessage)
@@ -266,6 +282,11 @@ export function createFindReplaceController(
 
   return {
     elements,
+    setI18n(nextI18n): void {
+      i18n = nextI18n
+      localizeFindReplaceDom(elements, i18n)
+      refresh()
+    },
     open,
     close,
     toggleVisible,
@@ -333,7 +354,7 @@ function destroyOverlay(overlayState: { overlay: HTMLElement | null }): void {
   overlayState.overlay = null
 }
 
-/** 渲染所有查找结果的只读高亮矩形。 */
+/** 渲染当前查找窗口的只读高亮矩形。 */
 function renderFindReplaceOverlay(
   editor: Editor,
   canvasContainer: HTMLElement,
@@ -344,8 +365,20 @@ function renderFindReplaceOverlay(
   const layout = editor.getLayout()
   const scale = editor.getPageConfig().scale
   const children: HTMLElement[] = []
+  const resolvedActiveIndex = activeIndex >= 0 && activeIndex < matches.length ? activeIndex : 0
+  const halfLimit = Math.floor(FIND_REPLACE_OVERLAY_MATCH_LIMIT / 2)
+  const matchStart = matches.length <= FIND_REPLACE_OVERLAY_MATCH_LIMIT
+    ? 0
+    : Math.max(0, Math.min(matches.length - FIND_REPLACE_OVERLAY_MATCH_LIMIT, resolvedActiveIndex - halfLimit))
+  const matchEnd = Math.min(matches.length, matchStart + FIND_REPLACE_OVERLAY_MATCH_LIMIT)
 
-  for (const [matchIndex, match] of matches.entries()) {
+  for (let matchIndex = matchStart; matchIndex < matchEnd; matchIndex += 1) {
+    const match = matches[matchIndex]
+
+    if (match === undefined) {
+      continue
+    }
+
     const range = editor.locateRangeSnapshot(match.rangeSnapshot)
 
     if (range === null) {
@@ -422,4 +455,9 @@ function createAnchorFromPosition(editor: Editor, position: TextPosition) {
 /** 读取当前查找结果索引提示。 */
 function readMatchIndexText(matchCount: number, activeIndex: number): string {
   return `${activeIndex + 1} / ${matchCount}`
+}
+
+/** 读取查找替换动态文案。 */
+function readFindReplaceText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
+  return readJWordUiText(i18n, `menu.findReplace.${key}`, fallback)
 }

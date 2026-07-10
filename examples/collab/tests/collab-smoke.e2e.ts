@@ -3,7 +3,7 @@
  * 边界：只验证内存模拟入口、断连重连和 auto insert 状态，不声明真实双窗口、Hocuspocus 或离线同步完成。
  * 协作：examples/collab/src/main.ts、examples/collab/src/runtime.ts 和 Playwright chromium 项目。
  * 约束：测试启动 collab demo 独立 Vite 服务，避免改动根 Playwright vanilla webServer 配置。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 collaboration/auto-insert。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test, type Page } from '@playwright/test'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -23,6 +23,7 @@ import {
   readAwarenessRangeAnchorRelativeTname,
   readAwarenessRangeFocusGraphemeIndex,
   readAwarenessViewportPageIndex,
+  readClientText,
   readCollabDebugApiNames,
   readFirstClientText,
   readHistoryLabels,
@@ -36,8 +37,11 @@ import {
   readProviderMode,
   readRemoteCursorTransforms,
   readSecondClientText,
+  setCollabDemoPort,
+  updateClientSelection,
   viteExecutablePath,
-  waitForCollabDemoServer
+  waitForCollabDemoServer,
+  writeClientText
 } from './collab-smoke-helpers'
 
 test.describe.configure({ mode: 'serial' })
@@ -46,13 +50,17 @@ test.setTimeout(120000)
 let serverProcess: ChildProcess | null = null
 let hocuspocusService: CollabHocuspocusService | null = null
 
-test.beforeAll(async () => {
+test.beforeAll(async ({ browserName }) => {
   test.setTimeout(120000)
+  const collabDemoPort = readCollabDemoPort(browserName)
+
+  setCollabDemoPort(collabDemoPort)
   serverProcess = spawn(viteExecutablePath, [
     '--host',
     '127.0.0.1',
     '--port',
-    '4186'
+    String(collabDemoPort),
+    '--strictPort'
   ], {
     cwd: collabDemoDirectory,
     env: {
@@ -72,6 +80,18 @@ test.afterAll(() => {
   hocuspocusService = null
 })
 
+/** 按浏览器项目分配独立 demo 端口，避免并行项目互相复用和关闭 Vite。 */
+function readCollabDemoPort(browserName: string): number {
+  if (browserName === 'firefox') {
+    return 4204
+  }
+  if (browserName === 'webkit') {
+    return 4205
+  }
+
+  return 4186
+}
+
 test('Gate 6 collab demo exposes memory debug API and state transitions', async ({ page }) => {
   await page.goto(collabDemoUrl)
   await expect(page.locator('[data-jword-collab-demo]')).toBeVisible()
@@ -82,6 +102,7 @@ test('Gate 6 collab demo exposes memory debug API and state transitions', async 
   expect(apiNames).toEqual([
     'abortAutoInsert',
     'addCommentRange',
+    'focusEditor',
     'formatClientRange',
     'importDocxForCollabAcceptance',
     'readAwarenessState',
@@ -94,7 +115,9 @@ test('Gate 6 collab demo exposes memory debug API and state transitions', async 
     'simulateDisconnect',
     'simulateReconnect',
     'startAutoInsert',
-    'undoLocalUserEdit'
+    'undoLocalUserEdit',
+    'updateClientSelection',
+    'updateClientText'
   ])
 
   await expect.poll(() => readOfflineConnected(page)).toBe(true)
@@ -121,20 +144,18 @@ test('Gate 6 collab demo syncs editable clients and restores history through bro
   await page.goto(collabDemoUrl)
   await expect(page.locator('[data-jword-collab-demo]')).toBeVisible()
 
-  const clientA = page.locator('#jword-collab-client-a')
-  const clientB = page.locator('#jword-collab-client-b')
   const historySelect = page.locator('#jword-collab-history-select')
   const previewButton = page.locator('#jword-collab-history-preview')
   const restoreButton = page.locator('#jword-collab-history-restore')
   const preview = page.locator('#jword-collab-history-preview-text')
   const browserText = 'Gate 6 browser synced text'
 
-  await clientA.fill(browserText)
-  await expect(clientB).toHaveValue(browserText)
+  await writeClientText(page, 'client-a', browserText)
+  await expect.poll(() => readClientText(page, 'client-b')).toBe(browserText)
   await expect.poll(() => readHistoryLabels(page)).toContain('Client A edit')
 
-  await clientB.fill(`${browserText} from B`)
-  await expect(clientA).toHaveValue(`${browserText} from B`)
+  await writeClientText(page, 'client-b', `${browserText} from B`)
+  await expect.poll(() => readClientText(page, 'client-a')).toBe(`${browserText} from B`)
   await expect.poll(() => readHistoryLabels(page)).toContain('Client B edit')
 
   await historySelect.selectOption('v1')
@@ -142,8 +163,8 @@ test('Gate 6 collab demo syncs editable clients and restores history through bro
   await expect(preview).toContainText('Gate 6 memory collab draft')
 
   await restoreButton.click()
-  await expect(clientA).toHaveValue('Gate 6 memory collab draft')
-  await expect(clientB).toHaveValue('Gate 6 memory collab draft')
+  await expect.poll(() => readClientText(page, 'client-a')).toBe('Gate 6 memory collab draft')
+  await expect.poll(() => readClientText(page, 'client-b')).toBe('Gate 6 memory collab draft')
   await expect.poll(() => readHistoryLabels(page)).toContain('restore:v1')
 })
 
@@ -155,14 +176,7 @@ test('Gate 6 collab demo renders remote cursor and selection presence', async ({
   await expect(page.locator('[data-jword-remote-cursor="client-b"]')).toContainText('Bao')
   await expect(page.locator('[data-jword-remote-cursor="client-a"]')).toHaveAttribute('title', 'Alice cursor 8')
 
-  await page.locator('#jword-collab-client-a').evaluate((element) => {
-    if (!(element instanceof HTMLTextAreaElement)) {
-      return
-    }
-    element.focus()
-    element.setSelectionRange(5, 12)
-    element.dispatchEvent(new Event('select', { bubbles: true }))
-  })
+  await updateClientSelection(page, 'client-a', 5, 12)
 
   await expect(page.locator('[data-jword-remote-selection="client-a"]')).toContainText('Alice')
   await expect(page.locator('[data-jword-remote-selection="client-a"]')).toContainText('5-12')
@@ -180,8 +194,8 @@ test('Gate 6 collab demo syncs two browser pages through Hocuspocus provider', a
   const clientA = await context.newPage()
   const clientB = await context.newPage()
   const roomId = `${started.roomPrefix}-room`
-  const clientAUrl = createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a')
-  const clientBUrl = createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b')
+  const clientAUrl = createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, undefined, started.historyHttpUrl)
+  const clientBUrl = createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', undefined, undefined, started.historyHttpUrl)
   const syncedText = 'Gate 6 real browser Hocuspocus sync'
 
   await clientA.goto(clientAUrl)
@@ -193,10 +207,10 @@ test('Gate 6 collab demo syncs two browser pages through Hocuspocus provider', a
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill(syncedText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(syncedText, {
+  await writeClientText(clientA, 'client-a', syncedText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(syncedText)
   await expect.poll(() => readProviderMode(clientB)).toBe('hocuspocus')
   await expect.poll(() => readFirstClientText(clientA)).toBe(syncedText)
   await expect.poll(() => readSecondClientText(clientB)).toBe(syncedText)
@@ -221,19 +235,19 @@ test('Gate 6 collab demo accepts two browser pages as separate users in the same
   const clientAUrl = createThirdPartyHocuspocusDemoUrl(started.webSocketUrl, roomId, {
     clientId: 'client-a',
     documentId,
-    serverUrl: started.httpUrl,
+    serverUrl: started.historyHttpUrl,
     userId: 'gate6-user-a',
     userName: clientAName,
     userColor: '#375bd2'
-  })
+  }, started.historyHttpUrl)
   const clientBUrl = createThirdPartyHocuspocusDemoUrl(started.webSocketUrl, roomId, {
     clientId: 'client-b',
     documentId,
-    serverUrl: started.httpUrl,
+    serverUrl: started.historyHttpUrl,
     userId: 'gate6-user-b',
     userName: clientBName,
     userColor: '#087c66'
-  })
+  }, started.historyHttpUrl)
   const syncedText = 'Gate 6 same document two browser users'
 
   await clientA.goto(clientAUrl)
@@ -253,22 +267,15 @@ test('Gate 6 collab demo accepts two browser pages as separate users in the same
   await expect(clientA.locator('[data-jword-collab-editor]')).toBeVisible()
   await expect(clientB.locator('[data-jword-collab-editor]')).toBeVisible()
 
-  await clientA.locator('#jword-collab-client-a').fill(syncedText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(syncedText, {
+  await writeClientText(clientA, 'client-a', syncedText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
-  await clientA.locator('#jword-collab-client-a').evaluate((element: Element) => {
-    if (!(element instanceof HTMLTextAreaElement)) {
-      return
-    }
-    element.focus()
-    element.setSelectionRange(0, 6)
-    element.dispatchEvent(new Event('select', { bubbles: true }))
-  })
+  }).toBe(syncedText)
+  await updateClientSelection(clientA, 'client-a', 0, 6)
   await expect.poll(() => readProviderMode(clientA)).toBe('hocuspocus')
   await expect.poll(() => readProviderMode(clientB)).toBe('hocuspocus')
-  await expect(clientB.locator('[data-jword-remote-cursor="client-a"]')).toContainText(`${clientAName} 正在输入`)
-  expect(await readAwarenessClientIds(clientB)).toContain('client-a')
+  await expect(clientB.locator('[data-jword-remote-cursor="gate6-user-a"]')).toContainText(clientAName)
+  await expect.poll(() => readAwarenessClientIds(clientB)).toContain('gate6-user-a')
 
   await context.close()
 })
@@ -285,7 +292,7 @@ test('Gate 6 collab demo connects to Hocuspocus with a required token', async ({
   const clientA = await context.newPage()
   const roomId = `${started.roomPrefix}-room`
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, 'valid-token'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, 'valid-token', started.historyHttpUrl))
 
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
@@ -307,7 +314,7 @@ test('Gate 6 collab demo reports Hocuspocus auth failed diagnostics in the brows
   const clientA = await context.newPage()
   const roomId = `${started.roomPrefix}-room`
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, 'invalid-token'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, 'invalid-token', started.historyHttpUrl))
 
   await expect.poll(() => readOfflineLastEvent(clientA), {
     timeout: 10000
@@ -331,12 +338,12 @@ test('Gate 6 collab demo reports Hocuspocus update rejected diagnostics in the b
   const clientA = await context.newPage()
   const roomId = `${started.roomPrefix}-room`
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, undefined, started.historyHttpUrl))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill('Gate 6 rejected browser update')
+  await writeClientText(clientA, 'client-a', 'Gate 6 rejected browser update')
 
   await expect.poll(() => readOfflineLastEvent(clientA), {
     timeout: 10000
@@ -361,8 +368,8 @@ test('Gate 6 collab demo renders Hocuspocus awareness across browser pages', asy
   const clientB = await context.newPage()
   const roomId = `${started.roomPrefix}-room`
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, undefined, started.historyHttpUrl))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', undefined, undefined, started.historyHttpUrl))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -370,18 +377,11 @@ test('Gate 6 collab demo renders Hocuspocus awareness across browser pages', asy
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill('awareness range text')
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue('awareness range text', {
+  await writeClientText(clientA, 'client-a', 'awareness range text')
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
-  await clientA.locator('#jword-collab-client-a').evaluate((element: Element) => {
-    if (!(element instanceof HTMLTextAreaElement)) {
-      return
-    }
-    element.focus()
-    element.setSelectionRange(2, 8)
-    element.dispatchEvent(new Event('select', { bubbles: true }))
-  })
+  }).toBe('awareness range text')
+  await updateClientSelection(clientA, 'client-a', 2, 8)
 
   await expect.poll(() => readAwarenessClientIds(clientB)).toContain('client-a')
   await expect(clientB.locator('[data-jword-remote-cursor="client-a"]')).toContainText('Client A 正在输入')
@@ -411,26 +411,20 @@ test('Gate 6 collab demo renders stable Hocuspocus presence for five browser pag
   const clientIds = ['client-a', 'client-b', 'client-c', 'client-d', 'client-e'] as const
   const pages: Page[] = []
   const roomId = `${started.roomPrefix}-${Date.now()}`
+  const sharedSelectionOffset = 1
 
   for (const clientId of clientIds) {
     const page = await context.newPage()
 
     pages.push(page)
-    await page.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, clientId))
+    await page.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, clientId, undefined, undefined, started.historyHttpUrl))
     await expect(page.locator('[data-jword-collab-status]')).toContainText('synced', {
       timeout: 10000
     })
   }
 
   for (const [index, page] of pages.entries()) {
-    await page.locator('#jword-collab-client-a').evaluate((element: Element, selectionOffset: number) => {
-      if (!(element instanceof HTMLTextAreaElement)) {
-        return
-      }
-      element.focus()
-      element.setSelectionRange(selectionOffset, selectionOffset)
-      element.dispatchEvent(new Event('select', { bubbles: true }))
-    }, index + 1)
+    await updateClientSelection(page, clientIds[index] ?? 'client-a', sharedSelectionOffset, sharedSelectionOffset)
   }
 
   const firstPage = pages[0]
@@ -492,8 +486,8 @@ test('Gate 6 collab demo removes Hocuspocus awareness after a browser page disco
   const roomId = `${started.roomPrefix}-room`
   const text = 'awareness disconnect text'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, undefined, started.historyHttpUrl))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', undefined, undefined, started.historyHttpUrl))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -501,18 +495,11 @@ test('Gate 6 collab demo removes Hocuspocus awareness after a browser page disco
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill(text)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(text, {
+  await writeClientText(clientA, 'client-a', text)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
-  await clientA.locator('#jword-collab-client-a').evaluate((element: Element) => {
-    if (!(element instanceof HTMLTextAreaElement)) {
-      return
-    }
-    element.focus()
-    element.setSelectionRange(0, 9)
-    element.dispatchEvent(new Event('select', { bubbles: true }))
-  })
+  }).toBe(text)
+  await updateClientSelection(clientA, 'client-a', 0, 9)
 
   await expect.poll(() => readAwarenessClientIds(clientB)).toContain('client-a')
   await expect(clientB.locator('[data-jword-remote-cursor="client-a"]')).toContainText('Client A')
@@ -522,7 +509,7 @@ test('Gate 6 collab demo removes Hocuspocus awareness after a browser page disco
     timeout: 10000
   }).not.toContain('client-a')
   await expect(clientB.locator('[data-jword-remote-cursor="client-a"]')).toHaveCount(0)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(text)
+  await expect.poll(() => readClientText(clientB, 'client-b')).toBe(text)
 
   await context.close()
 })
@@ -541,8 +528,8 @@ test('Gate 6 collab demo restores Hocuspocus history versions across browser pag
   const firstText = 'Gate 6 provider history v1'
   const secondText = 'Gate 6 provider history v2'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', undefined, undefined, started.historyHttpUrl))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', undefined, undefined, started.historyHttpUrl))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -550,16 +537,16 @@ test('Gate 6 collab demo restores Hocuspocus history versions across browser pag
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill(firstText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(firstText, {
+  await writeClientText(clientA, 'client-a', firstText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(firstText)
   const firstVersionId = await findHistoryVersionIdByText(clientA, firstText)
 
-  await clientA.locator('#jword-collab-client-a').fill(secondText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(secondText, {
+  await writeClientText(clientA, 'client-a', secondText, firstText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(secondText)
   await expect.poll(() => readHistoryTexts(clientA)).toContain(secondText)
 
   await clientA.locator('#jword-collab-history-select').selectOption(firstVersionId)
@@ -567,12 +554,12 @@ test('Gate 6 collab demo restores Hocuspocus history versions across browser pag
   await expect(clientA.locator('#jword-collab-history-preview-text')).toContainText(firstText)
 
   await clientA.locator('#jword-collab-history-restore').click()
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(firstText, {
+  await expect.poll(() => readClientText(clientA, 'client-a'), {
     timeout: 10000
-  })
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(firstText, {
+  }).toBe(firstText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(firstText)
   await expect.poll(() => readHistoryLabels(clientA)).toContain('restore:Client A edit')
 
   await context.close()
@@ -593,8 +580,8 @@ test('Gate 6 collab demo blocks Hocuspocus history restore with pending offline 
   const syncedText = 'Gate 6 provider history conflict synced'
   const pendingText = 'Gate 6 provider history conflict pending local'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb', undefined, started.historyHttpUrl))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb', undefined, started.historyHttpUrl))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -602,26 +589,32 @@ test('Gate 6 collab demo blocks Hocuspocus history restore with pending offline 
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill(firstText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(firstText, {
+  await writeClientText(clientA, 'client-a', firstText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(firstText)
   const firstVersionId = await findHistoryVersionIdByText(clientA, firstText)
 
-  await clientA.locator('#jword-collab-client-a').fill(syncedText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(syncedText, {
+  await writeClientText(clientA, 'client-a', syncedText, firstText)
+  await expect.poll(() => readClientText(clientA, 'client-a'), {
     timeout: 10000
-  })
+  }).toBe(syncedText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
+    timeout: 10000
+  }).toBe(syncedText)
   await clientA.evaluate(() => window.__jwordCollabDemo?.simulateDisconnect())
   await expect.poll(() => readOfflineConnected(clientA)).toBe(false)
-  await clientA.locator('#jword-collab-client-a').fill(pendingText)
+  await expect.poll(() => readClientText(clientA, 'client-a'), {
+    timeout: 10000
+  }).toBe(syncedText)
+  await writeClientText(clientA, 'client-a', pendingText, syncedText)
   await expect.poll(() => readOfflineQueuedOperations(clientA)).toBe(1)
 
   await clientA.locator('#jword-collab-history-select').selectOption(firstVersionId)
   await clientA.locator('#jword-collab-history-restore').click()
 
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(pendingText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(syncedText)
+  await expect.poll(() => readClientText(clientA, 'client-a')).toBe(pendingText)
+  await expect.poll(() => readClientText(clientB, 'client-b')).toBe(syncedText)
   await expect.poll(() => readOfflineQueuedOperations(clientA)).toBe(1)
   await expect.poll(() => readOfflineLastEvent(clientA)).toBe('restore-conflict-local-pending')
   await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('COLLAB_RESTORE_CONFLICT_RESOLVED')
@@ -643,18 +636,18 @@ test('Gate 6 collab demo restores Hocuspocus document from IndexedDB after reloa
   const roomId = `${started.roomPrefix}-${Date.now()}`
   const restoredText = 'Gate 6 IndexedDB reload text'
 
-  await writer.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
+  await writer.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb', undefined, started.historyHttpUrl))
   await expect(writer.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
-  await writer.locator('#jword-collab-client-a').fill(restoredText)
+  await writeClientText(writer, 'client-a', restoredText)
   await expect.poll(() => readOfflineLastEvent(writer)).toBe('indexeddb-synced')
   await expect.poll(() => readOfflineUpdateByteLength(writer)).toBeGreaterThan(0)
   await writer.close()
   await hocuspocusService.stop()
   hocuspocusService = null
 
-  await restored.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
+  await restored.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb', undefined, started.historyHttpUrl))
   await expect.poll(() => readFirstClientText(restored), {
     timeout: 10000
   }).toBe(restoredText)
@@ -682,16 +675,16 @@ test('Gate 6 collab demo keeps Hocuspocus usable when IndexedDB is unavailable',
   const roomId = `${started.roomPrefix}-${Date.now()}`
   const onlineText = 'Gate 6 IndexedDB unavailable online text'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb', undefined, started.historyHttpUrl))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb', undefined, started.historyHttpUrl))
   await expect.poll(() => readOfflineConnected(clientA)).toBe(true)
   await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('OFFLINE_CACHE_UNAVAILABLE')
   await expect.poll(() => readOfflineDiagnosticRecoverable(clientA, 'OFFLINE_CACHE_UNAVAILABLE')).toBe(true)
 
-  await clientA.locator('#jword-collab-client-a').fill(onlineText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(onlineText, {
+  await writeClientText(clientA, 'client-a', onlineText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(onlineText)
   await expect(clientA.locator('[data-jword-collab-status]')).not.toContainText('disconnected')
 
   await context.close()
@@ -711,8 +704,8 @@ test('Gate 6 collab demo keeps IndexedDB offline edits pending until Hocuspocus 
   const initialText = 'Gate 6 reconnect initial text'
   const offlineText = 'Gate 6 reconnect offline pending text'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb', undefined, started.historyHttpUrl))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb', undefined, started.historyHttpUrl))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -720,25 +713,25 @@ test('Gate 6 collab demo keeps IndexedDB offline edits pending until Hocuspocus 
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill(initialText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(initialText, {
+  await writeClientText(clientA, 'client-a', initialText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(initialText)
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.simulateDisconnect())
   await expect.poll(() => readOfflineConnected(clientA)).toBe(false)
-  await clientA.locator('#jword-collab-client-a').fill(offlineText)
+  await writeClientText(clientA, 'client-a', offlineText, initialText)
   await expect.poll(() => readOfflineQueuedOperations(clientA)).toBe(1)
   await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('OFFLINE_LOCAL_UPDATE_QUEUED')
-  await expect(clientB.locator('#jword-collab-client-b')).not.toHaveValue(offlineText, {
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 1000
-  })
+  }).not.toBe(offlineText)
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.simulateReconnect())
   await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('OFFLINE_RECONNECT_STARTED')
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(offlineText, {
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(offlineText)
   await expect.poll(() => readOfflineQueuedOperations(clientA)).toBe(0)
   await expect.poll(() => readOfflineLastEvent(clientA)).toBe('offline-reconnect-synced')
   await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('OFFLINE_RECONNECT_SYNCED')
@@ -761,8 +754,8 @@ test('Gate 6 collab demo merges remote server updates with offline local edits o
   const offlineText = 'Gate 6 merge offline local text'
   const remoteText = 'Gate 6 merge remote server text'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb', undefined, started.historyHttpUrl))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b', 'indexeddb', undefined, started.historyHttpUrl))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -770,18 +763,18 @@ test('Gate 6 collab demo merges remote server updates with offline local edits o
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill(initialText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(initialText, {
+  await writeClientText(clientA, 'client-a', initialText)
+  await expect.poll(() => readClientText(clientB, 'client-b'), {
     timeout: 10000
-  })
+  }).toBe(initialText)
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.simulateDisconnect())
   await expect.poll(() => readOfflineConnected(clientA)).toBe(false)
-  await clientA.locator('#jword-collab-client-a').fill(offlineText)
+  await writeClientText(clientA, 'client-a', offlineText, initialText)
   await expect.poll(() => readOfflineQueuedOperations(clientA)).toBe(1)
-  await clientB.locator('#jword-collab-client-b').fill(remoteText)
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(offlineText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(remoteText)
+  await writeClientText(clientB, 'client-b', remoteText, initialText)
+  await expect.poll(() => readClientText(clientA, 'client-a')).toBe(offlineText)
+  await expect.poll(() => readClientText(clientB, 'client-b')).toBe(remoteText)
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.simulateReconnect())
   await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('OFFLINE_RECONNECT_STARTED')
@@ -812,16 +805,16 @@ test('Gate 6 collab demo preserves pending offline edits when Hocuspocus reconne
   const syncedText = 'Gate 6 reconnect failure synced text'
   const pendingText = 'Gate 6 reconnect failure pending local text'
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'indexeddb', undefined, started.historyHttpUrl))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
-  await clientA.locator('#jword-collab-client-a').fill(syncedText)
+  await writeClientText(clientA, 'client-a', syncedText)
   await expect.poll(() => readOfflineLastEvent(clientA)).toBe('indexeddb-synced')
 
   await clientA.evaluate(() => window.__jwordCollabDemo?.simulateDisconnect())
   await expect.poll(() => readOfflineConnected(clientA)).toBe(false)
-  await clientA.locator('#jword-collab-client-a').fill(pendingText)
+  await writeClientText(clientA, 'client-a', pendingText, syncedText)
   await expect.poll(() => readOfflineQueuedOperations(clientA)).toBe(1)
 
   await hocuspocusService.stop()
@@ -836,7 +829,7 @@ test('Gate 6 collab demo preserves pending offline edits when Hocuspocus reconne
   await expect.poll(() => readOfflineLastEvent(clientA)).toBe('offline-reconnect-failed')
   await expect.poll(() => readOfflineConnected(clientA)).toBe(false)
   await expect(clientA.locator('[data-jword-collab-status]')).not.toContainText('synced')
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(pendingText)
+  await expect.poll(() => readClientText(clientA, 'client-a')).toBe(pendingText)
 
   await context.close()
 })

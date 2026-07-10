@@ -5,7 +5,7 @@
  * 边界：只覆盖 create/mount/destroy，不进入 Gate 1 模型、事务或输入能力。
  * 协作模块：后续 examples/vanilla 和 UI 包通过公开 facade 挂载编辑器。
  * 性能/安全约束：DOM 创建必须延迟到 mount，destroy 必须移除自身 DOM。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -42,6 +42,70 @@ describe('createEditor', () => {
   })
 })
 
+describe('Editor page config', () => {
+  it('resets custom margins to preset defaults when choosing a preset', () => {
+    const editor = createEditor()
+
+    try {
+      editor.setPageConfig({
+        widthTwips: 20000,
+        heightTwips: 30000,
+        marginTwips: {
+          top: 100,
+          right: 200,
+          bottom: 300,
+          left: 400
+        }
+      })
+
+      const nextConfig = editor.setPageConfig({ preset: 'a4' })
+
+      expect(nextConfig.preset).toBe('a4')
+      expect(nextConfig.marginTwips).toEqual({
+        top: 1440,
+        right: 1440,
+        bottom: 1440,
+        left: 1440
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('merges explicit preset margins from preset defaults', () => {
+    const editor = createEditor()
+
+    try {
+      editor.setPageConfig({
+        widthTwips: 20000,
+        heightTwips: 30000,
+        marginTwips: {
+          top: 100,
+          right: 200,
+          bottom: 300,
+          left: 400
+        }
+      })
+
+      const nextConfig = editor.setPageConfig({
+        preset: 'a4',
+        marginTwips: {
+          left: 720
+        }
+      })
+
+      expect(nextConfig.marginTwips).toEqual({
+        top: 1440,
+        right: 1440,
+        bottom: 1440,
+        left: 720
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+})
+
 describe('Editor mount/destroy lifecycle', () => {
   it('mounts a recognizable editor shell and canvas container', () => {
     const host = document.createElement('div')
@@ -56,6 +120,36 @@ describe('Editor mount/destroy lifecycle', () => {
     expect(shell?.getAttribute('aria-label')).toBe('Test document')
     expect(canvasContainer).toBeInstanceOf(HTMLElement)
     expect(shell?.contains(canvasContainer)).toBe(true)
+  })
+
+  it('keeps the canvas viewport horizontally scrollable for a wide page', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({
+      initialText: '横向宽纸张',
+      page: {
+        widthTwips: 30000,
+        heightTwips: 12000
+      }
+    })
+
+    host.style.width = '320px'
+    host.style.height = '240px'
+
+    try {
+      editor.mount(host)
+
+      const shell = host.querySelector<HTMLElement>('[data-jword-editor]')
+      const canvasContainer = host.querySelector<HTMLElement>('[data-jword-canvas-container]')
+      const page = host.querySelector<HTMLElement>('[data-jword-page="0"]')
+
+      expect(shell?.style.minWidth).toBe('0px')
+      expect(canvasContainer?.style.minWidth).toBe('0px')
+      expect(canvasContainer?.style.overflowX).toBe('auto')
+      expect(canvasContainer?.style.overflowY).toBe('auto')
+      expect(page?.style.minWidth).toBe(page?.style.width)
+    } finally {
+      editor.destroy()
+    }
   })
 
   it('mounts paginated canvas pages from the current projection', () => {
@@ -88,7 +182,8 @@ describe('Editor mount/destroy lifecycle', () => {
     expect(page).toBeDefined()
     expect(canvasContainer).toBeInstanceOf(HTMLElement)
     expect(firstPageCanvas).toBeInstanceOf(HTMLCanvasElement)
-    expect(canvasContainer?.style.overflow).toBe('auto')
+    expect(canvasContainer?.style.overflowX).toBe('auto')
+    expect(canvasContainer?.style.overflowY).toBe('auto')
 
     canvasContainer!.scrollTop = twipsToCssPx(page!.y)
     canvasContainer!.dispatchEvent(new Event('scroll'))

@@ -5,7 +5,7 @@
  * 边界：只测试纯调度计划，不执行真实布局、不访问 DOM、不绘制 Canvas。
  * 协作模块：Editor 后续可用调度结果决定当前页同步重排和后续页分片重排。
  * 约束：测试不读取 Y.Doc，不创建浏览器资源，不实现输入系统。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-2---分页-layout-与-canvas-render。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

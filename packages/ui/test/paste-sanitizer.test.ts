@@ -35,7 +35,9 @@ describe('paste sanitizer', () => {
           text: 'Word',
           properties: {
             bold: true,
-            italic: true
+            italic: true,
+            color: '#c00000',
+            backgroundColor: '#fff2cc'
           }
         }, {
           text: ' 片段',
@@ -49,14 +51,15 @@ describe('paste sanitizer', () => {
           listLevel: 0
         },
         runs: [{
-          text: '列表'
+          text: '列表',
+          properties: {
+            fontFamily: 'Calibri'
+          }
         }]
       }]
     })
     expect(JSON.stringify(fragment)).not.toContain('alert')
     expect(JSON.stringify(fragment)).not.toContain('onerror')
-    expect(JSON.stringify(fragment)).not.toContain('#c00000')
-    expect(JSON.stringify(fragment)).not.toContain('Calibri')
   })
 
 

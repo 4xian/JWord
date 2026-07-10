@@ -3,7 +3,7 @@
  * 边界：只检查已构建的 vanilla/collab dist 产物，不负责启动构建或真实浏览器。
  * 协作模块：examples/vanilla、examples/collab、Vite dynamic import chunk 和 Gate 6 商业包。
  * 约束：免费首屏不得包含协作高级代码；Hocuspocus、IndexedDB、server client 和授权诊断只能进入按需 chunk。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-653。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

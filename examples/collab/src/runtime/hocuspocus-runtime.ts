@@ -3,7 +3,7 @@
  * 边界：只连接 @4xian/jword-collab provider、IndexedDB offline adapter 与页面 debug 契约，不实现生产鉴权或 core 内部 store。
  * 协作：main.ts 根据 URL query 选择本 runtime，examples/collab/server 提供本地 Hocuspocus 服务。
  * 约束：所有协同正文来自同一个 Y.Doc；未实现能力用显式 no-op 状态暴露，不伪装离线或历史闭环完成。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.2。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { connectJWordCollaboration } from '@4xian/jword-collab'
 import { createHocuspocusCollabProviderAdapter } from '@4xian/jword-collab/experimental'
@@ -333,6 +333,12 @@ export function createHocuspocusDemoRuntime(
 
   /** 读取真实 provider awareness 的 debug 快照。 */
   function readAwarenessState(): AwarenessStateSnapshot {
+    if (providerState.status === 'error') {
+      return {
+        users: []
+      }
+    }
+
     const now = Date.now()
     const currentText = readEditorText()
 
@@ -818,7 +824,11 @@ export function createHocuspocusDemoRuntime(
 
     const activeEditor = ensureEditorForWrite()
 
-    if (!applyHocuspocusBoldRange(activeEditor, start, end)) {
+    if (!applyHocuspocusBoldRange(activeEditor, start, end, {
+      roomId: options.roomId,
+      clientId: options.clientId,
+      authorId: options.clientId
+    })) {
       return readCollabState()
     }
 

@@ -5,7 +5,7 @@
  * 边界：只覆盖目录按钮到 editor selection 的跳转闭环，不测试滚动动画或样式。
  * 协作模块：heading controller、core heading outline 与 editor facade。
  * 约束：通过稳定 data selector 交互，不读取 controller 私有状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor, createSelectionState } from '@4xian/jword-core'

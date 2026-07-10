@@ -3,7 +3,7 @@
  * 边界：只判断 transaction origin，不接 Editor、provider、DOM 或持久化。
  * 协作：hocuspocus-runtime.ts 在外部 provider/offline/version 事务后刷新内部 Editor 投影。
  * 约束：只识别 demo 所需 origin，不暴露 Yjs store 或 client clock。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type * as Y from 'yjs'
 

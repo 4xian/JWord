@@ -5,7 +5,7 @@
  * 边界：只读取根 package、tsconfig、vitest 配置并调用 Vite resolver，不执行包源码。
  * 协作模块：package.json、tsconfig.base.json、vitest.config.ts 与各 workspace package 清单。
  * 性能/安全约束：测试只做静态解析，防止根运行时依赖或测试 alias 漂移削弱包边界。
- * Specs：docs/superpowers/reports/2026-07-02-gate0-gate1-review.md#g0-01-生产依赖提升到根-packagejson。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFileSync } from 'node:fs'

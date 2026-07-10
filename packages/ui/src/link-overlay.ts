@@ -3,7 +3,7 @@
  * 边界：只读 projection/layout 并调用 link controller 传入的激活回调，不直接打开外部链接。
  * 协作模块：ui-lifecycle、link/controller 与 selection-actions/controller 共同完成链接交互。
  * 性能/安全约束：空链接文档不读取 layout；链接写入仍由 ui-lifecycle 走 core command pipeline。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import {
   createSelectionState,

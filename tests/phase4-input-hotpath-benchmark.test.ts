@@ -5,7 +5,7 @@
  * 边界：只验证 10 万字 / 200 页 fixture、benchmark 输出字段和 runner 接入，不声明 P95 < 50ms 已达标。
  * 协作模块：fixtures/plain-text/gate2-large-fixture.mjs、benchmarks/phase4-input-hotpath-benchmark.mjs、tools/bench/run-bench.mjs 和 packages/core layout。
  * 约束：性能专项必须先有可机器读取基线，再进入 GX-01/G2-05 等优化批次。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#39-phase-4-性能专项输入热路径-p95--50ms。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'

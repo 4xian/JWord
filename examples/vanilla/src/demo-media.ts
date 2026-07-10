@@ -3,7 +3,7 @@
  * 边界：不实现上传协议或 editor DOM；这里只负责 demo 级资源上传模拟、core command 桥接与可观察契约。
  * 协作模块：main.ts 把这里的 media options 传给 `createJWordUi(...)`，浏览器测试通过 `window.__jwordDemo.media` 读取钩子。
  * 性能/安全约束：上传状态保持最小真实异步；对 blob URL 负责回收；失败必须显式暴露 retry token。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 1 Step 4.1-4.3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordMediaOptions,
@@ -49,7 +49,6 @@ export function createDemoMediaSupport(): DemoMediaSupport {
 
   /** 组装 demo 级 media options。 */
   const media = Object.freeze({
-    title: '图片',
     description: 'Gate 4 Iteration 1：验证官方 media panel、上传状态与 core 图片命令的最小闭环。',
     adapter: {
       async upload(request: JWordMediaUploadRequest, options?: JWordMediaUploadOptions) {

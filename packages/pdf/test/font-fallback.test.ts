@@ -5,7 +5,7 @@
  * 边界：只覆盖公开 exportPdfFromLayout 入口，不直接访问字体注册表内部实现。
  * 协作模块：packages/pdf/src/index.ts、public-api fixture 和 PDF 视觉报告复用这些契约。
  * 约束：测试文件不放入 src，保持小体量，字体 fixture 仅使用仓库内小子集。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#37-pdf-字体子集化--fallback-链phase-3cl。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

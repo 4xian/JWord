@@ -5,7 +5,7 @@
  * 边界：只覆盖 Editor facade 到 canvas 绘制指令的批注高亮闭环，不测试批注侧边栏 UI。
  * 协作模块：文档模型批注、布局查询、canvas renderer 和挂载运行时共同完成绘制。
  * 性能/安全约束：测试只替换用例内 canvas getContext，结束后恢复原型，不访问真实网络或外部图形资源。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-分页-canvas-渲染。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

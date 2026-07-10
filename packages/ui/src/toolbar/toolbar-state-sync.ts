@@ -3,7 +3,7 @@
  * 边界：不绑定具体按钮业务动作，不创建 toolbar DOM。
  * 协作模块：controller 提供生命周期，format/paragraph/insert/panel 控件模块复用这里的绑定上下文。
  * 性能/安全约束：只读 editor facade 与现有 DOM 控件，不保存第二套编辑状态。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Editor } from '@4xian/jword-core'

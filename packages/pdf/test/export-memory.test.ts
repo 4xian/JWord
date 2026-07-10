@@ -5,7 +5,7 @@
  * 边界：只覆盖导出结果 buffer 所有权，不验证真实 PDF 渲染内容。
  * 协作模块：packages/pdf/src/index.ts 的导出入口与 pdf-lib save 结果。
  * 约束：测试通过 mock pdf-lib 隔离内存复制行为，不依赖 PDF 字节解析。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-4---性能与内存优化。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

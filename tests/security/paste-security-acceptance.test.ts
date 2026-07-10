@@ -5,7 +5,7 @@
  * 边界：只验证公开 UI/DOCX 入口的安全结果，不读取 sanitizer、controller 或 importer 私有状态。
  * 协作模块：@4xian/jword-ui、@4xian/jword-core 与 @4xian/jword-docx 共同提供验收证据。
  * 性能/安全约束：不执行真实网络请求，不把不可信 HTML 回插页面，危险 HTML 必须走纯文本降级。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md#64-安全验收。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor, createSelectionState, type Editor, type Run } from '@4xian/jword-core'

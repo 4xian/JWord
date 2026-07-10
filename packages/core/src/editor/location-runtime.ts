@@ -3,7 +3,7 @@
  * 边界：不访问 DOM、不读取布局、不接 provider，只把现有 anchor/range/selection 映射为公开纯数据。
  * 协作模块：facade-runtime 提供基础 anchor 与 range 恢复，location-query 提供 projection 扫描。
  * 性能/安全约束：返回可序列化对象，不暴露内部锚点、范围、协同状态、文档存储、浏览器选区或画布坐标。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 6.22-6.24。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { isSelectionCollapsed } from '../model/selection'

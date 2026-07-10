@@ -3,7 +3,7 @@
  * 边界：只返回页索引，不创建 DOM、canvas，不参与绘制、hit-test 或 矩形映射。
  * 协作模块：画布渲染器 按 retainedPageIndexes 同步真实 canvas，画布池 回收离屏页。
  * 性能/安全约束：只保留可视页和固定页数 buffer，避免单长 canvas 或全量页面 canvas 常驻。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-分页-canvas-渲染。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export interface VirtualizerPageBox {

@@ -26,7 +26,7 @@ Gate 7 Step 7.1 公开 API 清单。本文只记录当前仓库已经实现并�
 
 - 公开最低版本承诺见 [`browser-support.md`](./browser-support.md)。
 - 桌面编辑支持 Chrome / Edge ≥ 114、Firefox ≥ 115 ESR、Safari ≥ 16.4。
-- 移动端仅承诺只读分页预览，不承诺移动端编辑。
+- 窄屏仅承诺分页滚动预览与工具栏样式适配，不建立单独的窄屏平台能力口径。
 - 发布包与示例构建 target 对齐 ES2022；Playwright Chromium / Firefox / WebKit 最新版项目用于浏览器族回归，不等同于最低版本实验室认证。
 
 ## Release / no-alias 验收
@@ -50,7 +50,7 @@ Gate 7 Step 7.1 公开 API 清单。本文只记录当前仓库已经实现并�
 - Export surface：本文件每个 package 的 Stable / Experimental / Internal 清单与 package export map。
 - Event payload：`EditorEvent`、Plugin diagnostics/telemetry、collab/server handshake、license diagnostics 和 support bundle 字段必须先在本文件或生成诊断文档登记。
 - Diagnostics naming：`fixtures/collab/diagnostics-registry.json` 是单一真源，公开清单由 [`diagnostic-codes.md`](./diagnostic-codes.md) 生成。
-- Browser support：[`browser-support.md`](./browser-support.md) 是浏览器最低版本、移动端边界和构建 target 的公开真源。
+- Browser support：[`browser-support.md`](./browser-support.md) 是浏览器最低版本、窄屏适配边界和构建 target 的公开真源。
 
 Docs, type tests, wrappers and examples must consume these frozen sources. 需要新增或改名时，先更新冻结来源和对应 architecture guard，再更新文档站、类型测试、wrapper 或示例。
 
@@ -65,6 +65,13 @@ Docs, type tests, wrappers and examples must consume these frozen sources. 需�
 - `metadataTags`：机器可读分类标签，例如 `authorization`、`worker`、`payload-limit`、`server`。
 - `JWordDiagnosticsSnapshot.registry`：生成快照时采用的 registry 摘要。
 - `JWordDiagnosticsSnapshot.privacy`：固定声明文档正文、字符串 details 和 details key 已裁剪。
+- `JWordDiagnosticsSnapshot.packageVersions`：只包含 package name/version，不包含安装路径。
+- `JWordDiagnosticsSnapshot.featureFlags`：只包含 feature key、enabled 和来源。
+- `JWordDiagnosticsSnapshot.license`：只包含授权状态和 feature key，不包含 token、签名或 private key。
+- `JWordDiagnosticsSnapshot.operations`：只包含 transaction count、最近 command/origin、operation count 和 operation kind，不包含 operation payload。
+- `JWordDiagnosticsSnapshot.layout`：只包含 page/line/block/table/debug box 计数，不包含正文。
+- `JWordDiagnosticsSnapshot.selection`：只包含 anchor/focus 位置 ID 和 grapheme index，不包含正文。
+- `JWordDiagnosticsSnapshot.collaboration` / `server`：只包含 handshake/server 摘要，不包含 token、cookie 或 secret。
 - `JWordDiagnosticsSnapshot.plugins`：插件诊断只保留 `pluginName`、`code`、`lifecycle`、`commandName`、`reasonCode` 与 `recoverable`。
 
 Feature key handoff：Gate 5 高级格式能力必须使用 `GATE5_FORMAT_FEATURES`；Gate 6 协同、离线、历史、服务端和自动插入能力必须使用 `GATE6_COLLAB_FEATURES`。授权失败诊断只允许携带 feature key、customer id、稳定诊断码和可恢复标记，不携带用户文档内容。
@@ -129,11 +136,12 @@ Stable：
 
 Experimental：
 
-- Plugin core API：`PluginDefinition`、`PluginContext`、`PluginCommandDefinition`、`PluginCommandMiddleware`、`PluginKeyBindingDefinition`、`PluginLifecycleEventName`、`PluginDiagnostic`、`PluginDiagnosticCode`；当前仅供 Gate 7 Plugin API M2-M6 内部消费者与试用路径使用，不承诺 1.0 兼容。
+- Plugin core API：`PluginDefinition`、`PluginContext`、`PluginAdapterRegistry`、`PluginAdapterSlot`、`PluginAdapterResolution`、`PluginAdapterRegistration`、`PluginPersistenceAdapterDescriptor`、`PluginImportAdapterDescriptor`、`PluginExportAdapterDescriptor`、`PluginCollabProviderAdapterDescriptor`、`PluginCommandDefinition`、`PluginCommandMiddleware`、`PluginKeyBindingDefinition`、`PluginLifecycleEventName`、`PluginDiagnostic`、`PluginDiagnosticCode`；当前仅供 Gate 7 Plugin API M2-M6 内部消费者与试用路径使用，不承诺 1.0 兼容。
+- Plugin error isolation：setup、command、middleware、keybinding、decoration、lifecycle dispose 和 adapter 回调异常会被转换为 `error` 事件与 `PluginDiagnostic`，adapter 调用失败时返回 failed resource 或 `undefined`；这不是权限沙箱，插件仍运行在宿主同一 JS realm，不能用于隔离恶意代码或替代 license/auth enforcement。
 - Plugin decoration API：`ExperimentalDecorationProvider`、`PluginDecoration`、`PluginDecorationReadInput`、`PluginDecorationReadReason`、`PluginTextHighlightDecoration`、`PluginPageOverlayDecoration`、`PluginResolvedDecoration`；当前仅供 Gate 7 Plugin API M3 只读装饰路径试用，不承诺 1.0 兼容。
 - `PluginContext.registerDecorationProvider()`；provider 只能读取 projection/layout/selection 快照并返回装饰描述，不能访问 canvas context 或直接写文档。
-- Observability / telemetry API：`JWordTelemetryOptions`、`JWordTelemetrySink`、`JWordTelemetryEvent`、`JWordPluginDiagnosticTelemetryEvent`、`JWordDiagnosticsSnapshot`、`JWordDiagnosticsPluginEntry`、`JWordDiagnosticsPrivacySummary`；当前仅供 Gate 7 R3 observability 前置路径试用，不承诺 1.0 兼容。
-- `EditorOptions.telemetry` 与 `Editor.exportDiagnostics()`：telemetry 默认关闭且必须宿主 opt-in；diagnostics export 会携带 registry 摘要并裁剪插件 message、字符串 details 与 details key，不包含文档正文。
+- Observability / telemetry API：`JWordTelemetryOptions`、`JWordTelemetrySink`、`JWordTelemetryEvent`、`JWordPluginDiagnosticTelemetryEvent`、`JWordDiagnosticsSnapshot`、`JWordDiagnosticsPluginEntry`、`JWordDiagnosticsPrivacySummary`、`JWordDiagnosticsPackageVersion`、`JWordDiagnosticsFeatureFlag`、`JWordDiagnosticsOperationSummary`、`JWordDiagnosticsLayoutMetrics`、`JWordDiagnosticsSelectionSummary`、`JWordDiagnosticsLicenseState`、`JWordDiagnosticsCollaborationSummary`、`JWordDiagnosticsServerSummary`；当前仅供 Gate 7 observability/devtools 路径试用，不承诺 1.0 兼容。
+- `EditorOptions.telemetry` 与 `Editor.exportDiagnostics()`：telemetry 默认关闭且必须宿主 opt-in；diagnostics export 会携带 registry、package versions、feature flags、license state、operation summary、layout metrics、selection/anchor、collab/server 摘要并裁剪插件 message、字符串 details 与 details key，不包含文档正文、token、license private key 或原始 HTML。
 
 Internal：
 
@@ -154,7 +162,20 @@ Stable：
 - `JWordToolbarElements`
 - `JWordToolbarOptions`
 - `JWordToolbarToolId`
+- `JWordStatusBarOptions`
+- `JWordStatusBarItemId`
+- `JWordStatusBarElements`
+- `JWordStatusBarLocale`
+- `JWordStatusBarZoomOptions`
+- `JWordStatusBarThemeSwitcherOptions`
+- `JWordStatusBarLocaleSwitcherOptions`
+- `JWordStatusBarBrandOptions`
+- `JWordStatusBarBrandProtectionMode`
+- `JWordStatusBarDocumentStats`
+- `JWordWatermarkOptions`
 - `BUILTIN_JWORD_TOOL_IDS`
+- Theme contract：`JWordUiThemeOptions`、`JWordUiThemeName`、`JWordUiThemeToken`、`DEFAULT_JWORD_UI_THEME_TOKENS`；UI 只写 `jw-root`、`data-theme` 与 `--jw-*` CSS custom properties，不把 theme 状态写入 core。`JWordUiInstance.setTheme(...)` 支持创建后动态刷新 toolbar/statusBar。
+- i18n contract：`JWordUiI18nOptions`、`JWordUiI18nDictionary`、`JWordUiI18nKey`、`DEFAULT_JWORD_UI_I18N_DICTIONARY`、`resolveJWordUiI18n()`；缺失 key 回退内建中文，core 诊断码不本地化。`JWordUiInstance.setLocale(...)` 首批支持 `zh-CN` / `en-US` 动态刷新 toolbar/statusBar。
 - `createCoreMediaCommandAdapter()`
 - `createCoreTableCommandAdapter()`
 - `JWordMediaAdapter`
@@ -168,7 +189,15 @@ Stable：
 - `HeadingOutlineControllerHandle`
 - comments / link / revision / readonly / user option types exported from the root entry.
 - media and link policy API：`DEFAULT_JWORD_MEDIA_URL_POLICY`、`isAllowedJWordMediaUrl()`、`DEFAULT_JWORD_LINK_PROTOCOL_ALLOWLIST`、`isAllowedJWordLinkUrl()`。
-- style entry：`@4xian/jword-ui/styles.css`。
+- style entry：`@4xian/jword-ui/styles.css`；当前样式使用 `jw-` BEM class 与 `--jw-color-*` / `--jw-focus-ring` token，支持 `data-theme="light" | "dark"`。
+
+Current UI behavior:
+
+- `createJWordUi({ editor, editorHost })` 默认启用专业 Tab toolbar 与底部 statusBar；`toolbarHost` / `statusBar.host` 未传时由 SDK 在 `editorHost` 内组织 `toolbar / editor shell / statusBar`。
+- toolbar 支持 `professional` / `common` 双模式；旧 `visibleTools` 用法兼容为常用工具列表。
+- statusBar 默认提供文档统计、页码、选区统计、缩放、适应宽度/整页、全屏、演示模式、主题和语言入口；协作/保存/批注/修订汇总、企业治理、diagnostics/support bundle、AI 助手不属于 MVP。
+- `JWordUiInstance.setWatermark(...)`、`clearWatermark()`、`getWatermark()` 提供实例级页面水印；水印挂载在 UI canvas container 内，不写入 core 文档模型或协作事务。
+- statusBar `brand.protection` 支持 `hidden`、`restore`、`watermarkFallback`；版权水印与用户页面水印分层管理，`clearWatermark()` 不会清除版权水印。
 
 Experimental：
 
@@ -229,6 +258,8 @@ Stable：
 
 - `importDocx()`
 - `exportDocx()`
+- `createDocxImportPluginAdapter()`
+- `createDocxExportPluginAdapter()`
 - `inspectDocxPackage()`
 - `convertDocxImportDocumentToCoreDocument()`
 - `createDocxCompatibilityReport()`
@@ -265,7 +296,7 @@ Stable：
 Compatibility evidence：
 
 - 当前 `fixtures/docx/compatibility-results.json` 中 14 个 T1/T2 DOCX 导出 fixture 已通过自动 package graph、roundtrip diff 与 Open XML validator 检查。
-- 当前人工办公套件证据只覆盖 WPS；Microsoft Word 桌面版与 LibreOffice 仍为 `pending/not-run`，对外材料不得声明已完成 Word 桌面版兼容验证。
+- Microsoft Word 桌面版仍为 `pending/not-run`，对外材料不得声明已完成 Word 桌面版兼容验证。当前 API 只提供 DOCX import/export，不提供旧二进制 `.doc` 直接读写；`.doc` 只作为 Word 另存人工观察边界。
 - Word 桌面版补证必须按 `fixtures/docx/evidence-templates/manual-compatibility-results.template.json` 记录打开、编辑、保存、重开结果，并保留 export artifact 的 byteLength 与 SHA-256 绑定字段。
 
 Experimental：当前无。
@@ -282,6 +313,7 @@ Edition：paid format
 Stable：
 
 - `exportPdfFromLayout()`
+- `createPdfExportPluginAdapter()`
 - `detectPdfWorkerCapability()`
 - `PDF_WORKER_CSP_DIRECTIVES`
 - `ExportPdfOptions`
@@ -324,12 +356,13 @@ Edition：free base contract
 
 导出分级摘要：stable 覆盖基础 storage contract、diagnostics、memory/storage history adapter 类型和不可用 IndexedDB fallback；experimental 覆盖浏览器 IndexedDB adapter 行为；internal 覆盖 Yjs reconstruction、SHA-256 helper、storage serialization helper 和实现类。协作相关 persistence adapter 只在 paid collaboration 场景中作为高级能力消费。
 
-版本历史 GC 决策：`docs/superpowers/plans/2026-07-06-gate6-history-yjs-gc-decision.md` 是内部技术决策真源；公开 API 只承诺 update log、JWord snapshot record 和隔离 Y.Doc 重放路线，不公开 Yjs `Y.Snapshot` 或 `gc = false` 作为集成能力。
+版本历史实现边界：以 `docs/current-implementation/packages/persistence.md` 和当前 persistence/collab 源码为准；公开 API 只承诺 update log、JWord snapshot record 和隔离 Y.Doc 重放路线，不公开 Yjs `Y.Snapshot` 或 `gc = false` 作为集成能力。
 
 Stable：
 
 - `createMemoryPersistenceHistoryService()`
 - `createMemoryPersistenceAdapter()`
+- `createJWordPersistencePluginAdapter()`
 - `createUnavailableIndexedDbOfflineAdapter()`
 - `createStoragePersistenceAdapter()`
 - `createVolatileHistoryStorage()`
@@ -388,6 +421,7 @@ Stable：
 - `JWordCollaborationAutoInsertRetryInput`
 - `JWordCollaborationAutoInsertWriteResult`
 - `JWordCollabProviderAdapter`
+- `createJWordCollabProviderPluginAdapter()`
 - `JWordCollabAwarenessAdapter`
 - `JWordCollabProviderStatus`
 - `JWordCollabDiagnostic`
@@ -496,36 +530,59 @@ Internal：
 
 ## @4xian/jword-react
 
-状态：未实现，不能作为 stable API 使用
+Edition：free wrapper
 
-Edition：future wrapper
+Stable：
 
-Stable：当前无。
+- `JWordReactEditor`
+- `JWordReactEditorProps`
+- `JWordReactEditorHandle`
+- `JWordReactErrorBoundary`
+- `JWordEditorProvider`
+- `useJWordEditor()`
+- `useJWordEditorHandle()`
 
 Experimental：当前无。
 
-Internal：Gate 7 Step 7.7 前不得公开 React wrapper API。
+Internal：
+
+- wrapper 内部 DOM refs、React effect 调度、UI/editor 实例持有细节。
+- React wrapper 错误边界不是权限沙箱；插件与 wrapper 仍运行在宿主同一 JS realm。
 
 ## @4xian/jword-vue
 
-状态：未实现，不能作为 stable API 使用
+Edition：free wrapper
 
-Edition：future wrapper
+Stable：
 
-Stable：当前无。
+- `JWordVueEditor`
+- `JWordVueEditorProps`
+- `JWordVueEditorHandle`
+- `JWORD_VUE_EDITOR_KEY`
+- `useJWordEditor()`
+- `useJWordEditorHandle()`
 
 Experimental：当前无。
 
-Internal：Gate 7 Step 7.8 前不得公开 Vue wrapper API。
+Internal：
+
+- wrapper 内部 DOM refs、Vue lifecycle 调度、UI/editor 实例持有细节。
+- Vue wrapper expose/provide 不是权限沙箱；插件与 wrapper 仍运行在宿主同一 JS realm。
 
 ## @4xian/jword-devtools
 
-状态：未实现，不能作为 stable API 使用
+Edition：free diagnostics
 
-Edition：future devtools
+Stable：
 
-Stable：当前无。
+- `attachJWordDevtools()`
+- `AttachJWordDevtoolsOptions`
+- `JWordDevtoolsHandle`
 
 Experimental：当前无。
 
-Internal：Gate 7 Step 7.10 前不得公开 devtools API。
+Internal：
+
+- Devtools 只消费 `Editor.exportDiagnostics()` 返回的隐私裁剪 snapshot，不读取 editor runtime、Y.Doc、provider、worker 或 package `src` 内部路径。
+- 初版只提供 opt-in 浮动面板，不实现 Chrome Extension；默认不进入免费首屏 bundle。
+- 面板错误不得影响 editor，`destroy()` 后必须移除 DOM/listener。

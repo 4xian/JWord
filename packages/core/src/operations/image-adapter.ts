@@ -3,7 +3,7 @@
  * 边界：只处理图片 run 的插入、替换资源、删除、尺寸和旋转，不处理资源记录创建。
  * 协作模块：operation-adapter 负责分发，adapter-location 负责定位与 run 拆分。
  * 性能/安全约束：不访问 DOM 和网络；图片资源必须已存在于 DocumentStore。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {

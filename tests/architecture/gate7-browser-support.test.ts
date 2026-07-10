@@ -4,8 +4,8 @@
  * 职责：锁定 Gate 7 对外浏览器支持矩阵、构建 target 和 E2E 浏览器族。
  * 边界：只检查公开文档与配置文本，不启动浏览器、不构建示例。
  * 协作模块：docs/sdk/browser-support.md、Vite 示例配置、Playwright 配置和 package scripts。
- * 约束：测试矩阵不是最低版本承诺；移动端只承诺只读分页预览。
- * Specs：docs/superpowers/reports/2026-07-02-plan-review.md#313-对外浏览器支持矩阵未定义r2-复审补充。
+ * 约束：测试矩阵不是最低版本承诺；窄屏只保留分页滚动预览和工具栏样式适配。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -39,7 +39,7 @@ const packageTsconfigPaths = [
 ]
 
 describe('Gate 7 browser support matrix', () => {
-  it('freezes the public minimum browser matrix and mobile boundary', () => {
+  it('freezes the public minimum browser matrix and narrow viewport boundary', () => {
     expect(existsSync(browserSupportPath)).toBe(true)
 
     const support = readFileSync(browserSupportPath, 'utf8')
@@ -48,8 +48,9 @@ describe('Gate 7 browser support matrix', () => {
     expect(support).toContain('Chrome / Edge ≥ 114')
     expect(support).toContain('Firefox ≥ 115 ESR')
     expect(support).toContain('Safari ≥ 16.4')
-    expect(support).toContain('移动端仅承诺只读分页预览')
-    expect(support).toContain('不承诺移动端编辑')
+    expect(support).toContain('窄屏适配边界')
+    expect(support).toContain('分页 canvas 在窄屏视口下可滚动、可阅读、页面不空白')
+    expect(support).toContain('不在 JWord 中建立单独的窄屏平台概念')
     expect(support).toContain('ES2022')
     expect(support).toContain('Chromium / Firefox / WebKit 最新版')
     expect(publicApi).toContain('./browser-support.md')

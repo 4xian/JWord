@@ -3,7 +3,7 @@
  * 边界：不解析键盘输入语义，不生成编辑 operations。
  * 协作模块：布局运行时、DOM 辅助函数、渲染辅助函数和选择区运行时。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { renderPageCanvas } from '../canvas/renderer'
 import { createSelectionFormattingState } from '../model/formatting-state'

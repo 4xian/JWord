@@ -3,7 +3,7 @@
  * 边界：只提供 error class、code 和 helper，不实现 diagnostics export、UI 文案或插件错误隔离。
  * 协作模块：事务管线、操作适配器、编辑器门面后续统一抛出该错误类型。
  * 性能/安全约束：错误 details 只保存 JSON 兼容诊断数据，不持有 Yjs 或 DOM 可写对象。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export type JWordErrorCode =
@@ -45,9 +45,15 @@ export type JWordErrorCode =
   | 'EDITOR_POINTER_PAGE_MISSING'
   | 'EDITOR_INPUT_HANDLER_FAILED'
   | 'PLUGIN_CALLBACK_FAILED'
+  | 'PLUGIN_ADAPTER_DUPLICATE'
+  | 'PLUGIN_ADAPTER_FAILED'
+  | 'PLUGIN_ADAPTER_UNAVAILABLE'
+  | 'PLUGIN_COLLAB_PROVIDER_REJECTED'
   | 'PLUGIN_COMMAND_REJECTED'
   | 'PLUGIN_COMMAND_NOT_FOUND'
   | 'PLUGIN_COMMAND_DUPLICATE'
+  | 'PLUGIN_EXPORT_REJECTED'
+  | 'PLUGIN_IMPORT_REJECTED'
   | 'CANVAS_POOL_DISPOSED'
 
 export type JWordErrorDetails =

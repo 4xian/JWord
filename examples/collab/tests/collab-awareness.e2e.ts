@@ -3,7 +3,7 @@
  * 边界：只覆盖 Hocuspocus demo awareness 行为，不验证完整并发矩阵或版本历史。
  * 协作：examples/collab/src/runtime/hocuspocus-runtime.ts、server/hocuspocus-service.ts 和 Playwright chromium 项目。
  * 约束：每个用例使用独立 room 和随机 Hocuspocus 端口，测试结束必须关闭浏览器上下文和服务。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 6 Step 6.3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { ChildProcess } from 'node:child_process'
@@ -63,8 +63,8 @@ test('Gate 6 Hocuspocus awareness presence does not enter local undo history', a
   const baseText = 'awareness undo base'
   const localText = `${baseText} local`
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a'))
-  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-b'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a'))
+  await clientB.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-b'))
   await expect(clientA.locator('[data-jword-collab-status]')).toContainText('synced', {
     timeout: 10000
   })
@@ -72,36 +72,29 @@ test('Gate 6 Hocuspocus awareness presence does not enter local undo history', a
     timeout: 10000
   })
 
-  await clientA.locator('#jword-collab-client-a').fill(baseText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(baseText, {
+  await updateClientText(clientA, 'client-a', baseText)
+  await expect.poll(() => readSecondClientText(clientB), {
     timeout: 10000
-  })
-  await clientB.locator('#jword-collab-client-b').evaluate((element: Element) => {
-    if (!(element instanceof HTMLTextAreaElement)) {
-      return
-    }
-    element.focus()
-    element.setSelectionRange(0, 9)
-    element.dispatchEvent(new Event('select', { bubbles: true }))
-  })
+  }).toBe(baseText)
+  await updateClientSelection(clientB, 'client-b', 0, 9)
   await expect.poll(() => readAwarenessClientIds(clientA)).toContain('client-b')
 
-  await clientA.locator('#jword-collab-client-a').fill(localText)
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(localText, {
+  await updateClientText(clientA, 'client-a', localText, baseText)
+  await expect.poll(() => readSecondClientText(clientB), {
     timeout: 10000
-  })
+  }).toBe(localText)
   await clientA.evaluate(() => {
     const debugWindow = window as unknown as CollabDebugWindow
 
     debugWindow.__jwordCollabDemo?.undoLocalUserEdit()
   })
 
-  await expect(clientA.locator('#jword-collab-client-a')).toHaveValue(baseText, {
+  await expect.poll(() => readFirstClientText(clientA), {
     timeout: 10000
-  })
-  await expect(clientB.locator('#jword-collab-client-b')).toHaveValue(baseText, {
+  }).toBe(baseText)
+  await expect.poll(() => readSecondClientText(clientB), {
     timeout: 10000
-  })
+  }).toBe(baseText)
   await expect.poll(() => readAwarenessClientIds(clientA)).toContain('client-b')
 
   await context.close()
@@ -119,7 +112,7 @@ test('Gate 6 Hocuspocus auth failure blocks awareness while keeping explicit dia
   const clientA = await context.newPage()
   const roomId = `${started.roomPrefix}-${Date.now()}`
 
-  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, roomId, 'client-a', 'invalid-token'))
+  await clientA.goto(createHocuspocusDemoUrl(started.webSocketUrl, started.historyHttpUrl, roomId, 'client-a', 'invalid-token'))
 
   await expect.poll(() => readOfflineLastEvent(clientA), {
     timeout: 10000
@@ -127,14 +120,7 @@ test('Gate 6 Hocuspocus auth failure blocks awareness while keeping explicit dia
   await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('COLLAB_PROVIDER_AUTH_FAILED')
   await expect.poll(() => readAwarenessClientIds(clientA)).toEqual([])
 
-  await clientA.locator('#jword-collab-client-a').evaluate((element: Element) => {
-    if (!(element instanceof HTMLTextAreaElement)) {
-      return
-    }
-    element.focus()
-    element.setSelectionRange(0, 0)
-    element.dispatchEvent(new Event('select', { bubbles: true }))
-  })
+  await updateClientSelection(clientA, 'client-a', 0, 0)
 
   await expect.poll(() => readAwarenessClientIds(clientA)).toEqual([])
   await expect.poll(() => readOfflineDiagnosticCodes(clientA)).toContain('COLLAB_PROVIDER_AUTH_FAILED')
@@ -176,6 +162,7 @@ async function waitForCollabDemoServer(): Promise<void> {
 /** 构造真实 Hocuspocus provider demo URL。 */
 function createHocuspocusDemoUrl(
   webSocketUrl: string,
+  historyHttpUrl: string,
   roomId: string,
   clientId: string,
   token?: string
@@ -184,6 +171,7 @@ function createHocuspocusDemoUrl(
 
   url.searchParams.set('provider', 'hocuspocus')
   url.searchParams.set('ws', webSocketUrl)
+  url.searchParams.set('history', historyHttpUrl)
   url.searchParams.set('room', roomId)
   url.searchParams.set('client', clientId)
   if (token !== undefined) {
@@ -199,6 +187,69 @@ async function readAwarenessClientIds(page: Page): Promise<readonly string[]> {
     const debugWindow = window as unknown as CollabDebugWindow
 
     return debugWindow.__jwordCollabDemo?.readAwarenessState().users.map((user) => user.clientId) ?? []
+  })
+}
+
+/** 读取第一个 client 文本。 */
+async function readFirstClientText(page: Page): Promise<string | null> {
+  const text = await page.evaluate(() => {
+    const debugWindow = window as unknown as CollabDebugWindow
+
+    return debugWindow.__jwordCollabDemo?.readCollabState().clients[0]?.text ?? null
+  })
+
+  return normalizeCollabText(text)
+}
+
+/** 读取第二个 client 文本。 */
+async function readSecondClientText(page: Page): Promise<string | null> {
+  const text = await page.evaluate(() => {
+    const debugWindow = window as unknown as CollabDebugWindow
+
+    return debugWindow.__jwordCollabDemo?.readCollabState().clients[1]?.text ?? null
+  })
+
+  return normalizeCollabText(text)
+}
+
+/** 去除 editor 投影为单段文档补出的尾随换行。 */
+function normalizeCollabText(text: string | null): string | null {
+  return text?.replace(/\n$/u, '') ?? null
+}
+
+/** 通过 demo debug API 写入指定 provider client 的正文。 */
+async function updateClientText(
+  page: Page,
+  clientId: string,
+  text: string,
+  previousText?: string
+): Promise<void> {
+  await page.evaluate((input) => {
+    const debugWindow = window as unknown as CollabDebugWindow
+
+    debugWindow.__jwordCollabDemo?.updateClientText(input.clientId, input.text, input.previousText)
+  }, {
+    clientId,
+    text,
+    previousText
+  })
+}
+
+/** 通过 demo debug API 更新指定 provider client 的选区。 */
+async function updateClientSelection(
+  page: Page,
+  clientId: string,
+  selectionStart: number,
+  selectionEnd: number
+): Promise<void> {
+  await page.evaluate((input) => {
+    const debugWindow = window as unknown as CollabDebugWindow
+
+    debugWindow.__jwordCollabDemo?.updateClientSelection(input.clientId, input.selectionStart, input.selectionEnd)
+  }, {
+    clientId,
+    selectionStart,
+    selectionEnd
   })
 }
 
@@ -227,6 +278,11 @@ interface CollabDebugWindow {
 }
 
 interface CollabDebugApi {
+  readonly readCollabState: () => {
+    readonly clients: readonly {
+      readonly text: string
+    }[]
+  }
   readonly readAwarenessState: () => {
     readonly users: readonly {
       readonly clientId: string
@@ -239,4 +295,6 @@ interface CollabDebugApi {
     }[]
   }
   readonly undoLocalUserEdit: () => void
+  readonly updateClientText: (clientId: string, text: string, previousText?: string) => void
+  readonly updateClientSelection: (clientId: string, selectionStart: number, selectionEnd: number) => void
 }

@@ -3,7 +3,7 @@
  * 边界：不读取 DOM，不执行 transaction，只归一化结构化片段并分配运行时 run id。
  * 协作模块：text-editing-runtime 调用这里生成富文本 operation 所需的安全输入。
  * 性能/安全约束：只消费 projection 与已清洗的富文本片段，不持有外部可变引用。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { isAllowedLinkUrl } from '../link/policy'

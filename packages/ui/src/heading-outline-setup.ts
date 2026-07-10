@@ -3,7 +3,7 @@
  * 边界：只管理 heading outline 宿主 DOM 的插入和还原，不读取目录数据。
  * 协作模块：ui-lifecycle 调用这里后再创建 heading/controller。
  * 性能/安全约束：无顶层 DOM 副作用，cleanup 负责还原宿主挂载关系。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { resolveEditorShell } from './toolbar-setup'
 import type { CreateJWordUiOptions } from './types'

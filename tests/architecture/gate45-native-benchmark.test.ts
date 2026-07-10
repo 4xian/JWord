@@ -5,7 +5,7 @@
  * 边界：只验证 benchmark 脚本结构、runner 接入和输出字段，不执行耗时 benchmark。
  * 协作模块：benchmarks/gate45-native-benchmark.mjs、tools/bench/run-bench.mjs、packages/native。
  * 约束：Gate 4.5 benchmark 必须记录 save/load/validate 耗时，并覆盖 1 页、50 页、200 页、图片和表格文档。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-6---benchmarkbundle-和文档计划。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync, readFileSync } from 'node:fs'
 

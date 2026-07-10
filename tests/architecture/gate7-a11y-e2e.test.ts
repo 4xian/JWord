@@ -3,7 +3,7 @@
  * 边界：只检查 axe-core 依赖、共享 helper 与 Gate 4-6 E2E 覆盖文件是否存在。
  * 协作：examples/vanilla/tests、examples/collab/tests 与 tests/e2e/a11y-axe.ts。
  * 约束：不执行浏览器测试；真实无障碍扫描由 Playwright E2E 负责。
- * Specs：docs/superpowers/reports/2026-07-02-jword-remediation-plan.md#phase-6---gate-7-前置准备。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, test } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'

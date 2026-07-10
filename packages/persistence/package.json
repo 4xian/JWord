@@ -26,6 +26,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@4xian/jword-core": "workspace:*",
     "y-indexeddb": "9.0.12",
     "yjs": "13.6.30"
   }

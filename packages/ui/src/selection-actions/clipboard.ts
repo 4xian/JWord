@@ -3,7 +3,7 @@
  * 边界：不绑定按钮事件，不计算浮层显示状态，不直接修改 Y.Doc。
  * 协作模块：selection-actions/controller 提供 editor、hidden textarea 与状态回调，native-clipboard 负责事件兼容层。
  * 性能/安全约束：系统剪贴板失败时不改文档；剪切与粘贴仍通过 core facade 的 clipboard 事件路径执行。
- * Specs：docs/superpowers/reports/2026-07-03-remediation-execution-supplement.md#310-phase-5-超大文件拆分目标结构。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor, SelectionState } from '@4xian/jword-core'
 import { collectClipboardBuffer, createClipboardData, dispatchClipboardEvent, runNativeExecCommand } from './native-clipboard'

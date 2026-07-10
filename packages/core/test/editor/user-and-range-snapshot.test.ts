@@ -5,7 +5,7 @@
  * 边界：只覆盖 currentUser、snapshot 捕获与定位，不测试 comment/link builder 本体。
  * 协作模块：editor facade、position snapshot 与 transaction pipeline 共同提供后续 comment/revision 依赖的稳定边界。
  * 性能/安全约束：测试只依赖内存文档，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

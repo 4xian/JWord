@@ -3,7 +3,7 @@
  * 边界：只包含类型，不创建记录、不读取投影、不执行事务。
  * 协作模块：store-schema 提供字段常量，store-json 提供 JSON 字段类型，记录工厂与投影模块消费这些类型。
  * 性能/安全约束：无运行时副作用，不访问 DOM、网络或持久化资源。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#32-状态真源。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'

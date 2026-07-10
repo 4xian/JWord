@@ -3,7 +3,7 @@
  * 边界: 只启动 vanilla demo 测试服务，不写具体测试用例。
  * 协作: examples/vanilla 和后续协同示例添加测试后复用此矩阵。
  * 约束: Chromium、Firefox、WebKit 都保留，视觉测试单独项目运行。
- * Specs: docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
+ * 实现说明：本配置按当前测试与构建入口组织，不依赖旧实施计划或需求文档。
  */
 import { defineConfig, devices } from '@playwright/test'
 

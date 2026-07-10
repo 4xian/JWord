@@ -5,7 +5,7 @@
  * 边界：只验证 native 包公开 API，不接入 vanilla demo，也不导入 DOCX/PDF/collab。
  * 协作模块：packages/native/src/index.ts、core createEditor/loadDocumentModel、fixtures/native。
  * 约束：测试使用最小样例覆盖关键路径，损坏资源和 schema 兼容由稳定诊断判定。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#gate-45---jword-原生保存与打开。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'

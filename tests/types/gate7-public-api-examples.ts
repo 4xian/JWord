@@ -3,7 +3,7 @@
  * 边界：只做类型层示例，不运行 SDK，不导入内部源码、provider 内部类型或 demo runtime。
  * 协作模块：公开 API 清单、导出审计和文档示例共同证明外部项目能从包入口接入。
  * 约束：本文件只能使用 package 名称导入；新增示例必须保持无副作用并通过 `pnpm test:types`。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-73为稳定-api-补-tsdoc最小示例和-diagnostics-payload-文档。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
