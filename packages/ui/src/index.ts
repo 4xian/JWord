@@ -6,6 +6,13 @@
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 export { createJWordUi } from './create-ui'
+export { createJWord } from './editor-shell'
+export type {
+  CreateJWordOptions,
+  JWordEditorShell,
+  JWordEditorShellSlots,
+  JWordEditorShellUiOptions
+} from './editor-shell'
 export {
   DEFAULT_JWORD_UI_I18N_DICTIONARY,
   resolveJWordUiI18n

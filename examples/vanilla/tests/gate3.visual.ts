@@ -1,7 +1,7 @@
 /**
  * @fileoverview 职责: 用真实浏览器 canvas 像素补齐 Gate 3 输入阶段的最小视觉证据，覆盖选区高亮与光标渲染。
  * 边界: 不生成跨平台截图基线，不声称等同 Windows 原生 IME 视觉验收。
- * 协作: `window.__jwordDemo`、隐藏输入框测试钩子、Alpha 样例和 canvas renderer。
+ * 协作: `window.__jwordTestFixture`、隐藏输入框测试钩子、Alpha 样例和 canvas renderer。
  * 约束: 证据必须来自真实 canvas 像素与公开 facade 的 caret/selection 几何，避免退化成纯 DOM 断言。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
@@ -18,7 +18,7 @@ interface Gate3VisualProbe {
 }
 
 test('Gate 3 Alpha paints selection highlight and caret on the real page canvas', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3AlphaReady(page)
 
   const selectionProbe = await selectSampleAndReadVisualProbe(page)
@@ -46,7 +46,7 @@ test('Gate 3 Alpha paints selection highlight and caret on the real page canvas'
 })
 
 async function waitForGate3AlphaReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '1')
@@ -63,7 +63,7 @@ async function selectSampleAndReadVisualProbe(page: Page): Promise<Gate3VisualPr
 /** 点击页尾光标位置，并读取真实 canvas 视觉探针。 */
 async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3VisualProbe> {
   const point = await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo 测试钩子')
@@ -121,7 +121,7 @@ async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3Vis
 /** 判断当前选区是否落在同一个 run 内且非折叠。 */
 async function hasSingleRunSelection(page: Page): Promise<boolean> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection() ?? null
     const anchorPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.anchor)
     const focusPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.focus)
@@ -146,7 +146,7 @@ async function hasCollapsedSelectionAt(
   }>
 ): Promise<boolean> {
   return page.evaluate((input) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection() ?? null
     const anchorPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.anchor)
     const focusPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.focus)
@@ -167,7 +167,7 @@ async function hasCollapsedSelectionAt(
 /** 读取当前真实 canvas 上的文字、选区与光标像素。 */
 async function readCurrentVisualProbe(page: Page): Promise<Gate3VisualProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const pageBox = demo?.editor.getLayout().pages[0]
     const pageIndex = pageBox?.pageIndex ?? 0
     const selection = demo?.editor.getSelection() ?? null

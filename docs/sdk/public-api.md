@@ -155,6 +155,15 @@ Edition：free
 
 Stable：
 
+- `createJWord()`
+- `CreateJWordOptions`
+- `JWordEditorShell`
+- `JWordEditorShellSlots`
+- `JWordEditorShellUiOptions`
+- 默认集成只提供一个专用空根 Host；内部固定创建 toolbar、editor、status bar，在 editor 区域管理普通面板，并统一管理辅助技术节点和 `destroy()`。
+
+Advanced：
+
 - `createJWordUi()`
 - `CreateJWordUiOptions`
 - `JWordUiInstance`

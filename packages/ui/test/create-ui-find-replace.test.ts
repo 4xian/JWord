@@ -19,7 +19,7 @@ describe('createJWordUi find replace integration', () => {
 
     try {
       expect(harness.ui.elements.findReplacePanel).not.toBeNull()
-      expect(harness.toolbarHost.querySelector('[data-jword-find-replace]')).not.toBeNull()
+      expect(harness.findReplaceHost.querySelector('[data-jword-find-replace]')).not.toBeNull()
       expect([
         harness.ui.elements.findReplacePanel!.findButton,
         harness.ui.elements.findReplacePanel!.previousButton,
@@ -42,7 +42,7 @@ describe('createJWordUi find replace integration', () => {
 
       harness.ui.destroy()
 
-      expect(harness.toolbarHost.querySelector('[data-jword-find-replace]')).toBeNull()
+      expect(harness.findReplaceHost.querySelector('[data-jword-find-replace]')).toBeNull()
     } finally {
       harness.destroy()
     }

@@ -27,7 +27,7 @@ test('Gate 4 desktop visual baseline paints feature markup without blank canvas'
     width: 1366,
     height: 900
   })
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate4VisualReady(page)
   await createFixtureHeading(page)
   await insertFixtureImage(page)
@@ -65,14 +65,14 @@ test('Gate 4 media failure visual baseline keeps recoverable url dialog visible'
     width: 1280,
     height: 820
   })
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate4VisualReady(page)
   await openRetryFailureDialog(page)
 
   const failureProbe = await page.evaluate(() => {
     const dialog = document.querySelector<HTMLElement>('[data-jword-media-url-dialog="true"]')
     const error = document.querySelector<HTMLElement>('[data-jword-media-url-dialog-error="true"]')
-    const uploadLog = window.__jwordDemo?.media.readUploadLog() ?? []
+    const uploadLog = window.__jwordTestFixture?.media.readUploadLog() ?? []
 
     return {
       dialogVisible: dialog?.hidden === false,
@@ -98,12 +98,12 @@ test('Gate 4 long table visual baseline records current page-boundary behavior',
     width: 1280,
     height: 900
   })
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate4VisualReady(page)
   await insertLongFixtureTable(page)
 
   const tableProbe = await page.evaluate(() => {
-    const tableBoxes = window.__jwordDemo?.editor.getLayout().pages
+    const tableBoxes = window.__jwordTestFixture?.editor.getLayout().pages
       .flatMap((pageBox) => pageBox.blocks)
       .filter((block) => block.kind === 'table') ?? []
 
@@ -111,7 +111,7 @@ test('Gate 4 long table visual baseline records current page-boundary behavior',
       tableBoxCount: tableBoxes.length,
       tablePageIndexes: tableBoxes.map((tableBox) => tableBox.pageIndex),
       tableRowCount: tableBoxes[0]?.rowCount ?? 0,
-      pageCount: window.__jwordDemo?.editor.getLayout().pages.length ?? 0
+      pageCount: window.__jwordTestFixture?.editor.getLayout().pages.length ?? 0
     }
   })
 
@@ -130,7 +130,7 @@ test('Gate 4 narrow viewport visual baseline keeps paged canvas readable without
     width: 390,
     height: 780
   })
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate4VisualReady(page)
 
   const narrowViewportProbe = await page.evaluate(() => {
@@ -175,7 +175,7 @@ test('Gate 4 narrow viewport visual baseline keeps paged canvas readable without
 
 /** 等待 demo 与首个 canvas 挂载。 */
 async function waitForGate4VisualReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)).toBeGreaterThan(0)
 }
@@ -183,7 +183,7 @@ async function waitForGate4VisualReady(page: Page): Promise<void> {
 /** 把选区折叠到第一段指定位置。 */
 async function selectFirstRunRange(page: Page, anchorGraphemeIndex: number, focusGraphemeIndex: number): Promise<void> {
   await page.evaluate(({ anchorIndex, focusIndex }) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 4 visual demo hook。')
@@ -203,7 +203,7 @@ async function selectFirstRunRange(page: Page, anchorGraphemeIndex: number, focu
       focusGraphemeIndex: focusIndex
     })
 
-    function readTextSelectionTarget(demoInstance: NonNullable<typeof window.__jwordDemo>, requiredLength: number) {
+    function readTextSelectionTarget(demoInstance: NonNullable<typeof window.__jwordTestFixture>, requiredLength: number) {
       for (const section of demoInstance.editor.getProjection().document.sections) {
         for (const block of section.blocks) {
           if (block.kind !== 'paragraph') {
@@ -238,7 +238,7 @@ async function selectFirstRunRange(page: Page, anchorGraphemeIndex: number, focu
 async function createFixtureHeading(page: Page): Promise<void> {
   await selectFirstRunRange(page, 0, 0)
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 4 visual demo hook。')
@@ -254,14 +254,14 @@ async function insertFixtureImage(page: Page): Promise<void> {
   await selectFirstRunRange(page, 0, 0)
   await page.locator('[data-jword-media-trigger="true"]').click()
   await page.locator('[data-jword-media-file-input="true"]').setInputFiles('fixtures/gate4/media-inline.svg')
-  await expect.poll(() => page.evaluate(() => window.__jwordDemo?.media.readUploadLog().length ?? 0)).toBeGreaterThan(0)
+  await expect.poll(() => page.evaluate(() => window.__jwordTestFixture?.media.readUploadLog().length ?? 0)).toBeGreaterThan(0)
 }
 
 /** 通过官方表格入口插入 2 x 2 表格并写入首格文本。 */
 async function insertFixtureTable(page: Page): Promise<void> {
   await page.locator('[data-jword-table-insert-trigger="true"]').click()
   await page.locator('[data-jword-table-preview-cell="true"][data-jword-rows="2"][data-jword-columns="2"]').click()
-  await expect.poll(() => page.evaluate(() => window.__jwordDemo?.table.setCellText(0, 0, '视觉表格') ?? false)).toBe(true)
+  await expect.poll(() => page.evaluate(() => window.__jwordTestFixture?.table.setCellText(0, 0, '视觉表格') ?? false)).toBe(true)
 }
 
 /** 通过官方自定义行列入口插入长表格，并写入首列可见文本。 */
@@ -272,7 +272,7 @@ async function insertLongFixtureTable(page: Page): Promise<void> {
   await page.locator('[data-jword-table-insert-columns="true"]').fill('3')
   await page.locator('[data-jword-table-insert-confirm]').click()
   await expect.poll(() => page.evaluate(() => {
-    const table = window.__jwordDemo?.editor.getProjection().document.sections
+    const table = window.__jwordTestFixture?.editor.getProjection().document.sections
       .flatMap((section) => section.blocks)
       .find((block) => block.kind === 'table')
 
@@ -281,14 +281,14 @@ async function insertLongFixtureTable(page: Page): Promise<void> {
 
   for (let rowIndex = 0; rowIndex < 8; rowIndex += 1) {
     await expect.poll(() => page.evaluate((input) => {
-      return window.__jwordDemo?.table.setCellText(input.rowIndex, 0, `视觉长表格 ${input.rowIndex + 1}`) ?? false
+      return window.__jwordTestFixture?.table.setCellText(input.rowIndex, 0, `视觉长表格 ${input.rowIndex + 1}`) ?? false
     }, { rowIndex })).toBe(true)
   }
 }
 
 /** 打开 URL 图片失败态弹窗，固定可恢复失败视觉状态。 */
 async function openRetryFailureDialog(page: Page): Promise<void> {
-  const retryOnceUrl = await page.evaluate(() => window.__jwordDemo?.media.buildScenarioUrl('retry-once') ?? '')
+  const retryOnceUrl = await page.evaluate(() => window.__jwordTestFixture?.media.buildScenarioUrl('retry-once') ?? '')
 
   expect(retryOnceUrl).not.toBe('')
   await page.locator('[data-jword-media-trigger="true"]').click()
@@ -305,14 +305,14 @@ async function createFixtureComment(page: Page): Promise<void> {
   await page.locator('[data-jword-insert-comment]').click()
   await page.locator('[data-jword-comment-input="draft"]').first().fill('视觉批注')
   await page.locator('[data-jword-comment-action="confirm-draft"]').first().click()
-  await expect.poll(() => page.evaluate(() => window.__jwordDemo?.comments.readThreadCount() ?? 0)).toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__jwordTestFixture?.comments.readThreadCount() ?? 0)).toBe(1)
 }
 
 /** 通过 demo hook 创建一条修订 metadata。 */
 async function createFixtureRevision(page: Page): Promise<void> {
   await selectFirstRunRange(page, 2, 5)
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.revisions.addRevision({
+    return page.evaluate(() => window.__jwordTestFixture?.revisions.addRevision({
       authorId: 'demo-user',
       createdAt: '2026-05-24T08:00:00.000Z',
       type: 'format',
@@ -369,8 +369,8 @@ async function readGate4VisualProbe(page: Page): Promise<Gate4VisualProbe> {
       }
     }
 
-    const projection = window.__jwordDemo?.editor.getProjection()
-    const layout = window.__jwordDemo?.editor.getLayout()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
+    const layout = window.__jwordTestFixture?.editor.getLayout()
 
     return {
       canvasCount: canvases.length,

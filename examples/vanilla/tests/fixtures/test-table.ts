@@ -1,7 +1,7 @@
 /**
  * 职责：提供 vanilla demo 的 Gate 4 Iteration 2 table support，只做 core table adapter 装配和浏览器测试钩子。
  * 边界：不实现 table UI，也不复制 core table command builder；这些逻辑分别交给 `@4xian/jword-ui` 和 core 公开 API。
- * 协作模块：main.ts 把这里的 table options 传给 `createJWordUi(...)`，浏览器测试通过 `window.__jwordDemo.table` 读取钩子。
+ * 协作模块：main.ts 把这里的 table options 传给 `createJWordUi(...)`，浏览器测试通过 `window.__jwordTestFixture.table` 读取钩子。
  * 性能/安全约束：所有表格写入继续走 `createCoreTableCommandAdapter()` + `editor.executeCommand(...)`，不允许直接修改 projection。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */

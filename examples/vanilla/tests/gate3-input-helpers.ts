@@ -59,7 +59,7 @@ export interface InitialFocusProbe {
 }
 
 export async function waitForGate3AlphaReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '1')
@@ -68,7 +68,7 @@ export async function waitForGate3AlphaReady(page: Page): Promise<void> {
 
 export async function waitForGate3LargeFixtureReady(page: Page): Promise<void> {
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', String(expectedGate2PageCount))
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await expect.poll(async () => {
     return page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)
@@ -77,7 +77,7 @@ export async function waitForGate3LargeFixtureReady(page: Page): Promise<void> {
 
 export async function readInitialFocusProbe(page: Page): Promise<InitialFocusProbe | null> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection() ?? null
 
     if (demo === undefined || selection === null) {
@@ -135,7 +135,7 @@ export async function readPlainText(page: Page): Promise<string> {
 
 export async function readSelectionSummary(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection() ?? null
 
     if (demo === undefined || selection === null) {
@@ -161,7 +161,7 @@ export async function readSelectionSummary(page: Page): Promise<string> {
 
 export async function readParagraphCount(page: Page): Promise<number> {
   return page.evaluate(() => {
-    return window.__jwordDemo?.editor.getProjection().document.sections[0]?.blocks.length ?? 0
+    return window.__jwordTestFixture?.editor.getProjection().document.sections[0]?.blocks.length ?? 0
   })
 }
 
@@ -173,7 +173,7 @@ export async function readLongEnglishCaretProbe(
   readonly hitGraphemeIndexAtRenderedEnd: number | undefined
 }>> {
   return page.evaluate((text) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection()
     const layout = demo?.editor.getLayout()
     const pageBox = layout?.pages[0]
@@ -232,7 +232,7 @@ export async function readClientPointForGrapheme(
   clientY: number
 }>> {
   return page.evaluate(({ targetGraphemeIndex, targetPageIndex }) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const layout = demo?.editor.getLayout()
     const pageBox = layout?.pages[targetPageIndex]
     const wrapper = document.querySelector<HTMLElement>(`[data-jword-page="${targetPageIndex}"]`)
@@ -343,7 +343,7 @@ export async function readClientPointForPageWhitespace(
   clientY: number
 }>> {
   return page.evaluate((targetPageIndex) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const pageBox = demo?.editor.getLayout().pages[targetPageIndex]
     const firstLine = pageBox?.lines[0]
     const pageElement = document.querySelector<HTMLElement>(`[data-jword-page="${targetPageIndex}"]`)
@@ -367,7 +367,7 @@ export async function readClientPointForPageWhitespace(
 
 export async function readLargeFixtureLongDragPlan(page: Page): Promise<LargeFixtureLongDragPlan> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const firstPage = demo?.editor.getLayout().pages[0]
     const firstLine = firstPage?.lines.find((line) => line.fragments.length > 1)
     const firstFragment = firstLine?.fragments[0]
@@ -395,7 +395,7 @@ export async function readLargeFixtureLongDragPlan(page: Page): Promise<LargeFix
 
 export async function readLargeFixtureDoubleClickPlan(page: Page): Promise<LargeFixtureDoubleClickPlan> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const firstPage = demo?.editor.getLayout().pages[0]
     const firstLine = firstPage?.lines.find((line) => line.fragments.length > 1)
     const targetFragment = firstLine?.fragments.find((fragment) => {
@@ -424,7 +424,7 @@ export async function readLargeFixtureDoubleClickPlan(page: Page): Promise<Large
 export async function readAlphaChineseDoubleClickProbes(page: Page): Promise<readonly AlphaChineseDoubleClickProbe[]> {
   return page.evaluate(() => {
     const targetGraphemeIndex = 22
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const pageBox = demo?.editor.getLayout().pages[0]
     const pageElement = document.querySelector<HTMLElement>('[data-jword-page="0"]')
     const fragmentMatch = pageBox?.lines
@@ -473,7 +473,7 @@ export async function readAlphaChineseDoubleClickProbes(page: Page): Promise<rea
 
 export async function readResolvedSelectionSnapshot(page: Page): Promise<ResolvedSelectionSnapshot> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection() ?? null
 
     if (demo === undefined || selection === null) {
@@ -582,7 +582,7 @@ export async function collapseSelectionAtRunStart(
   }
 ): Promise<void> {
   await page.evaluate((selectionInput) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo 测试钩子')
@@ -611,7 +611,7 @@ export async function selectRange(
   }
 ): Promise<void> {
   await page.evaluate((selectionInput) => {
-    window.__jwordDemo?.selectTextRange(selectionInput)
+    window.__jwordTestFixture?.selectTextRange(selectionInput)
   }, input)
 }
 
@@ -670,7 +670,7 @@ export async function runCompositionSequence(
     const input = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
     const readText = (): string => document.querySelector<HTMLElement>('[data-jword-ui-text-mirror]')?.textContent ?? ''
     const readSelectionDescription = (): string => {
-      const demo = window.__jwordDemo
+      const demo = window.__jwordTestFixture
       const selection = demo?.editor.getSelection() ?? null
 
       if (demo === undefined || selection === null) {

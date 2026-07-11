@@ -87,6 +87,9 @@ const packageCatalogExpectations = [
     catalogTokens: [
       'Edition：free',
       'Stable',
+      'createJWord',
+      'JWordEditorShell',
+      'Advanced',
       'createJWordUi',
       'createCoreMediaCommandAdapter',
       'createCoreTableCommandAdapter',
@@ -105,6 +108,8 @@ const packageCatalogExpectations = [
       'Internal'
     ],
     sourceTokens: [
+      'createJWord',
+      'JWordEditorShell',
       'createJWordUi',
       'createCoreMediaCommandAdapter',
       'createCoreTableCommandAdapter',

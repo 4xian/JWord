@@ -62,6 +62,10 @@ describe('JWordReactEditor', () => {
     expect(readyEditors).toHaveLength(1)
     expect(handle.current?.editor).not.toBeNull()
     expect(handle.current?.exportDiagnostics()).not.toBeNull()
+    expect(container.querySelectorAll('[data-jword-react-host]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-jword-shell-region]')).toHaveLength(3)
+    expect(container.querySelector('[data-jword-react-toolbar]')).toBeNull()
+    expect(container.querySelector('[data-jword-react-editor]')).toBeNull()
 
     handle.current?.editor?.executePluginCommand('react.throwingPlugin.throw')
 

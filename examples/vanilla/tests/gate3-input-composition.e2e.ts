@@ -14,7 +14,7 @@ import {
 } from './gate3-input-helpers'
 
 test('Gate 3 runtime composition chain defers insertion until compositionend and keeps plain text result', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate3AlphaReady(page)
   await collapseSelectionAtRunStart(page, {
     sectionId: 'section-1',

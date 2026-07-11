@@ -25,7 +25,7 @@ describe('Phase 4 memory regression gate', () => {
       'longScrollSampleCount',
       'HeapProfiler.collectGarbage',
       'JSHeapUsedSize',
-      'window.__jwordDemo?.destroy',
+      'window.__jwordTestFixture?.destroy',
       '[data-jword-canvas-container]',
       'data-jword-page-count',
       'heapDeltaBytes',

@@ -60,6 +60,7 @@
     "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 12px;
   line-height: 1.3;
+  z-index: 99;
 }
 
 .jw-status-bar__root {

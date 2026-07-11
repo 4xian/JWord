@@ -47,7 +47,7 @@ export interface SelectOptionMatcher {
 /** 读取首段第一个 run 的格式。 */
 export async function readFirstRunStyle(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
     const firstBlock = projection?.document.sections[0]?.blocks[0]
 
     if (firstBlock === undefined || firstBlock.kind !== 'paragraph') {
@@ -61,7 +61,7 @@ export async function readFirstRunStyle(page: Page): Promise<Record<string, unkn
 /** 读取首段全部 run 的格式。 */
 export async function readFirstParagraphRunStyles(page: Page): Promise<readonly Record<string, unknown>[]> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
     const firstBlock = projection?.document.sections[0]?.blocks[0]
 
     if (firstBlock === undefined || firstBlock.kind !== 'paragraph') {
@@ -75,7 +75,7 @@ export async function readFirstParagraphRunStyles(page: Page): Promise<readonly 
 /** 读取第二段第一个 run 的格式。 */
 export async function readSecondParagraphFirstRunStyle(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
     const secondBlock = projection?.document.sections[0]?.blocks[1]
 
     if (secondBlock === undefined || secondBlock.kind !== 'paragraph') {
@@ -89,7 +89,7 @@ export async function readSecondParagraphFirstRunStyle(page: Page): Promise<Reco
 /** 读取前两段的段落属性。 */
 export async function readFirstTwoParagraphProperties(page: Page): Promise<readonly Record<string, unknown>[]> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
     const firstBlock = projection?.document.sections[0]?.blocks[0]
     const secondBlock = projection?.document.sections[0]?.blocks[1]
 
@@ -112,7 +112,7 @@ export async function readFirstTwoParagraphProperties(page: Page): Promise<reado
 /** 读取前两段各 run 的行距。 */
 export async function readFirstTwoParagraphRunLineHeights(page: Page): Promise<readonly (readonly (number | null)[])[]> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
     const firstBlock = projection?.document.sections[0]?.blocks[0]
     const secondBlock = projection?.document.sections[0]?.blocks[1]
 
@@ -134,7 +134,7 @@ export async function readFirstTwoParagraphRunLineHeights(page: Page): Promise<r
 /** 读取首个渲染文本片段。 */
 export async function readFirstRenderedFragment(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
-    const fragment = window.__jwordDemo?.editor.getLayout().pages[0]?.lines[0]?.fragments[0]
+    const fragment = window.__jwordTestFixture?.editor.getLayout().pages[0]?.lines[0]?.fragments[0]
 
     if (fragment === undefined) {
       throw new Error('缺少首个渲染片段')
@@ -150,7 +150,7 @@ export async function readFirstRenderedFragment(page: Page): Promise<Record<stri
 /** 读取首段布局和画布探针。 */
 export async function readFirstParagraphRenderProbe(page: Page): Promise<ParagraphRenderProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const projection = demo?.editor.getProjection()
     const pageBox = demo?.editor.getLayout().pages[0]
     const firstBlock = projection?.document.sections[0]?.blocks[0]
@@ -266,7 +266,7 @@ export async function readPagePresetProbe(page: Page): Promise<{
   readonly firstPageLineCount: number
 }> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const pageConfig = demo?.editor.getPageConfig()
     const firstPage = demo?.editor.getLayout().pages[0]
     const pageWrapper = document.querySelector<HTMLElement>('[data-jword-page="0"]')
@@ -295,7 +295,7 @@ export async function readToolbarHistoryProbe(page: Page): Promise<{
   readonly redoDisabled: boolean
 }> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const undoButton = document.querySelector<HTMLButtonElement>('[data-jword-history-undo]')
     const redoButton = document.querySelector<HTMLButtonElement>('[data-jword-history-redo]')
     const boldButton = document.querySelector<HTMLButtonElement>('[data-jword-format-bold]')
@@ -451,7 +451,7 @@ export async function readSelectedToolbarOption(page: Page, selector: string): P
 /** 选择首页首个文本片段范围。 */
 export async function selectFirstFragmentRange(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo 测试钩子')
@@ -478,7 +478,7 @@ export async function selectFirstFragmentRange(page: Page): Promise<void> {
 /** 选择首段跨 run 范围。 */
 export async function selectFirstParagraphAcrossRuns(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo 测试钩子')
@@ -527,7 +527,7 @@ export async function selectFirstParagraphAcrossRuns(page: Page): Promise<void> 
 /** 选择前两段范围。 */
 export async function selectFirstTwoParagraphs(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo 测试钩子')
@@ -584,7 +584,7 @@ export async function selectFirstTwoParagraphs(page: Page): Promise<void> {
 /** 将选区折叠到第二段开头。 */
 export async function collapseSelectionAtSecondParagraphStart(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo 测试钩子')
@@ -653,6 +653,6 @@ export function readOfficialToolbar(page: Page): Locator {
 
 /** 等待 vanilla demo 测试钩子和隐藏输入框就绪。 */
 export async function waitForDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
 }

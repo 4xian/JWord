@@ -13,6 +13,8 @@
 - 查看发布元数据审计：[release-metadata-audit.md](release-metadata-audit.md)。
 - 查看历史验证摘要：[historical-verification-summary.md](historical-verification-summary.md)。
 - 查看屏幕阅读器人工验证方法：[screen-reader-manual-verification.md](screen-reader-manual-verification.md)。
+- 查看 2026-07-10 全项目审查：[reviews/2026-07-10-full-review/README.md](reviews/2026-07-10-full-review/README.md)。
+- 查看一级 OEM 功能授权与开放文档访问实施方案：[oem-licensing-open-access-implementation-plan.md](oem-licensing-open-access-implementation-plan.md)。
 - 查看底部状态栏首批实施方案：[status-bar-mvp-implementation-plan.md](status-bar-mvp-implementation-plan.md)。
 - 查看顶部工具栏双模式实施方案：[toolbar-modes-implementation-plan.md](toolbar-modes-implementation-plan.md)。
 - 查看页面水印与版权防篡改实施方案：[watermark-and-brand-protection-implementation-plan.md](watermark-and-brand-protection-implementation-plan.md)。

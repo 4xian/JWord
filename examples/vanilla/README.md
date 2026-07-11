@@ -1,30 +1,33 @@
 # JWord Vanilla Example
 
-当前 `examples/vanilla` 是 JWord 的 host app demo，不再是 Gate 0 空壳。
+当前 `examples/vanilla` 是 JWord 单 Host EditorShell 的最小集成示例。
 
 ## Current Scope
 
-- 使用 `@4xian/jword-core` 创建和挂载 Editor facade。
-- 使用 `@4xian/jword-ui` 装配官方 toolbar、live region、assistive text mirror 和 Gate 4 第一版 media panel。
-- 继续保持不使用 `contenteditable`，编辑能力仍走 hidden textarea + transaction pipeline。
-- 承担 demo-only 场景逻辑、fixture 切换和浏览器测试钩子。
+- 页面只提供一个专用空根元素 `#jword`。
+- `src/main.ts` 只调用 `createJWord({ host })`，不手动 mount editor、toolbar、status bar 或辅助技术 Host。
+- 默认示例不接入 media、table、native、devtools 或浏览器测试桥接。
+- 复杂 Gate 场景只存在于 `tests/fixtures`，不进入默认构建入口或客户 interface。
 
 ## Current Responsibilities
 
-- [examples/vanilla/src/main.ts](/Users/jian/Desktop/tools/JWord/examples/vanilla/src/main.ts:1)：host app 装配层，只负责 editor 创建、UI 挂载、demo 控件接线和 `window.__jwordDemo` 暴露。
-- [examples/vanilla/src/demo-controls.ts](/Users/jian/Desktop/tools/JWord/examples/vanilla/src/demo-controls.ts:1)：demo-only 场景按钮、样例切换、测试辅助选区钩子。
-- [examples/vanilla/src/demo-media.ts](/Users/jian/Desktop/tools/JWord/examples/vanilla/src/demo-media.ts:1)：Gate 4 demo media adapter、core image command 最小闭环和浏览器测试钩子。
-- [examples/vanilla/tests](./tests)：Gate 2 / Gate 3 浏览器 E2E、视觉回归和 perf 证据。
+- [examples/vanilla/index.html](/Users/jian/Desktop/tools/JWord/examples/vanilla/index.html:1)：只声明 `#jword` 根元素。
+- [examples/vanilla/src/main.ts](/Users/jian/Desktop/tools/JWord/examples/vanilla/src/main.ts:1)：只创建和销毁 EditorShell。
+- [examples/vanilla/src/styles.css](/Users/jian/Desktop/tools/JWord/examples/vanilla/src/styles.css:1)：只提供页面尺寸和画布背景。
+- [examples/vanilla/test-fixture.html](/Users/jian/Desktop/tools/JWord/examples/vanilla/test-fixture.html:1)：仅供 Playwright 使用的复杂场景入口。
+- [examples/vanilla/tests/fixtures](/Users/jian/Desktop/tools/JWord/examples/vanilla/tests/fixtures)：Gate 场景适配器和测试专用 bridge，不被默认页面加载。
 
-## Gate 4 Media Contract
+## 默认集成
 
-- 官方 media panel 通过 `createJWordUi({ media })` 挂在 `#jword-toolbar` 下方，不属于 demo-only 场景按钮。
-- 当前 demo 已接上 core image command 的最小闭环：成功上传会进入 `applied`，失败与重试仍按真实上传状态暴露。
-- 浏览器测试钩子位于 `window.__jwordDemo.media`：
-  - `getFixtureUrl()`：返回 Gate 4 本地图片 fixture URL。
-  - `buildScenarioUrl('success' | 'retry-once' | 'always-fail')`：构建同源 URL 场景。
-  - `readUploadLog()`：读取当前页面生命周期内的上传结果日志。
-- assistive text mirror 的 UI 侧稳定 selector 改为 `[data-jword-ui-text-mirror="true"]`，避免与 core 内部 mirror 混淆。
+```ts
+const jword = createJWord({
+  host: document.querySelector('#jword')!
+})
+
+jword.destroy()
+```
+
+低层 `createEditor() + createJWordUi()` 继续作为高级接口，但不是本示例的默认路径。
 
 ## Commands
 

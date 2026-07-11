@@ -2,7 +2,7 @@
  * @fileoverview 职责: 用真实浏览器覆盖 Gate 4 富文本粘贴与窄屏分页的最小验收路径。
  * 边界: 只验证 demo 装配层、hidden textarea paste 事件、projection 输出和窄屏分页滚动预览，不建立独立平台概念。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/paste/* 与 core editor facade。
- * 约束: 断言来自真实 DOM 或 window.__jwordDemo.editor 公开 facade，不读取 controller 私有状态。
+ * 约束: 断言来自真实 DOM 或 window.__jwordTestFixture.editor 公开 facade，不读取 controller 私有状态。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
@@ -28,7 +28,7 @@ interface LinkTablePasteProbe {
 }
 
 test('Gate 4 paste sanitizer keeps safe Word-like formats and falls back to plain text', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForPasteNarrowViewportDemoReady(page)
   await collapseAtFirstParagraphIndex(page, 1)
 
@@ -63,7 +63,7 @@ test('Gate 4 paste sanitizer keeps safe Word-like formats and falls back to plai
 })
 
 test('Gate 4 paste sanitizer keeps safe links and flattens simple tables', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForPasteNarrowViewportDemoReady(page)
   await collapseAtFirstParagraphIndex(page, 1)
 
@@ -89,7 +89,7 @@ test('Gate 4 narrow viewport keeps paged canvas scrollable without implicit read
     width: 390,
     height: 780
   })
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForPasteNarrowViewportDemoReady(page)
 
   const probe = await readNarrowViewportProbe(page)
@@ -102,7 +102,7 @@ test('Gate 4 narrow viewport keeps paged canvas scrollable without implicit read
 
 /** 等待 demo、editor 和 toolbar 完成挂载。 */
 async function waitForPasteNarrowViewportDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
 }
@@ -110,7 +110,7 @@ async function waitForPasteNarrowViewportDemoReady(page: Page): Promise<void> {
 /** 把选区折叠到第一段指定 grapheme 位置。 */
 async function collapseAtFirstParagraphIndex(page: Page, graphemeIndex: number): Promise<void> {
   await page.evaluate((index) => {
-    window.__jwordDemo?.selectTextRange({
+    window.__jwordTestFixture?.selectTextRange({
       sectionId: 'section-1',
       blockId: 'paragraph-1',
       runId: 'run-1',
@@ -162,7 +162,7 @@ async function dispatchPaste(
 /** 读取粘贴后的 projection 关键结果。 */
 async function readPasteProjectionProbe(page: Page): Promise<PasteProjectionProbe> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
     const firstBlock = projection?.document.sections[0]?.blocks[0]
 
     if (firstBlock?.kind !== 'paragraph') {
@@ -207,7 +207,7 @@ async function readNarrowViewportProbe(page: Page): Promise<NarrowViewportProbe>
       throw new Error('窄屏视口测试缺少必要 DOM。')
     }
 
-    const firstBlock = window.__jwordDemo?.editor.getProjection().document.sections[0]?.blocks[0]
+    const firstBlock = window.__jwordTestFixture?.editor.getProjection().document.sections[0]?.blocks[0]
     const firstParagraphText = firstBlock?.kind === 'paragraph'
       ? firstBlock.runs.map((run) => run.inlines.map((inline) => inline.kind === 'text' ? inline.text : '').join('')).join('')
       : ''
@@ -224,7 +224,7 @@ async function readNarrowViewportProbe(page: Page): Promise<NarrowViewportProbe>
 /** 读取链接和简单表格粘贴后的 projection 证据。 */
 async function readLinkTablePasteProbe(page: Page): Promise<LinkTablePasteProbe> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
 
     if (projection === undefined) {
       throw new Error('缺少 editor projection。')

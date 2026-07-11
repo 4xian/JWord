@@ -2,18 +2,20 @@
 
 Gate 7 Step 7.3 最小公开接口示例。所有示例只从 package 入口导入，不依赖 monorepo 内部路径、provider 内部类型、worker helper 或 demo runtime。可编译版本见 `tests/types/gate7-public-api-examples.ts`，并由 `pnpm test:types` 验收。
 
-## 免费基础版：editor、UI、原生保存
+## 免费基础版：单 Host EditorShell、原生保存
 
 ```ts
 import { createEditor, createEditorSharedDocument, createTextInserter } from '@4xian/jword-core'
-import { createJWordUi } from '@4xian/jword-ui'
+import { createJWord } from '@4xian/jword-ui'
 import { saveJWordDocument, loadJWordDocument } from '@4xian/jword-native'
 import { createMemoryPersistenceAdapter, createStoragePersistenceAdapter } from '@4xian/jword-persistence'
 
-const editor = createEditor({ initialText: 'Hello JWord' })
-createJWordUi({ editor, editorHost: document.querySelector('#editor') as HTMLElement })
+const jword = createJWord({
+  host: document.querySelector('#jword')!,
+  editor: { initialText: 'Hello JWord' }
+})
 
-const saved = await saveJWordDocument(editor, { requestId: 'save-1' })
+const saved = await saveJWordDocument(jword.editor, { requestId: 'save-1' })
 await loadJWordDocument(saved.blob, { requestId: 'load-1' })
 
 const sharedDocument = createEditorSharedDocument()
@@ -21,7 +23,10 @@ const storage = createStoragePersistenceAdapter(createMemoryPersistenceAdapter()
 const inserter = createTextInserter(createEditor(), { requestId: 'insert-1' })
 inserter.abort('example-finished')
 await storage.listVersions(sharedDocument.toString())
+jword.destroy()
 ```
+
+需要分别控制 editor 与 UI 宿主时，可使用高级接口 `createEditor() + createJWordUi()`；默认集成不需要手动 mount toolbar、status bar 或辅助技术 Host。
 
 ## Gate 5 高级格式：DOCX 和 PDF
 

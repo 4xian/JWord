@@ -185,6 +185,7 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
     }
   }
 
+  /** 刷新选择区绘制，并让真实选择变化后的折叠光标保持可见。 */
   protected refreshMountedSelectionRuntime(previousSelection: SelectionState | null): void {
     if (this.mountedDom === undefined) {
       return
@@ -194,7 +195,7 @@ export abstract class JWordEditorMountedRuntime extends JWordEditorLayoutRuntime
       previousSelection !== this.currentSelection
       || (this.currentSelection === null && this.selectionPageIndexes.length > 0)
     ) {
-      this.renderMountedLayout('selection')
+      this.renderMountedLayout('selection', true)
       return
     }
 

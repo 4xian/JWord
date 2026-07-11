@@ -165,6 +165,7 @@ export abstract class JWordEditorMountFacadeRuntime extends JWordEditorLocationR
     shell.style.width = '100%'
     shell.style.height = '100%'
     shell.style.minWidth = '0'
+    shell.style.overflow = 'hidden'
     shell.style.position = 'relative'
     canvasContainer.style.width = '100%'
     canvasContainer.style.height = '100%'

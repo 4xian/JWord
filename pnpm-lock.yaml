@@ -193,6 +193,10 @@ importers:
 
   examples/vanilla:
     dependencies:
+      '@4xian/jword-ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
       '@4xian/jword-core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -202,10 +206,6 @@ importers:
       '@4xian/jword-native':
         specifier: workspace:*
         version: link:../../packages/native
-      '@4xian/jword-ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-    devDependencies:
       typescript:
         specifier: 6.0.3
         version: 6.0.3

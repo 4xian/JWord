@@ -23,7 +23,6 @@ import {
   type Ref
 } from 'vue'
 import {
-  createEditor,
   type Editor,
   type EditorDocumentInput,
   type EditorDocumentModelInput,
@@ -31,7 +30,11 @@ import {
   type EditorOptions,
   type JWordDiagnosticsSnapshot
 } from '@4xian/jword-core'
-import { createJWordUi, type CreateJWordUiOptions, type JWordUiInstance } from '@4xian/jword-ui'
+import {
+  createJWord,
+  type JWordEditorShell,
+  type JWordEditorShellUiOptions
+} from '@4xian/jword-ui'
 
 export type JWordVueTransactionEvent = Extract<EditorEvent, { readonly kind: 'transaction' }>['transaction']
 export type JWordVueSelectionChangeEvent = Extract<EditorEvent, { readonly kind: 'selectionChange' }>
@@ -47,8 +50,8 @@ export interface JWordVueEditorProps {
   readonly modelValue?: EditorDocumentModelInput
   /** 透传给 core createEditor 的配置；initialText/resources 由 wrapper 初始文档负责。 */
   readonly editorOptions?: Omit<EditorOptions, 'initialText' | 'resources'>
-  /** 透传给 createJWordUi 的配置；DOM 宿主由 wrapper 管理。 */
-  readonly uiOptions?: Omit<CreateJWordUiOptions, 'editor' | 'editorHost' | 'toolbarHost' | 'liveRegionHost' | 'assistiveMirrorHost'>
+  /** 透传给 EditorShell 的 UI 配置；DOM 宿主由 wrapper 管理。 */
+  readonly uiOptions?: JWordEditorShellUiOptions
   /** UI 只读模式；不是安全授权边界。 */
   readonly readonly?: boolean
 }
@@ -99,33 +102,27 @@ export const JWordVueEditor = defineComponent({
     'diagnostics-export'
   ],
   setup(props, { emit, expose, slots }) {
-    const editorHostRef = ref<HTMLElement | null>(null)
-    const toolbarHostRef = ref<HTMLElement | null>(null)
-    const liveRegionHostRef = ref<HTMLElement | null>(null)
-    const assistiveMirrorHostRef = ref<HTMLElement | null>(null)
-    const editorRef = shallowRef<Editor | null>(null)
-    const uiRef = shallowRef<JWordUiInstance | null>(null)
+    const hostRef = ref<HTMLElement | null>(null)
+    const shellRef = shallowRef<JWordEditorShell | null>(null)
     const unsubscribeRef = shallowRef<(() => void) | null>(null)
 
     /** 销毁当前 Vue wrapper 持有的 runtime。 */
     function destroyRuntime(): void {
       unsubscribeRef.value?.()
       unsubscribeRef.value = null
-      uiRef.value?.destroy()
-      uiRef.value = null
-      editorRef.value?.destroy()
-      editorRef.value = null
+      shellRef.value?.destroy()
+      shellRef.value = null
     }
 
     const handle: JWordVueEditorHandle = {
       get editor() {
-        return editorRef.value
+        return shellRef.value?.editor ?? null
       },
       focus() {
-        editorRef.value?.focus()
+        shellRef.value?.editor.focus()
       },
       exportDiagnostics() {
-        return editorRef.value?.exportDiagnostics() ?? null
+        return shellRef.value?.editor.exportDiagnostics() ?? null
       },
       destroy() {
         destroyRuntime()
@@ -137,15 +134,19 @@ export const JWordVueEditor = defineComponent({
     provide(JWORD_VUE_EDITOR_KEY, readonlyRef(handleRef))
 
     onMounted(() => {
-      const editorHost = editorHostRef.value
-      const toolbarHost = toolbarHostRef.value
+      const host = hostRef.value
 
-      if (editorHost === null || toolbarHost === null) {
+      if (host === null) {
         return
       }
 
       const initialDocument = props.defaultValue ?? props.initialDocument
-      const editor = createEditor(createEditorOptions(props.editorOptions, initialDocument))
+      const shell = createJWord({
+        host,
+        editor: createEditorOptions(props.editorOptions, initialDocument),
+        ui: createUiOptions(props)
+      })
+      const { editor } = shell
 
       if (props.modelValue !== undefined) {
         editor.loadDocumentModel(props.modelValue)
@@ -153,18 +154,7 @@ export const JWordVueEditor = defineComponent({
         editor.createDocument(initialDocument)
       }
 
-      editor.mount(editorHost)
-      const ui = createJWordUi(createUiOptions({
-        editor,
-        editorHost,
-        toolbarHost,
-        liveRegionHost: liveRegionHostRef.value,
-        assistiveMirrorHost: assistiveMirrorHostRef.value,
-        props
-      }))
-
-      editorRef.value = editor
-      uiRef.value = ui
+      shellRef.value = shell
       unsubscribeRef.value = editor.subscribe((event) => {
         dispatchVueEditorEvent(event, editor, emit)
       })
@@ -177,17 +167,14 @@ export const JWordVueEditor = defineComponent({
 
     watch(() => props.modelValue, (value) => {
       if (value !== undefined) {
-        editorRef.value?.loadDocumentModel(value)
+        shellRef.value?.editor.loadDocumentModel(value)
       }
     })
 
     return () => h('div', {
       'data-jword-vue': typeof window === 'undefined' ? 'ssr' : 'client'
     }, [
-      h('div', { ref: toolbarHostRef, 'data-jword-vue-toolbar': 'true' }),
-      h('div', { ref: editorHostRef, 'data-jword-vue-editor': 'true' }),
-      h('div', { ref: liveRegionHostRef, 'data-jword-vue-live-region': 'true' }),
-      h('div', { ref: assistiveMirrorHostRef, 'data-jword-vue-assistive': 'true' }),
+      h('div', { ref: hostRef, 'data-jword-vue-host': 'true' }),
       ...(slots.default?.() ?? [])
     ])
   }
@@ -222,24 +209,12 @@ function shouldCreateInitialDocument(input: EditorDocumentInput | undefined): in
   return input?.documentId !== undefined || input?.sectionId !== undefined
 }
 
-/** 创建 UI options，DOM 宿主由 Vue wrapper 管理。 */
-function createUiOptions(input: Readonly<{
-  editor: Editor
-  editorHost: HTMLElement
-  toolbarHost: HTMLElement
-  liveRegionHost: HTMLElement | null
-  assistiveMirrorHost: HTMLElement | null
-  props: RuntimeJWordVueEditorProps
-}>): CreateJWordUiOptions {
-  const readonlyMode = input.props.readonly ?? input.props.uiOptions?.readonly
+/** 创建 EditorShell UI options，并让显式 readonly prop 保持原有优先级。 */
+function createUiOptions(props: RuntimeJWordVueEditorProps): JWordEditorShellUiOptions {
+  const readonlyMode = props.readonly ?? props.uiOptions?.readonly
 
   return {
-    ...(input.props.uiOptions ?? {}),
-    editor: input.editor,
-    editorHost: input.editorHost,
-    toolbarHost: input.toolbarHost,
-    ...(input.liveRegionHost === null ? {} : { liveRegionHost: input.liveRegionHost }),
-    ...(input.assistiveMirrorHost === null ? {} : { assistiveMirrorHost: input.assistiveMirrorHost }),
+    ...(props.uiOptions ?? {}),
     ...(readonlyMode === undefined ? {} : { readonly: readonlyMode })
   }
 }

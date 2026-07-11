@@ -20,7 +20,7 @@ import {
 test('Gate 3 large-fixture pointer double click keeps responding after a collapsed canvas selection', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', '当前大夹具双击回归只固定 Chromium。')
 
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3LargeFixtureReady(page)
 
   const doubleClickPlan = await readLargeFixtureDoubleClickPlan(page)
@@ -70,7 +70,7 @@ test('Gate 3 large-fixture pointer double click keeps responding after a collaps
 test('Gate 3 large-fixture pointer drag keeps responding while mouse is held and paints the final selection', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', '当前长拖拽回归只固定 Chromium。')
 
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3LargeFixtureReady(page)
 
   const dragPlan = await readLargeFixtureLongDragPlan(page)

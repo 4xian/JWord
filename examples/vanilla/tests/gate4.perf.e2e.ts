@@ -39,7 +39,7 @@ test.setTimeout(60000)
 test('Gate 4 perf guard records image table find and overlay interaction metrics', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', '当前 Gate 4 perf 护栏只固定 Chromium。')
 
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate4PerfReady(page)
 
   const metrics = await readGate4PerfMetrics(page)
@@ -68,7 +68,7 @@ test('Gate 4 perf guard records image table find and overlay interaction metrics
 
 /** 等待 Gate 4 perf 所需的 demo 和 canvas 完成挂载。 */
 async function waitForGate4PerfReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)).toBeGreaterThan(0)
 }
@@ -76,7 +76,7 @@ async function waitForGate4PerfReady(page: Page): Promise<void> {
 /** 在真实浏览器内执行并记录 Gate 4 关键交互指标。 */
 async function readGate4PerfMetrics(page: Page): Promise<Gate4PerfMetrics> {
   return page.evaluate(async () => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
     const mediaTrigger = document.querySelector<HTMLButtonElement>('[data-jword-media-trigger="true"]')
     const mediaUrlAction = document.querySelector<HTMLButtonElement>('[data-jword-media-action-url="true"]')

@@ -12,7 +12,7 @@ import type { Locator } from '@playwright/test'
 test.describe.configure({ mode: 'serial' })
 
 test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForTableDemoReady(page)
 
   const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
@@ -55,7 +55,7 @@ test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page 
   await expect(customSizeDialog).toBeHidden()
 
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.table.setCellText(0, 0, '单元格A1') ?? false)
+    return page.evaluate(() => window.__jwordTestFixture?.table.setCellText(0, 0, '单元格A1') ?? false)
   }).toBe(true)
 
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
@@ -116,7 +116,7 @@ test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page 
 })
 
 test('Gate 4 table click resize and context actions keep table editable', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForTableDemoReady(page)
 
   const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
@@ -187,7 +187,7 @@ test('Gate 4 table click resize and context actions keep table editable', async 
 })
 
 test('Gate 4 table custom size dialog keeps focusable fields inside the panel', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForTableDemoReady(page)
 
   const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
@@ -214,7 +214,7 @@ test('Gate 4 table custom size dialog keeps focusable fields inside the panel', 
 
 /** 等待 demo、toolbar 与 table UI 都完成挂载。 */
 async function waitForTableDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
   await expect(page.locator('[data-jword-table-toolbar="true"]')).toBeVisible()
 }
@@ -365,7 +365,7 @@ function readResizeHandleStartPoint(
 async function selectDemoTableCell(page: Page, rowIndex: number, columnIndex: number): Promise<void> {
   await expect.poll(() => {
     return page.evaluate(({ nextRowIndex, nextColumnIndex }) => {
-      return window.__jwordDemo?.table.selectCell(nextRowIndex, nextColumnIndex) ?? false
+      return window.__jwordTestFixture?.table.selectCell(nextRowIndex, nextColumnIndex) ?? false
     }, {
       nextRowIndex: rowIndex,
       nextColumnIndex: columnIndex
@@ -373,7 +373,7 @@ async function selectDemoTableCell(page: Page, rowIndex: number, columnIndex: nu
   }).toBe(true)
 
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.table.readActiveTarget())
+    return page.evaluate(() => window.__jwordTestFixture?.table.readActiveTarget())
   }).not.toBeNull()
 
   const point = await readTableCellViewportPoint(page, rowIndex, columnIndex)
@@ -414,7 +414,7 @@ async function readTableCellViewportPoint(
   y: number
 }> {
   return page.evaluate(({ nextRowIndex, nextColumnIndex }) => {
-    const editor = window.__jwordDemo?.editor
+    const editor = window.__jwordTestFixture?.editor
     const editorHost = document.querySelector<HTMLElement>('#jword-editor')
     const canvasContainer = editorHost?.querySelector<HTMLElement>('[data-jword-canvas-container]') ?? null
     const layout = editor?.getLayout()
@@ -460,7 +460,7 @@ async function readCurrentCaretSnapshot(page: Page): Promise<{
   caretHeight: number | null
 } | null> {
   return page.evaluate(() => {
-    const editor = window.__jwordDemo?.editor
+    const editor = window.__jwordTestFixture?.editor
     const selection = editor?.getSelection()
     const focus = selection?.focus
     const position = focus === undefined ? undefined : editor?.resolveTextPosition(focus)
@@ -490,7 +490,7 @@ async function readFirstTableState(page: Page): Promise<{
   firstRowHeightTwips: number | null
 } | null> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
     const firstSection = projection?.document.sections[0]
     const table = firstSection?.blocks.find((block) => block.kind === 'table')
 

@@ -17,8 +17,11 @@ import { createPageStartKeys, isSameTextPosition, mergePageIndexes, renderPageBa
 import { cancelDeferredVisualTask, scheduleDeferredVisualTask } from './visual-task-scheduler'
 import type { RenderReason, TransientLayoutQuerySnapshot } from './types'
 
+const CARET_SCROLL_MARGIN_PX = 24
+
 export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRuntime {
-  protected renderMountedLayout(reason: RenderReason): void {
+  /** 渲染挂载后的布局，并在输入或选择变化时保持折叠光标可见。 */
+  protected renderMountedLayout(reason: RenderReason, revealCaret = reason === 'document'): void {
     const mountedDom = this.mountedDom
 
     if (mountedDom === undefined) {
@@ -65,6 +68,12 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
     }
 
     const nextPageStartKeys = createPageStartKeys(layout)
+    const selectionRender = this.createSelectionRenderState(layout)
+
+    if (revealCaret && this.isInputFocused && selectionRender.caretRect !== undefined) {
+      this.revealCaretInViewport(selectionRender.caretRect)
+    }
+
     const viewport = computeViewportPages({
       pages: layout.pages.map((page) => ({
         pageIndex: page.pageIndex,
@@ -75,7 +84,6 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
       viewportHeight: mountedDom.canvasContainer.clientHeight || this.pageConfig.heightCssPx,
       bufferPages: 1
     })
-    const selectionRender = this.createSelectionRenderState(layout)
     const experimentalDecorations = this.pluginHost.readDecorations({
       projection: this.currentProjection,
       layout,
@@ -111,6 +119,11 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
       scale: this.pageConfig.scale,
       pixelRatio: resolveCanvasPixelRatio(mountedDom)
     })
+
+    if (revealCaret && this.isInputFocused && selectionRender.caretRect !== undefined) {
+      this.revealCaretInViewport(selectionRender.caretRect)
+    }
+
     mountedDom.canvasContainer.setAttribute('data-jword-page-count', String(layout.pages.length))
     mountedDom.canvasContainer.setAttribute('data-jword-layout-immediate-pages', schedule.immediatePageIndexes.join(','))
     mountedDom.canvasContainer.setAttribute(
@@ -141,6 +154,31 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRun
     if (reason === 'document' && this.pendingLayoutContinuation !== undefined) {
       this.scheduleDeferredRender(this.pendingLayoutContinuation, 4)
     }
+  }
+
+  /** 仅在折叠光标越过视口安全边界时调整纵向滚动位置。 */
+  private revealCaretInViewport(caretRect: LayoutRect): void {
+    const canvasContainer = this.mountedDom?.canvasContainer
+
+    if (canvasContainer === undefined) {
+      return
+    }
+
+    const viewportHeight = canvasContainer.clientHeight || this.pageConfig.heightCssPx
+    const caretTop = twipsToCssPx(caretRect.y, this.pageConfig.scale)
+    const caretBottom = caretTop + Math.max(1, twipsToCssPx(caretRect.height, this.pageConfig.scale))
+    const viewportTop = canvasContainer.scrollTop
+    const viewportBottom = viewportTop + viewportHeight
+    let nextScrollTop = viewportTop
+
+    if (caretTop < viewportTop + CARET_SCROLL_MARGIN_PX) {
+      nextScrollTop = caretTop - CARET_SCROLL_MARGIN_PX
+    } else if (caretBottom > viewportBottom - CARET_SCROLL_MARGIN_PX) {
+      nextScrollTop = caretBottom - viewportHeight + CARET_SCROLL_MARGIN_PX
+    }
+
+    const maxScrollTop = Math.max(0, canvasContainer.scrollHeight - viewportHeight)
+    canvasContainer.scrollTop = Math.max(0, Math.min(nextScrollTop, maxScrollTop))
   }
 
   protected ensureCurrentLayout(): DocumentLayout {

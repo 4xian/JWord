@@ -8,12 +8,11 @@
 
 import {
   JWordError,
-  createEditor,
   type Editor
 } from '@4xian/jword-core'
 import {
-  createJWordUi,
-  type JWordUiInstance
+  createJWord,
+  type JWordEditorShell
 } from '@4xian/jword-ui'
 import {
   JWordNativePackageError,
@@ -23,26 +22,23 @@ import {
   type SaveJWordDocumentResult
 } from '@4xian/jword-native'
 
-declare const editorHost: HTMLElement
-declare const toolbarHost: HTMLElement
+declare const host: HTMLElement
 declare const packageBlob: Blob
 
-/** 初始化 editor、UI 并写入第一段文本。 */
-export function createFreeBaseEditor(): { readonly editor: Editor, readonly ui: JWordUiInstance } {
-  const editor = createEditor({
-    initialText: '第一段内容'
-  })
-  const ui = createJWordUi({
-    editor,
-    editorHost,
-    toolbarHost
+/** 通过单个根 Host 初始化 EditorShell 并写入第一段文本。 */
+export function createFreeBaseEditor(): JWordEditorShell {
+  const jword = createJWord({
+    host,
+    editor: {
+      initialText: '第一段内容'
+    }
   })
 
-  editor.createDocument({
+  jword.editor.createDocument({
     text: '可以继续编辑的正文'
   })
 
-  return { editor, ui }
+  return jword
 }
 
 /** 保存当前 `.jword` 文档。 */

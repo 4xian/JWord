@@ -2,7 +2,7 @@
  * @fileoverview 职责: 用真实浏览器验证 Gate 4 全局只读模式不会通过官方 UI 修改 projection。
  * 边界: 只覆盖 vanilla demo 的 createJWordUi({ readonly }) 装配、DOM 输入阻断和只读导航入口。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/readonly、toolbar、selection-actions、find-replace 与 link controller。
- * 约束: 断言来自真实 DOM、window.__jwordDemo 公开 facade 和 editor projection，不读取 controller 私有状态。
+ * 约束: 断言来自真实 DOM、window.__jwordTestFixture 公开 facade 和 editor projection，不读取 controller 私有状态。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
@@ -15,7 +15,7 @@ interface CanvasScrollProbe {
 }
 
 test('Gate 4 demo exposes a readonly example entry', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForReadonlyDemoReady(page)
 
   const readonlyExampleButton = page.locator('[data-jword-open-readonly-example]')
@@ -27,7 +27,7 @@ test('Gate 4 demo exposes a readonly example entry', async ({ page }) => {
   await page.waitForURL('**/?readonly=true')
   await waitForReadonlyDemoReady(page)
 
-  expect(await page.evaluate(() => window.__jwordDemo?.readonly)).toBe(true)
+  expect(await page.evaluate(() => window.__jwordTestFixture?.readonly)).toBe(true)
   await expect(page.locator('#jword-editor')).toHaveAttribute('data-jword-readonly', 'true')
   await expect(page.locator('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
   await expect(page.locator('[data-jword-open-find-replace]')).toBeEnabled()
@@ -40,10 +40,10 @@ test('Gate 4 global readonly blocks editing while keeping scroll and link open a
     width: 1024,
     height: 520
   })
-  await page.goto('/?readonly=true')
+  await page.goto('/test-fixture.html?readonly=true')
   await waitForReadonlyDemoReady(page)
 
-  expect(await page.evaluate(() => window.__jwordDemo?.readonly)).toBe(true)
+  expect(await page.evaluate(() => window.__jwordTestFixture?.readonly)).toBe(true)
   await expect(page.locator('#jword-toolbar')).toBeVisible()
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveJSProperty('readOnly', true)
   await expect(page.locator('#jword-editor')).toHaveAttribute('data-jword-readonly', 'true')
@@ -103,7 +103,7 @@ test('Gate 4 global readonly blocks editing while keeping scroll and link open a
 
 /** 等待只读 demo 与主要 UI 面板都完成挂载。 */
 async function waitForReadonlyDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
@@ -128,7 +128,7 @@ async function readClientPointForReadonlyGrapheme(page: Page, graphemeIndex: num
   readonly clientY: number
 }> {
   return page.evaluate((index) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const section = demo?.editor.getProjection().document.sections[0]
     const block = section?.blocks[0]
     const run = block?.kind === 'paragraph' ? block.runs[0] : undefined
@@ -174,7 +174,7 @@ async function readClientPointForReadonlyGrapheme(page: Page, graphemeIndex: num
 /** 读取只读模式当前选区摘要。 */
 async function readReadonlySelectionSummary(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection() ?? null
 
     if (demo === undefined || selection === null) {
@@ -224,13 +224,13 @@ async function dispatchReadonlyCopy(page: Page): Promise<string> {
 
 /** 读取当前 projection 的稳定 JSON 字符串。 */
 async function readSerializedProjection(page: Page): Promise<string> {
-  return page.evaluate(() => JSON.stringify(window.__jwordDemo?.editor.getProjection()))
+  return page.evaluate(() => JSON.stringify(window.__jwordTestFixture?.editor.getProjection()))
 }
 
 /** 通过公开 demo hook 选择第一段首个 run 的文本范围。 */
 async function selectFirstRunRange(page: Page, anchorGraphemeIndex: number, focusGraphemeIndex: number): Promise<void> {
   await page.evaluate(({ anchorIndex, focusIndex }) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const section = demo?.editor.getProjection().document.sections[0]
     const block = section?.blocks[0]
     const run = block?.kind === 'paragraph' ? block.runs[0] : undefined
@@ -342,7 +342,7 @@ async function scrollCanvas(page: Page): Promise<CanvasScrollProbe> {
 /** 用 demo hook 预置链接，供只读 quick tools 验证使用。 */
 async function seedReadonlyLink(page: Page): Promise<void> {
   const seeded = await page.evaluate(() => {
-    return window.__jwordDemo?.link.seedFirstRunLink('https://example.com/jword-readonly') ?? false
+    return window.__jwordTestFixture?.link.seedFirstRunLink('https://example.com/jword-readonly') ?? false
   })
 
   expect(seeded).toBe(true)

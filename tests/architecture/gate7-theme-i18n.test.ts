@@ -16,8 +16,8 @@ const uiIndex = readFileSync('packages/ui/src/index.ts', 'utf8')
 const uiTheme = readFileSync('packages/ui/src/theme.ts', 'utf8')
 const uiI18n = readFileSync('packages/ui/src/i18n.ts', 'utf8')
 const toolbarCss = readFileSync('packages/ui/src/styles/toolbar.css', 'utf8')
-const vanillaDemoMedia = readFileSync('examples/vanilla/src/demo-media.ts', 'utf8')
-const vanillaDemoTable = readFileSync('examples/vanilla/src/demo-table.ts', 'utf8')
+const vanillaDemoMedia = readFileSync('examples/vanilla/tests/fixtures/test-media.ts', 'utf8')
+const vanillaDemoTable = readFileSync('examples/vanilla/tests/fixtures/test-table.ts', 'utf8')
 
 describe('Gate 7 theme and i18n contract', () => {
   it('exposes theme and i18n options from the public UI package entry', () => {

@@ -19,7 +19,7 @@ describe('createJWordUi header footer integration', () => {
 
     try {
       expect(harness.ui.elements.headerFooterPanel).not.toBeNull()
-      expect(harness.toolbarHost.querySelector('[data-jword-header-footer]')).not.toBeNull()
+      expect(harness.headerFooterHost.querySelector('[data-jword-header-footer]')).not.toBeNull()
 
       harness.ui.elements.headerFooterPanel!.headerInput.value = 'header-main'
       harness.ui.elements.headerFooterPanel!.footerInput.value = 'footer-main'
@@ -38,7 +38,7 @@ describe('createJWordUi header footer integration', () => {
 
       harness.ui.destroy()
 
-      expect(harness.toolbarHost.querySelector('[data-jword-header-footer]')).toBeNull()
+      expect(harness.headerFooterHost.querySelector('[data-jword-header-footer]')).toBeNull()
     } finally {
       harness.destroy()
     }

@@ -128,7 +128,8 @@ export abstract class JWordEditorState {
   protected abstract cancelDeferredDocumentRender(): void
   protected abstract scheduleDeferredDocumentRender(): void
   protected abstract shouldRenderMountedDocumentImmediately(commandName: string): boolean
-  protected abstract renderMountedLayout(reason: RenderReason): void
+  /** 渲染挂载后的布局，并按调用来源决定是否恢复折叠光标可见性。 */
+  protected abstract renderMountedLayout(reason: RenderReason, revealCaret?: boolean): void
   protected abstract emit(event: EditorEvent): void
   protected abstract replaceDocument(input: EditorDocumentInput, commandName: string, origin: string): DocumentProjection
   protected abstract refreshSelectionAfterSharedTransaction(previousSelection: SelectionState | null): void

@@ -25,7 +25,7 @@ import {
 test.describe.configure({ mode: 'serial' })
 
 test('Gate 3 toolbar paragraph alignment dropdown changes real line geometry', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
@@ -57,7 +57,7 @@ test('Gate 3 toolbar paragraph alignment dropdown changes real line geometry', a
 
 
 test('Gate 3 toolbar paragraph metric dropdowns update projection and layout geometry', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
 
   await selectPluginPagePreset(page, 'a5')
@@ -140,7 +140,7 @@ test('Gate 3 toolbar paragraph metric dropdowns update projection and layout geo
 
 
 test('Gate 3 toolbar paragraph style dropdown makes heading rendering visibly different', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
@@ -179,7 +179,7 @@ test('Gate 3 toolbar paragraph style dropdown makes heading rendering visibly di
 
 
 test('Gate 3 toolbar paragraph list dropdown renders ordered and bullet variants and can clear', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
@@ -251,7 +251,7 @@ test('Gate 3 toolbar paragraph list dropdown renders ordered and bullet variants
 
 
 test('Gate 3 toolbar switches paper size and updates real page geometry', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
 
   await selectPluginPagePreset(page, 'a5')
@@ -268,7 +268,7 @@ test('Gate 3 toolbar switches paper size and updates real page geometry', async 
 })
 
 test('Gate 7 internal plugin page preset menu updates real page geometry', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
 
   const toolbar = readOfficialToolbar(page)
@@ -299,7 +299,7 @@ test('Gate 7 internal plugin page preset menu updates real page geometry', async
   })
 
   const a3Probe = await readPagePresetProbe(page)
-  const diagnostics = await page.evaluate(() => window.__jwordDemo?.editor.getPluginDiagnostics() ?? [])
+  const diagnostics = await page.evaluate(() => window.__jwordTestFixture?.editor.getPluginDiagnostics() ?? [])
 
   expect(a3Probe.pageWrapperWidthPx).toBeGreaterThan(a5Probe.pageWrapperWidthPx)
   expect(a3Probe.pageWrapperHeightPx).toBeGreaterThan(a5Probe.pageWrapperHeightPx)
@@ -308,15 +308,15 @@ test('Gate 7 internal plugin page preset menu updates real page geometry', async
 })
 
 test('Gate 7 plugin command error is isolated in real browser runtime', async ({ page }) => {
-  await page.goto('/?pluginError=throwing-command')
+  await page.goto('/test-fixture.html?pluginError=throwing-command')
   await waitForDemoReady(page)
 
   await page.evaluate(() => {
-    window.__jwordDemo?.editor.executePluginCommand('demo.throwingPlugin.throw')
+    window.__jwordTestFixture?.editor.executePluginCommand('demo.throwingPlugin.throw')
   })
 
   const diagnostics = await page.evaluate(() =>
-    window.__jwordDemo?.editor.getPluginDiagnostics().map((diagnostic) => ({
+    window.__jwordTestFixture?.editor.getPluginDiagnostics().map((diagnostic) => ({
       code: diagnostic.code,
       commandName: diagnostic.commandName,
       recoverable: diagnostic.recoverable

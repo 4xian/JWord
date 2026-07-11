@@ -15,15 +15,15 @@ import {
 } from './gate3-toolbar-helpers'
 
 test('Gate 7 plugin command error is isolated in real browser runtime', async ({ page }) => {
-  await page.goto('/?pluginError=throwing-command')
+  await page.goto('/test-fixture.html?pluginError=throwing-command')
   await waitForDemoReady(page)
 
   await page.evaluate(() => {
-    window.__jwordDemo?.editor.executePluginCommand('demo.throwingPlugin.throw')
+    window.__jwordTestFixture?.editor.executePluginCommand('demo.throwingPlugin.throw')
   })
 
   const diagnostics = await page.evaluate(() =>
-    window.__jwordDemo?.editor.getPluginDiagnostics().map((diagnostic) => ({
+    window.__jwordTestFixture?.editor.getPluginDiagnostics().map((diagnostic) => ({
       code: diagnostic.code,
       commandName: diagnostic.commandName,
       recoverable: diagnostic.recoverable
@@ -43,15 +43,15 @@ test('Gate 7 plugin command error is isolated in real browser runtime', async ({
 })
 
 test('Gate 7 plugin adapter error is isolated in real browser runtime', async ({ page }) => {
-  await page.goto('/?pluginError=throwing-adapter')
+  await page.goto('/test-fixture.html?pluginError=throwing-adapter')
   await waitForDemoReady(page)
 
   await page.evaluate(() => {
-    window.__jwordDemo?.editor.executePluginCommand('demo.throwingPlugin.adapter')
+    window.__jwordTestFixture?.editor.executePluginCommand('demo.throwingPlugin.adapter')
   })
 
   const diagnostics = await page.evaluate(() =>
-    window.__jwordDemo?.editor.getPluginDiagnostics().map((diagnostic) => ({
+    window.__jwordTestFixture?.editor.getPluginDiagnostics().map((diagnostic) => ({
       code: diagnostic.code,
       commandName: diagnostic.commandName,
       recoverable: diagnostic.recoverable

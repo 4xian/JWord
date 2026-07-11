@@ -202,6 +202,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
   let currentThemeName: JWordUiThemeName = options.theme?.name ?? 'light'
   let currentLocale: JWordStatusBarLocale = normalizeToolbarLocale(options.i18n?.locale)
   let pluginExtensions: ToolbarPluginExtensionsHandle | null = null
+  let destroyed = false
   let suppressSelectionAnnouncementsUntil = 0
   let suppressAfterToolbarTransaction = false
   const colorState = createToolbarColorSessionState()
@@ -381,55 +382,86 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
     syncToolbarTogglePressed(dom.controls['view.presentation'], presentation)
   }
 
-  pluginExtensions = createToolbarPluginExtensions({
-    bar: dom.extensionSlots.tools ?? dom.bar,
-    editor,
-    readonlyEnabled: readonlyMode.enabled,
-    extensions: toolbarPluginExtensions,
-    announce(message, refreshMirror) {
-      stateSync.announce(message, refreshMirror)
-    },
-    markToolbarTransaction,
-    readI18n() {
-      return currentI18n
-    },
-    restoreEditorFocusSoon
-  })
-
-  bindLifecycleControls(actionContext, panelOptions, options.insertActions, () => currentI18n, {
-    view: viewController,
-    readThemeName() {
-      return currentThemeName
-    },
-    writeThemeName(themeName) {
-      currentThemeName = themeName
-    },
-    readLocale() {
-      return currentLocale
-    },
-    writeLocale(locale) {
-      currentLocale = locale
-    },
-    setTheme(theme) {
-      options.uiActions?.setTheme(theme)
-    },
-    setLocale(locale) {
-      options.uiActions?.setLocale(locale)
-    }
-  }, watermarkMenu)
-  const colorFormat: ToolbarColorFormatHandle = bindFormatControls(actionContext, colorState)
-  bindParagraphControls(actionContext)
-  bindToolbarPanelDismissal(dom.host, panelHost, signalController.signal)
-  options.editorHost?.addEventListener('mousedown', () => {
-    if (colorState.readOpenColorPicker() === null) {
+  /** 释放 toolbar 构造或正常运行期间创建的全部资源。 */
+  function destroyToolbarController(): void {
+    if (destroyed) {
       return
     }
 
-    markActiveColorReturnedToEditor(colorState)
-    stateSync.render()
-  }, { signal: signalController.signal })
+    destroyed = true
+    signalController.abort()
+    unsubscribeEditor()
+    stateSync.destroyAssistive()
+    watermarkMenu?.destroy()
+    pluginExtensions?.destroy()
+    options.toolbarHost.hidden = previousToolbarHidden
+    options.toolbarHost.removeAttribute('data-jword-presentation')
+    options.toolbarHost.removeAttribute('data-jword-presentation-hidden')
+    fullscreenHost.removeAttribute('data-jword-presentation')
+    destroyToolbarDom(dom)
+  }
 
-  refresh()
+  let colorFormat: ToolbarColorFormatHandle
+
+  try {
+    pluginExtensions = createToolbarPluginExtensions({
+      bar: dom.extensionSlots.tools ?? dom.bar,
+      editor,
+      readonlyEnabled: readonlyMode.enabled,
+      extensions: toolbarPluginExtensions,
+      announce(message, refreshMirror) {
+        stateSync.announce(message, refreshMirror)
+      },
+      markToolbarTransaction,
+      readI18n() {
+        return currentI18n
+      },
+      restoreEditorFocusSoon
+    })
+
+    bindLifecycleControls(actionContext, panelOptions, options.insertActions, () => currentI18n, {
+      view: viewController,
+      readThemeName() {
+        return currentThemeName
+      },
+      writeThemeName(themeName) {
+        currentThemeName = themeName
+      },
+      readLocale() {
+        return currentLocale
+      },
+      writeLocale(locale) {
+        currentLocale = locale
+      },
+      setTheme(theme) {
+        options.uiActions?.setTheme(theme)
+      },
+      setLocale(locale) {
+        options.uiActions?.setLocale(locale)
+      }
+    }, watermarkMenu)
+    colorFormat = bindFormatControls(actionContext, colorState)
+    bindParagraphControls(actionContext)
+    bindToolbarPanelDismissal(dom.host, [
+      panelHost,
+      options.headerFooter?.host,
+      options.findReplace?.host,
+      options.revisions?.host
+    ], signalController.signal)
+    options.editorHost?.addEventListener('mousedown', () => {
+      if (colorState.readOpenColorPicker() === null) {
+        return
+      }
+
+      markActiveColorReturnedToEditor(colorState)
+      stateSync.render()
+    }, { signal: signalController.signal })
+
+    refresh()
+  } catch (error) {
+    destroyToolbarController()
+    throw error
+  }
 
   return {
     elements: {
@@ -455,18 +487,7 @@ export function createToolbarController(options: CreateToolbarControllerOptions)
       renderToolbar()
     },
     refresh,
-    destroy(): void {
-      signalController.abort()
-      unsubscribeEditor()
-      stateSync.destroyAssistive()
-      watermarkMenu?.destroy()
-      pluginExtensions?.destroy()
-      options.toolbarHost.hidden = previousToolbarHidden
-      options.toolbarHost.removeAttribute('data-jword-presentation')
-      options.toolbarHost.removeAttribute('data-jword-presentation-hidden')
-      fullscreenHost.removeAttribute('data-jword-presentation')
-      destroyToolbarDom(dom)
-    }
+    destroy: destroyToolbarController
   }
 }
 

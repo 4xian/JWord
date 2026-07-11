@@ -2,7 +2,7 @@
  * @fileoverview 职责: 用真实浏览器覆盖 Gate 4 修订 metadata 面板的最小验收路径。
  * 边界: 验证官方 UI 在 vanilla host 的装配、revision metadata 落地、点击定位、基础 undo/redo 与单条接受/拒绝。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/revisions/*、core revision command 与 editor facade。
- * 约束: 断言来自真实 DOM 或 window.__jwordDemo.editor 公开 facade，不读取 controller 私有状态。
+ * 约束: 断言来自真实 DOM 或 window.__jwordTestFixture.editor 公开 facade，不读取 controller 私有状态。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
@@ -21,11 +21,11 @@ interface RevisionProbe {
 }
 
 test('Gate 4 revisions panel shows metadata and restores selection from range snapshot', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForRevisionDemoReady(page)
 
   await page.evaluate(() => {
-    window.__jwordDemo?.selectTextRange({
+    window.__jwordTestFixture?.selectTextRange({
       sectionId: 'section-1',
       blockId: 'paragraph-1',
       runId: 'run-1',
@@ -54,7 +54,7 @@ test('Gate 4 revisions panel shows metadata and restores selection from range sn
   await expect(item).toContainText('demo-user')
 
   await page.evaluate(() => {
-    window.__jwordDemo?.selectTextRange({
+    window.__jwordTestFixture?.selectTextRange({
       sectionId: 'section-1',
       blockId: 'paragraph-1',
       runId: 'run-1',
@@ -68,14 +68,14 @@ test('Gate 4 revisions panel shows metadata and restores selection from range sn
     selectionOffsets: [1, 3]
   })
 
-  await page.evaluate(() => window.__jwordDemo?.editor.undo())
+  await page.evaluate(() => window.__jwordTestFixture?.editor.undo())
   await expect.poll(() => readRevisionProbe(page)).toMatchObject({
     revisionCount: 0,
     runRevisionId: null
   })
   await expect(page.locator('[data-jword-revision-item]')).toHaveCount(0)
 
-  await page.evaluate(() => window.__jwordDemo?.editor.redo())
+  await page.evaluate(() => window.__jwordTestFixture?.editor.redo())
   await expect.poll(() => readRevisionProbe(page)).toMatchObject({
     revisionCount: 1
   })
@@ -83,11 +83,11 @@ test('Gate 4 revisions panel shows metadata and restores selection from range sn
 
 
 test('Gate 4 revisions panel rejects one revision through the official action button', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForRevisionDemoReady(page)
 
   await page.evaluate(() => {
-    window.__jwordDemo?.selectTextRange({
+    window.__jwordTestFixture?.selectTextRange({
       sectionId: 'section-1',
       blockId: 'paragraph-1',
       runId: 'run-1',
@@ -110,7 +110,7 @@ test('Gate 4 revisions panel rejects one revision through the official action bu
 
 /** 等待 demo、editor 和修订官方 UI 完成挂载。 */
 async function waitForRevisionDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo?.revisions !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture?.revisions !== undefined)
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
   const panel = page.locator('[data-jword-revisions-panel]')
 
@@ -125,7 +125,7 @@ async function waitForRevisionDemoReady(page: Page): Promise<void> {
 
 /** 通过 demo hook 创建一条 revision metadata。 */
 async function addRevision(page: Page, type: 'insert' | 'delete' | 'format' = 'format'): Promise<boolean> {
-  return page.evaluate((revisionType) => window.__jwordDemo?.revisions.addRevision({
+  return page.evaluate((revisionType) => window.__jwordTestFixture?.revisions.addRevision({
     authorId: 'demo-user',
     createdAt: '2026-05-24T04:45:00.000Z',
     type: revisionType,
@@ -136,7 +136,7 @@ async function addRevision(page: Page, type: 'insert' | 'delete' | 'format' = 'f
 /** 读取 revision projection、run markup 和当前 selection。 */
 async function readRevisionProbe(page: Page): Promise<RevisionProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const projection = demo?.editor.getProjection()
     const revision = projection?.document.revisions?.[0]
     const block = projection?.document.sections[0]?.blocks[0]
@@ -163,7 +163,7 @@ async function readRevisionProbe(page: Page): Promise<RevisionProbe> {
 /** 读取第一段纯文本。 */
 async function readFirstParagraphText(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const block = window.__jwordDemo?.editor.getProjection().document.sections[0]?.blocks[0]
+    const block = window.__jwordTestFixture?.editor.getProjection().document.sections[0]?.blocks[0]
 
     return block?.kind === 'paragraph'
       ? block.runs.flatMap((run) => run.inlines).flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')

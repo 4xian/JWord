@@ -1,7 +1,7 @@
 /**
  * 职责：提供 vanilla demo 的 Gate 4 第一版 media adapter、core command 对接和浏览器测试钩子。
  * 边界：不实现上传协议或 editor DOM；这里只负责 demo 级资源上传模拟、core command 桥接与可观察契约。
- * 协作模块：main.ts 把这里的 media options 传给 `createJWordUi(...)`，浏览器测试通过 `window.__jwordDemo.media` 读取钩子。
+ * 协作模块：main.ts 把这里的 media options 传给 `createJWordUi(...)`，浏览器测试通过 `window.__jwordTestFixture.media` 读取钩子。
  * 性能/安全约束：上传状态保持最小真实异步；对 blob URL 负责回收；失败必须显式暴露 retry token。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
@@ -18,7 +18,7 @@ import { createCoreMediaCommandAdapter } from '@4xian/jword-ui'
 
 const DEMO_MEDIA_SCENARIO_PARAM = 'demo-media-scenario'
 const DEMO_MEDIA_RETRY_TOKEN_PREFIX = 'demo-media-retry:'
-const MEDIA_INLINE_FIXTURE_URL = new URL('../../../fixtures/gate4/media-inline.svg', import.meta.url).href
+const MEDIA_INLINE_FIXTURE_URL = new URL('../../../../fixtures/gate4/media-inline.svg', import.meta.url).href
 
 type DemoMediaScenario = 'success' | 'retry-once' | 'always-fail'
 

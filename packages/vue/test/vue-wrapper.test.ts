@@ -62,6 +62,10 @@ describe('JWordVueEditor', () => {
 
     expect(handle.editor).not.toBeNull()
     expect(handle.exportDiagnostics()).not.toBeNull()
+    expect(wrapper.findAll('[data-jword-vue-host]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-jword-shell-region]')).toHaveLength(3)
+    expect(wrapper.find('[data-jword-vue-toolbar]').exists()).toBe(false)
+    expect(wrapper.find('[data-jword-vue-editor]').exists()).toBe(false)
     expect(wrapper.find('[data-jword-vue-probe]').attributes('data-jword-vue-probe')).toBe('ready')
     expect(wrapper.find('[data-jword-vue-probe]').attributes('data-jword-vue-probe-editor')).toBe('ready')
 

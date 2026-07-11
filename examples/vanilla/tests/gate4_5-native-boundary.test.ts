@@ -1,7 +1,7 @@
 /**
  * 职责：锁定 Gate 4.5 vanilla 原生保存/打开入口只能使用公开 native 包与 lazy import。
  * 边界：只做源码边界扫描，不验证 native 包内部格式语义。
- * 协作：examples/vanilla/src/demo-native.ts、examples/vanilla/src/main.ts 和 @4xian/jword-native 公开 API。
+ * 协作：examples/vanilla/tests/fixtures/test-native.ts、examples/vanilla/tests/fixtures/test-fixture.ts 和 @4xian/jword-native 公开 API。
  * 约束：vanilla 不能直接读取 packages/native/src、core 私有 store，也不能把 native 放进首屏静态 import。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
@@ -10,11 +10,11 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-const vanillaSourceRoot = join(process.cwd(), 'examples/vanilla/src')
+const vanillaSourceRoot = join(process.cwd(), 'examples/vanilla/tests/fixtures')
 
 describe('Gate 4.5 vanilla native boundary', () => {
   it('使用 demo-native worker bridge 承接 .jword 保存/打开入口', () => {
-    const bridgePath = join(vanillaSourceRoot, 'demo-native.ts')
+    const bridgePath = join(vanillaSourceRoot, 'test-native.ts')
     const workerPath = join(vanillaSourceRoot, 'native-worker.ts')
 
     expect(existsSync(bridgePath)).toBe(true)

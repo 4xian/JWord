@@ -77,111 +77,125 @@ export function createToolbarPluginExtensions(
   const buttons: RegisteredPluginButton[] = []
   const menuActions: RegisteredPluginMenuAction[] = []
   const menus: RegisteredPluginMenu[] = []
+  let destroyed = false
+
+  /** 释放插件扩展在构造或正常运行期间创建的监听与 DOM。 */
+  function destroyPluginExtensions(): void {
+    if (destroyed) {
+      return
+    }
+
+    destroyed = true
+    signalController.abort()
+    closePluginMenus(menus)
+    for (const destroyTooltip of tooltipDestroyers) {
+      destroyTooltip()
+    }
+    group.remove()
+  }
 
   group.className = 'jw-toolbar__group jw-toolbar__group--separated'
   group.setAttribute('data-jword-plugin-toolbar-host', 'true')
   options.bar.append(group)
 
-  for (const extension of extensions) {
-    for (const item of extension.toolbarItems ?? []) {
-      const button = createPluginToolbarButton(ownerDocument, extension, item)
-      const { anchor, destroy } = wrapWithTooltip(button, item.tooltip ?? item.label)
-      const key = createPluginToolKey(extension.pluginName, item.name)
+  try {
+    for (const extension of extensions) {
+      for (const item of extension.toolbarItems ?? []) {
+        const button = createPluginToolbarButton(ownerDocument, extension, item)
+        const { anchor, destroy } = wrapWithTooltip(button, item.tooltip ?? item.label)
+        const key = createPluginToolKey(extension.pluginName, item.name)
 
-      pluginControls[key] = button
-      tooltipDestroyers.push(destroy)
-      group.append(anchor)
-      buttons.push({ button, extension, item })
-      button.addEventListener('click', () => {
-        if (button.disabled) {
-          return
-        }
-
-        executePluginCommand(options, item.commandName, item.input)
-        refresh()
-        announcePluginControlResult(options, item)
-      }, { signal: signalController.signal })
-    }
-
-    for (const menu of extension.menus ?? []) {
-      const renderedMenu = createPluginMenu(ownerDocument, extension, menu)
-      const { anchor, destroy } = wrapWithTooltip(renderedMenu.wrapper, menu.tooltip ?? menu.label)
-
-      tooltipDestroyers.push(destroy)
-      group.append(anchor)
-      menus.push(renderedMenu)
-      renderedMenu.trigger.addEventListener('click', () => {
-        if (renderedMenu.trigger.disabled) {
-          return
-        }
-
-        const nextOpen = renderedMenu.menu.hidden === true
-
-        closePluginMenus(menus)
-        setPluginMenuOpen(renderedMenu, nextOpen)
-      }, { signal: signalController.signal })
-
-      for (const action of menu.items) {
-        const actionButton = renderedMenu.menu.querySelector<HTMLButtonElement>(
-          `[data-jword-plugin-menu-item-key="${createPluginMenuActionKey(extension.pluginName, menu.name, action.name)}"]`
-        )
-
-        if (actionButton === null) {
-          continue
-        }
-
-        menuActions.push({ button: actionButton, extension, action })
-        actionButton.addEventListener('click', () => {
-          if (actionButton.disabled) {
+        pluginControls[key] = button
+        tooltipDestroyers.push(destroy)
+        group.append(anchor)
+        buttons.push({ button, extension, item })
+        button.addEventListener('click', () => {
+          if (button.disabled) {
             return
           }
 
-          closePluginMenus(menus)
-          if (action.commandName === CUSTOM_PAGE_SIZE_COMMAND) {
-            openCustomPageSizeDialog({
-              ownerDocument,
-              host: options.bar.closest<HTMLElement>('.jw-root') ?? options.bar,
-              editor: options.editor,
-              i18n: options.readI18n(),
-              announce: options.announce,
-              markToolbarTransaction: options.markToolbarTransaction,
-              refresh,
-              restoreEditorFocusSoon: options.restoreEditorFocusSoon
-            })
-            return
-          }
-
-          executePluginCommand(options, action.commandName, action.input)
+          executePluginCommand(options, item.commandName, item.input)
           refresh()
-          announcePluginControlResult(options, action)
+          announcePluginControlResult(options, item)
         }, { signal: signalController.signal })
       }
+
+      for (const menu of extension.menus ?? []) {
+        const renderedMenu = createPluginMenu(ownerDocument, extension, menu)
+        const { anchor, destroy } = wrapWithTooltip(renderedMenu.wrapper, menu.tooltip ?? menu.label)
+
+        tooltipDestroyers.push(destroy)
+        group.append(anchor)
+        menus.push(renderedMenu)
+        renderedMenu.trigger.addEventListener('click', () => {
+          if (renderedMenu.trigger.disabled) {
+            return
+          }
+
+          const nextOpen = renderedMenu.menu.hidden === true
+
+          closePluginMenus(menus)
+          setPluginMenuOpen(renderedMenu, nextOpen)
+        }, { signal: signalController.signal })
+
+        for (const action of menu.items) {
+          const actionButton = renderedMenu.menu.querySelector<HTMLButtonElement>(
+            `[data-jword-plugin-menu-item-key="${createPluginMenuActionKey(extension.pluginName, menu.name, action.name)}"]`
+          )
+
+          if (actionButton === null) {
+            continue
+          }
+
+          menuActions.push({ button: actionButton, extension, action })
+          actionButton.addEventListener('click', () => {
+            if (actionButton.disabled) {
+              return
+            }
+
+            closePluginMenus(menus)
+            if (action.commandName === CUSTOM_PAGE_SIZE_COMMAND) {
+              openCustomPageSizeDialog({
+                ownerDocument,
+                host: options.bar.closest<HTMLElement>('.jw-root') ?? options.bar,
+                editor: options.editor,
+                i18n: options.readI18n(),
+                announce: options.announce,
+                markToolbarTransaction: options.markToolbarTransaction,
+                refresh,
+                restoreEditorFocusSoon: options.restoreEditorFocusSoon
+              })
+              return
+            }
+
+            executePluginCommand(options, action.commandName, action.input)
+            refresh()
+            announcePluginControlResult(options, action)
+          }, { signal: signalController.signal })
+        }
+      }
     }
+
+    ownerDocument.addEventListener('click', (event) => {
+      const target = event.target
+
+      if (target instanceof Node && group.contains(target)) {
+        return
+      }
+
+      closePluginMenus(menus)
+    }, { signal: signalController.signal })
+
+    refresh()
+  } catch (error) {
+    destroyPluginExtensions()
+    throw error
   }
-
-  ownerDocument.addEventListener('click', (event) => {
-    const target = event.target
-
-    if (target instanceof Node && group.contains(target)) {
-      return
-    }
-
-    closePluginMenus(menus)
-  }, { signal: signalController.signal })
-
-  refresh()
 
   return {
     pluginControls,
     refresh,
-    destroy(): void {
-      signalController.abort()
-      closePluginMenus(menus)
-      for (const destroyTooltip of tooltipDestroyers) {
-        destroyTooltip()
-      }
-      group.remove()
-    }
+    destroy: destroyPluginExtensions
   }
 
   /** 刷新所有插件按钮和菜单动作状态。 */

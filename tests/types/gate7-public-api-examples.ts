@@ -16,8 +16,10 @@ import {
   type JWordDiagnosticsSnapshot
 } from '@4xian/jword-core'
 import {
+  createJWord,
   createJWordUi,
   type CreateJWordUiOptions,
+  type JWordEditorShell,
   type JWordUiInstance
 } from '@4xian/jword-ui'
 import {
@@ -61,7 +63,8 @@ import {
   type JWordLicenseFeatureKey
 } from '@4xian/jword-license'
 
-declare const editorHost: HTMLElement
+declare const host: HTMLElement
+declare const advancedEditorHost: HTMLElement
 declare const liveRegionHost: HTMLElement
 declare const binaryInput: Blob
 declare const docxProjection: Parameters<typeof exportDocx>[0]
@@ -71,14 +74,22 @@ declare const entitlement: JWordLicenseEntitlement
 
 declare function renderDiagnosticMessages(messages: readonly string[]): void
 
-/** 创建免费基础版 editor 和原生 UI。 */
-export function createFreeEditorExample(): { readonly editor: Editor, readonly ui: JWordUiInstance } {
-  const editor = createEditor({
-    initialText: 'Hello JWord'
+/** 通过单个根 Host 创建免费基础版 EditorShell。 */
+export function createFreeEditorExample(): JWordEditorShell {
+  return createJWord({
+    host,
+    editor: {
+      initialText: 'Hello JWord'
+    }
   })
+}
+
+/** 高级集成按需分别创建 editor 和 UI。 */
+export function createAdvancedEditorUiExample(): { readonly editor: Editor, readonly ui: JWordUiInstance } {
+  const editor = createEditor({ initialText: 'Advanced JWord' })
   const uiOptions: CreateJWordUiOptions = {
     editor,
-    editorHost,
+    editorHost: advancedEditorHost,
     liveRegionHost
   }
 

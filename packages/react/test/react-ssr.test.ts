@@ -20,6 +20,8 @@ describe('JWordReactEditor SSR', () => {
     }))
 
     expect(html).toContain('data-jword-react="ssr"')
-    expect(html).toContain('data-jword-react-editor="true"')
+    expect(html).toContain('data-jword-react-host="true"')
+    expect(html).not.toContain('data-jword-react-toolbar')
+    expect(html).not.toContain('data-jword-react-editor')
   })
 })

@@ -28,6 +28,7 @@ import type { HeadingOutlineDom } from './dom'
 export interface CreateHeadingOutlineControllerOptions {
   readonly editor: Editor
   readonly host: HTMLElement
+  readonly editorHost?: HTMLElement
   readonly scrollToRange?: (range: TextRange) => void
   readonly i18n?: ResolvedJWordUiI18n
 }
@@ -106,7 +107,7 @@ export function createHeadingOutlineController(
       return
     }
 
-    const canvasContainer = resolveCanvasContainer(dom.host)
+    const canvasContainer = resolveCanvasContainer(options.editorHost ?? dom.host)
 
     if (canvasContainer === null) {
       return
@@ -170,7 +171,7 @@ export function createHeadingOutlineController(
     destroyHeadingOutlineDom(dom)
   }
 
-  const canvasContainer = resolveCanvasContainer(dom.host)
+  const canvasContainer = resolveCanvasContainer(options.editorHost ?? dom.host)
 
   canvasContainer?.addEventListener('scroll', syncActiveItemFromViewport, {
     signal: signalController.signal

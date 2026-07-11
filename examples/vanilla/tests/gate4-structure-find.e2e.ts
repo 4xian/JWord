@@ -2,7 +2,7 @@
  * @fileoverview 职责: 用真实浏览器覆盖 Gate 4 目录跳转与查找替换官方 UI 的最小验收路径。
  * 边界: 只验证 vanilla demo 中 createJWordUi 装配的 headingOutline/findReplace 面板，不实现 demo-only 查找逻辑。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/heading、packages/ui/src/find-replace 与 core heading/find helper。
- * 约束: 所有断言来自真实 DOM、window.__jwordDemo 公开 facade 或 editor projection；替换不得绕过 transaction pipeline。
+ * 约束: 所有断言来自真实 DOM、window.__jwordTestFixture 公开 facade 或 editor projection；替换不得绕过 transaction pipeline。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
@@ -16,7 +16,7 @@ interface StructureFindProbe {
 }
 
 test('Gate 4 heading outline clicks stable anchor and find replace UI writes through transactions', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForStructureFindDemoReady(page)
   await prepareStructureFindDocument(page)
 
@@ -92,7 +92,7 @@ test('Gate 4 heading outline clicks stable anchor and find replace UI writes thr
 })
 
 test('Gate 4 heading outline collapse hides child rows', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForStructureFindDemoReady(page)
   await prepareNestedHeadingDocument(page)
 
@@ -110,7 +110,7 @@ test('Gate 4 heading outline collapse hides child rows', async ({ page }) => {
 
 /** 等待 demo、目录面板与查找替换面板完成挂载。 */
 async function waitForStructureFindDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-heading-outline]')).toHaveCount(1)
   await expect(page.locator('[data-jword-find-replace]')).toHaveCount(1)
 }
@@ -118,7 +118,7 @@ async function waitForStructureFindDemoReady(page: Page): Promise<void> {
 /** 准备带 Heading1/Heading2 与多个 alpha 结果的小文档。 */
 async function prepareStructureFindDocument(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 JWord demo facade。')
@@ -169,7 +169,7 @@ async function prepareStructureFindDocument(page: Page): Promise<void> {
 /** 准备带父子标题的小文档。 */
 async function prepareNestedHeadingDocument(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 JWord demo facade。')
@@ -209,7 +209,7 @@ async function prepareNestedHeadingDocument(page: Page): Promise<void> {
 /** 读取结构与查找替换关键结果。 */
 async function readStructureFindProbe(page: Page): Promise<StructureFindProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection()
     const anchorPosition = selection === null || selection === undefined
       ? null

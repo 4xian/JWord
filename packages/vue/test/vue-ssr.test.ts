@@ -20,6 +20,8 @@ describe('JWordVueEditor SSR', () => {
     }))
 
     expect(html).toContain('data-jword-vue="ssr"')
-    expect(html).toContain('data-jword-vue-editor="true"')
+    expect(html).toContain('data-jword-vue-host="true"')
+    expect(html).not.toContain('data-jword-vue-toolbar')
+    expect(html).not.toContain('data-jword-vue-editor')
   })
 })

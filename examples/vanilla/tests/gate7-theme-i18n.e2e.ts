@@ -7,8 +7,8 @@
 import { expect, test } from '@playwright/test'
 
 test('Gate 7 vanilla theme and i18n query path customizes public UI surface', async ({ page }) => {
-  await page.goto('/?theme=dark&i18n=en')
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.goto('/test-fixture.html?theme=dark&i18n=en')
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
 
   const toolbar = page.locator('[data-jword-toolbar="true"]')
 
@@ -16,7 +16,9 @@ test('Gate 7 vanilla theme and i18n query path customizes public UI surface', as
   await expect(toolbar).toHaveAttribute('aria-label', 'JWord editing toolbar')
   await expect(toolbar).toHaveAttribute('lang', 'en-US')
   await expect(toolbar.getByRole('button', { name: 'Bold' })).toBeVisible()
+  await toolbar.getByRole('tab', { name: 'Insert' }).click()
   await expect(toolbar.getByRole('button', { name: 'Image' })).toBeVisible()
+  await toolbar.getByRole('tab', { name: 'Table' }).click()
   await expect(toolbar.getByRole('button', { name: 'Table' })).toBeVisible()
   await expect(toolbar).toHaveCSS('color', 'rgb(250, 250, 250)')
 })

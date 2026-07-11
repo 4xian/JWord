@@ -10,7 +10,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { expectNoSeriousAxeViolations } from '../../../tests/e2e/a11y-axe'
 
 test('Gate 4 表格、批注和查找替换没有 serious/critical axe violation', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForA11yDemoReady(page)
 
   await expectNoSeriousAxeViolations(page, {
@@ -42,7 +42,7 @@ test('Gate 4 表格、批注和查找替换没有 serious/critical axe violation
 })
 
 test('Gate 4 键盘 smoke 可到达表格、批注和查找替换关键控件', async ({ page, browserName }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForA11yDemoReady(page)
 
   const tableTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
@@ -93,7 +93,7 @@ async function pressForwardTab(page: Page, browserName: string): Promise<void> {
 
 /** 等待 vanilla demo 的编辑器、toolbar 和 Gate 4 控件完成挂载。 */
 async function waitForA11yDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('.jw-demo')).toBeVisible()
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
   await expect(page.locator('[data-jword-table-toolbar="true"]')).toBeVisible()
@@ -111,7 +111,7 @@ async function openTableCustomSizeDialog(page: Page): Promise<void> {
 /** 通过公开 demo hook 选中文本并打开批注草稿。 */
 async function openCommentDraft(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const section = demo?.editor.getProjection().document.sections[0]
     const block = section?.blocks[0]
     const run = block?.kind === 'paragraph' ? block.runs[0] : undefined
@@ -135,7 +135,7 @@ async function openCommentDraft(page: Page): Promise<void> {
 /** 通过公开 demo hook 建立批注键盘 smoke 需要的正文选区。 */
 async function selectTextForCommentKeyboardSmoke(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const section = demo?.editor.getProjection().document.sections[0]
     const block = section?.blocks[0]
     const run = block?.kind === 'paragraph' ? block.runs[0] : undefined

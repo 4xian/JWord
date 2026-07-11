@@ -7,64 +7,7 @@
     <title>Vanilla Demo</title>
   </head>
   <body>
-    <main class="jw-demo">
-      <section class="jw-demo__workspace" aria-label="JWord vanilla demo workspace">
-        <section class="jw-demo__toolbar-zone" aria-label="JWord official toolbar area">
-          <div id="jword-toolbar"></div>
-        </section>
-        <!-- <section
-          id="jword-demo-controls"
-          class="jw-demo__demo-controls"
-          aria-label="JWord demo controls area"
-        >
-          <button
-            type="button"
-            class="jw-demo__demo-button jw-demo__demo-button--accent"
-            data-jword-load-alpha="true"
-          >
-            加载 Alpha 样例
-          </button>
-          <button type="button" class="jw-demo__demo-button" data-jword-restore-gate2="true">
-            恢复 Gate 2 夹具
-          </button>
-          <button
-            type="button"
-            class="jw-demo__demo-button jw-demo__demo-button--primary"
-            data-jword-select-sample="true"
-          >
-            选择首页片段
-          </button>
-          <button type="button" class="jw-demo__demo-button" data-jword-clear-selection="true">
-            清除选区
-          </button>
-          <button type="button" class="jw-demo__demo-button" data-jword-open-readonly-example="true">
-            打开只读示例
-          </button>
-          <button type="button" class="jw-demo__demo-button" data-jword-native-save="true">
-            保存 .jword
-          </button>
-          <button type="button" class="jw-demo__demo-button" data-jword-native-open-button="true">
-            打开 .jword
-          </button>
-          <input
-            type="file"
-            class="jw-demo__native-file"
-            data-jword-native-file="true"
-            accept=".jword,application/vnd.jword"
-            aria-label="选择 .jword 文件"
-          />
-          <span class="jw-demo__native-status" data-jword-native-status="true" aria-live="polite"></span>
-          <span class="jw-demo__native-warnings" data-jword-native-warnings="true" aria-live="polite"></span>
-        </section> -->
-        <section class="jw-demo__editor-shell" aria-label="JWord editor area">
-          <div id="jword-editor" class="jw-demo__editor-host" aria-label="JWord editor canvas host"></div>
-        </section>
-        <!-- <section class="jw-demo__assistive-zone" aria-label="JWord assistive and status area">
-          <p id="jword-status" class="jw-demo__status" aria-live="polite">Mounting editor...</p>
-          <div id="jword-assistive-mirror"></div>
-        </section> -->
-      </section>
-    </main>
+    <div id="jword" aria-label="JWord editor"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -66,27 +66,27 @@ async function measureMountDestroy(
   page: Page,
   cdp: CDPSession
 ): Promise<Readonly<{ heapDeltaBytes: number, domNodesDelta: number, listenerDelta: number }>> {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.evaluate(() => {
-    window.__jwordDemo?.destroy()
+    window.__jwordTestFixture?.destroy()
   })
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(0)
   await collectGarbage(cdp)
 
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.evaluate(() => {
-    window.__jwordDemo?.destroy()
+    window.__jwordTestFixture?.destroy()
   })
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(0)
   const baseline = await collectBrowserMemorySnapshot(cdp)
 
   for (let index = 0; index < mountDestroyCycleCount; index += 1) {
-    await page.goto('/')
+    await page.goto('/test-fixture.html')
     await waitForDemoReady(page)
     await page.evaluate(() => {
-      window.__jwordDemo?.destroy()
+      window.__jwordTestFixture?.destroy()
     })
     await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(0)
     await collectGarbage(cdp)
@@ -111,7 +111,7 @@ async function measureLongScroll(
   peakCanvasBytes: number
   finalMountedCanvasCount: number
 }>> {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate2Ready(page)
   await collectGarbage(cdp)
   const baseline = await collectBrowserMemorySnapshot(cdp)
@@ -142,7 +142,7 @@ async function measureLongScroll(
 
 /** 等待 demo 测试钩子与编辑器输入层完成挂载。 */
 async function waitForDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
 }
 

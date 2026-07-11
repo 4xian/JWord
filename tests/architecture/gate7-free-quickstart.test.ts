@@ -22,8 +22,9 @@ const requiredQuickstartText = [
   "from '@4xian/jword-core'",
   "from '@4xian/jword-ui'",
   "from '@4xian/jword-native'",
-  'createEditor',
-  'createJWordUi',
+  'createJWord',
+  'host',
+  'jword.destroy()',
   'saveJWordDocument',
   'loadJWordDocument',
   '继续编辑',
@@ -41,7 +42,9 @@ const forbiddenQuickstartText = [
   "from '@4xian/jword-collab'",
   "from '@4xian/jword-license'",
   "from 'yjs'",
-  "from '@hocuspocus/server'"
+  "from '@hocuspocus/server'",
+  'editor.mount(',
+  'createJWordUi({'
 ]
 
 describe('Gate 7 free quickstart', () => {
@@ -74,6 +77,8 @@ describe('Gate 7 free quickstart', () => {
       "from '@4xian/jword-core'",
       "from '@4xian/jword-ui'",
       "from '@4xian/jword-native'",
+      'createJWord',
+      'JWordEditorShell',
       'saveJWordDocument',
       'loadJWordDocument',
       'continueEditingAfterOpen',

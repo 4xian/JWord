@@ -21,8 +21,8 @@ import {
 } from './gate3-input-helpers'
 
 test('Gate 3 runtime seeds the first focus caret at the document tail by default', async ({ page }) => {
-  await page.goto('/')
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.goto('/test-fixture.html')
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
 
   await expect.poll(() => readInitialFocusProbe(page)).toMatchObject({
@@ -31,7 +31,7 @@ test('Gate 3 runtime seeds the first focus caret at the document tail by default
 })
 
 test('Gate 3 runtime keyboard input updates projection, selection and undo/redo state', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3AlphaReady(page)
   await collapseSelectionAtRunStart(page, {
     sectionId: 'section-1',
@@ -71,7 +71,7 @@ test('Gate 3 runtime keyboard input updates projection, selection and undo/redo 
 })
 
 test('Gate 3 runtime keeps long English caret aligned with rendered canvas text', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3AlphaReady(page)
   await collapseSelectionAtRunStart(page, {
     sectionId: 'section-1',
@@ -94,7 +94,7 @@ test('Gate 3 runtime keeps long English caret aligned with rendered canvas text'
 })
 
 test('Gate 3 runtime keeps keyboard Enter and select-all working after clicking page whitespace', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3LargeFixtureReady(page)
 
   const whitespacePoint = await readClientPointForPageWhitespace(page, 0)
@@ -116,7 +116,7 @@ test('Gate 3 runtime keeps keyboard Enter and select-all working after clicking 
 })
 
 test('Gate 3 selector contract stays explicit for later toolbar integration', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate3AlphaReady(page)
   await selectRange(page, {
     sectionId: 'section-1',

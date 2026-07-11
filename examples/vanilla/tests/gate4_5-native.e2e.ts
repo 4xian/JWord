@@ -2,26 +2,26 @@
  * @fileoverview 职责: 用真实浏览器锁定 Gate 4.5 vanilla 原生 .jword 保存/打开宿主入口。
  * 边界: 只验证第三方宿主 UI、首屏 lazy 边界和编辑器可继续输入，不覆盖 native 包内部 zip 语义。
  * 协作: examples/vanilla/src/main.ts、demo-native bridge、@4xian/jword-native 公开 API。
- * 约束: 断言来自真实 DOM、网络请求和 window.__jwordDemo 钩子，不能读取 packages/native/src。
+ * 约束: 断言来自真实 DOM、网络请求和 window.__jwordTestFixture 钩子，不能读取 packages/native/src。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test, type Page } from '@playwright/test'
 
 test('Gate 4.5 native controls save and reopen through the lazy public runtime', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
 
   await expect(page.locator('[data-jword-native-save="true"]')).toBeVisible()
   await expect(page.locator('[data-jword-native-open-button="true"]')).toBeVisible()
   await expect(page.locator('[data-jword-native-file="true"]')).toHaveAttribute('accept', '.jword,application/vnd.jword')
   await expect(page.locator('[data-jword-native-status="true"]')).toContainText('原生保存/打开就绪')
-  await expect.poll(() => page.evaluate(() => window.__jwordDemo?.native.readRuntimeLoaded() ?? true)).toBe(false)
+  await expect.poll(() => page.evaluate(() => window.__jwordTestFixture?.native.readRuntimeLoaded() ?? true)).toBe(false)
 
   await page.keyboard.type('GATE45_EDIT_PROOF')
 
   await expect.poll(() => readEditorText(page)).toContain('GATE45_EDIT_PROOF')
 
   const firstRoundtrip = await page.evaluate(async () => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const fileInput = document.querySelector<HTMLInputElement>('[data-jword-native-file="true"]')
 
     if (demo === undefined || fileInput === null) {
@@ -64,20 +64,20 @@ test('Gate 4.5 native controls save and reopen through the lazy public runtime',
   })
   expect(firstRoundtrip.savedSize).toBeGreaterThan(0)
   expect(firstRoundtrip.status).toContain('.jword 打开完成')
-  await expect.poll(() => page.evaluate(() => window.__jwordDemo?.native.readRuntimeLoaded() ?? false)).toBe(true)
+  await expect.poll(() => page.evaluate(() => window.__jwordTestFixture?.native.readRuntimeLoaded() ?? false)).toBe(true)
   await expect.poll(() => readEditorText(page)).toContain('GATE45_EDIT_PROOF')
 
-  await page.evaluate(() => window.__jwordDemo?.editor.focus())
+  await page.evaluate(() => window.__jwordTestFixture?.editor.focus())
   await page.keyboard.type('AFTER_OPEN_EDIT')
 
   await expect.poll(() => readEditorText(page)).toContain('AFTER_OPEN_EDIT')
 
   const secondSave = await page.evaluate(async () => {
-    const blob = await window.__jwordDemo?.native.save()
+    const blob = await window.__jwordTestFixture?.native.save()
 
     return {
       savedSize: blob?.size ?? 0,
-      status: window.__jwordDemo?.native.readStatus() ?? ''
+      status: window.__jwordTestFixture?.native.readStatus() ?? ''
     }
   })
 
@@ -86,11 +86,11 @@ test('Gate 4.5 native controls save and reopen through the lazy public runtime',
 })
 
 test('Gate 4.5 native save keeps uploaded file image resources across reopen', async ({ page }) => {
-  await page.goto('/')
-  await page.waitForFunction(() => window.__jwordDemo?.media !== undefined)
+  await page.goto('/test-fixture.html')
+  await page.waitForFunction(() => window.__jwordTestFixture?.media !== undefined)
   await page.locator('[data-jword-media-trigger="true"]').click()
   await page.locator('[data-jword-media-file-input="true"]').setInputFiles('fixtures/gate4/media-inline.svg')
-  await expect.poll(() => page.evaluate(() => window.__jwordDemo?.media.readUploadLog().length ?? 0)).toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__jwordTestFixture?.media.readUploadLog().length ?? 0)).toBe(1)
 
   const beforeSave = await readFirstImageResource(page)
 
@@ -100,7 +100,7 @@ test('Gate 4.5 native save keeps uploaded file image resources across reopen', a
   })
 
   const roundtrip = await page.evaluate(async () => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const fileInput = document.querySelector<HTMLInputElement>('[data-jword-native-file="true"]')
 
     if (demo === undefined || fileInput === null) {
@@ -144,7 +144,7 @@ test('Gate 4.5 native save keeps uploaded file image resources across reopen', a
 /** 读取当前编辑器 projection 中的正文文本。 */
 function readEditorText(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const documentModel = window.__jwordDemo?.editor.getProjection().document
+    const documentModel = window.__jwordTestFixture?.editor.getProjection().document
 
     if (documentModel === undefined) {
       return ''
@@ -171,7 +171,7 @@ function readFirstImageResource(page: Page): Promise<{
   readonly status: string
 } | null> {
   return page.evaluate(() => {
-    const documentModel = window.__jwordDemo?.editor.getProjection().document
+    const documentModel = window.__jwordTestFixture?.editor.getProjection().document
     const image = documentModel?.sections
       .flatMap((section) => section.blocks)
       .filter((block) => block.kind === 'paragraph')

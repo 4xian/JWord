@@ -18,7 +18,7 @@ import {
 test.describe.configure({ mode: 'serial' })
 
 test('Gate 3 toolbar renders real controls and mirrors current selection state', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
 
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()

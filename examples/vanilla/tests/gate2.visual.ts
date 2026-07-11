@@ -29,7 +29,7 @@ interface MountedWindowProbe {
 }
 
 test('Gate 2 demo paints first, middle, and last fixture pages on real canvases', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate2FixtureLayout(page)
 
   const { firstPageIndex, lastPageIndex, pageCount } = await readFixturePageBounds(page)
@@ -68,7 +68,7 @@ test('Gate 2 demo paints first, middle, and last fixture pages on real canvases'
 })
 
 test('Gate 2 demo paints only the mounted middle-window pages after scrolling the 50-page fixture', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate2FixtureLayout(page)
 
   const expectedPageCount = await readFixturePageCount(page)
@@ -113,7 +113,7 @@ test('Gate 2 remediation visual baseline renders justify text and row-split tabl
     width: 1100,
     height: 900
   })
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate2FixtureLayout(page)
   await loadGate2RemediationVisualDocument(page)
 
@@ -136,7 +136,7 @@ test('Gate 2 remediation visual baseline renders justify text and row-split tabl
 async function waitForGate2FixtureLayout(page: Page): Promise<void> {
   await expect.poll(async () => {
     return page.evaluate(() => {
-      return window.__jwordDemo?.editor.getLayout().pages.length ?? 0
+      return window.__jwordTestFixture?.editor.getLayout().pages.length ?? 0
     })
   }).toBeGreaterThan(0)
 }
@@ -147,7 +147,7 @@ async function readFixturePageBounds(page: Page): Promise<Readonly<{
   pageCount: number
 }>> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const pages = demo?.editor.getLayout().pages
 
     if (demo === undefined || pages === undefined || pages.length === 0) {
@@ -172,7 +172,7 @@ async function readFixturePageBounds(page: Page): Promise<Readonly<{
 /** 读取当前 demo layout 的页数，避免浏览器测试重复固化 draw-call baseline。 */
 async function readFixturePageCount(page: Page): Promise<number> {
   return page.evaluate(() => {
-    const pages = window.__jwordDemo?.editor.getLayout().pages
+    const pages = window.__jwordTestFixture?.editor.getLayout().pages
 
     if (pages === undefined || pages.length === 0) {
       throw new Error('缺少 Gate 2 fixture 页布局数据')
@@ -198,7 +198,7 @@ async function scrollToRatio(page: Page, ratio: number): Promise<void> {
 
   await expect.poll(async () => {
     return page.evaluate((targetRatio) => {
-      const demo = window.__jwordDemo
+      const demo = window.__jwordTestFixture
       const pageCount = demo?.editor.getLayout().pages.length ?? 0
       const mountedPageIndexes = [...document.querySelectorAll<HTMLElement>('[data-jword-page]')]
         .filter((element) => element.querySelector('canvas') !== null)
@@ -264,7 +264,7 @@ async function readMountedMedianPageIndex(page: Page): Promise<number> {
 
 async function readMountedWindowProbe(page: Page): Promise<MountedWindowProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 2 visual 所需的 demo 测试钩子')
@@ -307,7 +307,7 @@ async function readMountedWindowProbe(page: Page): Promise<MountedWindowProbe> {
 /** 加载同时覆盖 justify 与跨页表格的视觉修复夹具。 */
 async function loadGate2RemediationVisualDocument(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 2 remediation visual 所需的 demo 测试钩子')
@@ -402,7 +402,7 @@ async function loadGate2RemediationVisualDocument(page: Page): Promise<void> {
 
   await expect.poll(async () => {
     return page.evaluate(() => {
-      const layout = window.__jwordDemo?.editor.getLayout()
+      const layout = window.__jwordTestFixture?.editor.getLayout()
       const tableBoxes = layout?.pages.flatMap((pageBox) =>
         pageBox.blocks.filter((block) => block.kind === 'table')
       ) ?? []
@@ -425,7 +425,7 @@ async function readGate2RemediationProbe(page: Page): Promise<Readonly<{
   const secondPagePixels = await samplePagePixels(page, 1)
 
   return page.evaluate((nonWhitePixels) => {
-    const layout = window.__jwordDemo?.editor.getLayout()
+    const layout = window.__jwordTestFixture?.editor.getLayout()
     const firstPage = layout?.pages[0]
     const firstLine = firstPage?.lines.find((line) => line.paragraphId === 'gate2-remediation-justify-paragraph')
     const lastFragment = firstLine?.fragments.at(-1)

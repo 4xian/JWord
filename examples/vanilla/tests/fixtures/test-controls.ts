@@ -1,15 +1,15 @@
 /**
  * 职责：承接 vanilla demo 的场景控件、Alpha / Gate2 样例切换与测试辅助选区钩子。
  * 边界：不实现官方 toolbar、assistive mirror 或格式同步；这里只处理 demo-only 行为。
- * 协作模块：`@4xian/jword-core` Editor facade、fixtures/plain-text 与 `window.__jwordDemo` 测试钩子。
+ * 协作模块：`@4xian/jword-core` Editor facade、fixtures/plain-text 与 `window.__jwordTestFixture` 测试钩子。
  * 性能/安全约束：避免在 demo-only 控件里访问 core 私有状态；只通过公开 facade 读写文档与选区。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
-import { createGate2FixtureEditorText } from '../../../fixtures/plain-text/gate2-fixture.mjs'
+import { createGate2FixtureEditorText } from '../../../../fixtures/plain-text/gate2-fixture.mjs'
 
 import type { Editor, RangeRef, SelectionState } from '@4xian/jword-core'
 
-import type { JWordDemoSelectionInput } from './vite-env'
+import type { JWordDemoSelectionInput } from './test-fixture-env'
 
 interface CreateDemoControlsOptions {
   readonly editor: Editor
@@ -242,7 +242,7 @@ async function restoreGate2Fixture(input: CreateDemoControlsOptions): Promise<vo
 }
 
 /**
- * 职责：通过公开 text anchor API 建立测试用选区，保留 `window.__jwordDemo.selectTextRange(...)` 契约。
+ * 职责：通过公开 text anchor API 建立测试用选区，保留 `window.__jwordTestFixture.selectTextRange(...)` 契约。
  */
 function selectTextRange(editor: Editor, input: JWordDemoSelectionInput): SelectionState {
   const anchor = editor.createTextAnchor({
@@ -327,7 +327,7 @@ function createAlphaDemoText(): string {
  * 职责：按原始 raw fixture 路径读取 Gate 2 文本，保持现有 fixture 契约。
  */
 async function loadGate2FixtureText(): Promise<string> {
-  const fixture = await import('../../../fixtures/plain-text/gate2-50-pages.txt?raw')
+  const fixture = await import('../../../../fixtures/plain-text/gate2-50-pages.txt?raw')
 
   return fixture.default
 }

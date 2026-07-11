@@ -483,6 +483,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorFormattingFaca
     })
   }
 
+  /** 同步输入焦点状态，并仅在获得焦点时恢复折叠光标可见性。 */
   protected updateInputFocusState(nextFocused: boolean): void {
     if (this.isInputFocused === nextFocused) {
       return
@@ -492,7 +493,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorFormattingFaca
     this.syncCaretBlinkState()
 
     if (this.currentSelection !== null) {
-      this.renderMountedLayout('selection')
+      this.renderMountedLayout('selection', nextFocused)
     }
   }
 

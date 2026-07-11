@@ -59,7 +59,7 @@ interface MountedViewportProbe {
 const expectedGate2PageCount = 67
 
 test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
 
   const container = page.locator('[data-jword-canvas-container]')
 
@@ -88,7 +88,7 @@ test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', asy
 })
 
 test('Gate 2 demo keeps mounted page geometry and debug overlay aligned on the 50-page fixture', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
 
   const container = page.locator('[data-jword-canvas-container]')
 
@@ -132,7 +132,7 @@ test('Gate 2 demo keeps mounted page geometry and debug overlay aligned on the 5
 
 async function readDemoProbe(page: Page): Promise<DemoProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 2 demo 测试钩子')
@@ -182,7 +182,7 @@ async function scrollToRatio(page: Page, ratio: number): Promise<void> {
 
   await expect.poll(async () => {
     return page.evaluate((targetRatio) => {
-      const pageCount = window.__jwordDemo?.editor.getLayout().pages.length ?? 0
+      const pageCount = window.__jwordTestFixture?.editor.getLayout().pages.length ?? 0
       const mountedPageIndexes = [...document.querySelectorAll<HTMLElement>('[data-jword-page]')]
         .filter((element) => element.querySelector('canvas') !== null)
         .map((element) => Number(element.getAttribute('data-jword-page')))
@@ -210,7 +210,7 @@ async function scrollToRatio(page: Page, ratio: number): Promise<void> {
 
 async function readMountedViewportProbe(page: Page): Promise<MountedViewportProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 2 demo 测试钩子')

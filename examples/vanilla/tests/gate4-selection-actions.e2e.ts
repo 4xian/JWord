@@ -1,7 +1,7 @@
 /**
  * @fileoverview 职责: 用真实浏览器验证 Gate 4 选区浮动工具栏、右键菜单、快捷键和失焦收起路径。
  * 边界: 只覆盖 selection-actions 与 vanilla demo 的公开协作，不验证图片 overlay、系统剪贴板权限或后续批注/链接闭环。
- * 协作: examples/vanilla/src/main.ts、window.__jwordDemo、packages/ui/src/selection-actions/* 与 core Editor facade。
+ * 协作: examples/vanilla/src/main.ts、window.__jwordTestFixture、packages/ui/src/selection-actions/* 与 core Editor facade。
  * 约束: 断言来自真实 DOM 和公开 facade，不读取 controller 私有状态。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
@@ -19,7 +19,7 @@ interface TextSelectionTarget {
 test.describe.configure({ mode: 'serial' })
 
 test('Gate 4 selection actions appear immediately after middle pointer drag on alpha text and keep bold color working', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForSelectionActionDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
@@ -49,7 +49,7 @@ test('Gate 4 selection actions appear immediately after middle pointer drag on a
 })
 
 test('Gate 4 selection actions keep color controls open on first direct color click', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForSelectionActionDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
@@ -82,7 +82,7 @@ test('Gate 4 selection actions keep color controls open on first direct color cl
 })
 
 test('Gate 4 selection actions reuse toolbar color state for text and background colors', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForSelectionActionDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
@@ -118,7 +118,7 @@ test('Gate 4 selection actions reuse toolbar color state for text and background
 })
 
 test('Gate 4 selection actions keep final text and background colors after preview and editor refocus', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForSelectionActionDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
@@ -152,7 +152,7 @@ test('Gate 4 selection actions keep final text and background colors after previ
 })
 
 test('Gate 4 selection actions show hide rebind and handle shortcut plus context clear', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForSelectionActionDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
@@ -222,7 +222,7 @@ test('Gate 4 selection actions show hide rebind and handle shortcut plus context
 
 /** 等待 demo、toolbar 和 selection actions DOM 都完成挂载。 */
 async function waitForSelectionActionDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
   await expect(page.locator('[data-jword-floating-toolbar="true"]')).toHaveCount(1)
   await expect(page.locator('[data-jword-context-menu="true"]')).toHaveCount(1)
@@ -235,7 +235,7 @@ async function readTextSelectionTarget(
   focusGraphemeIndex: number
 ): Promise<TextSelectionTarget> {
   return page.evaluate((input) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 4 demo 测试钩子')
@@ -279,7 +279,7 @@ async function readTextSelectionTarget(
 /** 通过公开 demo hook 选择一段文本。 */
 async function selectTextRange(page: Page, selection: TextSelectionTarget): Promise<void> {
   await page.evaluate((selectionInput) => {
-    window.__jwordDemo?.selectTextRange(selectionInput)
+    window.__jwordTestFixture?.selectTextRange(selectionInput)
   }, selection)
 }
 
@@ -293,7 +293,7 @@ async function readClientPointForGrapheme(
   clientY: number
 }>> {
   return page.evaluate(({ targetGraphemeIndex, targetPageIndex }) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const layout = demo?.editor.getLayout()
     const pageBox = layout?.pages[targetPageIndex]
     const wrapper = document.querySelector<HTMLElement>(`[data-jword-page="${targetPageIndex}"]`)
@@ -347,7 +347,7 @@ async function readClientPointForGrapheme(
 /** 读取当前 editor 选区的 grapheme 范围，避免依赖 demo 调试摘要是否展示。 */
 async function readCurrentSelectionRange(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const editor = window.__jwordDemo?.editor
+    const editor = window.__jwordTestFixture?.editor
     const selection = editor?.getSelection()
 
     if (editor === undefined || selection === undefined || selection === null) {
@@ -375,7 +375,7 @@ async function rightClickEditor(page: Page): Promise<void> {
 /** 读取当前选区 underline 状态。 */
 async function readSelectionUnderline(page: Page): Promise<boolean | null> {
   return page.evaluate(() => {
-    const underline = window.__jwordDemo?.editor.getSelectionFormattingState().run?.underline
+    const underline = window.__jwordTestFixture?.editor.getSelectionFormattingState().run?.underline
 
     return underline === undefined || underline.mixed ? null : underline.value === true
   })
@@ -384,7 +384,7 @@ async function readSelectionUnderline(page: Page): Promise<boolean | null> {
 /** 读取当前选区 bold 状态。 */
 async function readSelectionBold(page: Page): Promise<boolean | null> {
   return page.evaluate(() => {
-    const bold = window.__jwordDemo?.editor.getSelectionFormattingState().run?.bold
+    const bold = window.__jwordTestFixture?.editor.getSelectionFormattingState().run?.bold
 
     return bold === undefined || bold.mixed ? null : bold.value === true
   })
@@ -393,7 +393,7 @@ async function readSelectionBold(page: Page): Promise<boolean | null> {
 /** 读取当前选区文字颜色。 */
 async function readSelectionTextColor(page: Page): Promise<string | null> {
   return page.evaluate(() => {
-    const color = window.__jwordDemo?.editor.getSelectionFormattingState().run?.color
+    const color = window.__jwordTestFixture?.editor.getSelectionFormattingState().run?.color
 
     return color === undefined || color.mixed ? null : color.value?.toLowerCase() ?? null
   })
@@ -402,7 +402,7 @@ async function readSelectionTextColor(page: Page): Promise<string | null> {
 /** 读取当前选区背景色。 */
 async function readSelectionBackgroundColor(page: Page): Promise<string | null> {
   return page.evaluate(() => {
-    const color = window.__jwordDemo?.editor.getSelectionFormattingState().run?.backgroundColor
+    const color = window.__jwordTestFixture?.editor.getSelectionFormattingState().run?.backgroundColor
 
     return color === undefined || color.mixed ? null : color.value?.toLowerCase() ?? null
   })
@@ -411,7 +411,7 @@ async function readSelectionBackgroundColor(page: Page): Promise<string | null> 
 /** 读取首个渲染 fragment 的样式，确认颜色最终进入内容区布局。 */
 async function readFirstRenderedFragmentStyle(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
-    const fragment = window.__jwordDemo?.editor.getLayout().pages[0]?.lines[0]?.fragments[0]
+    const fragment = window.__jwordTestFixture?.editor.getLayout().pages[0]?.lines[0]?.fragments[0]
 
     if (fragment === undefined) {
       throw new Error('缺少首个渲染片段')

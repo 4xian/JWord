@@ -25,7 +25,7 @@ describe('createJWordUi revisions integration', () => {
 
     try {
       expect(harness.ui.elements.revisionsPanel).not.toBeNull()
-      expect(harness.toolbarHost.querySelector('[data-jword-revisions-panel]')).not.toBeNull()
+      expect(harness.revisionsHost.querySelector('[data-jword-revisions-panel]')).not.toBeNull()
       expect(harness.ui.elements.revisionsPanel!.root.textContent).toContain('修订记录')
 
       const revisionSelection = createSelection(harness.editor, 1, 4)
@@ -45,7 +45,7 @@ describe('createJWordUi revisions integration', () => {
       harness.editor.setSelection(createSelection(harness.editor, 0, 0))
       harness.ui.refresh()
 
-      const item = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-revision-item]')
+      const item = harness.revisionsHost.querySelector<HTMLButtonElement>('[data-jword-revision-item]')
 
       expect(item).not.toBeNull()
       expect(item?.textContent).toContain('格式')
@@ -58,7 +58,7 @@ describe('createJWordUi revisions integration', () => {
 
       harness.ui.destroy()
 
-      expect(harness.toolbarHost.querySelector('[data-jword-revisions-panel]')).toBeNull()
+      expect(harness.revisionsHost.querySelector('[data-jword-revisions-panel]')).toBeNull()
     } finally {
       harness.destroy()
     }
@@ -85,7 +85,7 @@ describe('createJWordUi revisions integration', () => {
         harness.editor.executeCommand(command!, { selectionAfter: revisionSelection })
         harness.ui.refresh()
 
-        const button = harness.toolbarHost.querySelector<HTMLButtonElement>(`[data-jword-revision-${action}]`)
+        const button = harness.revisionsHost.querySelector<HTMLButtonElement>(`[data-jword-revision-${action}]`)
 
         expect(button).not.toBeNull()
 

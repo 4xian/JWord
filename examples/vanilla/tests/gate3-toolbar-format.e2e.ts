@@ -27,7 +27,7 @@ import {
 test.describe.configure({ mode: 'serial' })
 
 test('Gate 3 toolbar toggles current run bold and supports undo redo', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
@@ -73,7 +73,7 @@ test('Gate 3 toolbar toggles current run bold and supports undo redo', async ({ 
 
 
 test('Gate 3 toolbar reflects facade-driven selection updates without relying on toolbar handlers', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
 
@@ -81,7 +81,7 @@ test('Gate 3 toolbar reflects facade-driven selection updates without relying on
   await expect(readOfficialToolbar(page).getByRole('button', { name: '加粗' })).toBeEnabled()
 
   await page.evaluate(() => {
-    window.__jwordDemo?.editor.setSelection(null)
+    window.__jwordTestFixture?.editor.setSelection(null)
   })
 
   await expect(readOfficialToolbar(page).getByRole('button', { name: '加粗' })).toBeDisabled()
@@ -89,7 +89,7 @@ test('Gate 3 toolbar reflects facade-driven selection updates without relying on
 
 
 test('Gate 3 toolbar supports cross-run formatting through facade command builders', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
@@ -113,7 +113,7 @@ test('Gate 3 toolbar supports cross-run formatting through facade command builde
 
 
 test('Gate 3 toolbar applies the remaining run formatting matrix through real browser controls', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
@@ -209,7 +209,7 @@ test('Gate 3 toolbar applies the remaining run formatting matrix through real br
 
 
 test('Gate 3 toolbar color picker keeps applying to the selection captured when the control was opened', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
@@ -246,7 +246,7 @@ test('Gate 3 toolbar color picker keeps applying to the selection captured when 
 
 
 test('Gate 3 toolbar color picker accepts repeated palette and hue-strip changes without reverting to defaults', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()
@@ -266,7 +266,7 @@ test('Gate 3 toolbar color picker accepts repeated palette and hue-strip changes
 
 
 test('Gate 3 toolbar color picker keeps the same frozen selection across repeated native picker changes', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForDemoReady(page)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.getByRole('button', { name: '选择首页片段' }).click()

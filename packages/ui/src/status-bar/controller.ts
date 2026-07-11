@@ -393,7 +393,9 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
 
   /** 启动版权 DOM 防篡改监听。 */
   function bindBrandProtection(): () => void {
-    if (brandProtection === 'hidden' || !(dom.controls.brand instanceof HTMLElement)) {
+    const HTMLElementCtor = options.host.ownerDocument.defaultView?.HTMLElement
+
+    if (brandProtection === 'hidden' || HTMLElementCtor === undefined || !(dom.controls.brand instanceof HTMLElementCtor)) {
       return () => {}
     }
 
@@ -407,7 +409,7 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
 
       const brand = dom.controls.brand
 
-      if (!(brand instanceof HTMLElement) || !isBrandTampered(brand, brandLabel, dom.left)) {
+      if (!(brand instanceof HTMLElementCtor) || !isBrandTampered(brand, brandLabel, dom.left)) {
         return
       }
 
@@ -478,7 +480,7 @@ function readStatusBarBrandLabel(
     return ''
   }
 
-  return brand?.label ?? readJWordUiText(i18n, 'statusBar.brand.label', 'JWord')
+  return brand?.label ?? readJWordUiText(i18n, 'statusBar.brand.label', '@JWord')
 }
 
 /** 判断品牌节点是否被删除、隐藏或改写。 */

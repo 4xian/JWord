@@ -8,7 +8,6 @@
 
 import * as React from 'react'
 import {
-  createEditor,
   type Editor,
   type EditorDocumentInput,
   type EditorDocumentModelInput,
@@ -16,7 +15,11 @@ import {
   type EditorOptions,
   type JWordDiagnosticsSnapshot
 } from '@4xian/jword-core'
-import { createJWordUi, type CreateJWordUiOptions, type JWordUiInstance } from '@4xian/jword-ui'
+import {
+  createJWord,
+  type JWordEditorShell,
+  type JWordEditorShellUiOptions
+} from '@4xian/jword-ui'
 
 export type JWordReactTransactionEvent = Extract<EditorEvent, { readonly kind: 'transaction' }>['transaction']
 export type JWordReactSelectionChangeEvent = Extract<EditorEvent, { readonly kind: 'selectionChange' }>
@@ -32,8 +35,8 @@ export interface JWordReactEditorProps {
   readonly value?: EditorDocumentModelInput
   /** 透传给 core createEditor 的配置；initialText/resources 由 wrapper 初始文档负责。 */
   readonly editorOptions?: Omit<EditorOptions, 'initialText' | 'resources'>
-  /** 透传给 createJWordUi 的配置；DOM 宿主由 wrapper 管理。 */
-  readonly uiOptions?: Omit<CreateJWordUiOptions, 'editor' | 'editorHost' | 'toolbarHost' | 'liveRegionHost' | 'assistiveMirrorHost'>
+  /** 透传给 EditorShell 的 UI 配置；DOM 宿主由 wrapper 管理。 */
+  readonly uiOptions?: JWordEditorShellUiOptions
   /** wrapper 根节点 className。 */
   readonly className?: string
   /** wrapper 根节点 style。 */
@@ -90,12 +93,8 @@ const useBrowserLayoutEffect = typeof window === 'undefined' ? React.useEffect :
 /** React wrapper 组件，负责创建 core editor、挂载 UI 并桥接事件。 */
 export const JWordReactEditor = React.forwardRef<JWordReactEditorHandle, JWordReactEditorProps>(
   function JWordReactEditorComponent(props, forwardedRef) {
-    const editorHostRef = React.useRef<HTMLDivElement | null>(null)
-    const toolbarHostRef = React.useRef<HTMLDivElement | null>(null)
-    const liveRegionHostRef = React.useRef<HTMLDivElement | null>(null)
-    const assistiveMirrorHostRef = React.useRef<HTMLDivElement | null>(null)
-    const editorRef = React.useRef<Editor | null>(null)
-    const uiRef = React.useRef<JWordUiInstance | null>(null)
+    const hostRef = React.useRef<HTMLDivElement | null>(null)
+    const shellRef = React.useRef<JWordEditorShell | null>(null)
     const unsubscribeRef = React.useRef<(() => void) | null>(null)
     const callbacksRef = React.useRef(props)
 
@@ -104,21 +103,19 @@ export const JWordReactEditor = React.forwardRef<JWordReactEditorHandle, JWordRe
     const destroyRuntime = React.useCallback(() => {
       unsubscribeRef.current?.()
       unsubscribeRef.current = null
-      uiRef.current?.destroy()
-      uiRef.current = null
-      editorRef.current?.destroy()
-      editorRef.current = null
+      shellRef.current?.destroy()
+      shellRef.current = null
     }, [])
 
     React.useImperativeHandle(forwardedRef, () => ({
       get editor() {
-        return editorRef.current
+        return shellRef.current?.editor ?? null
       },
       focus() {
-        editorRef.current?.focus()
+        shellRef.current?.editor.focus()
       },
       exportDiagnostics() {
-        return editorRef.current?.exportDiagnostics() ?? null
+        return shellRef.current?.editor.exportDiagnostics() ?? null
       },
       destroy() {
         destroyRuntime()
@@ -126,15 +123,19 @@ export const JWordReactEditor = React.forwardRef<JWordReactEditorHandle, JWordRe
     }), [destroyRuntime])
 
     useBrowserLayoutEffect(() => {
-      const editorHost = editorHostRef.current
-      const toolbarHost = toolbarHostRef.current
+      const host = hostRef.current
 
-      if (editorHost === null || toolbarHost === null) {
+      if (host === null) {
         return undefined
       }
 
       const initialDocument = props.defaultValue ?? props.initialDocument
-      const editor = createEditor(createEditorOptions(props.editorOptions, initialDocument))
+      const shell = createJWord({
+        host,
+        editor: createEditorOptions(props.editorOptions, initialDocument),
+        ui: createUiOptions(props)
+      })
+      const { editor } = shell
 
       if (props.value !== undefined) {
         editor.loadDocumentModel(props.value)
@@ -142,18 +143,7 @@ export const JWordReactEditor = React.forwardRef<JWordReactEditorHandle, JWordRe
         editor.createDocument(initialDocument)
       }
 
-      editor.mount(editorHost)
-      const ui = createJWordUi(createUiOptions({
-        editor,
-        editorHost,
-        toolbarHost,
-        liveRegionHost: liveRegionHostRef.current,
-        assistiveMirrorHost: assistiveMirrorHostRef.current,
-        props
-      }))
-
-      editorRef.current = editor
-      uiRef.current = ui
+      shellRef.current = shell
       unsubscribeRef.current = editor.subscribe((event) => {
         dispatchReactEditorEvent(event, editor, callbacksRef.current)
       })
@@ -166,7 +156,7 @@ export const JWordReactEditor = React.forwardRef<JWordReactEditorHandle, JWordRe
 
     React.useEffect(() => {
       if (props.value !== undefined) {
-        editorRef.current?.loadDocumentModel(props.value)
+        shellRef.current?.editor.loadDocumentModel(props.value)
       }
     }, [props.value])
 
@@ -175,10 +165,7 @@ export const JWordReactEditor = React.forwardRef<JWordReactEditorHandle, JWordRe
       style: props.style,
       'data-jword-react': typeof window === 'undefined' ? 'ssr' : 'client'
     },
-    React.createElement('div', { ref: toolbarHostRef, 'data-jword-react-toolbar': 'true' }),
-    React.createElement('div', { ref: editorHostRef, 'data-jword-react-editor': 'true' }),
-    React.createElement('div', { ref: liveRegionHostRef, 'data-jword-react-live-region': 'true' }),
-    React.createElement('div', { ref: assistiveMirrorHostRef, 'data-jword-react-assistive': 'true' }))
+    React.createElement('div', { ref: hostRef, 'data-jword-react-host': 'true' }))
   }
 )
 
@@ -242,24 +229,12 @@ function shouldCreateInitialDocument(input: EditorDocumentInput | undefined): in
   return input?.documentId !== undefined || input?.sectionId !== undefined
 }
 
-/** 创建 UI options，DOM 宿主由 React wrapper 管理。 */
-function createUiOptions(input: Readonly<{
-  editor: Editor
-  editorHost: HTMLElement
-  toolbarHost: HTMLElement
-  liveRegionHost: HTMLElement | null
-  assistiveMirrorHost: HTMLElement | null
-  props: JWordReactEditorProps
-}>): CreateJWordUiOptions {
-  const readonlyMode = input.props.readOnly ?? input.props.uiOptions?.readonly
+/** 创建 EditorShell UI options，并让显式 readOnly prop 保持原有优先级。 */
+function createUiOptions(props: JWordReactEditorProps): JWordEditorShellUiOptions {
+  const readonlyMode = props.readOnly ?? props.uiOptions?.readonly
 
   return {
-    ...(input.props.uiOptions ?? {}),
-    editor: input.editor,
-    editorHost: input.editorHost,
-    toolbarHost: input.toolbarHost,
-    ...(input.liveRegionHost === null ? {} : { liveRegionHost: input.liveRegionHost }),
-    ...(input.assistiveMirrorHost === null ? {} : { assistiveMirrorHost: input.assistiveMirrorHost }),
+    ...(props.uiOptions ?? {}),
     ...(readonlyMode === undefined ? {} : { readonly: readonlyMode })
   }
 }

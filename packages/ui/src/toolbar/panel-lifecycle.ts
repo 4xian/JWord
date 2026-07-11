@@ -92,7 +92,7 @@ function shouldShowExtensionInCommonMode(kind: Exclude<ToolbarExtensionHostKind,
 /** 绑定点击 toolbar 与浮层外部时关闭当前打开面板的监听。 */
 export function bindToolbarPanelDismissal(
   host: HTMLElement,
-  panelHost: HTMLElement | null,
+  panelHosts: readonly (HTMLElement | null | undefined)[],
   signal: AbortSignal
 ): void {
   const closeToolbarPanelsOnOutsideEvent = (event: Event) => {
@@ -102,7 +102,7 @@ export function bindToolbarPanelDismissal(
       return
     }
 
-    closeVisibleToolbarPanels(panelHost)
+    closeVisibleToolbarPanels(panelHosts)
   }
 
   host.ownerDocument.addEventListener('pointerdown', closeToolbarPanelsOnOutsideEvent, { signal })
@@ -196,8 +196,10 @@ function isToolbarPanelTarget(target: Node): boolean {
 }
 
 /** 关闭当前 toolbar 相关的可见面板。 */
-function closeVisibleToolbarPanels(panelHost: HTMLElement | null): void {
-  closeToolbarPanelHostChildren(panelHost)
+function closeVisibleToolbarPanels(panelHosts: readonly (HTMLElement | null | undefined)[]): void {
+  for (const panelHost of new Set(panelHosts)) {
+    closeToolbarPanelHostChildren(panelHost ?? null)
+  }
 }
 
 /** 关闭挂在 toolbar overlay host 里的面板。 */

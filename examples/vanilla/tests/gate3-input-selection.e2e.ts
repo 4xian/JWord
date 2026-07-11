@@ -17,7 +17,7 @@ import {
 } from './gate3-input-helpers'
 
 test('Gate 3 runtime pointer selection supports click drag and double click on the real canvas', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3AlphaReady(page)
 
   const clickPoint = await readClientPointForGrapheme(page, 1)
@@ -65,11 +65,11 @@ test('Gate 3 runtime pointer selection supports click drag and double click on t
 })
 
 test('Gate 3 demo keeps caret centered after punctuation and latin text', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate3AlphaReady(page)
 
   const probe = await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo caret 垂直居中测试钩子')
@@ -139,11 +139,11 @@ test('Gate 3 demo keeps caret centered after punctuation and latin text', async 
 })
 
 test('Gate 3 demo keeps soft wrapped line-end clicks on the trailing boundary', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate3AlphaReady(page)
 
   const clickPlan = await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo 行尾点击测试钩子')
@@ -188,7 +188,7 @@ test('Gate 3 demo keeps soft wrapped line-end clicks on the trailing boundary', 
   await page.mouse.click(clickPlan.clientX, clickPlan.clientY)
 
   const focus = await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection()
 
     if (demo === undefined || selection === undefined || selection === null) {
@@ -203,7 +203,7 @@ test('Gate 3 demo keeps soft wrapped line-end clicks on the trailing boundary', 
 })
 
 test('Gate 3 runtime double click expands Chinese selection by the real hit bias on the real canvas', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate3AlphaReady(page)
 
   const chineseProbes = await readAlphaChineseDoubleClickProbes(page)

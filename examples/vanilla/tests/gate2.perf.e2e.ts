@@ -1,7 +1,7 @@
 /**
  * @fileoverview 职责: 用真实 Chromium 浏览器记录 Gate 2 长文夹具的滚动与虚拟化指标。
  * 边界: 只测 examples/vanilla 已接通的 Gate 2 demo，不替代 core Node benchmark 或 Gate 3 toolbar perf。
- * 协作: data-jword-canvas-container、window.__jwordDemo 和 Playwright perf-chromium 项目。
+ * 协作: data-jword-canvas-container、window.__jwordTestFixture 和 Playwright perf-chromium 项目。
  * 约束: 指标必须来自浏览器 performance、requestAnimationFrame 和真实 canvas DOM，可附带 JSON 供复查。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
@@ -28,7 +28,7 @@ interface Gate2PerfMetrics {
 test('Gate 2 fixture exposes real browser scroll metrics and virtualization bounds', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Gate 2 浏览器性能证据当前只固定在 Chromium。')
 
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate2Ready(page)
 
   const metrics = await readGate2PerfMetrics(page)
@@ -58,7 +58,7 @@ test('Gate 2 fixture exposes real browser scroll metrics and virtualization boun
 
 async function waitForGate2Ready(page: Page): Promise<void> {
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', String(expectedGate2PageCount))
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect.poll(async () => {
     return page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)
   }).toBeGreaterThan(0)
@@ -66,7 +66,7 @@ async function waitForGate2Ready(page: Page): Promise<void> {
 
 async function readGate2PerfMetrics(page: Page): Promise<Gate2PerfMetrics> {
   return page.evaluate(async () => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
 
     if (demo === undefined || container === null) {

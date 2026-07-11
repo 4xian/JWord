@@ -35,9 +35,14 @@ import {
   DEFAULT_JWORD_UI_I18N_DICTIONARY,
   DEFAULT_JWORD_UI_THEME_TOKENS,
   createCoreMediaCommandAdapter,
+  createJWord,
   createJWordUi,
   resolveJWordUiI18n,
   type CreateJWordUiOptions,
+  type CreateJWordOptions,
+  type JWordEditorShell,
+  type JWordEditorShellSlots,
+  type JWordEditorShellUiOptions,
   type JWordToolbarPluginItem,
   type JWordUiI18nDictionary,
   type JWordUiI18nOptions,
@@ -152,6 +157,11 @@ expectType<PluginCollabProviderAdapterDescriptor>(undefined as unknown as Plugin
 expectType<ResourceAdapter>(undefined as unknown as ResourceAdapter)
 expectType<typeof JWordError>(JWordError)
 
+expectType<typeof createJWord>(createJWord)
+expectType<CreateJWordOptions>({ host: undefined as unknown as HTMLElement })
+expectType<JWordEditorShell>(undefined as unknown as JWordEditorShell)
+expectType<JWordEditorShellSlots>({ comments: undefined as unknown as HTMLElement })
+expectType<JWordEditorShellUiOptions>({ toolbar: false })
 expectType<typeof createJWordUi>(createJWordUi)
 expectType<CreateJWordUiOptions>({
   editor: undefined as unknown as Editor,

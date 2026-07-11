@@ -87,13 +87,28 @@ import { scrollTextRangeIntoView } from './ui-geometry'
 
 /** 创建并挂载最小 JWord 官方 UI。 */
 export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
+  const cleanup = createJWordUiCleanup()
+
+  try {
+    return createJWordUiRuntime(options, cleanup)
+  } catch (error) {
+    cleanup.destroy()
+    throw error
+  }
+}
+
+/** 按构造顺序装配 UI，并把每项资源立即登记到统一清理栈。 */
+function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCleanup): JWordUiInstance {
   const toolbarMount = resolveToolbarMount(options)
+  cleanup.add(toolbarMount.cleanup)
   const toolbarHost = toolbarMount.host
   const statusBarMount = resolveStatusBarMount(options)
+  cleanup.add(() => statusBarMount?.cleanup())
   const statusBarHost = statusBarMount?.host ?? null
   const liveRegion = createLiveRegion({
     host: options.liveRegionHost ?? null
   })
+  cleanup.add(liveRegion.destroy)
   const textMirror = options.assistiveMirrorHost === undefined || options.assistiveMirrorHost === null
     ? null
     : createTextMirror({
@@ -101,11 +116,14 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       readText: () => readProjectionPlainText(options.editor.getProjection()),
       shouldDeferSync: () => readMountedPageCount(options.editorHost) > 4
     })
+  cleanup.add(() => textMirror?.destroy())
   const currentUser = resolveCurrentUiUser(options)
   const commentsMount = resolveCommentsMount(options.comments, options.editorHost)
+  cleanup.add(() => commentsMount?.cleanup())
   const commentsOverlay = commentsMount === null || options.editorHost === undefined
     ? null
     : createCommentsAnchorOverlay(options.editor, options.editorHost)
+  cleanup.add(() => commentsOverlay?.destroy())
   const pendingCommentSelections = new Map<string, SelectionState>()
   let commentsHandle: CommentsControllerHandle | null = null
   let linkHandle: LinkControllerHandle | null = null
@@ -120,6 +138,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   let headingOutlineVisible = false
   let pendingLinkSelection: SelectionState | null = null
   let unsubscribeCommentsGeometry = (): void => {}
+  cleanup.add(() => unsubscribeCommentsGeometry())
   const readonlyOptions = normalizeReadonlyOptions(options.readonly)
   const toolbarEntryAvailable = options.toolbar !== false
   const readonlyEditingBlocked = readonlyOptions.enabled === true
@@ -131,9 +150,22 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   let currentLocale: JWordStatusBarLocale = normalizeStatusBarLocale(options.i18n?.locale)
   const themeController = createJWordUiThemeController({
     ...(options.theme === undefined ? {} : { theme: options.theme }),
-    hosts: [toolbarHost, options.editorHost, statusBarHost]
+    hosts: [
+      toolbarHost,
+      options.editorHost,
+      statusBarHost,
+      options.comments === true ? null : options.comments?.host,
+      options.headingOutline?.host,
+      options.link?.host,
+      options.headerFooter?.host,
+      options.findReplace?.host,
+      options.revisions?.host,
+      typeof options.statusBar === 'object' ? options.statusBar.fullscreenHost : null
+    ]
   })
+  cleanup.add(themeController.destroy)
   const watermark = createWatermarkController(options.editorHost)
+  cleanup.add(watermark.destroy)
   let statusBarHandle: StatusBarControllerHandle | null = null
 
   /** 按 i18n key 播报 UI 阻断文案。 */
@@ -312,6 +344,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       }
     }
   })
+  cleanup.add(toolbar.destroy)
   const mountedEditorHost = options.editorHost
   const interactionGuard = createJWordInteractionGuard({
     editorHost: mountedEditorHost ?? toolbarHost,
@@ -322,6 +355,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       liveRegion
     }
   })
+  cleanup.add(interactionGuard.destroy)
   const media = toolbar.mediaHost === null
     ? null
     : createMediaController({
@@ -335,6 +369,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         liveRegion
       }
     })
+  cleanup.add(() => media?.destroy())
   const table = toolbar.tableHost === null
     ? null
     : createTableController({
@@ -348,6 +383,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         liveRegion
       }
     })
+  cleanup.add(() => table?.destroy())
   const link = options.link === undefined
     ? null
     : createLinkController({
@@ -398,6 +434,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         }
       }
   })
+  cleanup.add(() => link?.destroy())
   linkHandle = link
   const editorHost = options.editorHost
   const shouldCreateHeadingOutline = options.headingOutline !== undefined
@@ -415,6 +452,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
   const headingOutlineMount = shouldCreateHeadingOutline
     ? resolveHeadingOutlineMount(options.headingOutline, editorHost, toolbarHost)
     : null
+  cleanup.add(() => headingOutlineMount?.cleanup())
   const linkOverlay = link === null || editorHost === undefined
     ? null
     : createLinkAnchorOverlay(options.editor, editorHost, (target) => {
@@ -423,17 +461,19 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       options.editor.setSelection(target.selection)
       link.toggleQuickTools(target.draft)
     })
+  cleanup.add(() => linkOverlay?.destroy())
   const headerFooter = !shouldCreateHeaderFooter || options.headerFooter === undefined
     ? null
     : createHeaderFooterController({
       editor: options.editor,
-      host: toolbar.panelHost ?? options.headerFooter.host ?? toolbarHost,
+      host: options.headerFooter.host ?? toolbar.panelHost ?? toolbarHost,
       readonly: options.readonly,
       i18n,
       announce(message): void {
         liveRegion.announce(message)
       }
     })
+  cleanup.add(() => headerFooter?.destroy())
   headerFooterHandle = headerFooter === null
     ? null
     : {
@@ -452,11 +492,13 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     : createHeadingOutlineController({
       editor: options.editor,
       host: headingOutlineMount.host,
+      ...(options.editorHost === undefined ? {} : { editorHost: options.editorHost }),
       i18n,
       scrollToRange(range): void {
         scrollTextRangeIntoView(options.editor, options.editorHost, range)
       }
     })
+  cleanup.add(() => headingOutline?.destroy())
   headingOutlineHandle = headingOutline === null
     ? null
     : {
@@ -472,7 +514,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     ? null
     : createFindReplaceController({
       editor: options.editor,
-      host: toolbar.panelHost ?? options.findReplace.host ?? toolbarHost,
+      host: options.findReplace.host ?? toolbar.panelHost ?? toolbarHost,
       readonly: options.readonly,
       i18n,
       findOptions: {
@@ -486,6 +528,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         liveRegion.announce(message)
       }
     })
+  cleanup.add(() => findReplace?.destroy())
   findReplaceHandle = findReplace === null
     ? null
     : {
@@ -498,16 +541,18 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     || options.editorHost === undefined
     ? (): void => {}
     : bindFindReplaceKeyboardShortcuts([options.editorHost, toolbarHost, findReplace.elements.root], findReplace)
+  cleanup.add(unsubscribeFindReplaceKeyboardShortcuts)
   const revisions = !shouldCreateRevisions || options.revisions === undefined
     ? null
     : createRevisionController({
       editor: options.editor,
-      host: toolbar.panelHost ?? options.revisions.host ?? toolbarHost,
+      host: options.revisions.host ?? toolbar.panelHost ?? toolbarHost,
       i18n,
       announce(message): void {
         liveRegion.announce(message)
       }
     })
+  cleanup.add(() => revisions?.destroy())
   revisionsHandle = revisions === null
     ? null
     : {
@@ -575,6 +620,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         }
       }
     })
+  cleanup.add(() => comments?.destroy())
   commentsHandle = comments
   if (commentsMount?.defaultRail === true && comments !== null) {
     comments.elements.root.setAttribute('data-jword-comments-default-root', 'true')
@@ -623,6 +669,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         liveRegion
       }
     })
+  cleanup.add(() => selectionActions?.destroy())
   const imageSelection = options.editorHost === undefined
     ? null
     : createImageSelectionController({
@@ -632,6 +679,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       i18n,
       commands: resolvedMedia.commands
     })
+  cleanup.add(() => imageSelection?.destroy())
   const paste = mountedEditorHost === undefined
     ? null
     : createPasteController({
@@ -641,6 +689,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         liveRegion
       }
     })
+  cleanup.add(() => paste?.destroy())
   const unsubscribeEditor = options.editor.subscribe((event) => {
     if (event.kind === 'transaction') {
       syncComments(commentsHandle, options.editor)
@@ -661,6 +710,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       revisions?.refresh()
     }
   })
+  cleanup.add(unsubscribeEditor)
   statusBarHandle = statusBarMount === null
     ? null
     : createStatusBarController({
@@ -690,6 +740,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
         }
       }
     })
+  cleanup.add(() => statusBarHandle?.destroy())
   commentsOverlay?.sync()
   linkOverlay?.sync()
   syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
@@ -742,33 +793,7 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
       syncActiveLink(linkHandle, options.editor)
       syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
     },
-    destroy(): void {
-      unsubscribeEditor()
-      unsubscribeCommentsGeometry()
-      commentsOverlay?.destroy()
-      linkOverlay?.destroy()
-      paste?.destroy()
-      imageSelection?.destroy()
-      selectionActions?.destroy()
-      comments?.destroy()
-      commentsMount?.cleanup()
-      headerFooter?.destroy()
-      headingOutline?.destroy()
-      headingOutlineMount?.cleanup()
-      unsubscribeFindReplaceKeyboardShortcuts()
-      findReplace?.destroy()
-      revisions?.destroy()
-      link?.destroy()
-      table?.destroy()
-      media?.destroy()
-      statusBarHandle?.destroy()
-      statusBarMount?.cleanup()
-      interactionGuard.destroy()
-      toolbar.destroy()
-      toolbarMount.cleanup()
-      watermark.destroy()
-      themeController.destroy()
-    }
+    destroy: cleanup.destroy
   }
 
   /** 动态应用 UI 主题，并同步状态栏当前值。 */
@@ -802,6 +827,33 @@ export function createJWordUi(options: CreateJWordUiOptions): JWordUiInstance {
     table?.setI18n(i18n)
     selectionActions?.setI18n(i18n)
     imageSelection?.setI18n(i18n)
+  }
+}
+
+interface JWordUiCleanup {
+  add(cleanup: () => void): void
+  destroy(): void
+}
+
+/** 创建幂等反序清理栈，供正常销毁与构造失败共同使用。 */
+function createJWordUiCleanup(): JWordUiCleanup {
+  const cleanups: Array<() => void> = []
+  let destroyed = false
+
+  return {
+    add(cleanup): void {
+      cleanups.push(cleanup)
+    },
+    destroy(): void {
+      if (destroyed) {
+        return
+      }
+
+      destroyed = true
+      for (const cleanup of cleanups.reverse()) {
+        cleanup()
+      }
+    }
   }
 }
 

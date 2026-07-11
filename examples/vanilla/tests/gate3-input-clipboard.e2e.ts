@@ -15,7 +15,7 @@ import {
 } from './gate3-input-helpers'
 
 test('Gate 3 runtime copy cut paste keeps plain text clipboard semantics on current selection', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3AlphaReady(page)
   await selectRange(page, {
     sectionId: 'section-1',

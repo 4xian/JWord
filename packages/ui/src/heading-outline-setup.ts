@@ -23,11 +23,18 @@ export function resolveHeadingOutlineMount(
     return null
   }
 
+  if (options.host !== undefined) {
+    return {
+      host: options.host,
+      cleanup(): void {}
+    }
+  }
+
   const editorShell = editorHost === undefined
     ? null
     : resolveEditorShell(editorHost)
 
-  const host = options.host ?? toolbarHost
+  const host = toolbarHost
 
   if (editorShell === null) {
     return {
@@ -51,23 +58,8 @@ export function resolveHeadingOutlineMount(
     }
   }
 
-  const previousParent = host.parentNode
-  const previousNextSibling = host.nextSibling
-
-  host.classList.add('jw-heading-outline-host')
-  host.setAttribute('data-jword-heading-outline-host', 'true')
-  if (!editorShell.contains(host)) {
-    editorShell.append(host)
-  }
-
   return {
     host,
-    cleanup(): void {
-      host.classList.remove('jw-heading-outline-host')
-      host.removeAttribute('data-jword-heading-outline-host')
-      if (previousParent !== null) {
-        previousParent.insertBefore(host, previousNextSibling?.parentNode === previousParent ? previousNextSibling : null)
-      }
-    }
+    cleanup(): void {}
   }
 }

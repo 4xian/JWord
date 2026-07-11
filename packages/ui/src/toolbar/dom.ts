@@ -825,12 +825,12 @@ function createControl(definition: BuiltinToolDefinition, ownerDocument: Documen
       }
     }
     case 'select': {
-      const { wrapper, control } = createToolbarSelectControl(definition, ownerDocument)
+      const { wrapper, control, destroy } = createToolbarSelectControl(definition, ownerDocument)
 
       wrapper.setAttribute('data-jword-tool-id', definition.id)
       control.setAttribute(definition.dataAttribute, 'true')
 
-      return { wrapper, control }
+      return { wrapper, control, destroy }
     }
     case 'color': {
       const { wrapper, control } = createToolbarColorControl(definition.label, definition.icon, ownerDocument)

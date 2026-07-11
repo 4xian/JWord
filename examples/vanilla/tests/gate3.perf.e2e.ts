@@ -36,7 +36,7 @@ test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ 
   test.setTimeout(60000)
   test.skip(browserName !== 'chromium', '当前 Gate 3 Alpha perf 门槛只固定 Chromium。')
 
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForDemoReady(page)
 
   const metrics = await readGate3PerfMetrics(page)
@@ -69,7 +69,7 @@ test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ 
 
 async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
   return page.evaluate(async ({ p95SampleCount, largeDocumentInsertWarmupCount }) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
     const loadAlphaButton = document.querySelector<HTMLButtonElement>('[data-jword-load-alpha]')
     const clearSelectionButton = document.querySelector<HTMLButtonElement>('[data-jword-clear-selection]')
@@ -444,7 +444,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
 
 async function waitForDemoReady(page: Page): Promise<void> {
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', String(expectedGate2PageCount))
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await expect.poll(async () => {
     return page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)
