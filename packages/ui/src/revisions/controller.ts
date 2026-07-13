@@ -19,7 +19,11 @@ import {
   localizeRevisionPanelDom,
   renderRevisionPanel
 } from './dom'
-import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import type { JWordRevisionPanelElements } from '../types'
 
 export interface CreateRevisionControllerOptions {
@@ -27,6 +31,7 @@ export interface CreateRevisionControllerOptions {
   readonly host: HTMLElement
   readonly i18n?: ResolvedJWordUiI18n
   readonly announce?: (message: string) => void
+  readonly onClose?: () => void
 }
 
 export interface RevisionControllerHandle {
@@ -84,14 +89,14 @@ export function createRevisionController(
     const revision = options.editor.getProjection().document.revisions?.find((candidate) => candidate.id === revisionId)
 
     if (revision === undefined) {
-      options.announce?.('BLOCKED: 当前修订不存在。')
+      options.announce?.(readJWordUiText(i18n, 'a11y.revisions.missing'))
       return
     }
 
     const range = options.editor.locateRangeSnapshot(revision.rangeSnapshot)
 
     if (range === null) {
-      options.announce?.('BLOCKED: 当前修订范围无法定位。')
+      options.announce?.(readJWordUiText(i18n, 'a11y.revisions.rangeUnavailable'))
       return
     }
 
@@ -100,7 +105,7 @@ export function createRevisionController(
       createAnchorFromPosition(options.editor, range.focus)
     ))
     selectedId = revision.id
-    options.announce?.('已定位修订范围。')
+    options.announce?.(readJWordUiText(i18n, 'a11y.revisions.focused'))
     refresh()
   }
 
@@ -111,13 +116,16 @@ export function createRevisionController(
       : buildRejectRevisionCommand(options.editor.getProjection(), revisionId)
 
     if (command === null) {
-      options.announce?.('BLOCKED: 当前修订不存在。')
+      options.announce?.(readJWordUiText(i18n, 'a11y.revisions.missing'))
       return
     }
 
     options.editor.executeCommand(command)
     selectedId = null
-    options.announce?.(action === 'accept' ? '已接受修订。' : '已拒绝修订。')
+    options.announce?.(readJWordUiText(
+      i18n,
+      action === 'accept' ? 'a11y.revisions.accepted' : 'a11y.revisions.rejected'
+    ))
     refresh()
   }
 
@@ -145,6 +153,11 @@ export function createRevisionController(
   }
 
   elements.list.addEventListener('click', handleRevisionClick, {
+    signal: signalController.signal
+  })
+  elements.closeButton.addEventListener('click', () => {
+    options.onClose?.()
+  }, {
     signal: signalController.signal
   })
   refresh()

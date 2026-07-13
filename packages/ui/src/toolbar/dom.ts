@@ -44,6 +44,7 @@ interface ControlParts {
 interface ToolbarPanelRenderState {
   readonly headingOutline?: boolean
   readonly headingOutlineAvailable?: boolean
+  readonly revisions?: boolean
 }
 
 interface ToolbarModePickerParts {
@@ -77,7 +78,7 @@ export function createToolbarDom(
   host.setAttribute('data-jword-toolbar-mode', config.mode)
   host.setAttribute('data-jword-toolbar-active-tab', config.activeTab)
   host.setAttribute('data-jword-toolbar-common-extensions', String(config.commonExtensions))
-  host.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.ariaLabel', 'JWord toolbar'))
+  host.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.ariaLabel'))
   host.setAttribute('role', 'toolbar')
   host.setAttribute('lang', i18n.locale)
   if (i18n.dir !== undefined) {
@@ -109,7 +110,7 @@ export function createToolbarDom(
   topRow.className = 'jw-toolbar__top-row'
   tabsContainer.className = 'jw-toolbar__tabs'
   tabsContainer.setAttribute('role', 'tablist')
-  tabsContainer.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.tabs.ariaLabel', 'Toolbar tabs'))
+  tabsContainer.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.tabs.ariaLabel'))
   bar.className = 'jw-toolbar__bar'
   commonPanel.className = 'jw-toolbar__tabpanel jw-toolbar__tabpanel--common'
   commonPanel.setAttribute('data-jword-toolbar-common-panel', 'true')
@@ -464,17 +465,7 @@ function syncToolbarTabs(
 
 /** 读取专业模式 Tab 的当前语言文案。 */
 function readToolbarTabLabel(i18n: ResolvedJWordUiI18n, tabId: JWordToolbarTabId): string {
-  const fallback: Record<JWordToolbarTabId, string> = {
-    home: '开始',
-    insert: '插入',
-    table: '表格',
-    page: '页面',
-    tools: '工具',
-    view: '视图',
-    export: '导出'
-  }
-
-  return readJWordUiText(i18n, `toolbar.tabs.${tabId}`, fallback[tabId])
+  return readJWordUiText(i18n, `toolbar.tabs.${tabId}`)
 }
 
 /** 按当前语言刷新模式切换按钮的可见文案和可访问名称。 */
@@ -487,9 +478,9 @@ function localizeToolbarModeSwitcher(
     return
   }
 
-  button.dataset.jwordSwitcherLabel = readJWordUiText(i18n, 'toolbar.mode.switcherLabel', '切换工具栏')
-  button.dataset.jwordCommonToolbarLabel = readJWordUiText(i18n, 'toolbar.mode.commonToolbar', '常用工具栏')
-  button.dataset.jwordProfessionalToolbarLabel = readJWordUiText(i18n, 'toolbar.mode.professionalToolbar', '专业工具栏')
+  button.dataset.jwordSwitcherLabel = readJWordUiText(i18n, 'toolbar.mode.switcherLabel')
+  button.dataset.jwordCommonToolbarLabel = readJWordUiText(i18n, 'toolbar.mode.commonToolbar')
+  button.dataset.jwordProfessionalToolbarLabel = readJWordUiText(i18n, 'toolbar.mode.professionalToolbar')
   syncToolbarModeSwitcher(button, mode)
 }
 
@@ -609,7 +600,11 @@ export function renderToolbarState(
   setActionButtonState(dom.controls['document.headerFooter'], true)
   setActionButtonState(dom.controls['document.footer'], true)
   setActionButtonState(dom.controls['document.pageNumber'], true)
-  setActionButtonState(dom.controls['document.revisions'], true)
+  setToggleButtonState(
+    dom.controls['document.revisions'],
+    true,
+    activePanels.revisions === true ? 'true' : 'false'
+  )
   setActionButtonState(dom.controls['view.fitWidth'], true)
   setActionButtonState(dom.controls['view.fitPage'], true)
   setActionButtonState(dom.controls['view.fullscreen'], true)
@@ -660,7 +655,7 @@ export function localizeToolbarDom(
   config: ResolvedToolbarConfig,
   i18n: ResolvedJWordUiI18n
 ): void {
-  dom.host.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.ariaLabel', 'JWord toolbar'))
+  dom.host.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.ariaLabel'))
   dom.host.setAttribute('lang', i18n.locale)
   if (i18n.dir === undefined) {
     dom.host.removeAttribute('dir')
@@ -670,7 +665,7 @@ export function localizeToolbarDom(
 
   const tabsContainer = dom.host.querySelector<HTMLElement>('.jw-toolbar__tabs')
 
-  tabsContainer?.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.tabs.ariaLabel', 'Toolbar tabs'))
+  tabsContainer?.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.tabs.ariaLabel'))
   for (const tab of dom.tabs) {
     const tabId = tab.getAttribute('data-jword-toolbar-tab') as JWordToolbarTabId | null
 
@@ -871,7 +866,7 @@ function createToolbarButton(
   if (readButtonNeedsCaret(definition.id)) {
     const arrow = ownerDocument.createElement('span')
 
-    arrow.className = 'jw-toolbar__button-caret'
+    arrow.className = 'jw-toolbar__select-arrow'
     arrow.append(createToolbarIcon('caretDown'))
     iconRow.append(arrow)
   }
@@ -1130,7 +1125,7 @@ function createToolbarColorControl(
   wrapper.setAttribute('data-jword-tooltip-surface', 'true')
   visual.className = 'jw-toolbar__color-visual'
   indicator.className = 'jw-toolbar__color-indicator'
-  arrow.className = 'jw-toolbar__color-arrow'
+  arrow.className = 'jw-toolbar__select-arrow'
   arrow.append(createToolbarIcon('caretDown'))
 
   if (iconName !== undefined) {

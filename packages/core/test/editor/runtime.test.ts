@@ -1,8 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * 职责：验证 Gate 0 最小 Editor facade 的浏览器生命周期。
- * 边界：只覆盖 create/mount/destroy，不进入 Gate 1 模型、事务或输入能力。
+ * 职责：验证 Gate 0 Editor facade 挂载后的浏览器生命周期。
+ * 边界：只覆盖 mount/render/destroy，不进入 Gate 1 模型、事务或输入能力。
  * 协作模块：后续 examples/vanilla 和 UI 包通过公开 facade 挂载编辑器。
  * 性能/安全约束：DOM 创建必须延迟到 mount，destroy 必须移除自身 DOM。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
@@ -13,98 +13,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { buildSetBoldCommand, createEditor } from '../../src/index'
 import { twipsToCssPx } from '../../src/layout/page-config'
 import { createSelectionState } from '../../src/model/selection'
-
-describe('createEditor', () => {
-  it('creates an editor without touching host DOM', () => {
-    const host = document.createElement('div')
-
-    const editor = createEditor()
-    const projection = editor.getProjection()
-
-    expect(host.childElementCount).toBe(0)
-    expect(projection.document.id).toBe('document-1')
-    expect(projection.document.sections).toHaveLength(1)
-    editor.destroy()
-  })
-
-  it('passes grouped layout options into the layout runtime during initialization', () => {
-    const editor = createEditor({
-      initialText: `前缀 ${'h'.repeat(160)}`,
-      layout: {
-        keepLatinWordWholeOnWrap: true
-      }
-    })
-    const firstLineText = editor.getLayout().pages[0]?.lines[0]?.fragments.map((fragment) => fragment.text).join('')
-
-    expect(firstLineText).toBe('前缀 ')
-
-    editor.destroy()
-  })
-})
-
-describe('Editor page config', () => {
-  it('resets custom margins to preset defaults when choosing a preset', () => {
-    const editor = createEditor()
-
-    try {
-      editor.setPageConfig({
-        widthTwips: 20000,
-        heightTwips: 30000,
-        marginTwips: {
-          top: 100,
-          right: 200,
-          bottom: 300,
-          left: 400
-        }
-      })
-
-      const nextConfig = editor.setPageConfig({ preset: 'a4' })
-
-      expect(nextConfig.preset).toBe('a4')
-      expect(nextConfig.marginTwips).toEqual({
-        top: 1440,
-        right: 1440,
-        bottom: 1440,
-        left: 1440
-      })
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('merges explicit preset margins from preset defaults', () => {
-    const editor = createEditor()
-
-    try {
-      editor.setPageConfig({
-        widthTwips: 20000,
-        heightTwips: 30000,
-        marginTwips: {
-          top: 100,
-          right: 200,
-          bottom: 300,
-          left: 400
-        }
-      })
-
-      const nextConfig = editor.setPageConfig({
-        preset: 'a4',
-        marginTwips: {
-          left: 720
-        }
-      })
-
-      expect(nextConfig.marginTwips).toEqual({
-        top: 1440,
-        right: 1440,
-        bottom: 1440,
-        left: 720
-      })
-    } finally {
-      editor.destroy()
-    }
-  })
-})
 
 describe('Editor mount/destroy lifecycle', () => {
   it('mounts a recognizable editor shell and canvas container', () => {

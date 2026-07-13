@@ -10,6 +10,7 @@ import type {
   JWordTableSelectionScope,
   JWordTableSelectionTarget
 } from '../types'
+import { readJWordUiText, type ResolvedJWordUiI18n } from '../i18n'
 
 /** table 输入行列维度的最小值。 */
 export const MIN_TABLE_DIMENSION = 1
@@ -36,8 +37,9 @@ export function readTableSelectionSummary(
 }
 
 /** 读取“宿主尚未对接命令”时的默认提示。 */
-export function readDefaultDeferredMessage(actionLabel: string): string {
-  return `${actionLabel} 已触发，但宿主尚未接入表格命令适配器。`
+export function readDefaultDeferredMessage(actionLabel: string, i18n?: ResolvedJWordUiI18n): string {
+  return readJWordUiText(i18n ?? { messages: {} }, 'a11y.table.deferred')
+    .replace('{action}', actionLabel)
 }
 
 /** 把用户输入归一化成安全的表格维度。 */

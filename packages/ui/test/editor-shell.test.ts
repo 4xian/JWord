@@ -32,6 +32,15 @@ describe('createJWord EditorShell', () => {
     expect(host.querySelector('[data-jword-editor]')).not.toBeNull()
     expect(host.querySelector('[data-jword-shell-live-region-host]')).toBeNull()
     expect(host.querySelector('[data-jword-shell-text-mirror-host]')).toBeNull()
+    expect(jword.ui.elements.commentsPanel).not.toBeNull()
+    expect(jword.ui.elements.linkPanel).not.toBeNull()
+    expect(jword.ui.elements.headerFooterPanel).not.toBeNull()
+    expect(jword.ui.elements.headingOutlinePanel).not.toBeNull()
+    expect(jword.ui.elements.findReplacePanel).not.toBeNull()
+    expect(jword.ui.elements.revisionsPanel).not.toBeNull()
+    expect(host.querySelector('[data-jword-shell-region="editor"] > [data-jword-side-workspace="left"]')).not.toBeNull()
+    expect(host.querySelector('[data-jword-shell-region="editor"] > [data-jword-side-workspace="right"]')).not.toBeNull()
+    expect(host.querySelector('[data-jword-editor] [data-jword-side-workspace]')).toBeNull()
     expect(document.activeElement).toBe(host.querySelector('[data-jword-hidden-textarea]'))
     expect(selection).not.toBeNull()
     expect(selection === null ? null : jword.editor.resolveTextPosition(selection.focus).graphemeIndex).toBe(6)
@@ -41,6 +50,33 @@ describe('createJWord EditorShell', () => {
 
     expect(host.children).toHaveLength(0)
     expect(host.hasAttribute('data-jword-editor-shell')).toBe(false)
+    host.remove()
+  })
+
+  test('只自动装配工具栏配置中可见工具依赖的面板能力', () => {
+    const host = document.createElement('div')
+
+    document.body.append(host)
+
+    const jword = createJWord({
+      host,
+      ui: {
+        toolbar: {
+          mode: 'common',
+          modeSwitcher: false,
+          visibleTools: ['insert.link']
+        }
+      }
+    })
+
+    expect(jword.ui.elements.linkPanel).not.toBeNull()
+    expect(jword.ui.elements.commentsPanel).toBeNull()
+    expect(jword.ui.elements.headerFooterPanel).toBeNull()
+    expect(jword.ui.elements.headingOutlinePanel).toBeNull()
+    expect(jword.ui.elements.findReplacePanel).toBeNull()
+    expect(jword.ui.elements.revisionsPanel).toBeNull()
+
+    jword.destroy()
     host.remove()
   })
 

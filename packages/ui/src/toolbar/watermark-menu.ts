@@ -61,6 +61,22 @@ export function createToolbarWatermarkMenuController(
 
     closeMenu()
   }, { signal: options.signal })
+  const closeOnOutsideEvent = (event: Event) => {
+    const target = event.target
+
+    if (
+      !(target instanceof Node)
+      || elements?.root.contains(target) === true
+      || activeAnchor?.contains(target) === true
+    ) {
+      return
+    }
+
+    closeMenu()
+  }
+
+  options.host.ownerDocument.addEventListener('pointerdown', closeOnOutsideEvent, { signal: options.signal })
+  options.host.ownerDocument.addEventListener('click', closeOnOutsideEvent, { signal: options.signal })
 
   return {
     toggle(anchor): void {
@@ -118,14 +134,14 @@ export function createToolbarWatermarkMenuController(
         fontSizePx,
         color
       })
-      options.announce(readJWordUiText(currentI18n, 'a11y.watermark.applied', '页面水印已应用。'), true)
+      options.announce(readJWordUiText(currentI18n, 'a11y.watermark.applied'), true)
       closeMenu()
     }, { signal: options.signal })
 
     menu.clear.addEventListener('click', () => {
       options.actions.clearWatermark()
       syncFormFromWatermark(menu)
-      options.announce(readJWordUiText(currentI18n, 'a11y.watermark.cleared', '页面水印已清除。'), true)
+      options.announce(readJWordUiText(currentI18n, 'a11y.watermark.cleared'), true)
       closeMenu()
     }, { signal: options.signal })
   }
@@ -227,20 +243,20 @@ function createField(ownerDocument: Document): HTMLElement {
 
 /** 刷新菜单文案。 */
 function localizeMenu(menu: WatermarkMenuElements, i18n: ResolvedJWordUiI18n): void {
-  const contentLabel = readJWordUiText(i18n, 'dialog.watermark.content', '水印内容')
-  const fontSizeLabel = readJWordUiText(i18n, 'dialog.watermark.fontSize', '字体大小')
-  const colorLabel = readJWordUiText(i18n, 'dialog.watermark.color', '字体颜色')
+  const contentLabel = readJWordUiText(i18n, 'dialog.watermark.content')
+  const fontSizeLabel = readJWordUiText(i18n, 'dialog.watermark.fontSize')
+  const colorLabel = readJWordUiText(i18n, 'dialog.watermark.color')
 
-  menu.root.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.document.watermark.label', '页面水印'))
+  menu.root.setAttribute('aria-label', readJWordUiText(i18n, 'toolbar.document.watermark.label'))
   menu.contentLabel.textContent = contentLabel
   menu.content.setAttribute('aria-label', contentLabel)
-  menu.content.placeholder = readJWordUiText(i18n, 'dialog.watermark.contentPlaceholder', '输入水印内容，可多行')
+  menu.content.placeholder = readJWordUiText(i18n, 'dialog.watermark.contentPlaceholder')
   menu.fontSizeLabel.textContent = fontSizeLabel
   menu.fontSize.setAttribute('aria-label', fontSizeLabel)
   menu.colorLabel.textContent = colorLabel
   menu.color.setAttribute('aria-label', colorLabel)
-  menu.apply.textContent = readJWordUiText(i18n, 'dialog.watermark.apply', '应用水印')
-  menu.clear.textContent = readJWordUiText(i18n, 'dialog.watermark.clear', '清除水印')
+  menu.apply.textContent = readJWordUiText(i18n, 'dialog.watermark.apply')
+  menu.clear.textContent = readJWordUiText(i18n, 'dialog.watermark.clear')
 }
 
 /** 按触发按钮定位菜单。 */

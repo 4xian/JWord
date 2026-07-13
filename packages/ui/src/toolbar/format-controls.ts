@@ -13,6 +13,7 @@ import {
   type SelectionState
 } from '@4xian/jword-core'
 import { createSelectionRebindSnapshot, restoreSelectionFromRebindSnapshot } from '../selection-rebind'
+import { readJWordUiText } from '../i18n'
 import {
   FONT_SIZE_TWIPS_STEPS,
   FONT_FAMILY_EMPTY_VALUE,
@@ -36,7 +37,7 @@ import {
   readColor,
   readSelect
 } from './toolbar-state-sync'
-import type { JWordToolbarControlElement } from '../types'
+import type { JWordToolbarControlElement, JWordToolbarToolId } from '../types'
 
 export interface ToolbarColorSessionState {
   readonly frozenColorSelections: {
@@ -102,22 +103,22 @@ export function bindFormatControls(context: ToolbarActionContext, colorState: To
   const { dom } = context
 
   bindToolbarButton(context, dom.controls['format.bold'], () => {
-    toggleActiveRunBooleanFormat(context, 'bold', '加粗')
+    toggleActiveRunBooleanFormat(context, 'bold', readToolbarLabel(context, 'format.bold'))
   })
   bindToolbarButton(context, dom.controls['format.italic'], () => {
-    toggleActiveRunBooleanFormat(context, 'italic', '斜体')
+    toggleActiveRunBooleanFormat(context, 'italic', readToolbarLabel(context, 'format.italic'))
   })
   bindToolbarButton(context, dom.controls['format.underline'], () => {
-    toggleActiveRunBooleanFormat(context, 'underline', '下划线')
+    toggleActiveRunBooleanFormat(context, 'underline', readToolbarLabel(context, 'format.underline'))
   })
   bindToolbarButton(context, dom.controls['format.strike'], () => {
-    toggleActiveRunBooleanFormat(context, 'strike', '删除线')
+    toggleActiveRunBooleanFormat(context, 'strike', readToolbarLabel(context, 'format.strike'))
   })
   bindToolbarButton(context, dom.controls['format.superscript'], () => {
-    toggleActiveRunBooleanFormat(context, 'superscript', '上标')
+    toggleActiveRunBooleanFormat(context, 'superscript', readToolbarLabel(context, 'format.superscript'))
   })
   bindToolbarButton(context, dom.controls['format.subscript'], () => {
-    toggleActiveRunBooleanFormat(context, 'subscript', '下标')
+    toggleActiveRunBooleanFormat(context, 'subscript', readToolbarLabel(context, 'format.subscript'))
   })
   bindToolbarSelect(context, dom.controls['format.fontFamily'], () => {
     const control = readSelect(dom.controls['format.fontFamily'])
@@ -133,7 +134,7 @@ export function bindFormatControls(context: ToolbarActionContext, colorState: To
       return
     }
 
-    applyRunStringFormat(context, 'fontFamily', '字体', value)
+    applyRunStringFormat(context, 'fontFamily', readToolbarLabel(context, 'format.fontFamily'), value)
   })
   bindToolbarSelect(context, dom.controls['format.fontSize'], () => {
     const control = readSelect(dom.controls['format.fontSize'])
@@ -152,12 +153,15 @@ export function bindFormatControls(context: ToolbarActionContext, colorState: To
     const parsedValue = Number.parseInt(value, 10)
 
     if (!Number.isFinite(parsedValue)) {
-      context.announce(`BLOCKED: 无法识别字号值 ${value}。`)
+      context.announce(readJWordUiText(
+        context.readI18n(),
+        'a11y.toolbar.format.invalidFontSize'
+      ).replace('{value}', value))
       context.render()
       return
     }
 
-    applyRunNumberFormat(context, '字号', parsedValue)
+    applyRunNumberFormat(context, readToolbarLabel(context, 'format.fontSize'), parsedValue)
   })
   bindToolbarButton(context, dom.controls['format.fontSizeDecrease'], () => {
     applyFontSizeStep(context, -1)
@@ -181,7 +185,7 @@ export function bindFormatControls(context: ToolbarActionContext, colorState: To
     }
 
     colorState.writeOpenColorPicker('textColor')
-    applyColorFormatFromFrozenSelection(context, colorState, 'textColor', '文字颜色', readActiveColorValue(colorState, 'textColor', control.value, event.type))
+    applyColorFormatFromFrozenSelection(context, colorState, 'textColor', readToolbarLabel(context, 'format.textColor'), readActiveColorValue(colorState, 'textColor', control.value, event.type))
   }, context.signal)
   bindColorInput(dom.controls['format.backgroundColor'], (event) => {
     const control = readColor(dom.controls['format.backgroundColor'])
@@ -191,7 +195,7 @@ export function bindFormatControls(context: ToolbarActionContext, colorState: To
     }
 
     colorState.writeOpenColorPicker('backgroundColor')
-    applyColorFormatFromFrozenSelection(context, colorState, 'backgroundColor', '背景色', readActiveColorValue(colorState, 'backgroundColor', control.value, event.type))
+    applyColorFormatFromFrozenSelection(context, colorState, 'backgroundColor', readToolbarLabel(context, 'format.backgroundColor'), readActiveColorValue(colorState, 'backgroundColor', control.value, event.type))
   }, context.signal)
 
   return {
@@ -201,7 +205,9 @@ export function bindFormatControls(context: ToolbarActionContext, colorState: To
         context,
         colorState,
         property,
-        property === 'textColor' ? '文字颜色' : '背景色',
+        property === 'textColor'
+          ? readToolbarLabel(context, 'format.textColor')
+          : readToolbarLabel(context, 'format.backgroundColor'),
         value
       )
     }
@@ -230,7 +236,7 @@ function toggleActiveRunBooleanFormat(
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.run === null) {
-    context.announce(`BLOCKED: ${label} 需要当前有可格式化的文本选区。`)
+    announceFormatSelectionRequired(context, label)
     return
   }
 
@@ -273,13 +279,13 @@ function applyRunStringFormat(
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.run === null) {
-    context.announce(`BLOCKED: ${label} 需要当前有可格式化的文本选区。`)
+    announceFormatSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (isRunStringFormatAlreadyApplied(formattingState, property, value)) {
-    context.announce(`${label} 已经处于目标状态。`)
+    announceAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -319,13 +325,13 @@ function applyColorFormatFromFrozenSelection(
   }
 
   if (selection === null || formattingState === null || formattingState.run === null) {
-    context.announce(`BLOCKED: ${label} 需要当前有可格式化的文本选区。`)
+    announceFormatSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (isRunStringFormatAlreadyApplied(formattingState, property, normalizedValue)) {
-    context.announce(`${label} 已经处于目标状态。`)
+    announceAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -335,7 +341,10 @@ function applyColorFormatFromFrozenSelection(
     : buildSetBackgroundColorCommand(context.editor.getProjection(), selection, normalizedValue)
 
   if (command === null) {
-    context.announce(`BLOCKED: ${label} 当前没有可应用的文本目标。`)
+    context.announce(readJWordUiText(
+      context.readI18n(),
+      'a11y.toolbar.format.targetUnavailable'
+    ).replace('{label}', label))
     context.render()
     return
   }
@@ -389,13 +398,13 @@ function applyRunNumberFormat(context: ToolbarActionContext, label: string, valu
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.run === null) {
-    context.announce(`BLOCKED: ${label} 需要当前有可格式化的文本选区。`)
+    announceFormatSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (isRunNumberFormatAlreadyApplied(formattingState, value)) {
-    context.announce(`${label} 已经处于目标状态。`)
+    announceAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -410,7 +419,10 @@ function applyFontSizeStep(context: ToolbarActionContext, direction: -1 | 1): vo
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.run === null) {
-    context.announce(`BLOCKED: ${direction > 0 ? '增大字号' : '减小字号'} 需要当前有可格式化的文本选区。`)
+    announceFormatSelectionRequired(
+      context,
+      readToolbarLabel(context, direction > 0 ? 'format.fontSizeIncrease' : 'format.fontSizeDecrease')
+    )
     context.render()
     return
   }
@@ -421,13 +433,37 @@ function applyFontSizeStep(context: ToolbarActionContext, direction: -1 | 1): vo
   const nextValue = resolveNextFontSizeStep(currentValue, direction)
 
   if (nextValue === currentValue) {
-    context.announce(direction > 0 ? '字号 已经处于最大档位。' : '字号 已经处于最小档位。')
+    context.announce(readJWordUiText(
+      context.readI18n(),
+      direction > 0 ? 'a11y.toolbar.format.fontSizeMaximum' : 'a11y.toolbar.format.fontSizeMinimum'
+    ))
     context.render()
     return
   }
 
   context.markToolbarTransaction()
   context.editor.setFontSize(nextValue)
+}
+
+/** 读取当前语言的工具名称。 */
+function readToolbarLabel(context: ToolbarActionContext, toolId: JWordToolbarToolId): string {
+  return readJWordUiText(context.readI18n(), `toolbar.${toolId}.label`)
+}
+
+/** 播报字符格式缺少有效选区。 */
+function announceFormatSelectionRequired(context: ToolbarActionContext, label: string): void {
+  context.announce(readJWordUiText(
+    context.readI18n(),
+    'a11y.toolbar.format.selectionRequired'
+  ).replace('{label}', label))
+}
+
+/** 播报格式已经处于目标状态。 */
+function announceAlreadyApplied(context: ToolbarActionContext, label: string): void {
+  context.announce(readJWordUiText(
+    context.readI18n(),
+    'a11y.toolbar.format.alreadyApplied'
+  ).replace('{label}', label))
 }
 
 /** 读取颜色控件冻结快照。 */

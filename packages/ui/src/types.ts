@@ -133,6 +133,9 @@ export type JWordUiA11yTextKey = `a11y.${string}`
 /** diagnostics 短文案 key。 */
 export type JWordUiDiagnosticsTextKey = `diagnostics.${string}`
 
+/** Toast 文案 key。 */
+export type JWordUiToastTextKey = `toast.${string}`
+
 /** UI i18n 字典 key。 */
 export type JWordUiI18nKey =
   | JWordUiToolbarTextKey
@@ -141,6 +144,7 @@ export type JWordUiI18nKey =
   | JWordUiDialogTextKey
   | JWordUiA11yTextKey
   | JWordUiDiagnosticsTextKey
+  | JWordUiToastTextKey
 
 /** UI i18n 字典，允许宿主只覆盖少量 key。 */
 export type JWordUiI18nDictionary = Readonly<Partial<Record<JWordUiI18nKey, string>>>
@@ -160,6 +164,44 @@ export type JWordUiStatusBarTextKey = `statusBar.${string}`
 
 /** 状态栏首批内建语言。 */
 export type JWordStatusBarLocale = 'zh-CN' | 'en-US'
+
+/** Toast 可见语义类型。 */
+export type JWordToastType = 'info' | 'success' | 'warning' | 'error'
+
+/** 单次 Toast 调用参数。 */
+export interface JWordToastOptions {
+  /** 已完成本地化的可见文案。 */
+  readonly message: string
+  /** 可见颜色和 live region 优先级。 */
+  readonly type: JWordToastType
+  /** 自动关闭毫秒数；小于等于零表示不自动关闭。 */
+  readonly duration: number
+}
+
+/** Debug 日志级别。 */
+export type JWordLogLevel = 'debug' | 'info' | 'warning' | 'error'
+
+/** 宿主可接收的结构化日志 entry。 */
+export interface JWordLogEntry {
+  readonly level: JWordLogLevel
+  readonly scope: string
+  readonly event: string
+  readonly message: string
+  readonly details?: Readonly<Record<string, unknown>>
+}
+
+/** Debug 日志接收器。 */
+export interface JWordLogger {
+  write(entry: JWordLogEntry): void
+}
+
+/** UI 实例级 debug 配置。 */
+export interface JWordDebugOptions {
+  /** 默认 false；只有显式开启才输出日志。 */
+  readonly enabled?: boolean
+  /** 可选宿主日志接收器；为空时使用 console。 */
+  readonly logger?: JWordLogger
+}
 
 /** 状态栏首批 item id。 */
 export type JWordStatusBarItemId =
@@ -754,6 +796,8 @@ export interface CreateJWordUiOptions {
   readonly theme?: JWordUiThemeOptions
   /** UI 文案和 a11y 播报覆盖；缺失 key 回退内建中文。 */
   readonly i18n?: JWordUiI18nOptions
+  /** 实例级调试日志；默认关闭。 */
+  readonly debug?: boolean | JWordDebugOptions
   /** toolbar 的最小显隐配置；false 表示隐藏整条 toolbar。 */
   readonly toolbar?: false | JWordToolbarOptions
   /** 底部状态栏配置；默认启用，false 表示禁用。 */
@@ -787,6 +831,8 @@ export interface JWordUiLiveRegionController {
   announce(message: string, options?: {
     readonly force?: boolean
     readonly priority?: 'polite' | 'assertive'
+    readonly source?: string
+    readonly event?: string
   }): void
   destroy(): void
 }
@@ -989,6 +1035,10 @@ export interface JWordRevisionPanelElements {
   readonly host: HTMLElement
   /** 面板根节点。 */
   readonly root: HTMLElement
+  /** 面板标题节点。 */
+  readonly title: HTMLElement
+  /** 关闭按钮。 */
+  readonly closeButton: HTMLButtonElement
   /** 修订列表节点。 */
   readonly list: HTMLElement
   /** 空状态节点。 */
@@ -1025,6 +1075,12 @@ export interface JWordFindReplacePanelElements {
 export interface JWordHeadingOutlinePanelElements {
   /** 目录面板宿主。 */
   readonly host: HTMLElement
+  /** 面板根节点。 */
+  readonly root: HTMLElement
+  /** 面板标题节点。 */
+  readonly title: HTMLElement
+  /** 关闭按钮。 */
+  readonly closeButton: HTMLButtonElement
   /** 目录项列表节点。 */
   readonly list: HTMLElement
 }
@@ -1061,6 +1117,8 @@ export interface JWordUiInstance {
   setTheme(theme: JWordUiThemeOptions): void
   /** 动态切换 UI 内建语言；首批只支持中文和英文。 */
   setLocale(locale: JWordStatusBarLocale, messages?: JWordUiI18nDictionary): void
+  /** 显示或替换当前编辑器实例顶部的 Toast。 */
+  toast(options: JWordToastOptions): void
   /** 设置编辑器实例级页面水印。 */
   setWatermark(options: JWordWatermarkOptions): void
   /** 清除用户设置的页面水印，不清除版权保护水印。 */

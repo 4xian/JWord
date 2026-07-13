@@ -47,7 +47,7 @@ import type {
   JWordCommentThread,
   JWordCommentUpdateThreadRequest
 } from './types'
-import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
+import { readJWordUiText, resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 
 /** 创建 comments controller。 */
 export function createCommentsController(options: CreateCommentsControllerOptions): CommentsControllerHandle {
@@ -279,7 +279,7 @@ export function createCommentsController(options: CreateCommentsControllerOption
         draft: {
           anchor: result.submission.anchor,
           body: result.submission.body,
-          error: normalizeCommentError(error, '创建批注失败，请重试。')
+          error: normalizeCommentError(error, readJWordUiText(i18n, 'a11y.comments.createFailed'))
         }
       }
       render()
@@ -465,7 +465,7 @@ export function createCommentsController(options: CreateCommentsControllerOption
         replyDraft: {
           threadId: result.submission.threadId,
           body: result.submission.body,
-          error: normalizeCommentError(error, '发送回复失败，请重试。')
+          error: normalizeCommentError(error, readJWordUiText(i18n, 'a11y.comments.replyFailed'))
         }
       }
       render()
@@ -532,7 +532,7 @@ export function createCommentsController(options: CreateCommentsControllerOption
           threadId: result.submission.threadId,
           messageId: result.submission.messageId,
           body: result.submission.body,
-          error: normalizeCommentError(error, '保存修改失败，请重试。')
+          error: normalizeCommentError(error, readJWordUiText(i18n, 'a11y.comments.editFailed'))
         }
       }
       render()

@@ -63,6 +63,9 @@ export function createSelectionActionsController(
   const commandContext: SelectionActionCommandContext = {
     editor,
     colorFormat,
+    readI18n() {
+      return i18n
+    },
     announce,
     readActiveSelectionSnapshot,
     readFrozenColorSelection,
@@ -79,6 +82,9 @@ export function createSelectionActionsController(
   const clipboardContext: SelectionActionsClipboardContext = {
     editor,
     hiddenTextarea,
+    readI18n() {
+      return i18n
+    },
     announce,
     clearStableContextPoint,
     restoreEditorFocusSoon

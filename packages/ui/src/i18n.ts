@@ -2,7 +2,7 @@
  * 职责：提供 @4xian/jword-ui 的轻量 i18n 字典合并和内建 toolbar 文案本地化。
  * 边界：不引入外部 i18n runtime，不读取 DOM，只处理 key 到文案的映射。
  * 协作模块：create-ui、toolbar/dom 与内部插件菜单通过本模块读取可覆盖文案。
- * 性能/安全约束：字典合并在 UI 创建或显式切换语言时执行，缺失 key 回退到调用点既有文案。
+ * 性能/安全约束：字典合并在 UI 创建或显式切换语言时执行，缺失 key 统一回退到内建中文文案。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
@@ -23,7 +23,8 @@ export interface ResolvedJWordUiI18n {
   readonly locale: string
   readonly dir?: JWordUiTextDirection
   readonly messages: JWordUiI18nDictionary
-  t(key: JWordUiI18nKey, fallback: string): string
+  /** 读取当前语言文案，缺失 key 时回退到内建中文文案。 */
+  t(key: JWordUiI18nKey): string
 }
 
 const SHARED_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
@@ -159,6 +160,8 @@ const ZH_CN_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
   'menu.findReplace.replaceRemaining': '已替换，剩余 {count} 个结果',
   'menu.findReplace.replaceAllResult': '已替换 {count} 个结果',
   'menu.headingOutline.ariaLabel': '文档目录',
+  'menu.headingOutline.title': '目录大纲',
+  'menu.headingOutline.close': '关闭目录大纲',
   'menu.headingOutline.collapseItem': '折叠目录项',
   'menu.headingOutline.expandItem': '展开目录项',
   'menu.headerFooter.header': '页眉',
@@ -263,6 +266,7 @@ const ZH_CN_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
   'menu.table.resizeColumn': '调整第 {index} 列宽度',
   'menu.table.resizeRow': '调整第 {index} 行高度',
   'menu.revisions.title': '修订记录',
+  'menu.revisions.close': '关闭修订记录',
   'menu.revisions.empty': '暂无修订记录',
   'menu.revisions.accept': '接受',
   'menu.revisions.reject': '拒绝',
@@ -292,9 +296,127 @@ const ZH_CN_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
   'dialog.media.errorUrlDisallowed': '当前 URL 不在 allowlist 中；请改用同源、data:、blob: 或宿主放行的地址。',
   'dialog.media.errorUploadFailed': '媒体上传失败。',
   'dialog.table.customSizeTitle': '自定义表格尺寸',
+  'a11y.table.readonly': 'BLOCKED: 当前为只读模式。',
+  'a11y.table.targetMissing': '当前没有命中表格单元格，无法执行该操作。',
+  'a11y.table.copyMissing': '当前没有可复制的表格内容。',
+  'a11y.table.cutMissing': '当前没有可剪切的表格内容。',
+  'a11y.table.clipboardWriteDenied': '当前浏览器拒绝写入系统剪贴板。',
+  'a11y.table.cutDenied': '当前浏览器拒绝执行剪切。',
+  'a11y.table.clipboardReadDenied': '当前浏览器不允许读取系统剪贴板。',
+  'a11y.table.clipboardEmpty': '系统剪贴板当前没有文本内容。',
+  'a11y.table.error': '表格操作失败。',
+  'a11y.table.insertTableFailed': '当前文档无法插入表格。',
+  'a11y.table.insertRowFailed': '当前表格无法插入行。',
+  'a11y.table.deleteRowFailed': '当前表格至少需要保留一行。',
+  'a11y.table.insertColumnFailed': '当前表格无法插入列。',
+  'a11y.table.deleteColumnFailed': '当前表格至少需要保留一列。',
+  'a11y.table.resizeColumnFailed': '当前表格无法更新列宽。',
+  'a11y.table.resizeRowFailed': '当前表格无法更新行高。',
+  'a11y.table.mergeFailed': '当前单元格右侧没有可合并单元格。',
+  'a11y.table.borderFailed': '当前表格无法更新边框。',
+  'a11y.table.inserted': '已插入表格。',
+  'a11y.table.rowInserted': '已插入表格行。',
+  'a11y.table.rowDeleted': '已删除表格行。',
+  'a11y.table.columnInserted': '已插入表格列。',
+  'a11y.table.columnDeleted': '已删除表格列。',
+  'a11y.table.columnResized': '已更新表格列宽。',
+  'a11y.table.rowResized': '已更新表格行高。',
+  'a11y.table.merged': '已合并单元格。',
+  'a11y.table.borderUpdated': '已更新表格边框。',
+  'a11y.table.destroyed': 'JWord editor 已销毁，表格工具已关闭。',
+  'a11y.table.completed': '{action}已完成。',
+  'a11y.table.deferred': '{action} 已触发，但宿主尚未接入表格命令适配器。',
+  'a11y.media.readonly': '当前为只读模式。',
+  'a11y.media.adapterMissing': '图片上传适配器未配置。',
+  'a11y.media.uploadStarted': '图片上传已开始：{source}。',
+  'a11y.media.uploadReady': '图片资源已就绪：{source}。',
+  'a11y.media.uploadFailed': '图片上传失败：{message}',
+  'a11y.media.destroyed': 'JWord editor 已销毁，图片入口已关闭。',
+  'a11y.media.editorDestroyed': 'JWord editor 已销毁，无法继续插入图片。',
+  'a11y.media.deferred': '资源已就绪，等待主进程对接 core 的 inline image command。',
+  'a11y.media.applied': '资源已就绪，并已插入当前文档。',
+  'a11y.media.uploading': '上传中。',
+  'a11y.media.uploadingPercent': '上传中 {percent}%',
+  'a11y.media.insertUnavailable': '当前选区无法插入行内图片。',
+  'a11y.media.inserted': '已插入行内图片。',
+  'a11y.media.replaceUnavailable': '当前选区未命中可替换的图片。',
+  'a11y.media.replaced': '已替换当前图片资源。',
+  'a11y.media.resizeUnavailable': '当前图片尺寸未变化，或当前选区未命中可调整的图片。',
+  'a11y.media.resized': '已更新图片尺寸。',
+  'a11y.media.rotateUnavailable': '当前图片旋转角度未变化，或当前选区未命中可旋转的图片。',
+  'a11y.media.rotationReset': '已重置图片旋转角度。',
+  'a11y.media.rotated': '已更新图片旋转角度。',
+  'a11y.media.moveUnavailable': '当前图片未移动，或当前拖拽落点不可用。',
+  'a11y.media.moved': '已更新图片位置。',
+  'a11y.media.deleteUnavailable': '当前选区未命中可删除的图片。',
+  'a11y.media.deleted': '已删除当前图片。',
+  'a11y.paste.richTextApplied': '已粘贴保留格式的安全富文本。',
+  'a11y.paste.tableFlattened': '粘贴表格结构暂按制表符文本降级。',
+  'a11y.headerFooter.readonly': '当前为只读模式。',
+  'a11y.headerFooter.sectionMissing': 'BLOCKED: 当前文档缺少可配置的分节。',
+  'a11y.headerFooter.sectionUpdateFailed': 'BLOCKED: 当前分节无法更新。',
+  'a11y.headerFooter.updated': '已更新分节、页眉页脚和页码设置。',
   'a11y.blockedReadonly': 'BLOCKED: 当前为只读模式。',
+  'a11y.editor.destroyed': 'JWord editor 已销毁。',
+  'a11y.history.undoUnavailable': '没有可撤销的本地操作。',
+  'a11y.history.undoCompleted': '已撤销最近一次本地操作。',
+  'a11y.history.redoUnavailable': '没有可重做的本地操作。',
+  'a11y.history.redoCompleted': '已重做最近一次本地操作。',
+  'a11y.toolbar.format.invalidFontSize': 'BLOCKED: 无法识别字号值 {value}。',
+  'a11y.toolbar.format.selectionRequired': 'BLOCKED: {label} 需要当前有可格式化的文本选区。',
+  'a11y.toolbar.format.alreadyApplied': '{label} 已经处于目标状态。',
+  'a11y.toolbar.format.targetUnavailable': 'BLOCKED: {label} 当前没有可应用的文本目标。',
+  'a11y.toolbar.format.fontSizeMaximum': '字号 已经处于最大档位。',
+  'a11y.toolbar.format.fontSizeMinimum': '字号 已经处于最小档位。',
+  'a11y.toolbar.paragraph.selectionRequired': 'BLOCKED: {label} 需要当前有可格式化的段落选区。',
+  'a11y.toolbar.paragraph.alreadyApplied': '{label} 已经处于目标状态。',
+  'a11y.toolbar.paragraph.targetUnavailable': 'BLOCKED: 当前没有可应用 {label} 的段落目标。',
+  'a11y.toolbar.paragraph.clearListUnavailable': 'BLOCKED: 当前没有可清空的列表目标。',
+  'a11y.toolbar.transaction.completed': '已同步 {label}。',
+  'a11y.toolbar.transaction.completedWithSelection': '{selection}，已同步 {label}。',
+  'a11y.toolbar.transaction.executed': '已执行 {command}。',
+  'a11y.toolbar.selection.cleared': '选区已清空。',
+  'a11y.toolbar.selection.unresolved': '选区已更新，但当前未能定位到可格式化的 paragraph/run。',
+  'a11y.toolbar.selection.updated': '{selection}。',
+  'a11y.toolbar.selection.none': '无选区',
+  'a11y.toolbar.selection.unmapped': '选区已更新，但当前未能映射到可读文本位置。',
+  'a11y.toolbar.selection.range': '选区：{paragraph} / {run} / {start}→{end}',
+  'a11y.toolbar.selection.between': '选区：{anchor} → {focus}',
+  'a11y.clipboard.copySelectionMissing': 'BLOCKED: 当前没有可复制的稳定选区。',
+  'a11y.clipboard.copyDenied': 'BLOCKED: 当前浏览器拒绝写入系统剪贴板。',
+  'a11y.clipboard.copyTextMissing': 'BLOCKED: 当前稳定选区没有可复制文本。',
+  'a11y.clipboard.cutSelectionMissing': 'BLOCKED: 当前没有可剪切的稳定选区。',
+  'a11y.clipboard.cutDenied': 'BLOCKED: 当前浏览器拒绝执行剪切。',
+  'a11y.clipboard.cutTextMissing': 'BLOCKED: 当前稳定选区没有可剪切文本。',
+  'a11y.clipboard.readDenied': 'BLOCKED: 当前浏览器不允许读取纯文本剪贴板。',
+  'a11y.clipboard.empty': 'BLOCKED: 系统剪贴板当前没有纯文本内容。',
+  'a11y.selectionActions.formatSelectionMissing': 'BLOCKED: 当前没有可格式化的有效文本选区。',
+  'a11y.selectionActions.formatRunMissing': 'BLOCKED: 当前选区没有可格式化的文本 run。',
+  'a11y.selectionActions.formatCommandUnavailable': 'BLOCKED: 当前选区未生成可执行的格式命令。',
+  'a11y.selectionActions.colorSelectionMissing': 'BLOCKED: 当前没有可用于颜色更新的有效文本选区。',
+  'a11y.selectionActions.colorInvalid': 'BLOCKED: 颜色值 {value} 非法。',
+  'a11y.selectionActions.clearSelectionMissing': 'BLOCKED: 右键菜单当前没有稳定选区可供清除格式。',
+  'a11y.selectionActions.clearUnavailable': 'BLOCKED: 当前稳定选区没有可清除的常见 run 级格式。',
+  'a11y.selectionActions.linkDialogMissing': 'BLOCKED: 当前宿主未启用链接弹窗。',
+  'a11y.selectionActions.linkOpenMissing': 'BLOCKED: 当前宿主未启用链接打开能力。',
+  'a11y.selectionActions.linkEditMissing': 'BLOCKED: 当前宿主未启用链接编辑能力。',
+  'a11y.selectionActions.linkRemoveMissing': 'BLOCKED: 当前宿主未启用链接删除能力。',
+  'a11y.selectionActions.commentsMissing': 'BLOCKED: 当前宿主未启用批注侧栏。',
+  'a11y.link.selectionUnavailable': '当前选区无法应用链接。',
+  'a11y.link.removeSelectionUnavailable': '当前选区未命中可移除的链接。',
+  'a11y.comments.selectionUnavailable': '当前选区无法创建批注。',
+  'a11y.comments.threadUnavailable': '当前批注不存在，无法删除。',
+  'a11y.comments.createFailed': '创建批注失败，请重试。',
+  'a11y.comments.replyFailed': '发送回复失败，请重试。',
+  'a11y.comments.editFailed': '保存修改失败，请重试。',
   'a11y.commentSidebarMissing': 'BLOCKED: 当前宿主未启用批注侧栏。',
   'a11y.commentSelectionRequired': 'BLOCKED: 批注需要先选中一段正文。',
+  'toast.commentSelectionRequired': '请先选择一段正文，再添加批注。',
+  'a11y.revisions.missing': 'BLOCKED: 当前修订不存在。',
+  'a11y.revisions.rangeUnavailable': 'BLOCKED: 当前修订范围无法定位。',
+  'a11y.revisions.focused': '已定位修订范围。',
+  'a11y.revisions.accepted': '已接受修订。',
+  'a11y.revisions.rejected': '已拒绝修订。',
   'a11y.linkDialogMissing': 'BLOCKED: 当前宿主未启用链接弹窗。',
   'a11y.linkAlreadyExists': 'BLOCKED: 当前内容已有链接，请使用打开、编辑或删除链接。',
   'a11y.linkOpenMissing': 'BLOCKED: 当前选区未命中可打开的链接。',
@@ -315,7 +437,7 @@ const ZH_CN_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
   'dialog.watermark.clear': '清除水印',
   'diagnostics.pluginAdapterFailed': '插件适配器执行失败。',
   'statusBar.ariaLabel': '文档状态栏',
-  'statusBar.brand.label': 'JWord',
+  'statusBar.brand.label': 'Power by @JWord',
   'statusBar.stats.words': '字数',
   'statusBar.stats.characters': '字符',
   'statusBar.stats.paragraphs': '段落',
@@ -564,6 +686,8 @@ const EN_US_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
   'menu.findReplace.replaceRemaining': 'Replaced, {count} results remaining',
   'menu.findReplace.replaceAllResult': 'Replaced {count} results',
   'menu.headingOutline.ariaLabel': 'Document outline',
+  'menu.headingOutline.title': 'Document outline',
+  'menu.headingOutline.close': 'Close document outline',
   'menu.headingOutline.collapseItem': 'Collapse outline item',
   'menu.headingOutline.expandItem': 'Expand outline item',
   'menu.headerFooter.header': 'Header',
@@ -668,6 +792,7 @@ const EN_US_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
   'menu.table.resizeColumn': 'Resize column {index}',
   'menu.table.resizeRow': 'Resize row {index}',
   'menu.revisions.title': 'Revisions',
+  'menu.revisions.close': 'Close revisions',
   'menu.revisions.empty': 'No revisions yet',
   'menu.revisions.accept': 'Accept',
   'menu.revisions.reject': 'Reject',
@@ -697,9 +822,127 @@ const EN_US_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
   'dialog.media.errorUrlDisallowed': 'This URL is not in the allowlist. Use same-origin, data:, blob:, or a host-allowed URL.',
   'dialog.media.errorUploadFailed': 'Media upload failed.',
   'dialog.table.customSizeTitle': 'Custom table size',
+  'a11y.table.readonly': 'BLOCKED: Read-only mode is enabled.',
+  'a11y.table.targetMissing': 'No table cell is active, so this action cannot run.',
+  'a11y.table.copyMissing': 'There is no table content to copy.',
+  'a11y.table.cutMissing': 'There is no table content to cut.',
+  'a11y.table.clipboardWriteDenied': 'The browser denied writing to the system clipboard.',
+  'a11y.table.cutDenied': 'The browser denied the cut operation.',
+  'a11y.table.clipboardReadDenied': 'The browser does not allow reading the system clipboard.',
+  'a11y.table.clipboardEmpty': 'The system clipboard has no text content.',
+  'a11y.table.error': 'Table operation failed.',
+  'a11y.table.insertTableFailed': 'The document cannot insert a table.',
+  'a11y.table.insertRowFailed': 'The current table cannot insert a row.',
+  'a11y.table.deleteRowFailed': 'The current table must keep at least one row.',
+  'a11y.table.insertColumnFailed': 'The current table cannot insert a column.',
+  'a11y.table.deleteColumnFailed': 'The current table must keep at least one column.',
+  'a11y.table.resizeColumnFailed': 'The current table cannot update the column width.',
+  'a11y.table.resizeRowFailed': 'The current table cannot update the row height.',
+  'a11y.table.mergeFailed': 'There is no mergeable cell to the right of the current cell.',
+  'a11y.table.borderFailed': 'The current table cannot update its borders.',
+  'a11y.table.inserted': 'The table was inserted.',
+  'a11y.table.rowInserted': 'The table row was inserted.',
+  'a11y.table.rowDeleted': 'The table row was deleted.',
+  'a11y.table.columnInserted': 'The table column was inserted.',
+  'a11y.table.columnDeleted': 'The table column was deleted.',
+  'a11y.table.columnResized': 'The table column width was updated.',
+  'a11y.table.rowResized': 'The table row height was updated.',
+  'a11y.table.merged': 'The table cells were merged.',
+  'a11y.table.borderUpdated': 'The table borders were updated.',
+  'a11y.table.destroyed': 'The JWord editor was destroyed; table tools are closed.',
+  'a11y.table.completed': '{action} completed.',
+  'a11y.table.deferred': '{action} was triggered, but the host has not connected a table command adapter.',
+  'a11y.media.readonly': 'Read-only mode is enabled.',
+  'a11y.media.adapterMissing': 'The image upload adapter is not configured.',
+  'a11y.media.uploadStarted': 'Image upload started: {source}.',
+  'a11y.media.uploadReady': 'Image resource is ready: {source}.',
+  'a11y.media.uploadFailed': 'Image upload failed: {message}',
+  'a11y.media.destroyed': 'The JWord editor was destroyed; the image entry is closed.',
+  'a11y.media.editorDestroyed': 'The JWord editor was destroyed; image insertion cannot continue.',
+  'a11y.media.deferred': 'The resource is ready and waiting for the core inline image command.',
+  'a11y.media.applied': 'The resource is ready and has been inserted into the document.',
+  'a11y.media.uploading': 'Uploading.',
+  'a11y.media.uploadingPercent': 'Uploading {percent}%',
+  'a11y.media.insertUnavailable': 'The current selection cannot insert an inline image.',
+  'a11y.media.inserted': 'The inline image was inserted.',
+  'a11y.media.replaceUnavailable': 'The current selection does not target a replaceable image.',
+  'a11y.media.replaced': 'The current image resource was replaced.',
+  'a11y.media.resizeUnavailable': 'The image size did not change, or the selection does not target a resizable image.',
+  'a11y.media.resized': 'The image size was updated.',
+  'a11y.media.rotateUnavailable': 'The image rotation did not change, or the selection does not target a rotatable image.',
+  'a11y.media.rotationReset': 'The image rotation was reset.',
+  'a11y.media.rotated': 'The image rotation was updated.',
+  'a11y.media.moveUnavailable': 'The image did not move, or the drop target is unavailable.',
+  'a11y.media.moved': 'The image position was updated.',
+  'a11y.media.deleteUnavailable': 'The current selection does not target a deletable image.',
+  'a11y.media.deleted': 'The current image was deleted.',
+  'a11y.paste.richTextApplied': 'Safe rich text was pasted with formatting preserved.',
+  'a11y.paste.tableFlattened': 'The pasted table structure was downgraded to tab-separated text.',
+  'a11y.headerFooter.readonly': 'Read-only mode is enabled.',
+  'a11y.headerFooter.sectionMissing': 'BLOCKED: The document has no configurable section.',
+  'a11y.headerFooter.sectionUpdateFailed': 'BLOCKED: The current section could not be updated.',
+  'a11y.headerFooter.updated': 'Section, header, footer, and page-number settings were updated.',
   'a11y.blockedReadonly': 'BLOCKED: Read-only mode is enabled.',
+  'a11y.editor.destroyed': 'JWord editor was destroyed.',
+  'a11y.history.undoUnavailable': 'There is no local operation to undo.',
+  'a11y.history.undoCompleted': 'Undid the most recent local operation.',
+  'a11y.history.redoUnavailable': 'There is no local operation to redo.',
+  'a11y.history.redoCompleted': 'Redid the most recent local operation.',
+  'a11y.toolbar.format.invalidFontSize': 'BLOCKED: Font size value {value} is not recognized.',
+  'a11y.toolbar.format.selectionRequired': 'BLOCKED: {label} requires a text selection that can be formatted.',
+  'a11y.toolbar.format.alreadyApplied': '{label} is already in the target state.',
+  'a11y.toolbar.format.targetUnavailable': 'BLOCKED: There is no applicable text target for {label}.',
+  'a11y.toolbar.format.fontSizeMaximum': 'Font size is already at the largest step.',
+  'a11y.toolbar.format.fontSizeMinimum': 'Font size is already at the smallest step.',
+  'a11y.toolbar.paragraph.selectionRequired': 'BLOCKED: {label} requires a paragraph selection that can be formatted.',
+  'a11y.toolbar.paragraph.alreadyApplied': '{label} is already in the target state.',
+  'a11y.toolbar.paragraph.targetUnavailable': 'BLOCKED: There is no applicable paragraph target for {label}.',
+  'a11y.toolbar.paragraph.clearListUnavailable': 'BLOCKED: There is no list target to clear.',
+  'a11y.toolbar.transaction.completed': '{label} updated.',
+  'a11y.toolbar.transaction.completedWithSelection': '{label} updated for {selection}.',
+  'a11y.toolbar.transaction.executed': 'Executed {command}.',
+  'a11y.toolbar.selection.cleared': 'Selection cleared.',
+  'a11y.toolbar.selection.unresolved': 'Selection updated, but no formatable paragraph/run could be located.',
+  'a11y.toolbar.selection.updated': '{selection}.',
+  'a11y.toolbar.selection.none': 'No selection',
+  'a11y.toolbar.selection.unmapped': 'Selection updated, but no readable text position could be mapped.',
+  'a11y.toolbar.selection.range': 'Selection: {paragraph} / {run} / {start}->{end}',
+  'a11y.toolbar.selection.between': 'Selection: {anchor} -> {focus}',
+  'a11y.clipboard.copySelectionMissing': 'BLOCKED: There is no stable selection to copy.',
+  'a11y.clipboard.copyDenied': 'BLOCKED: The browser refused to write to the system clipboard.',
+  'a11y.clipboard.copyTextMissing': 'BLOCKED: The stable selection has no copyable text.',
+  'a11y.clipboard.cutSelectionMissing': 'BLOCKED: There is no stable selection to cut.',
+  'a11y.clipboard.cutDenied': 'BLOCKED: The browser refused to cut.',
+  'a11y.clipboard.cutTextMissing': 'BLOCKED: The stable selection has no cuttable text.',
+  'a11y.clipboard.readDenied': 'BLOCKED: The browser does not allow reading plain text from the clipboard.',
+  'a11y.clipboard.empty': 'BLOCKED: The system clipboard has no plain text content.',
+  'a11y.selectionActions.formatSelectionMissing': 'BLOCKED: There is no valid text selection to format.',
+  'a11y.selectionActions.formatRunMissing': 'BLOCKED: The selection has no formattable text run.',
+  'a11y.selectionActions.formatCommandUnavailable': 'BLOCKED: No executable format command was produced for the selection.',
+  'a11y.selectionActions.colorSelectionMissing': 'BLOCKED: There is no valid text selection for the color update.',
+  'a11y.selectionActions.colorInvalid': 'BLOCKED: Color value {value} is invalid.',
+  'a11y.selectionActions.clearSelectionMissing': 'BLOCKED: The context menu has no stable selection to clear formatting from.',
+  'a11y.selectionActions.clearUnavailable': 'BLOCKED: The stable selection has no common run formatting to clear.',
+  'a11y.selectionActions.linkDialogMissing': 'BLOCKED: The host has not enabled the link dialog.',
+  'a11y.selectionActions.linkOpenMissing': 'BLOCKED: The host has not enabled opening links.',
+  'a11y.selectionActions.linkEditMissing': 'BLOCKED: The host has not enabled editing links.',
+  'a11y.selectionActions.linkRemoveMissing': 'BLOCKED: The host has not enabled removing links.',
+  'a11y.selectionActions.commentsMissing': 'BLOCKED: The host has not enabled the comments sidebar.',
+  'a11y.link.selectionUnavailable': 'The current selection cannot receive a link.',
+  'a11y.link.removeSelectionUnavailable': 'The current selection does not contain a removable link.',
+  'a11y.comments.selectionUnavailable': 'The current selection cannot create a comment.',
+  'a11y.comments.threadUnavailable': 'The current comment does not exist and cannot be deleted.',
+  'a11y.comments.createFailed': 'Could not create the comment. Please try again.',
+  'a11y.comments.replyFailed': 'Could not send the reply. Please try again.',
+  'a11y.comments.editFailed': 'Could not save the edit. Please try again.',
   'a11y.commentSidebarMissing': 'BLOCKED: Comment sidebar is not enabled by the host.',
   'a11y.commentSelectionRequired': 'BLOCKED: Select document text before adding a comment.',
+  'toast.commentSelectionRequired': 'Select document text before adding a comment.',
+  'a11y.revisions.missing': 'BLOCKED: The revision no longer exists.',
+  'a11y.revisions.rangeUnavailable': 'BLOCKED: The revision range cannot be located.',
+  'a11y.revisions.focused': 'Revision range selected.',
+  'a11y.revisions.accepted': 'Revision accepted.',
+  'a11y.revisions.rejected': 'Revision rejected.',
   'a11y.linkDialogMissing': 'BLOCKED: Link dialog is not enabled by the host.',
   'a11y.linkAlreadyExists': 'BLOCKED: This selection already contains a link. Use open, edit, or remove link instead.',
   'a11y.linkOpenMissing': 'BLOCKED: The current selection does not contain a link to open.',
@@ -720,7 +963,7 @@ const EN_US_UI_I18N_DICTIONARY: JWordUiI18nDictionary = Object.freeze({
   'dialog.watermark.clear': 'Clear watermark',
   'diagnostics.pluginAdapterFailed': 'Plugin adapter failed.',
   'statusBar.ariaLabel': 'Document status bar',
-  'statusBar.brand.label': 'JWord',
+  'statusBar.brand.label': 'Power by @JWord',
   'statusBar.stats.words': 'Words',
   'statusBar.stats.characters': 'Characters',
   'statusBar.stats.paragraphs': 'Paragraphs',
@@ -757,6 +1000,7 @@ export const DEFAULT_JWORD_UI_I18N_DICTIONARY: JWordUiI18nDictionary = ZH_CN_UI_
 /** 合并默认字典与宿主局部覆盖。 */
 export function resolveJWordUiI18n(options: JWordUiI18nOptions | undefined = undefined): ResolvedJWordUiI18n {
   const messages: JWordUiI18nDictionary = Object.freeze({
+    ...DEFAULT_JWORD_UI_I18N_DICTIONARY,
     ...readBuiltInLocaleDictionary(options?.locale),
     ...(options?.messages ?? {})
   })
@@ -765,21 +1009,28 @@ export function resolveJWordUiI18n(options: JWordUiI18nOptions | undefined = und
     locale: options?.locale ?? 'zh-CN',
     ...(options?.dir === undefined ? {} : { dir: options.dir }),
     messages,
-    t(key, fallback): string {
-      return readJWordUiText({ messages }, key, fallback)
+    t(key): string {
+      return readJWordUiText({ messages }, key)
     }
   }
 }
 
-/** 读取字典文案，缺失或空字符串时回退到既有文案。 */
+/** 读取字典文案，缺失或空字符串时回退到内建中文。 */
 export function readJWordUiText(
   i18n: Pick<ResolvedJWordUiI18n, 'messages'>,
-  key: JWordUiI18nKey,
-  fallback: string
+  key: JWordUiI18nKey
 ): string {
   const value = i18n.messages[key]
+  if (value !== undefined && value.length > 0) {
+    return value
+  }
 
-  return value === undefined || value.length === 0 ? fallback : value
+  const defaultValue = DEFAULT_JWORD_UI_I18N_DICTIONARY[key]
+  if (defaultValue !== undefined && defaultValue.length > 0) {
+    return defaultValue
+  }
+
+  return key
 }
 
 /** 按 i18n 字典本地化单个内建 toolbar 定义。 */
@@ -789,11 +1040,11 @@ export function localizeToolbarDefinition(
 ): BuiltinToolDefinition {
   return {
     ...definition,
-    label: readJWordUiText(i18n, `toolbar.${definition.id}.label`, definition.label),
-    tooltip: readJWordUiText(i18n, `toolbar.${definition.id}.tooltip`, definition.tooltip),
+    label: readJWordUiText(i18n, `toolbar.${definition.id}.label`),
+    tooltip: readJWordUiText(i18n, `toolbar.${definition.id}.tooltip`),
     ...(definition.fieldLabel === undefined
       ? {}
-      : { fieldLabel: readJWordUiText(i18n, `toolbar.${definition.id}.fieldLabel`, definition.fieldLabel) }),
+      : { fieldLabel: readJWordUiText(i18n, `toolbar.${definition.id}.fieldLabel`) }),
     ...(definition.options === undefined
       ? {}
       : { options: definition.options.map((option) => localizeToolbarOption(definition.id, option, i18n)) })
@@ -808,7 +1059,7 @@ function localizeToolbarOption(
 ): ToolbarOption {
   return {
     ...option,
-    label: readJWordUiText(i18n, `toolbar.${toolId}.option.${readToolbarOptionKey(option.value)}`, option.label)
+    label: readJWordUiText(i18n, `toolbar.${toolId}.option.${readToolbarOptionKey(option.value)}`)
   }
 }
 

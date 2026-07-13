@@ -9,7 +9,7 @@
 import { buildSetSectionPropertiesCommand, type Editor, type SectionPropertiesInput } from '@4xian/jword-core'
 import { createHeaderFooterDom, destroyHeaderFooterDom, localizeHeaderFooterDom } from './dom'
 import type { HeaderFooterDom } from './dom'
-import { resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
+import { readJWordUiText, resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 import type { JWordReadonlyMode } from '../types'
 
 export interface CreateHeaderFooterControllerOptions {
@@ -53,7 +53,7 @@ export function createHeaderFooterController(
   const dom = createHeaderFooterDom(options.host)
   const signalController = new AbortController()
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
-  const i18n = options.i18n ?? resolveJWordUiI18n()
+  let i18n = options.i18n ?? resolveJWordUiI18n()
   let destroyed = false
 
   localizeHeaderFooterDom(dom, i18n)
@@ -307,25 +307,25 @@ export function createHeaderFooterController(
     const sectionId = options.editor.getProjection().document.sections[0]?.id
 
     if (sectionId === undefined) {
-      options.announce?.('BLOCKED: 当前文档缺少可配置的分节。')
+      options.announce?.(readJWordUiText(i18n, 'a11y.headerFooter.sectionMissing'))
       return
     }
 
     const command = buildSetSectionPropertiesCommand(options.editor.getProjection(), sectionId, input)
 
     if (command === null) {
-      options.announce?.('BLOCKED: 当前分节无法更新。')
+      options.announce?.(readJWordUiText(i18n, 'a11y.headerFooter.sectionUpdateFailed'))
       return
     }
 
     options.editor.executeCommand(command)
-    options.announce?.('已更新分节、页眉页脚和页码设置。')
+    options.announce?.(readJWordUiText(i18n, 'a11y.headerFooter.updated'))
     refresh()
   }
 
   /** 播报只读阻断。 */
   function announceReadonly(): void {
-    options.announce?.('当前为只读模式。')
+    options.announce?.(readJWordUiText(i18n, 'a11y.headerFooter.readonly'))
   }
 
   /** 从当前 projection 回填表单。 */
@@ -419,7 +419,8 @@ export function createHeaderFooterController(
     toggleHeaderFooterMenu,
     toggleFooterMenu,
     togglePageNumberMenu,
-    setI18n(i18n): void {
+    setI18n(nextI18n): void {
+      i18n = nextI18n
       localizeHeaderFooterDom(dom, i18n)
     },
     refresh,

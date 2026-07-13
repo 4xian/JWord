@@ -17,6 +17,7 @@ import {
   buildSetUnderlineCommand
 } from '@4xian/jword-core'
 import { createSelectionRebindSnapshot, restoreSelectionFromRebindSnapshot } from '../selection-rebind'
+import { readJWordUiText, type ResolvedJWordUiI18n } from '../i18n'
 import { DEFAULT_BACKGROUND_COLOR, DEFAULT_TEXT_COLOR } from '../toolbar/builtin-tools'
 import { cloneSelection, normalizeHexColor, readSelectionFormattingState } from '../toolbar/state'
 import { copyStableSelectionToClipboard, cutStableSelection, pasteFromClipboard, pastePlainTextFromClipboard } from './clipboard'
@@ -27,6 +28,7 @@ import type { SelectionActionColorKind, SelectionActionsColorFormatController, S
 export interface SelectionActionCommandContext {
   readonly editor: Editor
   readonly colorFormat: SelectionActionsColorFormatController
+  readonly readI18n: () => ResolvedJWordUiI18n
   readonly announce: (message: string) => void
   readonly readActiveSelectionSnapshot: () => SelectionState | null
   readonly readFrozenColorSelection: (kind: SelectionActionColorKind) => SelectionState | null
@@ -81,14 +83,14 @@ export function toggleRunFormat(
   property: 'bold' | 'italic' | 'underline' | 'strike'
 ): void {
   if (selection === null) {
-    context.announce('BLOCKED: 当前没有可格式化的有效文本选区。')
+    announceSelectionMessage(context, 'a11y.selectionActions.formatSelectionMissing')
     return
   }
 
   const formattingState = readSelectionFormattingState(context.editor, selection)
 
   if (formattingState.run === null) {
-    context.announce('BLOCKED: 当前选区没有可格式化的文本 run。')
+    announceSelectionMessage(context, 'a11y.selectionActions.formatRunMissing')
     return
   }
 
@@ -98,7 +100,7 @@ export function toggleRunFormat(
   context.freezeFloatingToolbarForSelection(selection)
 
   if (!executeSelectionCommand(context.editor, selection, command)) {
-    context.announce('BLOCKED: 当前选区未生成可执行的格式命令。')
+    announceSelectionMessage(context, 'a11y.selectionActions.formatCommandUnavailable')
     return
   }
 
@@ -115,21 +117,21 @@ export function applyColorFormat(
   keepPickerOpen: boolean
 ): void {
   if (selection === null) {
-    context.announce('BLOCKED: 当前没有可用于颜色更新的有效文本选区。')
+    announceSelectionMessage(context, 'a11y.selectionActions.colorSelectionMissing')
     return
   }
 
   const value = normalizeHexColor(rawValue)
 
   if (value === null) {
-    context.announce(`BLOCKED: 颜色值 ${rawValue} 非法。`)
+    context.announce(readJWordUiText(context.readI18n(), 'a11y.selectionActions.colorInvalid').replace('{value}', rawValue))
     return
   }
 
   const formattingState = readSelectionFormattingState(context.editor, selection)
 
   if (formattingState.run === null) {
-    context.announce('BLOCKED: 当前选区没有可格式化的文本 run。')
+    announceSelectionMessage(context, 'a11y.selectionActions.formatRunMissing')
     return
   }
 
@@ -158,7 +160,7 @@ export function clearStableSelectionFormatting(
   selection: SelectionState | null
 ): void {
   if (selection === null) {
-    context.announce('BLOCKED: 右键菜单当前没有稳定选区可供清除格式。')
+    announceSelectionMessage(context, 'a11y.selectionActions.clearSelectionMissing')
     return
   }
 
@@ -186,7 +188,7 @@ export function clearStableSelectionFormatting(
   }
 
   if (!applied) {
-    context.announce('BLOCKED: 当前稳定选区没有可清除的常见 run 级格式。')
+    announceSelectionMessage(context, 'a11y.selectionActions.clearUnavailable')
     return
   }
 
@@ -223,7 +225,7 @@ export function bindToolbarActions(context: SelectionActionsBindingContext): voi
   })
   context.bindButton(dom.formatControls.insertLink, () => {
     if (context.insertActions === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用链接弹窗。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.linkDialogMissing')
       return
     }
 
@@ -233,7 +235,7 @@ export function bindToolbarActions(context: SelectionActionsBindingContext): voi
   })
   context.bindButton(dom.formatControls.openLink, () => {
     if (context.insertActions?.openActiveLink === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用链接打开能力。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.linkOpenMissing')
       return
     }
 
@@ -243,7 +245,7 @@ export function bindToolbarActions(context: SelectionActionsBindingContext): voi
   })
   context.bindButton(dom.formatControls.editLink, () => {
     if (context.insertActions?.editLink === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用链接编辑能力。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.linkEditMissing')
       return
     }
 
@@ -253,7 +255,7 @@ export function bindToolbarActions(context: SelectionActionsBindingContext): voi
   })
   context.bindButton(dom.formatControls.removeLink, () => {
     if (context.insertActions?.removeLink === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用链接删除能力。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.linkRemoveMissing')
       return
     }
 
@@ -305,7 +307,7 @@ export function bindContextMenuActions(context: SelectionActionsBindingContext):
   })
   context.bindButton(dom.contextControls.insertComment, () => {
     if (context.insertActions === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用批注侧栏。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.commentsMissing')
       return
     }
 
@@ -315,7 +317,7 @@ export function bindContextMenuActions(context: SelectionActionsBindingContext):
   })
   context.bindButton(dom.contextControls.insertLink, () => {
     if (context.insertActions === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用链接弹窗。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.linkDialogMissing')
       return
     }
 
@@ -332,7 +334,7 @@ function bindContextLinkActions(context: SelectionActionsBindingContext): void {
 
   context.bindButton(dom.contextControls.openLink, () => {
     if (context.insertActions?.openActiveLink === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用链接打开能力。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.linkOpenMissing')
       return
     }
 
@@ -341,7 +343,7 @@ function bindContextLinkActions(context: SelectionActionsBindingContext): void {
   })
   context.bindButton(dom.contextControls.editLink, () => {
     if (context.insertActions?.editLink === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用链接编辑能力。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.linkEditMissing')
       return
     }
 
@@ -350,13 +352,29 @@ function bindContextLinkActions(context: SelectionActionsBindingContext): void {
   })
   context.bindButton(dom.contextControls.removeLink, () => {
     if (context.insertActions?.removeLink === undefined) {
-      context.announce('BLOCKED: 当前宿主未启用链接删除能力。')
+      announceSelectionBindingMessage(context, 'a11y.selectionActions.linkRemoveMissing')
       return
     }
 
     context.insertActions.removeLink(cloneSelection(state.stableContextSelection.linkSelection))
     clearContextLinkState(context)
   })
+}
+
+/** 使用当前语言播报选区命令错误。 */
+function announceSelectionMessage(
+  context: SelectionActionCommandContext,
+  key: Parameters<typeof readJWordUiText>[1]
+): void {
+  context.announce(readJWordUiText(context.readI18n(), key))
+}
+
+/** 使用当前语言播报选区绑定能力错误。 */
+function announceSelectionBindingMessage(
+  context: SelectionActionsBindingContext,
+  key: Parameters<typeof readJWordUiText>[1]
+): void {
+  context.announce(readJWordUiText(context.commandContext.readI18n(), key))
 }
 
 /** 清除右键菜单中的链接快照。 */

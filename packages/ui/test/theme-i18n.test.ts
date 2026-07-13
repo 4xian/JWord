@@ -14,6 +14,7 @@ import { createJWordUi } from '../src/create-ui'
 import {
   DEFAULT_JWORD_UI_I18N_DICTIONARY,
   JWORD_UI_BUILTIN_I18N_DICTIONARIES,
+  readJWordUiText,
   resolveJWordUiI18n
 } from '../src/i18n'
 
@@ -338,9 +339,10 @@ describe('Gate 7 theme and i18n', () => {
     })
 
     expect(i18n.locale).toBe('tenant')
-    expect(i18n.t('toolbar.format.bold.label', '加粗')).toBe('Strong')
-    expect(i18n.t('toolbar.format.italic.label', '斜体')).toBe('斜体')
-    expect(i18n.t('diagnostics.pluginAdapterFailed', '插件适配器执行失败。')).toBe('插件适配器执行失败。')
+    expect(i18n.t('toolbar.format.bold.label')).toBe('Strong')
+    expect(i18n.t('toolbar.format.italic.label')).toBe('斜体')
+    expect(i18n.t('diagnostics.pluginAdapterFailed')).toBe('插件适配器执行失败。')
+    expect(readJWordUiText({ messages: {} }, 'toolbar.format.italic.label')).toBe('斜体')
   })
 
   test('built-in English dictionary covers every built-in Chinese key', () => {

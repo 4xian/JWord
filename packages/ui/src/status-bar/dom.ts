@@ -81,7 +81,7 @@ export function createStatusBarDom(options: CreateStatusBarDomOptions): StatusBa
   root.className = 'jw-status-bar__root'
   root.setAttribute('data-jword-status-bar-root', 'true')
   root.setAttribute('role', 'toolbar')
-  root.setAttribute('aria-label', readJWordUiText(options.i18n, 'statusBar.ariaLabel', '文档状态栏'))
+  root.setAttribute('aria-label', readJWordUiText(options.i18n, 'statusBar.ariaLabel'))
   left.className = 'jw-status-bar__side jw-status-bar__side--left'
   left.setAttribute('data-jword-status-bar-left', 'true')
   right.className = 'jw-status-bar__side jw-status-bar__side--right'
@@ -127,21 +127,21 @@ export function localizeStatusBarDom(
   } else {
     dom.host.setAttribute('dir', i18n.dir)
   }
-  dom.root.setAttribute('aria-label', readJWordUiText(i18n, 'statusBar.ariaLabel', '文档状态栏'))
-  updateControlText(dom.controls.wordCount, readJWordUiText(i18n, 'statusBar.stats.words', '字数'))
-  updateControlText(dom.controls.characterCount, readJWordUiText(i18n, 'statusBar.stats.characters', '字符'))
-  updateControlText(dom.controls.paragraphCount, readJWordUiText(i18n, 'statusBar.stats.paragraphs', '段落'))
-  updateControlText(dom.controls.selection, readJWordUiText(i18n, 'statusBar.stats.selection', '选区'))
-  updateButtonLabel(dom.controls.fullscreen, readJWordUiText(i18n, 'statusBar.view.fullscreen', '全屏'))
-  updateButtonLabel(dom.controls.presentation, readJWordUiText(i18n, 'statusBar.view.presentation', '演示模式'))
-  updateInputLabel(dom.controls.zoomSlider, readJWordUiText(i18n, 'statusBar.zoom.label', '缩放'))
-  updateZoomStepButtonLabel(dom.zoomOutButton, readJWordUiText(i18n, 'statusBar.zoom.decrease', '缩小'))
-  updateZoomStepButtonLabel(dom.zoomInButton, readJWordUiText(i18n, 'statusBar.zoom.increase', '放大'))
-  updateButtonLabel(dom.controls.zoomReset, readJWordUiText(i18n, 'statusBar.zoom.reset', '还原 100%'))
-  updateButtonLabel(dom.controls.fitWidth, readJWordUiText(i18n, 'statusBar.zoom.fitWidth', '适应宽度'))
-  updateButtonLabel(dom.controls.fitPage, readJWordUiText(i18n, 'statusBar.zoom.fitPage', '适应整页'))
-  updateSelectLabel(dom.controls.themeSwitcher, readJWordUiText(i18n, 'statusBar.theme.label', '主题'))
-  updateSelectLabel(dom.controls.localeSwitcher, readJWordUiText(i18n, 'statusBar.locale.label', '语言'))
+  dom.root.setAttribute('aria-label', readJWordUiText(i18n, 'statusBar.ariaLabel'))
+  updateControlText(dom.controls.wordCount, readJWordUiText(i18n, 'statusBar.stats.words'))
+  updateControlText(dom.controls.characterCount, readJWordUiText(i18n, 'statusBar.stats.characters'))
+  updateControlText(dom.controls.paragraphCount, readJWordUiText(i18n, 'statusBar.stats.paragraphs'))
+  updateControlText(dom.controls.selection, readJWordUiText(i18n, 'statusBar.stats.selection'))
+  updateButtonLabel(dom.controls.fullscreen, readJWordUiText(i18n, 'statusBar.view.fullscreen'))
+  updateButtonLabel(dom.controls.presentation, readJWordUiText(i18n, 'statusBar.view.presentation'))
+  updateInputLabel(dom.controls.zoomSlider, readJWordUiText(i18n, 'statusBar.zoom.label'))
+  updateZoomStepButtonLabel(dom.zoomOutButton, readJWordUiText(i18n, 'statusBar.zoom.decrease'))
+  updateZoomStepButtonLabel(dom.zoomInButton, readJWordUiText(i18n, 'statusBar.zoom.increase'))
+  updateButtonLabel(dom.controls.zoomReset, readJWordUiText(i18n, 'statusBar.zoom.reset'))
+  updateButtonLabel(dom.controls.fitWidth, readJWordUiText(i18n, 'statusBar.zoom.fitWidth'))
+  updateButtonLabel(dom.controls.fitPage, readJWordUiText(i18n, 'statusBar.zoom.fitPage'))
+  updateSelectLabel(dom.controls.themeSwitcher, readJWordUiText(i18n, 'statusBar.theme.label'))
+  updateSelectLabel(dom.controls.localeSwitcher, readJWordUiText(i18n, 'statusBar.locale.label'))
   syncThemeOptions(dom.themeSelect, themes, i18n)
   syncLocaleOptions(dom.localeSelect, locales, i18n)
 }
@@ -151,7 +151,7 @@ export function renderStatusBarDomState(dom: StatusBarDom, state: StatusBarDomSt
   setValueText(dom.controls.wordCount, String(state.words))
   setValueText(dom.controls.characterCount, String(state.characters))
   setValueText(dom.controls.paragraphCount, String(state.paragraphs))
-  setValueText(dom.controls.page, readJWordUiText(i18n, 'statusBar.page.current', '第 {current} / {total} 页')
+  setValueText(dom.controls.page, readJWordUiText(i18n, 'statusBar.page.current')
     .replace('{current}', String(state.currentPage))
     .replace('{total}', String(state.totalPages)))
   setValueText(dom.controls.selection, state.selectionText)
@@ -159,15 +159,15 @@ export function renderStatusBarDomState(dom: StatusBarDom, state: StatusBarDomSt
   updateButtonLabel(
     dom.controls.fullscreen,
     state.fullscreen
-      ? readJWordUiText(i18n, 'statusBar.view.exitFullscreen', '退出全屏')
-      : readJWordUiText(i18n, 'statusBar.view.fullscreen', '全屏'),
+      ? readJWordUiText(i18n, 'statusBar.view.exitFullscreen')
+      : readJWordUiText(i18n, 'statusBar.view.fullscreen'),
     state.fullscreen ? 'exitFullscreen' : 'fullscreen'
   )
   updateButtonLabel(
     dom.controls.presentation,
     state.presentation
-      ? readJWordUiText(i18n, 'statusBar.view.exitPresentation', '退出演示模式')
-      : readJWordUiText(i18n, 'statusBar.view.presentation', '演示模式'),
+      ? readJWordUiText(i18n, 'statusBar.view.exitPresentation')
+      : readJWordUiText(i18n, 'statusBar.view.presentation'),
     state.presentation ? 'exitPresentation' : 'presentation'
   )
   dom.zoomSlider?.setAttribute('value', String(state.zoomPercent))
@@ -210,29 +210,29 @@ function createStatusBarItem(
     case 'brand':
       return createLabel(ownerDocument, item, options.brandLabel)
     case 'wordCount':
-      return createMetric(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.stats.words', '字数'))
+      return createMetric(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.stats.words'))
     case 'characterCount':
-      return createMetric(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.stats.characters', '字符'))
+      return createMetric(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.stats.characters'))
     case 'paragraphCount':
-      return createMetric(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.stats.paragraphs', '段落'))
+      return createMetric(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.stats.paragraphs'))
     case 'page':
       return createValue(ownerDocument, item)
     case 'selection':
-      return createMetric(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.stats.selection', '选区'))
+      return createMetric(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.stats.selection'))
     case 'fullscreen':
-      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.view.fullscreen', '全屏'), 'fullscreen')
+      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.view.fullscreen'), 'fullscreen')
     case 'presentation':
-      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.view.presentation', '演示模式'), 'presentation')
+      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.view.presentation'), 'presentation')
     case 'zoomSlider':
       return createZoomSlider(ownerDocument, options)
     case 'zoomPercent':
       return createValue(ownerDocument, item)
     case 'zoomReset':
-      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.zoom.reset', '还原 100%'), 'reset')
+      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.zoom.reset'), 'reset')
     case 'fitWidth':
-      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.zoom.fitWidth', '适应宽度'), 'fitWidth')
+      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.zoom.fitWidth'), 'fitWidth')
     case 'fitPage':
-      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.zoom.fitPage', '适应整页'), 'fitPage')
+      return createButton(ownerDocument, item, readJWordUiText(options.i18n, 'statusBar.zoom.fitPage'), 'fitPage')
     case 'themeSwitcher':
       return createThemeSelect(ownerDocument, options)
     case 'localeSwitcher':
@@ -306,14 +306,14 @@ function createZoomSlider(ownerDocument: Document, options: CreateStatusBarDomOp
   const minus = createZoomStepButton(
     ownerDocument,
     'zoomOut',
-    readJWordUiText(options.i18n, 'statusBar.zoom.decrease', '缩小'),
+    readJWordUiText(options.i18n, 'statusBar.zoom.decrease'),
     'data-jword-status-bar-zoom-minus'
   )
   const input = ownerDocument.createElement('input')
   const plus = createZoomStepButton(
     ownerDocument,
     'zoomIn',
-    readJWordUiText(options.i18n, 'statusBar.zoom.increase', '放大'),
+    readJWordUiText(options.i18n, 'statusBar.zoom.increase'),
     'data-jword-status-bar-zoom-plus'
   )
 
@@ -321,7 +321,7 @@ function createZoomSlider(ownerDocument: Document, options: CreateStatusBarDomOp
   wrapper.setAttribute('data-jword-status-bar-action', 'zoomSlider')
   input.type = 'range'
   input.className = 'jw-status-bar__zoom-slider'
-  input.setAttribute('aria-label', readJWordUiText(options.i18n, 'statusBar.zoom.label', '缩放'))
+  input.setAttribute('aria-label', readJWordUiText(options.i18n, 'statusBar.zoom.label'))
   input.min = String(options.minZoomPercent)
   input.max = String(options.maxZoomPercent)
   input.step = String(options.zoomStepPercent)
@@ -357,8 +357,8 @@ function createThemeSelect(ownerDocument: Document, options: CreateStatusBarDomO
   wrapper.setAttribute('data-jword-status-bar-action', 'themeSwitcher')
   select.className = 'jw-status-bar__select'
   select.setAttribute('data-jword-status-bar-action', 'themeSwitcher')
-  select.setAttribute('aria-label', readJWordUiText(options.i18n, 'statusBar.theme.label', '主题'))
-  select.title = readJWordUiText(options.i18n, 'statusBar.theme.label', '主题')
+  select.setAttribute('aria-label', readJWordUiText(options.i18n, 'statusBar.theme.label'))
+  select.title = readJWordUiText(options.i18n, 'statusBar.theme.label')
   syncThemeOptions(select, options.themes, options.i18n)
   wrapper.append(select)
 
@@ -373,8 +373,8 @@ function createLocaleSelect(ownerDocument: Document, options: CreateStatusBarDom
   wrapper.setAttribute('data-jword-status-bar-action', 'localeSwitcher')
   select.className = 'jw-status-bar__select'
   select.setAttribute('data-jword-status-bar-action', 'localeSwitcher')
-  select.setAttribute('aria-label', readJWordUiText(options.i18n, 'statusBar.locale.label', '语言'))
-  select.title = readJWordUiText(options.i18n, 'statusBar.locale.label', '语言')
+  select.setAttribute('aria-label', readJWordUiText(options.i18n, 'statusBar.locale.label'))
+  select.title = readJWordUiText(options.i18n, 'statusBar.locale.label')
   syncLocaleOptions(select, options.locales, options.i18n)
   wrapper.append(select)
 
@@ -428,8 +428,8 @@ function syncLocaleOptions(select: HTMLSelectElement | null, locales: readonly J
 
     option.value = locale
     option.textContent = locale === 'en-US'
-      ? readJWordUiText(i18n, 'statusBar.locale.enUS', 'English')
-      : readJWordUiText(i18n, 'statusBar.locale.zhCN', '中文')
+      ? readJWordUiText(i18n, 'statusBar.locale.enUS')
+      : readJWordUiText(i18n, 'statusBar.locale.zhCN')
     select.append(option)
   }
   select.value = currentValue
@@ -438,10 +438,10 @@ function syncLocaleOptions(select: HTMLSelectElement | null, locales: readonly J
 /** 读取主题文案。 */
 function readThemeLabel(i18n: ResolvedJWordUiI18n, theme: JWordUiThemeName): string {
   if (theme === 'dark') {
-    return readJWordUiText(i18n, 'statusBar.theme.dark', '深色')
+    return readJWordUiText(i18n, 'statusBar.theme.dark')
   }
 
-  return readJWordUiText(i18n, 'statusBar.theme.light', '浅色')
+  return readJWordUiText(i18n, 'statusBar.theme.light')
 }
 
 /** 读取特定类型控件。 */

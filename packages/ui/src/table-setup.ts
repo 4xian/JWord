@@ -7,15 +7,19 @@
  */
 import { createCoreTableCommandAdapter } from './table/core-command-adapter'
 import type { JWordTableOptions } from './types'
+import type { ResolvedJWordUiI18n } from './i18n'
 
 /** 解析表格工具配置；默认使用 core 表格命令适配器。 */
-export function resolveTableOptions(table: JWordTableOptions | undefined): JWordTableOptions {
+export function resolveTableOptions(
+  table: JWordTableOptions | undefined,
+  i18n?: ResolvedJWordUiI18n | (() => ResolvedJWordUiI18n)
+): JWordTableOptions {
   if (table !== undefined) {
     return table
   }
 
   return Object.freeze({
     description: '默认表格工具使用 core 表格命令适配器。',
-    commands: createCoreTableCommandAdapter()
+    commands: createCoreTableCommandAdapter(i18n)
   } satisfies JWordTableOptions)
 }

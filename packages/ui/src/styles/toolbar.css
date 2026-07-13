@@ -1,7 +1,7 @@
 /* 完整公开 token 由 theme.ts 定义；当前 CSS 首屏只消费 --jw-color-surface-muted 与 --jw-color-accent 等 token 的必要子集。 */
 :is(.jw-root, .jw-toolbar) {
   --jw-color-surface: #ffffff;
-  --jw-color-surface-muted: #f8fafc;
+  --jw-color-surface-muted: #eef2fc;
   --jw-color-surface-elevated: #ffffff;
   --jw-color-text: #454d5a;
   --jw-color-text-muted: #667085;
@@ -585,23 +585,6 @@
   flex: 0 0 auto;
 }
 
-.jw-toolbar__button-caret {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 6px;
-  width: 6px;
-  height: 5px;
-  margin-left: 3px;
-  color: currentColor;
-}
-
-.jw-toolbar__button .jw-toolbar__button-caret svg {
-  flex: 0 0 6px;
-  width: 6px;
-  height: 5px;
-}
-
 .jw-header-footer {
   box-sizing: border-box;
   display: flex;
@@ -710,6 +693,84 @@
   box-shadow: 0 12px 28px rgb(25 35 52 / 12%);
 }
 
+.jw-side-workspace {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
+  width: min(280px, calc(100% - 24px));
+  min-height: 0;
+  pointer-events: none;
+}
+
+.jw-side-workspace--left {
+  left: 12px;
+}
+
+.jw-side-workspace--right {
+  right: 12px;
+}
+
+.jw-side-workspace > * {
+  max-height: 100%;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+.jw-toast-host {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  z-index: 180;
+  width: min(420px, calc(100% - 32px));
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.jw-toast {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  box-shadow: 0 10px 28px rgb(24 38 59 / 18%);
+  color: #1e3a5f;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.jw-toast[data-jword-toast-type='success'] {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.jw-toast[data-jword-toast-type='warning'] {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.jw-toast[data-jword-toast-type='error'] {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.jw-find-replace[data-jword-anchored='true'] {
+  position: fixed;
+  left: var(--jw-find-replace-left, 16px);
+  top: var(--jw-find-replace-top, 0);
+  z-index: 130;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - var(--jw-find-replace-top, 0) - 16px);
+  overflow: auto;
+}
+
 .jw-find-replace > * {
   margin: 0;
 }
@@ -782,7 +843,7 @@
   flex: 1 1 0;
   min-width: 0;
   min-height: 28px;
-  padding: 0 6px;
+  padding: 0;
   border: 1px solid #d9e0e9;
   border-radius: 4px;
   background: #ffffff;
@@ -790,6 +851,7 @@
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+  text-align: center;
 }
 
 .jw-find-replace__button:hover:enabled {
@@ -833,19 +895,7 @@
   background: rgb(255 184 0 / 48%);
 }
 
-.jw-heading-outline-host {
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: 12px;
-  z-index: 24;
-  width: min(248px, calc(100% - 24px));
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-}
-
-.jw-heading-outline-host .jw-heading-outline {
+.jw-side-workspace--left .jw-heading-outline {
   max-height: 100%;
   pointer-events: auto;
 }
@@ -858,12 +908,63 @@
   font-size: 12px;
   width: 100%;
   max-height: 100%;
-  overflow: auto;
+  overflow: hidden;
   padding: 10px 8px;
   border: 1px solid #dfe5ec;
   border-radius: 8px;
   background: rgb(255 255 255 / 96%);
   box-shadow: 0 16px 36px rgb(24 38 59 / 14%);
+}
+
+.jw-heading-outline__header,
+.jw-revisions-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  min-height: 28px;
+  margin-bottom: 8px;
+}
+
+.jw-heading-outline__title,
+.jw-revisions-panel__title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jw-heading-outline__close,
+.jw-revisions-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.jw-heading-outline__close:hover,
+.jw-revisions-panel__close:hover {
+  color: #111827;
+}
+
+.jw-heading-outline__list {
+  min-height: 0;
+  overflow: auto;
 }
 
 .jw-heading-outline__row {
@@ -954,7 +1055,9 @@
 .jw-revisions-panel {
   display: flex;
   flex-direction: column;
-  max-width: 320px;
+  width: 100%;
+  max-height: 100%;
+  overflow: hidden;
   padding: 10px;
   border: 1px solid #d9e1eb;
   border-radius: 6px;
@@ -962,16 +1065,11 @@
   color: #263241;
 }
 
-.jw-revisions-panel__title {
-  margin: 0 0 8px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.25;
-}
-
 .jw-revisions-panel__list {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: auto;
 }
 
 .jw-revisions-panel__item + .jw-revisions-panel__item {
@@ -1198,7 +1296,7 @@
   min-height: 26px;
   border-color: var(--jw-color-border, #e0e0e0);
   background: var(--jw-color-surface, #ffffff);
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .jw-toolbar__select-wrap[data-jword-trigger-variant='boxed']:hover,
@@ -1221,6 +1319,7 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  position: relative;
 }
 
 .jw-toolbar__select-trigger-row {
@@ -1232,14 +1331,12 @@
 }
 
 .jw-toolbar__select-wrap[data-jword-trigger-variant='icon'] .jw-toolbar__select-trigger {
-  justify-content: flex-start;
-  min-width: 36px;
-  padding: 0 2px;
+  padding: 4px 2px;
 }
 
 .jw-toolbar__select-wrap[data-jword-trigger-variant='boxed'] .jw-toolbar__select-trigger {
-  min-height: 24px;
-  padding: 0 6px;
+  padding: 0 4px;
+  min-height: 26px;
 }
 
 .jw-toolbar__select-trigger-icon {
@@ -1265,26 +1362,18 @@
   margin-right: 0;
 }
 
-.jw-toolbar__select-trigger-icon svg {
-  /* width: 20px; */
-  /* height: 20px; */
-}
-
-.jw-toolbar__select-arrow,
-.jw-toolbar__color-arrow {
+.jw-toolbar__select-arrow {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 10px;
   height: 8px;
   flex: 0 0 10px;
-  margin-left: 4px;
   color: var(--jw-color-text-muted, #81868f);
   pointer-events: none;
 }
 
-.jw-toolbar__select-arrow svg,
-.jw-toolbar__color-arrow svg {
+.jw-toolbar__select-arrow svg {
   width: 6px;
   height: 5px;
 }
@@ -1348,7 +1437,7 @@
   max-width: min(var(--jw-toolbar-select-menu-max-width, 240px), calc(100vw - 32px));
   padding: 4px 0;
   border: 1px solid var(--jw-color-border, #e4e7eb);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--jw-color-surface-elevated, #ffffff);
   box-shadow: var(--jw-shadow-overlay, 0 12px 28px rgb(25 35 52 / 12%));
 }
@@ -1816,7 +1905,7 @@
 
 .jw-toolbar__select-option:hover,
 .jw-toolbar__select-option[data-jword-selected='true'] {
-  background: var(--jw-color-surface-muted, #f5f6f8);
+  background: var(--jw-color-surface-muted, #eef2fc);
 }
 
 .jw-toolbar__select-option-check,
@@ -1921,7 +2010,6 @@
 }
 
 .jw-toolbar__color-wrap {
-  min-width: 36px;
   padding: 0 2px;
   cursor: pointer;
   --jw-toolbar-color: #111111;
@@ -2009,7 +2097,7 @@
 .jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-table-toolbar__trigger,
 .jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-table-toolbar__icon-button {
   box-sizing: border-box;
-  padding: 4px;
+  padding: 4px 8px;
   border-radius: 6px;
   text-align: center;
 }
@@ -2021,15 +2109,6 @@
   flex-direction: column;
 }
 
-.jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-toolbar__button > svg:first-child,
-.jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-media-toolbar__trigger > svg:first-child,
-.jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-table-toolbar__trigger > svg:first-child,
-.jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-table-toolbar__glyph-icon {
-  /* flex: 0 0 26px; */
-  /* width: 26px; */
-  /* height: 26px; */
-}
-
 .jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-toolbar__button-label,
 .jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-media-toolbar__trigger-label,
 .jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-table-toolbar__trigger-label,
@@ -2038,7 +2117,7 @@
   width: 100%;
   overflow: hidden;
   color: currentColor;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.2;
   text-align: center;
   text-overflow: ellipsis;
@@ -2106,14 +2185,6 @@
 
 .jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-toolbar__select-trigger-icon:not([hidden]) {
   margin-right: 0;
-}
-
-.jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-toolbar__select-arrow {
-  margin-left: 0;
-}
-
-.jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-toolbar__select-trigger-icon:not([hidden]) ~ .jw-toolbar__select-arrow {
-  margin-left: 4px;
 }
 
 .jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-table-toolbar__group-row {
@@ -3148,7 +3219,6 @@
 }
 
 :is(.jw-root, .jw-toolbar)[data-theme='dark'] .jw-toolbar__select-arrow,
-:is(.jw-root, .jw-toolbar)[data-theme='dark'] .jw-toolbar__color-arrow,
 :is(.jw-root, .jw-toolbar)[data-theme='dark'] .jw-toolbar__select-prefix,
 :is(.jw-root, .jw-toolbar)[data-theme='dark'] .jw-media-toolbar__dialog-description,
 :is(.jw-root, .jw-toolbar)[data-theme='dark'] .jw-context-menu__shortcut {

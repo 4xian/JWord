@@ -146,6 +146,7 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     contextMenu,
     signal: signalController.signal,
     readonlyMode,
+    readI18n: () => i18n,
     announce,
     readCommandContext,
     readTarget,
@@ -158,6 +159,7 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     commands,
     resizePreview,
     signal: signalController.signal,
+    readI18n: () => i18n,
     readCommandContext,
     closeContextMenu,
     refresh,
@@ -172,7 +174,7 @@ export function createTableController(options: CreateTableControllerOptions): Ta
     if (event.kind === 'destroyed') {
       state.busy = false
       refresh()
-      announce('JWord editor 已销毁，表格工具已关闭。')
+      announce(readJWordUiText(i18n, 'a11y.table.destroyed'))
     }
   })
 
@@ -216,7 +218,7 @@ export function createTableController(options: CreateTableControllerOptions): Ta
 
 /** 读取表格入口标题，宿主自定义 title 优先。 */
 function readTableTitle(i18n: ResolvedJWordUiI18n, title: string | undefined): string {
-  return title ?? readJWordUiText(i18n, 'menu.table.insert', '插入表格')
+  return title ?? readJWordUiText(i18n, 'menu.table.insert')
 }
 
 /** 根据 toolbar 当前模式隐藏只属于专业表格 Tab 的结构操作。 */

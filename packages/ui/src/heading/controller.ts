@@ -31,6 +31,7 @@ export interface CreateHeadingOutlineControllerOptions {
   readonly editorHost?: HTMLElement
   readonly scrollToRange?: (range: TextRange) => void
   readonly i18n?: ResolvedJWordUiI18n
+  readonly onClose?: () => void
 }
 
 export interface HeadingOutlineControllerHandle {
@@ -38,6 +39,7 @@ export interface HeadingOutlineControllerHandle {
   setI18n(i18n: ResolvedJWordUiI18n): void
   hasItems(): boolean
   isVisible(): boolean
+  close(): void
   toggleVisible(): void
   refresh(): void
   destroy(): void
@@ -89,6 +91,7 @@ export function createHeadingOutlineController(
       collapsedItemIds.clear()
     }
 
+    dom.root.hidden = !visible
     dom.list.hidden = !visible
     renderHeadingOutlineDom(
       dom,
@@ -155,6 +158,12 @@ export function createHeadingOutlineController(
     return visible
   }
 
+  /** 关闭目录面板，重复调用保持关闭状态。 */
+  function close(): void {
+    visible = false
+    refresh()
+  }
+
   /** 读取当前文档是否存在可展示的目录项。 */
   function hasItems(): boolean {
     return buildHeadingOutline(options.editor).length > 0
@@ -176,6 +185,11 @@ export function createHeadingOutlineController(
   canvasContainer?.addEventListener('scroll', syncActiveItemFromViewport, {
     signal: signalController.signal
   })
+  dom.closeButton.addEventListener('click', () => {
+    options.onClose?.()
+  }, {
+    signal: signalController.signal
+  })
   refresh()
 
   return {
@@ -186,6 +200,7 @@ export function createHeadingOutlineController(
       refresh()
     },
     isVisible,
+    close,
     hasItems,
     toggleVisible,
     refresh,

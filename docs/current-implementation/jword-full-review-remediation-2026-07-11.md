@@ -21,9 +21,9 @@
 | 产品结论 | 不可直接销售，授权、协作、发布阻断 | 同样为 `REQUEST CHANGES` | 一致，继续执行整改 |
 | 执行管理 | 有 JWR 编号、P0/P1/P2、关闭条件和 OEM Phase 0~5 | 更偏独立风险复核和行业对照 | 以 7 月 10 日台账管理关闭，以 7 月 11 日补充新问题 |
 | 默认集成 | EditorShell 已完成 | 将默认集成视为已有较好基础 | 已完成源码阶段，不重复实施；仅补 tarball 消费验收 |
-| 基础门禁 | typecheck/lint 已恢复，文件预算失败 | live 复验得到相同文件预算失败 | 仍有效，作为第一批修复 |
+| 基础门禁 | typecheck/lint 已恢复，文件预算失败 | live 复验得到相同文件预算失败 | 阶段 0A 已按职责拆分并恢复 18/18 |
 | dist/ESM | 当时 normalization 和 Node import 失败 | 7 月 11 日 build 通过但未单列最新 import 状态 | 当前已复验通过，JWR-P0-007 该子项可标完成 |
-| 第三方消费 | 当时安装阶段请求 registry 包 | 未完整跑到浏览器 | 当前已能安装、typecheck、build；因固定 5173 端口冲突未完成 E2E，属于部分完成 |
+| 第三方消费 | 当时安装阶段请求 registry 包 | 未完整跑到浏览器 | 阶段 0A 已完成 tarball、no-alias、typecheck、build 和 Chromium；动态端口不复用 5173 |
 | License | 测试私钥可伪造默认 token；已有详细 JWL2 深模块方案 | 同样列为 Critical，并补充 JWL1 时间/schema、query entitlement 问题 | 最高商业风险；基线恢复后立即处理 |
 | 协作模型 | 已冻结为单 OEM deployment、open/write，不做 tenant/ACL | 调研中同时讨论通用 tenant/document ACL | 不采用通用多租户扩展；按 OEM 方案做 deployment admission 和可信 actorId |
 | `.jword`/restore | ZIP 预算、资源重开、restore 原子性均已发现 | 再次确认 ZIP DoS 与 restore 风险 | 合并处理，不重复建项 |
@@ -39,10 +39,11 @@
 - `node tools/release/normalize-dist-relative-imports.mjs --check`。
 - `node --input-type=module -e "await import('./packages/core/dist/index.js')"`。
 - release dry-run 当前退出 0；但它仍不能替代真实 consumer 和发布治理。
+- 文件预算 architecture tests 已恢复为 18/18；`query.ts`、`runtime.test.ts`、`toolbar/controller.ts` 的门禁计数分别为 827、968、390。
+- third-party tarball smoke 已在 5173 被既有 Vite 占用时完成 pack、install、no-alias、TypeScript、Vite build 和 Chromium 1/1。
 
 ### 部分完成
 
-- 第三方 tarball smoke：本地包安装、no-alias 解析、TypeScript、Vite build 已通过；Chromium 因脚本固定使用已占用的 `5173` 端口而未执行。
 - JWR-P0-005：源码、示例和 Quickstart 已完成，空项目 tarball 的完整编辑/销毁旅程仍待关闭。
 
 ### 仍有效的主要阻断
@@ -53,11 +54,10 @@
 - JWR-P0-009：DOCX 承诺范围和 Word 人工证据；另补外链协议与 opaque 内存预算。
 - JWR-P0-010 / P1-102 / P1-121：生产协作数据面、事务 history、备份恢复和运维。
 - JWR-P0-011 / P1-112：版本、私有分发、CI、provenance、rollback。
-- 当前文件预算红灯：`layout/query.ts`、`runtime.test.ts`、`toolbar/controller.ts`。
 
 ## 4. 完整处理阶段
 
-### 阶段 0A：恢复可重复反馈环（现在第一批）
+### 阶段 0A：恢复可重复反馈环（2026-07-11 已完成）
 
 范围：只按职责拆分三个超预算文件，不改变公开 API 和行为；同时修复 third-party smoke 的固定端口冲突，使其使用隔离端口或由 runner 分配端口。
 
@@ -73,6 +73,8 @@ node tools/release/check-gate7-third-party-smoke.mjs
 ```
 
 退出标准：文件预算 18/18 通过；tarball consumer 完成 install、typecheck、build 和 Chromium，不依赖仓库 alias，也不与已有开发服务器抢端口。
+
+完成证据：上述退出标准均已满足。smoke 主进程通过 `127.0.0.1:0` 申请一次动态端口，并以 `JWORD_GATE7_SMOKE_PORT` 传给全部 Playwright 进程；生成配置让 Vite `--port`、`webServer.url` 和 `use.baseURL` 使用同一端口，启用 `--strictPort` 并保持 `reuseExistingServer: false`。2026-07-12 另补齐第二批单 Host EditorShell 的默认能力装配：最终工具栏配置中可见的批注、链接、页眉/页脚/页码、查找替换、目录和修订工具会自动创建 controller 并使用内部 Host。查找替换面板已锚定工具栏按钮下方，修订面板在中间编辑区域完整显示，链接、文档面板、水印与 select 临时弹层已补齐互斥和外部点击关闭；目录和批注保持持续工作区语义。本阶段没有进入 License、DOCX 或协作整改。
 
 ### 阶段 0B：冻结首期销售合同（可与 0A 并行）
 
@@ -148,7 +150,7 @@ node tools/release/check-gate7-third-party-smoke.mjs
 
 ## 5. 当前立即执行顺序
 
-1. 只修三个文件预算红灯，并让 third-party smoke 使用隔离端口。
+1. 阶段 0A 已完成：三个文件预算红灯已关闭，third-party smoke 已使用隔离动态端口。
 2. 同时完成 Phase 0 商业输入冻结，不写新 UI 功能。
 3. 紧接着执行 License Phase 1；这是任何收费 PoC 前的最高安全阻断。
 4. License 稳定后，按销售范围并行进入“本地格式授权迁移”和“协作 admission”。

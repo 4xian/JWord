@@ -11,9 +11,13 @@ import type {
   JWordMediaUploadRequest,
   JWordMediaUploadResult
 } from './types'
+import type { ResolvedJWordUiI18n } from './i18n'
 
 /** 解析图片工具配置；未传配置时使用内建轻量图片适配器。 */
-export function resolveMediaOptions(media: JWordMediaOptions | undefined): JWordMediaOptions {
+export function resolveMediaOptions(
+  media: JWordMediaOptions | undefined,
+  i18n?: ResolvedJWordUiI18n | (() => ResolvedJWordUiI18n)
+): JWordMediaOptions {
   if (media !== undefined) {
     return media
   }
@@ -21,7 +25,7 @@ export function resolveMediaOptions(media: JWordMediaOptions | undefined): JWord
   return Object.freeze({
     description: '默认图片工具支持本地文件 data URL 和已放行 URL 插入。',
     adapter: createDefaultMediaAdapter(),
-    commands: createCoreMediaCommandAdapter()
+    commands: createCoreMediaCommandAdapter(i18n)
   } satisfies JWordMediaOptions)
 }
 

@@ -20,6 +20,47 @@ import { describe, expect, test } from 'vitest'
 import { createJWordUi } from '../src/create-ui'
 
 describe('createJWordUi revisions integration', () => {
+  test('未提供修订 host 时会在 editorHost 内创建右侧浮动工作区并在销毁后清理', () => {
+    const harness = createHarness({ useDefaultRevisionsHost: true })
+
+    try {
+      const workspace = harness.editorHost.querySelector<HTMLElement>(
+        ':scope > [data-jword-side-workspace="right"][data-jword-revisions-host]'
+      )
+
+      expect(workspace).not.toBeNull()
+      expect(harness.ui.elements.revisionsPanel?.host).toBe(workspace)
+      expect(workspace?.querySelector('[data-jword-revisions-panel]')).not.toBeNull()
+
+      const revisionsButton = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toggle-revisions]')
+      const title = harness.ui.elements.revisionsPanel?.title
+      const closeButton = harness.ui.elements.revisionsPanel?.closeButton
+
+      revisionsButton?.click()
+
+      expect(harness.ui.elements.revisionsPanel?.root.hidden).toBe(false)
+      expect(revisionsButton?.getAttribute('aria-pressed')).toBe('true')
+      expect(title?.textContent).toBe('修订记录')
+      expect(closeButton?.getAttribute('aria-label')).toBe('关闭修订记录')
+
+      harness.ui.setLocale('en-US')
+
+      expect(title?.textContent).toBe('Revisions')
+      expect(closeButton?.getAttribute('aria-label')).toBe('Close revisions')
+
+      closeButton?.click()
+
+      expect(harness.ui.elements.revisionsPanel?.root.hidden).toBe(true)
+      expect(revisionsButton?.getAttribute('aria-pressed')).toBe('false')
+
+      harness.ui.destroy()
+
+      expect(harness.editorHost.querySelector('[data-jword-side-workspace="right"]')).toBeNull()
+    } finally {
+      harness.destroy()
+    }
+  })
+
   test('启用 revisions option 后会显示 revision metadata 并点击定位 range', () => {
     const harness = createHarness()
 
@@ -85,14 +126,17 @@ describe('createJWordUi revisions integration', () => {
         harness.editor.executeCommand(command!, { selectionAfter: revisionSelection })
         harness.ui.refresh()
 
-        const button = harness.revisionsHost.querySelector<HTMLButtonElement>(`[data-jword-revision-${action}]`)
+        let button = harness.revisionsHost.querySelector<HTMLButtonElement>(`[data-jword-revision-${action}]`)
 
         expect(button).not.toBeNull()
 
+        harness.ui.setLocale('en-US')
+        button = harness.revisionsHost.querySelector<HTMLButtonElement>(`[data-jword-revision-${action}]`)
         button?.click()
 
         expect(harness.editor.getProjection().document.revisions).toBeUndefined()
         expect(readParagraphText(harness.editor)).toBe(action === 'accept' ? 'abcdef' : 'aef')
+        expect(harness.liveRegionHost.textContent).toBe(action === 'accept' ? 'Revision accepted.' : 'Revision rejected.')
       } finally {
         harness.destroy()
       }
@@ -106,12 +150,13 @@ interface Harness {
   readonly editorHost: HTMLElement
   readonly toolbarHost: HTMLElement
   readonly revisionsHost: HTMLElement
+  readonly liveRegionHost: HTMLElement
   readonly ui: ReturnType<typeof createJWordUi>
   destroy(): void
 }
 
 /** 创建入口级 UI 测试环境。 */
-function createHarness(): Harness {
+function createHarness(options: { readonly useDefaultRevisionsHost?: boolean } = {}): Harness {
   const editorHost = document.createElement('div')
   const toolbarHost = document.createElement('div')
   const liveRegionHost = document.createElement('div')
@@ -125,9 +170,7 @@ function createHarness(): Harness {
     editorHost,
     toolbarHost,
     liveRegionHost,
-    revisions: {
-      host: revisionsHost
-    }
+    revisions: options.useDefaultRevisionsHost === true ? {} : { host: revisionsHost }
   })
 
   return {
@@ -135,6 +178,7 @@ function createHarness(): Harness {
     editorHost,
     toolbarHost,
     revisionsHost,
+    liveRegionHost,
     ui,
     destroy(): void {
       editor.destroy()

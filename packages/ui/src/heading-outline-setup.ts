@@ -5,7 +5,7 @@
  * 性能/安全约束：无顶层 DOM 副作用，cleanup 负责还原宿主挂载关系。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
-import { resolveEditorShell } from './toolbar-setup'
+import { resolveSideWorkspaceMount } from './side-workspace'
 import type { CreateJWordUiOptions } from './types'
 
 export interface ResolvedHeadingOutlineMount {
@@ -13,7 +13,7 @@ export interface ResolvedHeadingOutlineMount {
   cleanup(): void
 }
 
-/** 解析目录挂载点，默认放到已挂载的 jw-editor 内。 */
+/** 解析目录挂载点，默认放到 editor region 的左侧浮动工作区。 */
 export function resolveHeadingOutlineMount(
   options: CreateJWordUiOptions['headingOutline'],
   editorHost: HTMLElement | undefined,
@@ -23,43 +23,11 @@ export function resolveHeadingOutlineMount(
     return null
   }
 
-  if (options.host !== undefined) {
-    return {
-      host: options.host,
-      cleanup(): void {}
-    }
-  }
-
-  const editorShell = editorHost === undefined
-    ? null
-    : resolveEditorShell(editorHost)
-
-  const host = toolbarHost
-
-  if (editorShell === null) {
-    return {
-      host,
-      cleanup(): void {}
-    }
-  }
-
-  if (host === toolbarHost) {
-    const defaultHost = editorShell.ownerDocument.createElement('div')
-
-    defaultHost.className = 'jw-heading-outline-host'
-    defaultHost.setAttribute('data-jword-heading-outline-host', 'true')
-    editorShell.append(defaultHost)
-
-    return {
-      host: defaultHost,
-      cleanup(): void {
-        defaultHost.remove()
-      }
-    }
-  }
-
-  return {
-    host,
-    cleanup(): void {}
-  }
+  return resolveSideWorkspaceMount({
+    side: 'left',
+    feature: 'heading-outline',
+    ...(options.host === undefined ? {} : { explicitHost: options.host }),
+    ...(editorHost === undefined ? {} : { editorHost }),
+    fallbackHost: toolbarHost
+  })
 }

@@ -24,20 +24,20 @@ export function createFindReplaceDom(
   const header = document.createElement('div')
   const fields = document.createElement('div')
   const actions = document.createElement('div')
-  const closeButton = createButton(readFindReplaceText(i18n, 'close', '关闭查找替换'), 'data-jword-find-close-button')
-  const queryInput = createTextInput(readFindReplaceText(i18n, 'query', '查找'), 'data-jword-find-query-input')
-  const replacementInput = createTextInput(readFindReplaceText(i18n, 'replacement', '替换为'), 'data-jword-find-replacement-input')
-  const findButton = createButton(readFindReplaceText(i18n, 'find', '查找'), 'data-jword-find-button')
-  const previousButton = createButton(readFindReplaceText(i18n, 'previous', '上一个'), 'data-jword-find-previous-button')
-  const nextButton = createButton(readFindReplaceText(i18n, 'next', '下一个'), 'data-jword-find-next-button')
-  const replaceButton = createButton(readFindReplaceText(i18n, 'replace', '替换'), 'data-jword-replace-button')
-  const replaceAllButton = createButton(readFindReplaceText(i18n, 'replaceAll', '全部替换'), 'data-jword-replace-all-button')
+  const closeButton = createButton(readFindReplaceText(i18n, 'close'), 'data-jword-find-close-button')
+  const queryInput = createTextInput(readFindReplaceText(i18n, 'query'), 'data-jword-find-query-input')
+  const replacementInput = createTextInput(readFindReplaceText(i18n, 'replacement'), 'data-jword-find-replacement-input')
+  const findButton = createButton(readFindReplaceText(i18n, 'find'), 'data-jword-find-button')
+  const previousButton = createButton(readFindReplaceText(i18n, 'previous'), 'data-jword-find-previous-button')
+  const nextButton = createButton(readFindReplaceText(i18n, 'next'), 'data-jword-find-next-button')
+  const replaceButton = createButton(readFindReplaceText(i18n, 'replace'), 'data-jword-replace-button')
+  const replaceAllButton = createButton(readFindReplaceText(i18n, 'replaceAll'), 'data-jword-replace-all-button')
   const status = document.createElement('output')
 
   root.className = 'jw-find-replace'
   root.setAttribute('data-jword-find-replace', 'true')
   root.setAttribute('role', 'dialog')
-  root.setAttribute('aria-label', readFindReplaceText(i18n, 'title', '查找替换'))
+  root.setAttribute('aria-label', readFindReplaceText(i18n, 'title'))
   root.hidden = true
   header.className = 'jw-find-replace__header'
   fields.className = 'jw-find-replace__fields'
@@ -88,15 +88,15 @@ export function localizeFindReplaceDom(
   dom: JWordFindReplacePanelElements,
   i18n: ResolvedJWordUiI18n
 ): void {
-  dom.root.setAttribute('aria-label', readFindReplaceText(i18n, 'title', '查找替换'))
-  setButtonLabel(dom.closeButton, readFindReplaceText(i18n, 'close', '关闭查找替换'))
-  dom.queryInput.placeholder = readFindReplaceText(i18n, 'query', '查找')
-  dom.replacementInput.placeholder = readFindReplaceText(i18n, 'replacement', '替换为')
-  setButtonLabel(dom.findButton, readFindReplaceText(i18n, 'find', '查找'))
-  setButtonLabel(dom.previousButton, readFindReplaceText(i18n, 'previous', '上一个'))
-  setButtonLabel(dom.nextButton, readFindReplaceText(i18n, 'next', '下一个'))
-  setButtonLabel(dom.replaceButton, readFindReplaceText(i18n, 'replace', '替换'))
-  setButtonLabel(dom.replaceAllButton, readFindReplaceText(i18n, 'replaceAll', '全部替换'))
+  dom.root.setAttribute('aria-label', readFindReplaceText(i18n, 'title'))
+  setButtonLabel(dom.closeButton, readFindReplaceText(i18n, 'close'))
+  dom.queryInput.placeholder = readFindReplaceText(i18n, 'query')
+  dom.replacementInput.placeholder = readFindReplaceText(i18n, 'replacement')
+  setButtonLabel(dom.findButton, readFindReplaceText(i18n, 'find'))
+  setButtonLabel(dom.previousButton, readFindReplaceText(i18n, 'previous'))
+  setButtonLabel(dom.nextButton, readFindReplaceText(i18n, 'next'))
+  setButtonLabel(dom.replaceButton, readFindReplaceText(i18n, 'replace'))
+  setButtonLabel(dom.replaceAllButton, readFindReplaceText(i18n, 'replaceAll'))
 }
 
 /**
@@ -142,6 +142,6 @@ function setButtonLabel(button: HTMLButtonElement, label: string): void {
 }
 
 /** 读取查找替换面板文案。 */
-function readFindReplaceText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `menu.findReplace.${key}`, fallback)
+function readFindReplaceText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.findReplace.${key}`)
 }

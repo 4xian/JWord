@@ -64,12 +64,12 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
 
   fileActionButton.type = 'button'
   fileActionButton.className = 'jw-toolbar__select-option jw-media-toolbar__menu-button'
-  fileActionButton.textContent = readMediaText(i18n, 'localUpload', '本地上传')
+  fileActionButton.textContent = readMediaText(i18n, 'localUpload')
   fileActionButton.setAttribute('data-jword-media-action-file', 'true')
 
   urlActionButton.type = 'button'
   urlActionButton.className = 'jw-toolbar__select-option jw-media-toolbar__menu-button'
-  urlActionButton.textContent = readMediaText(i18n, 'url', '网络地址')
+  urlActionButton.textContent = readMediaText(i18n, 'url')
   urlActionButton.setAttribute('data-jword-media-action-url', 'true')
 
   menu.append(fileActionButton, urlActionButton)
@@ -87,12 +87,12 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
 
   dialogCard.className = 'jw-media-toolbar__dialog-card'
   dialogTitle.className = 'jw-media-toolbar__dialog-title'
-  dialogTitle.textContent = readJWordUiText(i18n, 'dialog.media.urlTitle', '网络地址')
+  dialogTitle.textContent = readJWordUiText(i18n, 'dialog.media.urlTitle')
   dialogDescription.className = 'jw-media-toolbar__dialog-description'
-  dialogDescription.textContent = readJWordUiText(i18n, 'dialog.media.urlDescription', '输入图片地址后确认，资源会按行内图片方式插入当前光标位置。')
+  dialogDescription.textContent = readJWordUiText(i18n, 'dialog.media.urlDescription')
   dialogInput.type = 'url'
   dialogInput.className = 'jw-media-toolbar__dialog-input'
-  dialogInput.placeholder = readJWordUiText(i18n, 'dialog.media.urlPlaceholder', '输入同源或 allowlist 图片 URL')
+  dialogInput.placeholder = readJWordUiText(i18n, 'dialog.media.urlPlaceholder')
   dialogInput.setAttribute('data-jword-media-url-dialog-input', 'true')
   dialogError.className = 'jw-media-toolbar__dialog-error'
   dialogError.setAttribute('data-jword-media-url-dialog-error', 'true')
@@ -100,11 +100,11 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
   dialogActions.className = 'jw-media-toolbar__dialog-actions'
   dialogCancelButton.type = 'button'
   dialogCancelButton.className = 'jw-media-toolbar__dialog-button'
-  dialogCancelButton.textContent = readJWordUiText(i18n, 'dialog.media.cancel', '取消')
+  dialogCancelButton.textContent = readJWordUiText(i18n, 'dialog.media.cancel')
   dialogCancelButton.setAttribute('data-jword-media-url-dialog-cancel', 'true')
   dialogConfirmButton.type = 'button'
   dialogConfirmButton.className = 'jw-media-toolbar__dialog-button jw-media-toolbar__dialog-button--primary'
-  dialogConfirmButton.textContent = readJWordUiText(i18n, 'dialog.media.confirm', '确认')
+  dialogConfirmButton.textContent = readJWordUiText(i18n, 'dialog.media.confirm')
   dialogConfirmButton.setAttribute('data-jword-media-url-dialog-confirm', 'true')
   dialogActions.append(dialogCancelButton, dialogConfirmButton)
 
@@ -139,17 +139,17 @@ export function localizeMediaPanelDom(dom: MediaPanelDom, i18n: ResolvedJWordUiI
   if (triggerLabel !== null) {
     triggerLabel.textContent = title
   }
-  dom.fileActionButton.textContent = readMediaText(i18n, 'localUpload', '本地上传')
-  dom.urlActionButton.textContent = readMediaText(i18n, 'url', '网络地址')
+  dom.fileActionButton.textContent = readMediaText(i18n, 'localUpload')
+  dom.urlActionButton.textContent = readMediaText(i18n, 'url')
   if (dialogTitle !== null) {
-    dialogTitle.textContent = readJWordUiText(i18n, 'dialog.media.urlTitle', '网络地址')
+    dialogTitle.textContent = readJWordUiText(i18n, 'dialog.media.urlTitle')
   }
   if (dialogDescription !== null) {
-    dialogDescription.textContent = readJWordUiText(i18n, 'dialog.media.urlDescription', '输入图片地址后确认，资源会按行内图片方式插入当前光标位置。')
+    dialogDescription.textContent = readJWordUiText(i18n, 'dialog.media.urlDescription')
   }
-  dom.urlDialogInput.placeholder = readJWordUiText(i18n, 'dialog.media.urlPlaceholder', '输入同源或 allowlist 图片 URL')
-  dom.urlDialogCancelButton.textContent = readJWordUiText(i18n, 'dialog.media.cancel', '取消')
-  dom.urlDialogConfirmButton.textContent = readJWordUiText(i18n, 'dialog.media.confirm', '确认')
+  dom.urlDialogInput.placeholder = readJWordUiText(i18n, 'dialog.media.urlPlaceholder')
+  dom.urlDialogCancelButton.textContent = readJWordUiText(i18n, 'dialog.media.cancel')
+  dom.urlDialogConfirmButton.textContent = readJWordUiText(i18n, 'dialog.media.confirm')
 }
 
 /** 根据当前状态重绘 toolbar 图片入口。 */
@@ -180,6 +180,6 @@ export function resetMediaFileInput(dom: MediaPanelDom): void {
 }
 
 /** 读取图片入口文案。 */
-function readMediaText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `menu.media.${key}`, fallback)
+function readMediaText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.media.${key}`)
 }

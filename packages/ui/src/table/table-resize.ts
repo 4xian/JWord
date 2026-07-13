@@ -17,6 +17,7 @@ import {
   type TableResizePreviewGeometry
 } from './controller-helpers'
 import { readDefaultDeferredMessage } from './state'
+import type { ResolvedJWordUiI18n } from '../i18n'
 import type {
   TableControllerState,
   TableOverlayGeometry
@@ -27,6 +28,7 @@ interface TableResizeControllerOptions {
   readonly commands: JWordTableOptions['commands']
   readonly resizePreview: HTMLElement
   readonly signal: AbortSignal
+  readI18n(): ResolvedJWordUiI18n
   readCommandContext(): JWordTableCommandContext
   closeContextMenu(): void
   refresh(): void
@@ -197,7 +199,7 @@ export function createTableResizeController(options: TableResizeControllerOption
           widthTwips
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('调整列宽')
+          message: readDefaultDeferredMessage('调整列宽', options.readI18n())
         }
       })
       return
@@ -213,7 +215,7 @@ export function createTableResizeController(options: TableResizeControllerOption
         heightTwips
       }) ?? {
         kind: 'deferred',
-        message: readDefaultDeferredMessage('调整行高')
+        message: readDefaultDeferredMessage('调整行高', options.readI18n())
       }
     })
   }

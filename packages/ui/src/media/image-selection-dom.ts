@@ -79,13 +79,13 @@ export function createImageSelectionDom(
   ghost.hidden = true
   dropCaret.hidden = true
 
-  const rotateButton = createImageSelectionToolButton('rotate', readMediaText(i18n, 'rotate', '旋转'), false)
-  const resetButton = createImageSelectionToolButton('reset', readMediaText(i18n, 'reset', '重置'), false)
-  const deleteButton = createImageSelectionToolButton('trash', readMediaText(i18n, 'delete', '删除'), false)
-  const downloadButton = createImageSelectionToolButton('download', readMediaText(i18n, 'downloadUnavailable', '下载暂未开放'), true)
-  const cropButton = createImageSelectionToolButton('crop', readMediaText(i18n, 'cropUnavailable', '裁剪暂未开放'), true)
-  const layoutButton = createImageSelectionToolButton('layout', readMediaText(i18n, 'layoutUnavailable', '版式暂未开放'), true)
-  const commentButton = createImageSelectionToolButton('comment', readMediaText(i18n, 'commentUnavailable', '评论暂未开放'), true)
+  const rotateButton = createImageSelectionToolButton('rotate', readMediaText(i18n, 'rotate'), false)
+  const resetButton = createImageSelectionToolButton('reset', readMediaText(i18n, 'reset'), false)
+  const deleteButton = createImageSelectionToolButton('trash', readMediaText(i18n, 'delete'), false)
+  const downloadButton = createImageSelectionToolButton('download', readMediaText(i18n, 'downloadUnavailable'), true)
+  const cropButton = createImageSelectionToolButton('crop', readMediaText(i18n, 'cropUnavailable'), true)
+  const layoutButton = createImageSelectionToolButton('layout', readMediaText(i18n, 'layoutUnavailable'), true)
+  const commentButton = createImageSelectionToolButton('comment', readMediaText(i18n, 'commentUnavailable'), true)
 
   rotateButton.setAttribute('data-jword-image-toolbar-action', 'rotate')
   resetButton.setAttribute('data-jword-image-toolbar-action', 'reset')
@@ -146,13 +146,13 @@ export function createImageSelectionDom(
 
 /** 动态刷新图片 overlay 工具文案。 */
 export function localizeImageSelectionDom(dom: ImageSelectionDom, i18n: ResolvedJWordUiI18n): void {
-  setButtonLabel(dom.rotateButton, readMediaText(i18n, 'rotate', '旋转'))
-  setButtonLabel(dom.resetButton, readMediaText(i18n, 'reset', '重置'))
-  setButtonLabel(dom.deleteButton, readMediaText(i18n, 'delete', '删除'))
-  setButtonLabel(dom.downloadButton, readMediaText(i18n, 'downloadUnavailable', '下载暂未开放'))
-  setButtonLabel(dom.cropButton, readMediaText(i18n, 'cropUnavailable', '裁剪暂未开放'))
-  setButtonLabel(dom.layoutButton, readMediaText(i18n, 'layoutUnavailable', '版式暂未开放'))
-  setButtonLabel(dom.commentButton, readMediaText(i18n, 'commentUnavailable', '评论暂未开放'))
+  setButtonLabel(dom.rotateButton, readMediaText(i18n, 'rotate'))
+  setButtonLabel(dom.resetButton, readMediaText(i18n, 'reset'))
+  setButtonLabel(dom.deleteButton, readMediaText(i18n, 'delete'))
+  setButtonLabel(dom.downloadButton, readMediaText(i18n, 'downloadUnavailable'))
+  setButtonLabel(dom.cropButton, readMediaText(i18n, 'cropUnavailable'))
+  setButtonLabel(dom.layoutButton, readMediaText(i18n, 'layoutUnavailable'))
+  setButtonLabel(dom.commentButton, readMediaText(i18n, 'commentUnavailable'))
 
   for (const handleId of RESIZE_HANDLE_IDS) {
     dom.handles[handleId].setAttribute('aria-label', readResizeHandleLabel(i18n, handleId))
@@ -299,21 +299,21 @@ function applySelectionRect(selection: HTMLElement, rect: ImageOverlayRect, widt
 function readResizeHandleLabel(i18n: ResolvedJWordUiI18n, handleId: ResizeHandleId): string {
   switch (handleId) {
     case 'top-left':
-      return readMediaText(i18n, 'resizeTopLeft', '左上缩放')
+      return readMediaText(i18n, 'resizeTopLeft')
     case 'top-center':
-      return readMediaText(i18n, 'resizeTop', '顶部缩放')
+      return readMediaText(i18n, 'resizeTop')
     case 'top-right':
-      return readMediaText(i18n, 'resizeTopRight', '右上缩放')
+      return readMediaText(i18n, 'resizeTopRight')
     case 'middle-left':
-      return readMediaText(i18n, 'resizeLeft', '左侧缩放')
+      return readMediaText(i18n, 'resizeLeft')
     case 'middle-right':
-      return readMediaText(i18n, 'resizeRight', '右侧缩放')
+      return readMediaText(i18n, 'resizeRight')
     case 'bottom-left':
-      return readMediaText(i18n, 'resizeBottomLeft', '左下缩放')
+      return readMediaText(i18n, 'resizeBottomLeft')
     case 'bottom-center':
-      return readMediaText(i18n, 'resizeBottom', '底部缩放')
+      return readMediaText(i18n, 'resizeBottom')
     case 'bottom-right':
-      return readMediaText(i18n, 'resizeBottomRight', '右下缩放')
+      return readMediaText(i18n, 'resizeBottomRight')
   }
 }
 
@@ -324,6 +324,6 @@ function setButtonLabel(button: HTMLButtonElement, label: string): void {
 }
 
 /** 读取图片 overlay 文案。 */
-function readMediaText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `menu.media.${key}`, fallback)
+function readMediaText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.media.${key}`)
 }

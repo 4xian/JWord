@@ -26,6 +26,79 @@ test('vanilla 默认页只提供单 Host EditorShell', async ({ page }) => {
   expect(await page.evaluate(() => Reflect.has(window, '__jwordTestFixture'))).toBe(false)
 })
 
+test('默认工具栏面板无需额外 Host 即可打开', async ({ page }) => {
+  await page.goto('/')
+
+  const host = page.locator('#jword')
+
+  await page.keyboard.type('abc')
+  await page.keyboard.down('Shift')
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.up('Shift')
+  await page.getByRole('tab', { name: '插入' }).click()
+
+  await page.getByRole('button', { name: '批注', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: '输入批注内容' })).toBeVisible()
+  await page.getByRole('button', { name: '取消', exact: true }).click()
+
+  await page.getByRole('button', { name: '链接', exact: true }).click()
+  const linkDialog = host.locator('[data-jword-link-dialog]')
+
+  await expect(linkDialog).toBeVisible()
+  await page.getByRole('tab', { name: '页面' }).click()
+  await expect(linkDialog).toBeHidden()
+  for (const [name, menu] of [
+    ['页眉', 'header'],
+    ['页脚', 'footer'],
+    ['页码', 'page-number']
+  ] as const) {
+    await page.getByRole('button', { name, exact: true }).click()
+    await expect(host.locator('[data-jword-header-footer]')).toBeVisible()
+    await expect(host.locator('[data-jword-header-footer]')).toHaveAttribute('data-jword-active-menu', menu)
+  }
+
+  await page.getByRole('tab', { name: '工具' }).click()
+  const findReplaceButton = page.getByRole('button', { name: '查找替换', exact: true })
+
+  await findReplaceButton.click()
+  const findReplace = host.locator('[data-jword-find-replace]')
+
+  await expect(findReplace).toBeVisible()
+  const findReplaceButtonRect = await findReplaceButton.boundingBox()
+  const findReplaceRect = await findReplace.boundingBox()
+  const viewport = page.viewportSize()
+
+  expect(findReplaceButtonRect).not.toBeNull()
+  expect(findReplaceRect).not.toBeNull()
+  expect(findReplaceRect?.y).toBeCloseTo((findReplaceButtonRect?.y ?? 0) + (findReplaceButtonRect?.height ?? 0) + 8, 0)
+  expect(findReplaceRect?.x).toBeGreaterThanOrEqual(16)
+  expect((findReplaceRect?.x ?? 0) + (findReplaceRect?.width ?? 0)).toBeLessThanOrEqual((viewport?.width ?? 0) - 16)
+  await page.getByRole('button', { name: '修订记录', exact: true }).click()
+  const revisions = host.locator('[data-jword-revisions-panel]')
+
+  await expect(revisions).toBeVisible()
+  await expect(findReplace).toBeHidden()
+  expect(await revisions.evaluate((panel) => {
+    const panelRect = panel.getBoundingClientRect()
+    const editorRegion = panel.closest<HTMLElement>('[data-jword-shell-region="editor"]')
+    const editorRect = editorRegion?.getBoundingClientRect()
+
+    return editorRect !== undefined
+      && panelRect.top >= editorRect.top
+      && panelRect.bottom <= editorRect.bottom
+  })).toBe(true)
+
+  await page.getByRole('tab', { name: '开始' }).click()
+  const fontTrigger = page.getByRole('button', { name: '字体', exact: true })
+  const fontListbox = page.getByRole('listbox', { name: '字体', exact: true })
+
+  await fontTrigger.click()
+  await expect(revisions).toBeHidden()
+  await expect(fontListbox).toBeVisible()
+  await fontListbox.getByRole('option', { name: '宋体', exact: true }).click()
+  await expect(fontListbox).toBeHidden()
+})
+
 test('连续输入时滚动视口跟随光标且不撑高 EditorShell', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')

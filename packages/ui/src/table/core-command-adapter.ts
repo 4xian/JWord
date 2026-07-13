@@ -29,9 +29,21 @@ import type {
   JWordTableSelectionScope,
   JWordTableSelectionTarget
 } from '../types'
+import { readJWordUiText, resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 
 /** 创建 core 表格命令适配器。 */
-export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
+export function createCoreTableCommandAdapter(
+  i18nOrReader: ResolvedJWordUiI18n | (() => ResolvedJWordUiI18n) | undefined = undefined
+): JWordTableCommandAdapter {
+  const readI18n = typeof i18nOrReader === 'function'
+    ? i18nOrReader
+    : () => i18nOrReader ?? resolveJWordUiI18n()
+
+  /** 读取表格命令结果文案。 */
+  function tableText(key: string, action?: string): string {
+    return readJWordUiText(readI18n(), `a11y.table.${key}`).replace('{action}', action ?? '')
+  }
+
   return {
     resolveActiveTableTarget(input) {
       return resolveActiveTableTarget(input.editor, input.projection, input.selection)
@@ -45,7 +57,7 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
       if (command === null) {
         return {
           kind: 'deferred',
-          message: '当前文档无法插入表格。'
+          message: tableText('insertTableFailed')
         }
       }
 
@@ -54,7 +66,7 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
 
       return {
         kind: 'applied',
-        message: '已插入表格。'
+        message: tableText('inserted')
       }
     },
     insertRow(request) {
@@ -65,8 +77,8 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
       return executeTableCommand(
         buildInsertTableRowCommand(request.projection, request.target.tableId, rowIndex),
         request.editor,
-        '当前表格无法插入行。',
-        '已插入表格行。'
+        tableText('insertRowFailed'),
+        tableText('rowInserted')
       )
     },
     deleteRow(request) {
@@ -74,8 +86,8 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
       const result = executeTableCommand(
         command,
         request.editor,
-        '当前表格至少需要保留一行。',
-        '已删除表格行。'
+        tableText('deleteRowFailed'),
+        tableText('rowDeleted')
       )
 
       if (result.kind === 'applied') {
@@ -92,8 +104,8 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
       return executeTableCommand(
         buildInsertTableColumnCommand(request.projection, request.target.tableId, columnIndex),
         request.editor,
-        '当前表格无法插入列。',
-        '已插入表格列。'
+        tableText('insertColumnFailed'),
+        tableText('columnInserted')
       )
     },
     deleteColumn(request) {
@@ -101,8 +113,8 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
       const result = executeTableCommand(
         command,
         request.editor,
-        '当前表格至少需要保留一列。',
-        '已删除表格列。'
+        tableText('deleteColumnFailed'),
+        tableText('columnDeleted')
       )
 
       if (result.kind === 'applied') {
@@ -120,8 +132,8 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
           request.widthTwips
         ),
         request.editor,
-        '当前表格无法更新列宽。',
-        '已更新表格列宽。'
+        tableText('resizeColumnFailed'),
+        tableText('columnResized')
       )
     },
     setRowHeight(request) {
@@ -133,8 +145,8 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
           request.heightTwips
         ),
         request.editor,
-        '当前表格无法更新行高。',
-        '已更新表格行高。'
+        tableText('resizeRowFailed'),
+        tableText('rowResized')
       )
     },
     mergeCellWithRight(request) {
@@ -147,8 +159,8 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
           request.target.cellIndex + 1
         ),
         request.editor,
-        '当前单元格右侧没有可合并单元格。',
-        '已合并单元格。'
+        tableText('mergeFailed'),
+        tableText('merged')
       )
     },
     applyBorderPreset(request) {
@@ -160,8 +172,8 @@ export function createCoreTableCommandAdapter(): JWordTableCommandAdapter {
           readBorderTargetCellId(request.scope, request.target)
         ),
         request.editor,
-        '当前表格无法更新边框。',
-        '已更新表格边框。'
+        tableText('borderFailed'),
+        tableText('borderUpdated')
       )
     }
   }

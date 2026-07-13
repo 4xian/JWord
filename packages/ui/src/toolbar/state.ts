@@ -21,6 +21,7 @@ import type {
   TextPosition
 } from '@4xian/jword-core'
 import { createSelectionFormattingState } from '@4xian/jword-core'
+import { readJWordUiText, resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 import {
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_TEXT_COLOR,
@@ -32,6 +33,7 @@ import {
   TOOLBAR_SELECT_EMPTY_VALUE,
   TOOLBAR_SELECT_MIXED_VALUE
 } from './builtin-tools'
+import type { JWordUiI18nKey } from '../types'
 
 /** 按钮按压态。 */
 export type ToolbarPressedState = 'true' | 'false' | 'mixed'
@@ -199,67 +201,76 @@ export function readPagePresetAnnouncement(value: PagePreset, pageConfig: PageCo
 }
 
 /** 生成格式命令完成后的播报文案。 */
-export function readTransactionAnnouncement(editor: Editor, commandName: string): string {
+export function readTransactionAnnouncement(
+  editor: Editor,
+  commandName: string,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
+): string {
   const selection = editor.getSelection()
   const context = selection === null ? null : resolveSelectionContext(editor, editor.getProjection(), selection)
-  const summaryPrefix = selection === null ? '' : `${readSelectionSummary(context, selection)}，`
+  const label = readTransactionLabel(i18n, commandName)
 
-  switch (commandName) {
-    case 'setBold':
-      return `${summaryPrefix}已同步加粗状态。`
-    case 'setItalic':
-      return `${summaryPrefix}已同步斜体状态。`
-    case 'setUnderline':
-      return `${summaryPrefix}已同步下划线状态。`
-    case 'setStrike':
-      return `${summaryPrefix}已同步删除线状态。`
-    case 'setSuperscript':
-      return `${summaryPrefix}已同步上标状态。`
-    case 'setSubscript':
-      return `${summaryPrefix}已同步下标状态。`
-    case 'setFontFamily':
-      return `${summaryPrefix}已同步字体。`
-    case 'setFontSize':
-      return `${summaryPrefix}已同步字号。`
-    case 'setTextColor':
-      return `${summaryPrefix}已同步文字颜色。`
-    case 'setBackgroundColor':
-      return `${summaryPrefix}已同步背景色。`
-    case 'setParagraphAlignment':
-      return `${summaryPrefix}已同步段落对齐。`
-    case 'setParagraphLineHeight':
-      return `${summaryPrefix}已同步段落行距。`
-    case 'setParagraphIndent':
-    case 'adjustParagraphIndent':
-      return `${summaryPrefix}已同步左缩进。`
-    case 'setParagraphSpacingBefore':
-      return `${summaryPrefix}已同步段前间距。`
-    case 'setParagraphSpacingAfter':
-      return `${summaryPrefix}已同步段后间距。`
-    case 'setParagraphFirstLineIndent':
-      return `${summaryPrefix}已同步首行缩进。`
-    case 'setParagraphHangingIndent':
-      return `${summaryPrefix}已同步悬挂缩进。`
-    case 'setParagraphStyle':
-      return `${summaryPrefix}已同步段落样式。`
-    case 'setParagraphList':
-      return `${summaryPrefix}已同步列表语义。`
-    default:
-      return `已执行 ${commandName}。`
+  if (label !== null) {
+    const selectionSummary = selection === null ? null : readSelectionSummary(context, selection, i18n)
+    const template = readJWordUiText(
+      i18n,
+      selectionSummary === null ? 'a11y.toolbar.transaction.completed' : 'a11y.toolbar.transaction.completedWithSelection'
+    )
+
+    return template
+      .replace('{selection}', selectionSummary ?? '')
+      .replace('{label}', label)
   }
+
+  return readJWordUiText(i18n, 'a11y.toolbar.transaction.executed')
+    .replace('{command}', commandName)
 }
 
 /** 生成选区变更后的播报文案。 */
-export function readSelectionAnnouncement(editor: Editor, selection: SelectionState | null): string {
+export function readSelectionAnnouncement(
+  editor: Editor,
+  selection: SelectionState | null,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
+): string {
   if (selection === null) {
-    return '选区已清空。'
+    return readJWordUiText(i18n, 'a11y.toolbar.selection.cleared')
   }
 
   const context = resolveSelectionContext(editor, editor.getProjection(), selection)
 
   return context === null
-    ? '选区已更新，但当前未能定位到可格式化的 paragraph/run。'
-    : `${readSelectionSummary(context, selection)}。`
+    ? readJWordUiText(i18n, 'a11y.toolbar.selection.unresolved')
+    : readJWordUiText(i18n, 'a11y.toolbar.selection.updated')
+      .replace('{selection}', readSelectionSummary(context, selection, i18n))
+}
+
+/** 读取格式事务对应的当前语言工具名称。 */
+function readTransactionLabel(i18n: ResolvedJWordUiI18n, commandName: string): string | null {
+  const labels: Readonly<Record<string, [string, string]>> = {
+    setBold: ['toolbar.format.bold.label', '加粗'],
+    setItalic: ['toolbar.format.italic.label', '斜体'],
+    setUnderline: ['toolbar.format.underline.label', '下划线'],
+    setStrike: ['toolbar.format.strike.label', '删除线'],
+    setSuperscript: ['toolbar.format.superscript.label', '上标'],
+    setSubscript: ['toolbar.format.subscript.label', '下标'],
+    setFontFamily: ['toolbar.format.fontFamily.label', '字体'],
+    setFontSize: ['toolbar.format.fontSize.label', '字号'],
+    setTextColor: ['toolbar.format.textColor.label', '文字颜色'],
+    setBackgroundColor: ['toolbar.format.backgroundColor.label', '背景色'],
+    setParagraphAlignment: ['toolbar.paragraph.alignment.label', '段落对齐'],
+    setParagraphLineHeight: ['toolbar.paragraph.lineHeight.label', '段落行距'],
+    setParagraphIndent: ['toolbar.paragraph.indentLeft.label', '左缩进'],
+    adjustParagraphIndent: ['toolbar.paragraph.indentLeft.label', '左缩进'],
+    setParagraphSpacingBefore: ['toolbar.paragraph.spacingBefore.label', '段前间距'],
+    setParagraphSpacingAfter: ['toolbar.paragraph.spacingAfter.label', '段后间距'],
+    setParagraphFirstLineIndent: ['toolbar.paragraph.firstLineIndent.label', '首行缩进'],
+    setParagraphHangingIndent: ['toolbar.paragraph.hangingIndent.label', '悬挂缩进'],
+    setParagraphStyle: ['toolbar.paragraph.style.label', '段落样式'],
+    setParagraphList: ['toolbar.paragraph.list.label', '列表语义']
+  }
+  const entry = labels[commandName]
+
+  return entry === undefined ? null : readJWordUiText(i18n, entry[0] as JWordUiI18nKey)
 }
 
 /** 把 PagePreset 映射成可读标签。 */
@@ -461,14 +472,15 @@ function findParagraphById(blocks: readonly Block[], blockId: string): Paragraph
 /** 生成人类可读的选区摘要。 */
 function readSelectionSummary(
   context: SelectionContext | null,
-  selection: SelectionState | null
+  selection: SelectionState | null,
+  i18n: ResolvedJWordUiI18n
 ): string {
   if (selection === null) {
-    return '无选区'
+    return readJWordUiText(i18n, 'a11y.toolbar.selection.none')
   }
 
   if (context === null) {
-    return '选区已更新，但当前未能映射到可读文本位置。'
+    return readJWordUiText(i18n, 'a11y.toolbar.selection.unmapped')
   }
 
   if (
@@ -478,10 +490,16 @@ function readSelectionSummary(
     const start = Math.min(context.anchor.graphemeIndex, context.focus.graphemeIndex)
     const end = Math.max(context.anchor.graphemeIndex, context.focus.graphemeIndex)
 
-    return `选区：${context.anchor.paragraphId} / ${context.anchor.runId} / ${start}→${end}`
+    return readJWordUiText(i18n, 'a11y.toolbar.selection.range')
+      .replace('{paragraph}', context.anchor.paragraphId)
+      .replace('{run}', context.anchor.runId)
+      .replace('{start}', String(start))
+      .replace('{end}', String(end))
   }
 
-  return `选区：${readSelectionEndpoint(context.anchor)} → ${readSelectionEndpoint(context.focus)}`
+  return readJWordUiText(i18n, 'a11y.toolbar.selection.between')
+    .replace('{anchor}', readSelectionEndpoint(context.anchor))
+    .replace('{focus}', readSelectionEndpoint(context.focus))
 }
 
 /** 序列化单个选区端点。 */

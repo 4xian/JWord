@@ -36,10 +36,14 @@ import {
   syncDefaultCommentsRailGeometry
 } from './comments-rail'
 import type { ResolvedCommentsMount } from './comments-rail'
-import { createFindReplaceController } from './find-replace/controller'
+import {
+  createFindReplaceController,
+  positionFindReplacePanelUnderAnchor
+} from './find-replace/controller'
 import { createHeaderFooterController } from './header-footer/controller'
 import { createHeadingOutlineController } from './heading/controller'
 import { resolveHeadingOutlineMount } from './heading-outline-setup'
+import { resolveSideWorkspaceMount } from './side-workspace'
 import { createLinkController } from './link/controller'
 import type { LinkControllerHandle } from './link/types'
 import {
@@ -70,6 +74,8 @@ import {
 } from './toolbar-setup'
 import { createToolbarController } from './toolbar/controller'
 import { createWatermarkController } from './watermark/controller'
+import { createToastController } from './toast/controller'
+import { createJWordUiLogger } from './debug/logger'
 import {
   readProjectionPlainText,
   readSelectionText
@@ -105,10 +111,25 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
   const statusBarMount = resolveStatusBarMount(options)
   cleanup.add(() => statusBarMount?.cleanup())
   const statusBarHost = statusBarMount?.host ?? null
+  const logger = createJWordUiLogger(options.debug)
   const liveRegion = createLiveRegion({
-    host: options.liveRegionHost ?? null
+    host: options.liveRegionHost ?? null,
+    onAnnounce(message, announceOptions, priority): void {
+      logger.write({
+        level: priority === 'assertive' ? 'warning' : 'info',
+        scope: announceOptions.source ?? 'ui',
+        event: announceOptions.event ?? 'announce',
+        message
+      })
+    }
   })
   cleanup.add(liveRegion.destroy)
+  const toast = createToastController({
+    mount: options.editorHost ?? toolbarHost,
+    liveRegion,
+    logger
+  })
+  cleanup.add(toast.destroy)
   const textMirror = options.assistiveMirrorHost === undefined || options.assistiveMirrorHost === null
     ? null
     : createTextMirror({
@@ -132,9 +153,9 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
     toggleFooterMenu(anchor?: HTMLElement): void
     togglePageNumberMenu(anchor?: HTMLElement): void
   } | null = null
-  let headingOutlineHandle: { isVisible(): boolean, toggleVisible(): void } | null = null
-  let findReplaceHandle: { toggleVisible(): void } | null = null
-  let revisionsHandle: { toggleVisible(): void } | null = null
+  let headingOutlineHandle: { isVisible(): boolean, close(): void, toggleVisible(): void } | null = null
+  let findReplaceHandle: { toggleVisible(anchor?: HTMLElement): void } | null = null
+  let revisionsHandle: { isVisible(): boolean, close(): void, toggleVisible(): void } | null = null
   let headingOutlineVisible = false
   let pendingLinkSelection: SelectionState | null = null
   let unsubscribeCommentsGeometry = (): void => {}
@@ -143,9 +164,9 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
   const toolbarEntryAvailable = options.toolbar !== false
   const readonlyEditingBlocked = readonlyOptions.enabled === true
   const readonlyNavigationAllowed = readonlyOptions.allowNavigation !== false
-  const resolvedMedia = resolveMediaOptions(options.media)
-  const resolvedTable = resolveTableOptions(options.table)
   let i18n = resolveJWordUiI18n(options.i18n)
+  const resolvedMedia = resolveMediaOptions(options.media, () => i18n)
+  const resolvedTable = resolveTableOptions(options.table, () => i18n)
   let currentThemeName: JWordUiThemeName = options.theme?.name ?? 'light'
   let currentLocale: JWordStatusBarLocale = normalizeStatusBarLocale(options.i18n?.locale)
   const themeController = createJWordUiThemeController({
@@ -169,24 +190,31 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
   let statusBarHandle: StatusBarControllerHandle | null = null
 
   /** 按 i18n key 播报 UI 阻断文案。 */
-  function announceUiMessage(key: Parameters<typeof readJWordUiText>[1], fallback: string): void {
-    liveRegion.announce(readJWordUiText(i18n, key, fallback), { force: true })
+  function announceUiMessage(key: Parameters<typeof readJWordUiText>[1]): void {
+    liveRegion.announce(readJWordUiText(i18n, key), { force: true })
   }
 
   /** 从当前选区打开批注草稿。 */
   function openCommentFromSelection(selection: SelectionState | null = options.editor.getSelection()): void {
     if (readonlyOptions.enabled === true) {
-      announceUiMessage('a11y.blockedReadonly', 'BLOCKED: 当前为只读模式。')
+      announceUiMessage('a11y.blockedReadonly')
       return
     }
 
     if (commentsHandle === null) {
-      announceUiMessage('a11y.commentSidebarMissing', 'BLOCKED: 当前宿主未启用批注侧栏。')
+      announceUiMessage('a11y.commentSidebarMissing')
       return
     }
 
     if (selection === null || isSelectionCollapsed(selection)) {
-      announceUiMessage('a11y.commentSelectionRequired', 'BLOCKED: 批注需要先选中一段正文。')
+      toast.toast({
+        message: readJWordUiText(i18n, 'toast.commentSelectionRequired'),
+        type: 'warning',
+        duration: 3000
+      }, {
+        scope: 'comments',
+        event: 'selection-required'
+      })
       return
     }
 
@@ -207,17 +235,17 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
   /** 从当前选区打开链接弹窗。 */
   function openLinkFromSelection(selection: SelectionState | null = options.editor.getSelection()): void {
     if (readonlyOptions.enabled === true) {
-      announceUiMessage('a11y.blockedReadonly', 'BLOCKED: 当前为只读模式。')
+      announceUiMessage('a11y.blockedReadonly')
       return
     }
 
     if (linkHandle === null) {
-      announceUiMessage('a11y.linkDialogMissing', 'BLOCKED: 当前宿主未启用链接弹窗。')
+      announceUiMessage('a11y.linkDialogMissing')
       return
     }
 
     if (readActiveLinkDraftFromSelection(options.editor, selection) !== null) {
-      announceUiMessage('a11y.linkAlreadyExists', 'BLOCKED: 当前内容已有链接，请使用打开、编辑或删除链接。')
+      announceUiMessage('a11y.linkAlreadyExists')
       return
     }
 
@@ -227,12 +255,68 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
       : readSelectionText(options.editor, selection))
   }
 
+  /** 切换目录工作区并同步工具栏按钮状态。 */
+  function toggleHeadingOutlineWorkspace(): void {
+    headingOutlineHandle?.toggleVisible()
+    headingOutlineVisible = headingOutlineHandle?.isVisible() ?? false
+    toolbarHost.querySelector<HTMLElement>('[data-jword-toggle-heading-outline]')
+      ?.setAttribute('aria-pressed', String(headingOutlineVisible))
+    logger.write({
+      level: 'debug',
+      scope: 'workspace.left',
+      event: headingOutlineVisible ? 'open' : 'close',
+      message: '目录工作区可见性已切换。'
+    })
+  }
+
+  /** 切换修订工作区并同步工具栏按钮状态。 */
+  function toggleRevisionsWorkspace(): void {
+    revisionsHandle?.toggleVisible()
+    const visible = revisionsHandle?.isVisible() ?? false
+
+    toolbarHost.querySelector<HTMLElement>('[data-jword-toggle-revisions]')
+      ?.setAttribute('aria-pressed', String(visible))
+    logger.write({
+      level: 'debug',
+      scope: 'workspace.right',
+      event: visible ? 'open' : 'close',
+      message: '修订工作区可见性已切换。'
+    })
+  }
+
+  /** 关闭目录工作区并同步工具栏按钮状态。 */
+  function closeHeadingOutlineWorkspace(): void {
+    headingOutlineHandle?.close()
+    headingOutlineVisible = false
+    toolbarHost.querySelector<HTMLElement>('[data-jword-toggle-heading-outline]')
+      ?.setAttribute('aria-pressed', 'false')
+    logger.write({
+      level: 'debug',
+      scope: 'workspace.left',
+      event: 'close',
+      message: '目录工作区已关闭。'
+    })
+  }
+
+  /** 关闭修订工作区并同步工具栏按钮状态。 */
+  function closeRevisionsWorkspace(): void {
+    revisionsHandle?.close()
+    toolbarHost.querySelector<HTMLElement>('[data-jword-toggle-revisions]')
+      ?.setAttribute('aria-pressed', 'false')
+    logger.write({
+      level: 'debug',
+      scope: 'workspace.right',
+      event: 'close',
+      message: '修订工作区已关闭。'
+    })
+  }
+
   /** 打开当前链接选区命中的 URL。 */
   function openActiveLinkFromSelection(selection: SelectionState | null): void {
     const draft = readActiveLinkDraftFromSelection(options.editor, selection)
 
     if (draft === null) {
-      announceUiMessage('a11y.linkOpenMissing', 'BLOCKED: 当前选区未命中可打开的链接。')
+      announceUiMessage('a11y.linkOpenMissing')
       return
     }
 
@@ -242,19 +326,19 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
   /** 用当前链接选区打开编辑弹窗。 */
   function editLinkFromSelection(selection: SelectionState | null): void {
     if (readonlyOptions.enabled === true) {
-      announceUiMessage('a11y.blockedReadonly', 'BLOCKED: 当前为只读模式。')
+      announceUiMessage('a11y.blockedReadonly')
       return
     }
 
     if (linkHandle === null) {
-      announceUiMessage('a11y.linkDialogMissing', 'BLOCKED: 当前宿主未启用链接弹窗。')
+      announceUiMessage('a11y.linkDialogMissing')
       return
     }
 
     const draft = readActiveLinkDraftFromSelection(options.editor, selection)
 
     if (draft === null) {
-      announceUiMessage('a11y.linkEditMissing', 'BLOCKED: 当前选区未命中可编辑的链接。')
+      announceUiMessage('a11y.linkEditMissing')
       return
     }
 
@@ -266,14 +350,14 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
   /** 删除当前链接选区命中的链接。 */
   function removeLinkFromSelection(selection: SelectionState | null): void {
     if (readonlyOptions.enabled === true) {
-      announceUiMessage('a11y.blockedReadonly', 'BLOCKED: 当前为只读模式。')
+      announceUiMessage('a11y.blockedReadonly')
       return
     }
 
     const command = buildDeleteLinkCommand(options.editor.getProjection(), selection)
 
     if (command === null) {
-      announceUiMessage('a11y.linkRemoveMissing', 'BLOCKED: 当前选区未命中可移除的链接。')
+      announceUiMessage('a11y.linkRemoveMissing')
       return
     }
 
@@ -296,12 +380,11 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
       openLink: openLinkFromSelection
     },
     panelActions: {
-      toggleFindReplace(): void {
-        findReplaceHandle?.toggleVisible()
+      toggleFindReplace(anchor): void {
+        findReplaceHandle?.toggleVisible(anchor)
       },
       toggleHeadingOutline(): void {
-        headingOutlineHandle?.toggleVisible()
-        headingOutlineVisible = headingOutlineHandle === null ? false : !headingOutlineVisible
+        toggleHeadingOutlineWorkspace()
       },
       toggleHeaderFooter(anchor): void {
         headerFooterHandle?.toggleHeaderFooterMenu(anchor)
@@ -313,7 +396,7 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
         headerFooterHandle?.togglePageNumberMenu(anchor)
       },
       toggleRevisions(): void {
-        revisionsHandle?.toggleVisible()
+        toggleRevisionsWorkspace()
       }
     },
     panelState: {
@@ -322,6 +405,9 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
       },
       headingOutlineAvailable(): boolean {
         return options.headingOutline !== undefined && buildHeadingOutline(options.editor).length > 0
+      },
+      revisions(): boolean {
+        return revisionsHandle?.isVisible() ?? false
       }
     },
     uiActions: {
@@ -410,7 +496,7 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
             })
 
           if (command === null) {
-            throw new Error('当前选区无法应用链接。')
+            throw new Error(readJWordUiText(i18n, 'a11y.link.selectionUnavailable'))
           }
 
           options.editor.executeCommand(command, {
@@ -424,7 +510,7 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
           const command = buildDeleteLinkCommand(options.editor.getProjection(), selection)
 
           if (command === null) {
-            throw new Error('当前选区未命中可移除的链接。')
+            throw new Error(readJWordUiText(i18n, 'a11y.link.removeSelectionUnavailable'))
           }
 
           options.editor.executeCommand(command, {
@@ -453,6 +539,16 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
     ? resolveHeadingOutlineMount(options.headingOutline, editorHost, toolbarHost)
     : null
   cleanup.add(() => headingOutlineMount?.cleanup())
+  const revisionsMount = shouldCreateRevisions && options.revisions !== undefined
+    ? resolveSideWorkspaceMount({
+        side: 'right',
+        feature: 'revisions',
+        ...(options.revisions.host === undefined ? {} : { explicitHost: options.revisions.host }),
+        ...(editorHost === undefined ? {} : { editorHost }),
+        fallbackHost: toolbar.panelHost ?? toolbarHost
+      })
+    : null
+  cleanup.add(() => revisionsMount?.cleanup())
   const linkOverlay = link === null || editorHost === undefined
     ? null
     : createLinkAnchorOverlay(options.editor, editorHost, (target) => {
@@ -496,7 +592,8 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
       i18n,
       scrollToRange(range): void {
         scrollTextRangeIntoView(options.editor, options.editorHost, range)
-      }
+      },
+      onClose: closeHeadingOutlineWorkspace
     })
   cleanup.add(() => headingOutline?.destroy())
   headingOutlineHandle = headingOutline === null
@@ -504,6 +601,10 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
     : {
         isVisible(): boolean {
           return headingOutline.isVisible()
+        },
+        close(): void {
+          headingOutline.close()
+          headingOutlineVisible = false
         },
         toggleVisible(): void {
           headingOutline.toggleVisible()
@@ -532,7 +633,11 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
   findReplaceHandle = findReplace === null
     ? null
     : {
-        toggleVisible(): void {
+        toggleVisible(anchor?: HTMLElement): void {
+          if (anchor !== undefined && findReplace.elements.root.hidden) {
+            positionFindReplacePanelUnderAnchor(findReplace.elements.root, anchor)
+          }
+
           findReplace.toggleVisible()
         }
       }
@@ -540,22 +645,40 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
     || options.findReplace?.keyboardShortcuts === false
     || options.editorHost === undefined
     ? (): void => {}
-    : bindFindReplaceKeyboardShortcuts([options.editorHost, toolbarHost, findReplace.elements.root], findReplace)
+    : bindFindReplaceKeyboardShortcuts([options.editorHost, toolbarHost, findReplace.elements.root], {
+        elements: findReplace.elements,
+        open(): void {
+          const anchor = toolbar.elements.controls['document.findReplace']
+
+          if (anchor !== undefined) {
+            positionFindReplacePanelUnderAnchor(findReplace.elements.root, anchor)
+          }
+
+          findReplace.open()
+        }
+      })
   cleanup.add(unsubscribeFindReplaceKeyboardShortcuts)
-  const revisions = !shouldCreateRevisions || options.revisions === undefined
+  const revisions = revisionsMount === null
     ? null
     : createRevisionController({
       editor: options.editor,
-      host: options.revisions.host ?? toolbar.panelHost ?? toolbarHost,
+      host: revisionsMount.host,
       i18n,
       announce(message): void {
         liveRegion.announce(message)
-      }
+      },
+      onClose: closeRevisionsWorkspace
     })
   cleanup.add(() => revisions?.destroy())
   revisionsHandle = revisions === null
     ? null
     : {
+        isVisible(): boolean {
+          return revisions.elements.root.hidden === false
+        },
+        close(): void {
+          revisions.elements.root.hidden = true
+        },
         toggleVisible(): void {
           revisions.elements.root.hidden = !revisions.elements.root.hidden
         }
@@ -586,7 +709,7 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
           pendingCommentSelections.delete(request.anchor.threadId)
 
           if (command === null) {
-            throw new Error('当前选区无法创建批注。')
+            throw new Error(readJWordUiText(i18n, 'a11y.comments.selectionUnavailable'))
           }
 
           options.editor.executeCommand(command, {
@@ -606,7 +729,7 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
           const command = buildDeleteCommentThreadCommand(options.editor.getProjection(), threadId)
 
           if (command === null) {
-            throw new Error('当前批注不存在，无法删除。')
+            throw new Error(readJWordUiText(i18n, 'a11y.comments.threadUnavailable'))
           }
 
           options.editor.executeCommand(command)
@@ -685,6 +808,7 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
     : createPasteController({
       editor: options.editor,
       editorHost: mountedEditorHost,
+      i18n,
       assistive: {
         liveRegion
       }
@@ -744,6 +868,13 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
   commentsOverlay?.sync()
   linkOverlay?.sync()
   syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
+  logger.write({
+    level: 'info',
+    scope: 'ui',
+    event: 'created',
+    message: 'JWord UI 已创建。'
+  })
+  let instanceDestroyed = false
 
   return {
     elements: {
@@ -764,6 +895,9 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
     },
     setLocale(locale, messages): void {
       applyUiLocale(locale, messages)
+    },
+    toast(options): void {
+      toast.toast(options)
     },
     setWatermark(nextWatermark): void {
       watermark.setWatermark(nextWatermark)
@@ -793,7 +927,20 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
       syncActiveLink(linkHandle, options.editor)
       syncToolbarLinkInsertAvailability(toolbar, options.editor, readonlyOptions.enabled === true)
     },
-    destroy: cleanup.destroy
+    destroy(): void {
+      if (instanceDestroyed) {
+        return
+      }
+
+      instanceDestroyed = true
+      logger.write({
+        level: 'info',
+        scope: 'ui',
+        event: 'destroy',
+        message: 'JWord UI 正在销毁。'
+      })
+      cleanup.destroy()
+    }
   }
 
   /** 动态应用 UI 主题，并同步状态栏当前值。 */
@@ -802,6 +949,12 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
     themeController.setTheme(theme)
     toolbar.setThemeName(currentThemeName)
     statusBarHandle?.setThemeName(currentThemeName)
+    logger.write({
+      level: 'info',
+      scope: 'ui',
+      event: 'theme-change',
+      message: `JWord UI 主题已切换为 ${currentThemeName}。`
+    })
   }
 
   /** 动态应用 UI 语言，并同步 toolbar/statusBar 文案。 */
@@ -827,6 +980,12 @@ function createJWordUiRuntime(options: CreateJWordUiOptions, cleanup: JWordUiCle
     table?.setI18n(i18n)
     selectionActions?.setI18n(i18n)
     imageSelection?.setI18n(i18n)
+    logger.write({
+      level: 'info',
+      scope: 'ui',
+      event: 'locale-change',
+      message: `JWord UI 语言已切换为 ${currentLocale}。`
+    })
   }
 }
 

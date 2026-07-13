@@ -12,6 +12,7 @@ import {
 } from '@4xian/jword-core'
 
 import { createJWordUi } from './ui-lifecycle'
+import { resolveToolbarConfig } from './toolbar/config'
 import type {
   CreateJWordUiOptions,
   JWordCommentsOptions,
@@ -21,6 +22,7 @@ import type {
   JWordLinkOptions,
   JWordRevisionsOptions,
   JWordStatusBarOptions,
+  JWordToolbarToolId,
   JWordUiInstance
 } from './types'
 
@@ -187,6 +189,19 @@ function createEditorShellUiOptions(
   const ui = options.ui ?? {}
   const liveRegionHost = dom.editorHost.querySelector<HTMLElement>('[data-jword-aria-live]')
   const statusBar = resolveEditorShellStatusBar(ui.statusBar, options.slots?.fullscreen ?? options.host, dom.statusBarHost)
+  const toolbarToolIds = resolveEditorShellToolbarToolIds(ui.toolbar)
+  const comments = ui.comments ?? (toolbarToolIds.has('insert.comment') ? true : undefined)
+  const link = ui.link ?? (toolbarToolIds.has('insert.link') ? {} : undefined)
+  const headerFooter = ui.headerFooter ?? (
+    toolbarToolIds.has('document.headerFooter')
+      || toolbarToolIds.has('document.footer')
+      || toolbarToolIds.has('document.pageNumber')
+      ? {}
+      : undefined
+  )
+  const headingOutline = ui.headingOutline ?? (toolbarToolIds.has('document.headingOutline') ? {} : undefined)
+  const findReplace = ui.findReplace ?? (toolbarToolIds.has('document.findReplace') ? {} : undefined)
+  const revisions = ui.revisions ?? (toolbarToolIds.has('document.revisions') ? {} : undefined)
 
   return {
     ...ui,
@@ -195,29 +210,40 @@ function createEditorShellUiOptions(
     toolbarHost: dom.toolbarHost,
     ...(liveRegionHost === null ? {} : { liveRegionHost }),
     statusBar,
-    ...(ui.comments === undefined
+    ...(comments === undefined
       ? {}
       : {
-          comments: ui.comments === true
+          comments: comments === true
             ? options.slots?.comments === undefined ? true : { host: options.slots.comments }
             : {
-                ...ui.comments,
+                ...comments,
                 ...(options.slots?.comments === undefined ? {} : { host: options.slots.comments })
               }
         }),
-    ...(ui.headingOutline === undefined
+    ...(headingOutline === undefined
       ? {}
       : {
           headingOutline: {
-            ...ui.headingOutline,
+            ...headingOutline,
             ...(options.slots?.outline === undefined ? {} : { host: options.slots.outline })
           }
         }),
-    ...(ui.link === undefined ? {} : { link: { ...ui.link, host: dom.editorHost } }),
-    ...(ui.headerFooter === undefined ? {} : { headerFooter: { ...ui.headerFooter, host: dom.editorHost } }),
-    ...(ui.findReplace === undefined ? {} : { findReplace: { ...ui.findReplace, host: dom.editorHost } }),
-    ...(ui.revisions === undefined ? {} : { revisions: { ...ui.revisions, host: dom.editorHost } })
+    ...(link === undefined ? {} : { link: { ...link, host: dom.editorHost } }),
+    ...(headerFooter === undefined ? {} : { headerFooter: { ...headerFooter, host: dom.editorHost } }),
+    ...(findReplace === undefined ? {} : { findReplace: { ...findReplace, host: dom.editorHost } }),
+    ...(revisions === undefined ? {} : { revisions: { ...revisions } })
   }
+}
+
+/** 解析 EditorShell 当前会渲染的工具，用于自动装配其依赖的内建面板能力。 */
+function resolveEditorShellToolbarToolIds(
+  toolbar: JWordEditorShellUiOptions['toolbar']
+): ReadonlySet<JWordToolbarToolId> {
+  if (toolbar === false) {
+    return new Set()
+  }
+
+  return new Set(resolveToolbarConfig(toolbar).toolIds)
 }
 
 /** 解析状态栏配置，并固定使用 EditorShell 的底部区域和全屏宿主。 */

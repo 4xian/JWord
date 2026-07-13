@@ -38,9 +38,9 @@ export function createLinkPanelDom(host: HTMLElement): JWordLinkPanelDom {
   quickTools.setAttribute('data-jword-link-quick-tools', 'true')
   quickTools.hidden = true
 
-  configureQuickToolButton(openLinkButton, readLinkText(i18n, 'open', '打开链接'), 'data-jword-link-open', 'openLink')
-  configureQuickToolButton(editLinkButton, readLinkText(i18n, 'edit', '编辑链接'), 'data-jword-link-edit', 'paragraphStyle')
-  configureQuickToolButton(removeLinkButton, readLinkText(i18n, 'remove', '删除链接'), 'data-jword-link-remove', 'trash')
+  configureQuickToolButton(openLinkButton, readLinkText(i18n, 'open'), 'data-jword-link-open', 'openLink')
+  configureQuickToolButton(editLinkButton, readLinkText(i18n, 'edit'), 'data-jword-link-edit', 'paragraphStyle')
+  configureQuickToolButton(removeLinkButton, readLinkText(i18n, 'remove'), 'data-jword-link-remove', 'trash')
 
   quickTools.append(openLinkButton, editLinkButton, removeLinkButton)
 
@@ -50,7 +50,7 @@ export function createLinkPanelDom(host: HTMLElement): JWordLinkPanelDom {
   dialog.hidden = true
 
   visibleTextInput.type = 'text'
-  visibleTextInput.placeholder = readLinkText(i18n, 'visibleText', '显示文本')
+  visibleTextInput.placeholder = readLinkText(i18n, 'visibleText')
   visibleTextInput.setAttribute('data-jword-link-visible-text-input', 'true')
 
   urlInput.type = 'url'
@@ -62,7 +62,7 @@ export function createLinkPanelDom(host: HTMLElement): JWordLinkPanelDom {
   errorText.hidden = true
 
   cancelButton.type = 'button'
-  cancelButton.textContent = readLinkText(i18n, 'cancel', '取消')
+  cancelButton.textContent = readLinkText(i18n, 'cancel')
   cancelButton.setAttribute('data-jword-link-cancel', 'true')
 
   confirmButton.type = 'button'
@@ -139,17 +139,17 @@ export function renderLinkPanel(
   dom.cancelButton.disabled = state.dialog.busy
   dom.confirmButton.disabled = readLinkConfirmDisabled(state.dialog, policy, i18n)
   dom.confirmButton.textContent = state.dialog.mode === 'edit'
-    ? readLinkText(i18n, 'save', '保存链接')
-    : readLinkText(i18n, 'insert', '插入链接')
+    ? readLinkText(i18n, 'save')
+    : readLinkText(i18n, 'insert')
 }
 
 /** 动态刷新 link panel 静态文案。 */
 export function localizeLinkPanelDom(dom: JWordLinkPanelDom, i18n: ResolvedJWordUiI18n): void {
-  updateButtonLabel(dom.openLinkButton, readLinkText(i18n, 'open', '打开链接'))
-  updateButtonLabel(dom.editLinkButton, readLinkText(i18n, 'edit', '编辑链接'))
-  updateButtonLabel(dom.removeLinkButton, readLinkText(i18n, 'remove', '删除链接'))
-  dom.visibleTextInput.placeholder = readLinkText(i18n, 'visibleText', '显示文本')
-  dom.cancelButton.textContent = readLinkText(i18n, 'cancel', '取消')
+  updateButtonLabel(dom.openLinkButton, readLinkText(i18n, 'open'))
+  updateButtonLabel(dom.editLinkButton, readLinkText(i18n, 'edit'))
+  updateButtonLabel(dom.removeLinkButton, readLinkText(i18n, 'remove'))
+  dom.visibleTextInput.placeholder = readLinkText(i18n, 'visibleText')
+  dom.cancelButton.textContent = readLinkText(i18n, 'cancel')
 }
 
 /** 销毁 link panel DOM。 */
@@ -164,6 +164,6 @@ function updateButtonLabel(button: HTMLButtonElement, label: string): void {
 }
 
 /** 读取链接弹窗文案。 */
-function readLinkText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `dialog.link.${key}`, fallback)
+function readLinkText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `dialog.link.${key}`)
 }

@@ -7,11 +7,13 @@
  */
 import type { Editor } from '@4xian/jword-core'
 import type { JWordUiLiveRegionController } from '../types'
+import { readJWordUiText, resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 import { sanitizePastedHtmlToRichTextFragmentWithWarnings } from './sanitizer'
 
 interface CreatePasteControllerOptions {
   readonly editor: Editor
   readonly editorHost: HTMLElement
+  readonly i18n?: ResolvedJWordUiI18n
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
@@ -61,9 +63,13 @@ function handlePasteEvent(options: CreatePasteControllerOptions, event: Clipboar
 
   event.preventDefault()
   event.stopImmediatePropagation()
-  options.assistive.liveRegion?.announce('已粘贴保留格式的安全富文本。', { force: true })
+  const i18n = options.i18n ?? resolveJWordUiI18n()
+  options.assistive.liveRegion?.announce(readJWordUiText(i18n, 'a11y.paste.richTextApplied'), { force: true })
   for (const warning of result.warnings) {
-    options.assistive.liveRegion?.announce(`WARN: ${warning.message}`, { force: true })
+    const warningMessage = warning.code === 'PASTE_TABLE_FLATTENED'
+      ? readJWordUiText(i18n, 'a11y.paste.tableFlattened')
+      : warning.message
+    options.assistive.liveRegion?.announce(`WARN: ${warningMessage}`, { force: true })
   }
 }
 

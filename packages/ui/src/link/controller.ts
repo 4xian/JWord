@@ -149,7 +149,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
       await adapter.openLink(activeLink)
     } catch (error) {
       dialog = createLinkDialogState('edit', activeLink)
-      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.openFailed', '打开链接失败，请重试。')))
+      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.openFailed')))
       refresh()
     }
   }
@@ -185,7 +185,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
       activeLink = draft
       closeDialog()
     } catch (error) {
-      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.saveFailed', '保存链接失败，请重试。')))
+      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.saveFailed')))
       refresh()
     }
   }
@@ -215,7 +215,7 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
       if (dialog === null) {
         dialog = createLinkDialogState('edit', activeLink ?? undefined)
       }
-      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.removeFailed', '移除链接失败，请重试。')))
+      setDialogError(normalizeLinkError(error, readJWordUiText(i18n, 'dialog.link.removeFailed')))
       refresh()
     }
   }
@@ -261,6 +261,21 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
     dom.removeLinkButton.addEventListener('click', () => {
       void handleRemoveLink()
     }, { signal: signalController.signal })
+    const closeOnOutsideEvent = (event: Event) => {
+      const target = event.target
+
+      if (!(target instanceof Node) || dom.host.contains(target)) {
+        return
+      }
+
+      dialog = null
+      quickToolsVisible = false
+      refresh()
+    }
+
+    options.host.ownerDocument.addEventListener('pointerdown', closeOnOutsideEvent, {
+      signal: signalController.signal
+    })
   }
 
   bindEvents()

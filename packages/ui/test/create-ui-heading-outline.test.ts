@@ -52,7 +52,7 @@ describe('createJWordUi heading outline integration', () => {
     }
   })
 
-  test('未提供目录 slot 时会在 jw-editor 内创建左侧侧栏宿主', () => {
+  test('未提供目录 slot 时会在 editorHost 内创建左侧浮动工作区', () => {
     const harness = createHarness({ useDefaultHeadingHost: true })
 
     try {
@@ -61,10 +61,12 @@ describe('createJWordUi heading outline integration', () => {
 
       const outlineButton = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toggle-heading-outline]')
       const outlineHost = harness.editorHost.querySelector<HTMLElement>(
-        '[data-jword-editor] [data-jword-heading-outline-host]'
+        ':scope > [data-jword-side-workspace="left"][data-jword-heading-outline-host]'
       )
 
       expect(outlineHost).not.toBeNull()
+      expect(outlineHost?.parentElement).toBe(harness.editorHost)
+      expect(harness.editorHost.querySelector('[data-jword-editor] [data-jword-heading-outline-host]')).toBeNull()
       expect(harness.toolbarHost.querySelector('[data-jword-heading-outline]')).toBeNull()
       expect(harness.ui.elements.headingOutlinePanel?.list.hidden).toBe(true)
       expect(outlineButton?.disabled).toBe(false)
@@ -76,10 +78,26 @@ describe('createJWordUi heading outline integration', () => {
       expect(outlineButton?.getAttribute('aria-pressed')).toBe('true')
       expect(outlineHost?.querySelector('[data-jword-heading-outline-sidebar]')).not.toBeNull()
 
+      const title = harness.ui.elements.headingOutlinePanel?.title
+      const closeButton = harness.ui.elements.headingOutlinePanel?.closeButton
+
+      expect(title?.textContent).toBe('目录大纲')
+      expect(closeButton?.getAttribute('aria-label')).toBe('关闭目录大纲')
+
+      harness.ui.setLocale('en-US')
+
+      expect(title?.textContent).toBe('Document outline')
+      expect(closeButton?.getAttribute('aria-label')).toBe('Close document outline')
+
+      closeButton?.click()
+
+      expect(harness.ui.elements.headingOutlinePanel?.root.hidden).toBe(true)
+      expect(outlineButton?.getAttribute('aria-pressed')).toBe('false')
+
       outlineButton?.click()
 
-      expect(harness.ui.elements.headingOutlinePanel?.list.hidden).toBe(true)
-      expect(outlineButton?.getAttribute('aria-pressed')).toBe('false')
+      expect(harness.ui.elements.headingOutlinePanel?.root.hidden).toBe(false)
+      expect(outlineButton?.getAttribute('aria-pressed')).toBe('true')
     } finally {
       harness.destroy()
     }

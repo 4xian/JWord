@@ -58,11 +58,19 @@ describe('createJWordUi find replace integration', () => {
       document.body.append(outsideTarget)
 
       expect(openButton).not.toBeNull()
+      if (openButton === null) {
+        throw new Error('查找替换 toolbar 按钮未挂载。')
+      }
+
+      stubBoundingRect(openButton, 124, 20, 28, 28)
       expect(harness.ui.elements.findReplacePanel!.root.hidden).toBe(true)
 
-      openButton?.click()
+      openButton.click()
 
       expect(harness.ui.elements.findReplacePanel!.root.hidden).toBe(false)
+      expect(harness.ui.elements.findReplacePanel!.root.getAttribute('data-jword-anchored')).toBe('true')
+      expect(harness.ui.elements.findReplacePanel!.root.style.getPropertyValue('--jw-find-replace-left')).toBe('124px')
+      expect(harness.ui.elements.findReplacePanel!.root.style.getPropertyValue('--jw-find-replace-top')).toBe('56px')
 
       outsideTarget.click()
 
@@ -235,6 +243,7 @@ describe('createJWordUi find replace integration', () => {
 
     try {
       const hiddenTextarea = readHiddenTextarea(harness.editorHost)
+      const openButton = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-open-find-replace]')
       const ctrlFindEvent = new KeyboardEvent('keydown', {
         key: 'f',
         ctrlKey: true,
@@ -248,12 +257,20 @@ describe('createJWordUi find replace integration', () => {
         cancelable: true
       })
 
+      expect(openButton).not.toBeNull()
+      if (openButton === null) {
+        throw new Error('查找替换 toolbar 按钮未挂载。')
+      }
+
+      stubBoundingRect(openButton, 160, 24, 28, 28)
       expect(harness.ui.elements.findReplacePanel!.root.hidden).toBe(true)
 
       hiddenTextarea.dispatchEvent(ctrlFindEvent)
 
       expect(ctrlFindEvent.defaultPrevented).toBe(true)
       expect(harness.ui.elements.findReplacePanel!.root.hidden).toBe(false)
+      expect(harness.ui.elements.findReplacePanel!.root.style.getPropertyValue('--jw-find-replace-left')).toBe('160px')
+      expect(harness.ui.elements.findReplacePanel!.root.style.getPropertyValue('--jw-find-replace-top')).toBe('60px')
       expect(document.activeElement).toBe(harness.ui.elements.findReplacePanel!.queryInput)
 
       harness.ui.elements.findReplacePanel!.closeButton.click()
@@ -372,6 +389,26 @@ function readHiddenTextarea(editorHost: HTMLElement): HTMLTextAreaElement {
   }
 
   return hiddenTextarea
+}
+
+/** 固定测试按钮几何，模拟 toolbar 按钮在真实页面中的位置。 */
+function stubBoundingRect(element: HTMLElement, left: number, top: number, width: number, height: number): void {
+  Object.defineProperty(element, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      x: left,
+      y: top,
+      left,
+      top,
+      width,
+      height,
+      right: left + width,
+      bottom: top + height,
+      toJSON(): Record<string, number> {
+        return { x: left, y: top, left, top, width, height, right: left + width, bottom: top + height }
+      }
+    } as DOMRect)
+  })
 }
 
 /** 读取测试文档第一节的段落纯文本。 */

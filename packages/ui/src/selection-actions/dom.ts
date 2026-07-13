@@ -42,8 +42,8 @@ export function createSelectionActionsDom(
     formatControls.openLink,
     formatControls.editLink,
     formatControls.removeLink,
-    createColorLabel(readSelectionActionText(i18n, 'textColor', '文字颜色'), 'text-color', 'textColor', formatControls.textColor),
-    createColorLabel(readSelectionActionText(i18n, 'backgroundColor', '背景色'), 'background-color', 'backgroundColor', formatControls.backgroundColor)
+    createColorLabel(readSelectionActionText(i18n, 'textColor'), 'text-color', 'textColor', formatControls.textColor),
+    createColorLabel(readSelectionActionText(i18n, 'backgroundColor'), 'background-color', 'backgroundColor', formatControls.backgroundColor)
   )
   floatingToolbar.append(floatingBar)
 
@@ -84,30 +84,30 @@ export function createSelectionActionsDom(
 
 /** 动态刷新 selection actions 文案。 */
 export function localizeSelectionActionsDom(dom: SelectionActionsDom, i18n: ResolvedJWordUiI18n): void {
-  updateButtonLabel(dom.formatControls.bold, readSelectionActionText(i18n, 'bold', '加粗'))
-  updateButtonLabel(dom.formatControls.italic, readSelectionActionText(i18n, 'italic', '斜体'))
-  updateButtonLabel(dom.formatControls.underline, readSelectionActionText(i18n, 'underline', '下划线'))
-  updateButtonLabel(dom.formatControls.strike, readSelectionActionText(i18n, 'strike', '删除线'))
-  updateButtonLabel(dom.formatControls.insertLink, readSelectionActionText(i18n, 'insertLink', '插入链接'))
-  updateButtonLabel(dom.formatControls.openLink, readSelectionActionText(i18n, 'openLink', '打开链接'))
-  updateButtonLabel(dom.formatControls.editLink, readSelectionActionText(i18n, 'editLink', '编辑链接'))
-  updateButtonLabel(dom.formatControls.removeLink, readSelectionActionText(i18n, 'removeLink', '删除链接'))
-  updateInputLabel(dom.formatControls.textColor, readSelectionActionText(i18n, 'textColor', '文字颜色'))
-  updateInputLabel(dom.formatControls.backgroundColor, readSelectionActionText(i18n, 'backgroundColor', '背景色'))
-  updateColorLabel(dom.formatControls.textColor, readSelectionActionText(i18n, 'textColor', '文字颜色'))
-  updateColorLabel(dom.formatControls.backgroundColor, readSelectionActionText(i18n, 'backgroundColor', '背景色'))
-  updateContextButton(dom.contextControls.cut, readSelectionActionText(i18n, 'cut', '剪切'))
-  updateContextButton(dom.contextControls.copy, readSelectionActionText(i18n, 'copy', '复制'))
-  updateContextButton(dom.contextControls.paste, readSelectionActionText(i18n, 'paste', '粘贴'))
-  updateContextButton(dom.contextControls.pastePlainText, readSelectionActionText(i18n, 'pastePlainText', '仅文本粘贴'))
-  updateContextButton(dom.contextControls.clear, readSelectionActionText(i18n, 'clear', '清除格式'))
-  updateContextButton(dom.contextControls.insertLink, readSelectionActionText(i18n, 'insertLink', '插入链接'))
-  updateContextButton(dom.contextControls.openLink, readSelectionActionText(i18n, 'openLink', '打开链接'))
-  updateContextButton(dom.contextControls.editLink, readSelectionActionText(i18n, 'editLink', '编辑链接'))
-  updateContextButton(dom.contextControls.removeLink, readSelectionActionText(i18n, 'removeLink', '删除链接'))
-  updateContextButton(dom.contextControls.insertComment, readSelectionActionText(i18n, 'insertComment', '插入批注'))
-  updateContextButton(dom.contextControls.insertBookmark, readSelectionActionText(i18n, 'insertBookmark', '插入书签'))
-  updateContextButton(dom.contextControls.forwardReference, readSelectionActionText(i18n, 'forwardReference', '引用转发'))
+  updateButtonLabel(dom.formatControls.bold, readSelectionActionText(i18n, 'bold'))
+  updateButtonLabel(dom.formatControls.italic, readSelectionActionText(i18n, 'italic'))
+  updateButtonLabel(dom.formatControls.underline, readSelectionActionText(i18n, 'underline'))
+  updateButtonLabel(dom.formatControls.strike, readSelectionActionText(i18n, 'strike'))
+  updateButtonLabel(dom.formatControls.insertLink, readSelectionActionText(i18n, 'insertLink'))
+  updateButtonLabel(dom.formatControls.openLink, readSelectionActionText(i18n, 'openLink'))
+  updateButtonLabel(dom.formatControls.editLink, readSelectionActionText(i18n, 'editLink'))
+  updateButtonLabel(dom.formatControls.removeLink, readSelectionActionText(i18n, 'removeLink'))
+  updateInputLabel(dom.formatControls.textColor, readSelectionActionText(i18n, 'textColor'))
+  updateInputLabel(dom.formatControls.backgroundColor, readSelectionActionText(i18n, 'backgroundColor'))
+  updateColorLabel(dom.formatControls.textColor, readSelectionActionText(i18n, 'textColor'))
+  updateColorLabel(dom.formatControls.backgroundColor, readSelectionActionText(i18n, 'backgroundColor'))
+  updateContextButton(dom.contextControls.cut, readSelectionActionText(i18n, 'cut'))
+  updateContextButton(dom.contextControls.copy, readSelectionActionText(i18n, 'copy'))
+  updateContextButton(dom.contextControls.paste, readSelectionActionText(i18n, 'paste'))
+  updateContextButton(dom.contextControls.pastePlainText, readSelectionActionText(i18n, 'pastePlainText'))
+  updateContextButton(dom.contextControls.clear, readSelectionActionText(i18n, 'clear'))
+  updateContextButton(dom.contextControls.insertLink, readSelectionActionText(i18n, 'insertLink'))
+  updateContextButton(dom.contextControls.openLink, readSelectionActionText(i18n, 'openLink'))
+  updateContextButton(dom.contextControls.editLink, readSelectionActionText(i18n, 'editLink'))
+  updateContextButton(dom.contextControls.removeLink, readSelectionActionText(i18n, 'removeLink'))
+  updateContextButton(dom.contextControls.insertComment, readSelectionActionText(i18n, 'insertComment'))
+  updateContextButton(dom.contextControls.insertBookmark, readSelectionActionText(i18n, 'insertBookmark'))
+  updateContextButton(dom.contextControls.forwardReference, readSelectionActionText(i18n, 'forwardReference'))
 }
 
 /** 根据最新状态重绘 selection-actions DOM。 */
@@ -154,40 +154,40 @@ export function destroySelectionActionsDom(dom: SelectionActionsDom): void {
 /** 创建浮动工具栏中的格式按钮集合。 */
 function createFormatControls(i18n: ResolvedJWordUiI18n): SelectionActionsFormatControls {
   return {
-    bold: createFormatButton('format.bold', readSelectionActionText(i18n, 'bold', '加粗'), 'bold'),
-    italic: createFormatButton('format.italic', readSelectionActionText(i18n, 'italic', '斜体'), 'italic'),
-    underline: createFormatButton('format.underline', readSelectionActionText(i18n, 'underline', '下划线'), 'underline'),
-    strike: createFormatButton('format.strike', readSelectionActionText(i18n, 'strike', '删除线'), 'strike'),
-    insertLink: createFormatButton('insert.link', readSelectionActionText(i18n, 'insertLink', '插入链接'), 'link'),
-    openLink: createFormatButton('link.open', readSelectionActionText(i18n, 'openLink', '打开链接'), 'openLink'),
-    editLink: createFormatButton('link.edit', readSelectionActionText(i18n, 'editLink', '编辑链接'), 'paragraphStyle'),
-    removeLink: createFormatButton('link.remove', readSelectionActionText(i18n, 'removeLink', '删除链接'), 'trash'),
-    textColor: createColorInput('format.textColor', readSelectionActionText(i18n, 'textColor', '文字颜色'), '#111111'),
-    backgroundColor: createColorInput('format.backgroundColor', readSelectionActionText(i18n, 'backgroundColor', '背景色'), '#fff59d')
+    bold: createFormatButton('format.bold', readSelectionActionText(i18n, 'bold'), 'bold'),
+    italic: createFormatButton('format.italic', readSelectionActionText(i18n, 'italic'), 'italic'),
+    underline: createFormatButton('format.underline', readSelectionActionText(i18n, 'underline'), 'underline'),
+    strike: createFormatButton('format.strike', readSelectionActionText(i18n, 'strike'), 'strike'),
+    insertLink: createFormatButton('insert.link', readSelectionActionText(i18n, 'insertLink'), 'link'),
+    openLink: createFormatButton('link.open', readSelectionActionText(i18n, 'openLink'), 'openLink'),
+    editLink: createFormatButton('link.edit', readSelectionActionText(i18n, 'editLink'), 'paragraphStyle'),
+    removeLink: createFormatButton('link.remove', readSelectionActionText(i18n, 'removeLink'), 'trash'),
+    textColor: createColorInput('format.textColor', readSelectionActionText(i18n, 'textColor'), '#111111'),
+    backgroundColor: createColorInput('format.backgroundColor', readSelectionActionText(i18n, 'backgroundColor'), '#fff59d')
   }
 }
 
 /** 创建右键菜单动作集合。 */
 function createContextControls(i18n: ResolvedJWordUiI18n): SelectionActionsContextControls {
   return {
-    cut: createContextButton('clipboard.cut', readSelectionActionText(i18n, 'cut', '剪切'), false, '⌘+X'),
-    copy: createContextButton('clipboard.copy', readSelectionActionText(i18n, 'copy', '复制'), false, '⌘+C'),
-    paste: createContextButton('clipboard.paste', readSelectionActionText(i18n, 'paste', '粘贴'), false, '⌘+V'),
-    pastePlainText: createContextButton('clipboard.pastePlainText', readSelectionActionText(i18n, 'pastePlainText', '仅文本粘贴'), false, '⌘+⇧+V'),
-    clear: createContextButton('format.clear', readSelectionActionText(i18n, 'clear', '清除格式')),
-    insertLink: createContextButton('insert.link', readSelectionActionText(i18n, 'insertLink', '插入链接')),
-    openLink: createContextButton('link.open', readSelectionActionText(i18n, 'openLink', '打开链接')),
-    editLink: createContextButton('link.edit', readSelectionActionText(i18n, 'editLink', '编辑链接')),
-    removeLink: createContextButton('link.remove', readSelectionActionText(i18n, 'removeLink', '删除链接')),
-    insertComment: createContextButton('insert.comment', readSelectionActionText(i18n, 'insertComment', '插入批注')),
-    insertBookmark: createContextButton('insert.bookmark', readSelectionActionText(i18n, 'insertBookmark', '插入书签'), true),
-    forwardReference: createContextButton('insert.referenceForward', readSelectionActionText(i18n, 'forwardReference', '引用转发'), true)
+    cut: createContextButton('clipboard.cut', readSelectionActionText(i18n, 'cut'), false, '⌘+X'),
+    copy: createContextButton('clipboard.copy', readSelectionActionText(i18n, 'copy'), false, '⌘+C'),
+    paste: createContextButton('clipboard.paste', readSelectionActionText(i18n, 'paste'), false, '⌘+V'),
+    pastePlainText: createContextButton('clipboard.pastePlainText', readSelectionActionText(i18n, 'pastePlainText'), false, '⌘+⇧+V'),
+    clear: createContextButton('format.clear', readSelectionActionText(i18n, 'clear')),
+    insertLink: createContextButton('insert.link', readSelectionActionText(i18n, 'insertLink')),
+    openLink: createContextButton('link.open', readSelectionActionText(i18n, 'openLink')),
+    editLink: createContextButton('link.edit', readSelectionActionText(i18n, 'editLink')),
+    removeLink: createContextButton('link.remove', readSelectionActionText(i18n, 'removeLink')),
+    insertComment: createContextButton('insert.comment', readSelectionActionText(i18n, 'insertComment')),
+    insertBookmark: createContextButton('insert.bookmark', readSelectionActionText(i18n, 'insertBookmark'), true),
+    forwardReference: createContextButton('insert.referenceForward', readSelectionActionText(i18n, 'forwardReference'), true)
   }
 }
 
 /** 读取选区动作双语文案。 */
-function readSelectionActionText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `menu.selectionActions.${key}`, fallback)
+function readSelectionActionText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.selectionActions.${key}`)
 }
 
 /** 更新图标按钮的无障碍文案。 */

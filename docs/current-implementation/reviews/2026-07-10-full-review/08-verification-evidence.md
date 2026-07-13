@@ -143,6 +143,104 @@ pnpm typecheck
 | `node --input-type=module -e "import('./packages/core/dist/index.js')"` | 1 | `ERR_MODULE_NOT_FOUND`，无法解析 `packages/core/dist/canvas/pool`。 |
 | `node tools/release/check-gate7-third-party-smoke.mjs` | 1 | pnpm 安装阶段请求未发布的 `@4xian/jword-*` registry 包，未进入 type/build/browser。 |
 
+## 2026-07-11 阶段 0A 最新验证证据
+
+本节以当前 HEAD `89eda9f328a5a73d8afadecbc80bab34428f847d` 的工作树实现为准，supersede 上述文件预算、dist/ESM 和基础 third-party smoke 的历史红灯；其它 License、DOCX、协作、安全和完整发布问题不受影响。本阶段没有 commit、push 或 PR。
+
+### 文件预算和 focused 回归
+
+| 命令/范围 | Exit | 结果 |
+| --- | ---: | --- |
+| Core query、runtime pagination、runtime initialization、runtime focused Vitest | 0 | 4 files、46 tests 通过。 |
+| toolbar controller、readonly、create UI、EditorShell、theme/i18n focused Vitest | 0 | 5 files、31 tests 通过。 |
+| `pnpm exec vitest run tests/architecture/core-file-budget.test.ts tests/architecture/phase5-file-split.test.ts` | 0 | 2 files、18/18 tests 通过；没有调整预算或跳过检查。 |
+
+Architecture 使用的最终门禁计数：
+
+| 文件 | 修复前 | 修复后 | 预算 |
+| --- | ---: | ---: | ---: |
+| `packages/core/src/layout/query.ts` | 1039 | 827 | 1000 |
+| `packages/core/test/editor/runtime.test.ts` | 1060 | 968 | 1000 |
+| `packages/ui/src/toolbar/controller.ts` | 1024 | 390 | 400 |
+
+### 阶段级构建与发布基线
+
+| 命令 | Exit | 结果 |
+| --- | ---: | --- |
+| `pnpm typecheck` | 0 | 根 TypeScript 检查通过；拆分文件精确复核也通过。 |
+| `pnpm lint` | 0 | ESLint、依赖版本、boundary 和中文注释检查通过。 |
+| 拆分涉及的 10 个 TypeScript 文件精确 ESLint | 0 | 未发现未使用 import、未使用类型导入或失效符号。 |
+| `pnpm build` | 0 | 全部 public package Rollup 构建完成，并执行 dist import normalization。 |
+| `node tools/release/normalize-dist-relative-imports.mjs --check` | 0 | 当前 dist 相对 import 已规范化。 |
+| `node --input-type=module -e "await import('./packages/core/dist/index.js')"` | 0 | core Node ESM import 通过。 |
+| `node tools/release/gate7-release-dry-run.mjs` | 0 | `status: ok`，未执行 publish，仍要求人工审批。 |
+
+三个原文件另使用 TypeScript AST 逐项统计 import 在 import 区域之外的引用次数；发现并删除 `query.ts` 的 `createTableFragmentLine` 与 `toolbar/controller.ts` 的 `SelectionState` 两处无效导入。`runtime.test.ts` 的全部导入均有实际引用，清理后精确 ESLint、typecheck、focused tests、architecture、build 和 smoke 已重新通过。
+
+### Third-party smoke 端口隔离
+
+修复后的 smoke 主进程通过 `node:net` 在 `127.0.0.1:0` 申请一次动态端口，关闭探测 socket 后立即通过 `JWORD_GATE7_SMOKE_PORT` 传给 Playwright 的全部进程。生成配置使用同一端口构造 Vite `--port`、`webServer.url` 和 `use.baseURL`，Vite 启用 `--strictPort`，`reuseExistingServer` 保持 `false`。
+
+执行期间 PID 61802 的既有 Vite 始终监听 5173，没有被停止或复用。最终：
+
+| 阶段 | 结果 |
+| --- | --- |
+| 本地 package tarball pack | 通过 |
+| 临时空项目 install | 通过 |
+| no-alias resolve | 通过 |
+| TypeScript typecheck | 通过 |
+| Vite production build | 通过 |
+| Playwright Chromium | 1/1 通过 |
+
+实现过程中保留了两次真实失败证据：首次因临时项目缺少 Node types 停在 typecheck；补齐根项目锁定的 `@types/node` 后，第二次因 Playwright 多进程重复加载配置、分别申请端口而在 Chromium 得到 `ERR_CONNECTION_REFUSED`。最终方案改为由 smoke 主进程只申请一次并通过环境变量共享，随后 focused 和阶段级两次完整 smoke 均 exit 0，Playwright 管理的 Vite/worker 进程均正常退出。
+
+临时 consumer 的实际安装输出使用 pnpm 10.33.0；该版本差异没有导致本次失败，不在阶段 0A 扩大处理，后续如需固定发布 runner 版本应归发布治理记录。
+
+## 2026-07-12 单 Host EditorShell 默认能力补充验证
+
+根因是 `createEditorShellUiOptions()` 只在调用方显式传入 `ui.comments/link/headerFooter/findReplace/headingOutline/revisions` 时创建对应 controller，而默认工具栏仍渲染这些入口。修复后先解析最终工具栏配置，再自动装配可见工具依赖的 controller；显式 UI 配置和高级 slots 保持优先，隐藏工具不额外装配。`export.native` 仍按既定契约派发宿主事件，不属于内部 panel controller。
+
+后续真实页面复验又确认了两个独立缺陷。第一，查找替换虽然已创建，但作为 `editor` 区域普通流的末尾子节点位于 `y=686`、高度 `104px`，被 720px 高的 EditorShell 根容器裁切；现改为锚定工具栏按钮下方并限制在视口边缘内，修订面板继续在中间编辑区域内居中并限制最大高度。第二，共享文档面板把整条 toolbar 误判为内部点击，水印和链接也缺少完整的外部收起，因此不同临时弹层可以叠加；现保留同一触发器切换和弹层内部交互，打开其它工具或点击外部会关闭旧弹层，select 选择值后继续关闭。目录与批注按既有持续工作区契约保留，不纳入临时弹层互斥。
+
+| 命令/范围 | Exit | 结果 |
+| --- | ---: | --- |
+| 修复前 `pnpm exec vitest run packages/ui/test/editor-shell.test.ts` | 1 | 7 tests 中 2 项按预期失败，默认及仅显示链接场景的 panel 均为 `null`。 |
+| 修复后同一 EditorShell focused 命令 | 0 | 7/7 通过。 |
+| 浮层互斥修复前 focused Vitest | 1 | 新增用例在“查找替换后打开页眉”处按预期失败；旧面板仍为可见。 |
+| 查找替换定位修复前 Chromium | 1 | 面板可见但底部超出 editor 区域，完整可见性断言按预期失败。 |
+| toolbar/link focused Vitest | 0 | 4 files、48/48 通过；覆盖内部点击、外部点击、切换新弹层和 select 选值关闭。 |
+| `pnpm --filter @4xian/jword-ui test` | 0 | 40 files、178/178 通过。 |
+| `pnpm exec playwright test examples/vanilla/tests/editor-shell.e2e.ts --project=chromium` | 0 | 3/3 通过；默认页实际打开批注、链接、页眉、页脚、页码、查找替换和修订，验证链接→页面、查找→修订、修订→字体的互斥、查找替换锚定工具栏按钮及修订面板完整位于编辑区。 |
+| `pnpm exec vitest run tests/architecture/core-file-budget.test.ts tests/architecture/phase5-file-split.test.ts` | 0 | 18/18 通过。 |
+| `pnpm typecheck` / `pnpm lint` / `pnpm build` | 0 | 类型、代码规范、注释、boundary 和全部 public package 构建通过。 |
+| dist normalization check / core 与 UI Node ESM import | 0 | 产物相对 import 和 Node ESM 消费通过。 |
+| release dry-run / third-party tarball smoke | 0 | dry-run `status: ok`；tarball install、typecheck、Vite build、Chromium 1/1 通过。 |
+
+本次没有提交、push 或创建 PR，也没有进入 License、DOCX 或协作阶段。
+
+## 2026-07-12 工作区、Toast、debug 与 i18n 方案完成证据
+
+目录大纲和修订记录已增加顶部标题与独立关闭图标，关闭后同步更新对应工具栏按钮状态。i18n 已按方案完成五批迁移，最后一批覆盖表格、媒体、粘贴和页眉页脚用户消息；debug 日志保持稳定英文 scope/event，不纳入用户可见文案字典。新增 architecture 检查只约束稳定用户播报入口和中英 key 对齐，不扫描注释、测试、debug、开发者 invariant 或 sanitizer 诊断。
+
+回归过程中 `phase5-file-split.test.ts` 曾发现 toolbar controller 为 416 行、超过 400 行预算。没有放宽阈值；撤销、重做和原生导出绑定按既有职责提取到 `packages/ui/src/toolbar/history-controls.ts` 后，controller 为 365 行，同一门禁重新通过。
+
+| 命令/范围 | Exit | 结果 |
+| --- | ---: | --- |
+| 目录与修订 focused Vitest | 0 | 2 files、10/10 通过；覆盖标题、关闭、状态同步和中英文标签。 |
+| toolbar i18n focused Vitest | 0 | 4 files、43/43 通过。 |
+| selection actions、剪贴板、链接、批注 focused Vitest | 0 | 5 files、28/28 通过。 |
+| 表格、媒体、粘贴、页眉页脚 focused Vitest | 0 | 现有相关测试全部通过；阶段中两次聚焦运行分别为 17/17 和 13/13。 |
+| `pnpm --filter @4xian/jword-ui test` | 0 | 42 files、183/183 通过。 |
+| `pnpm exec vitest run tests/architecture/core-file-budget.test.ts tests/architecture/phase5-file-split.test.ts tests/architecture/ui-i18n-user-text.test.ts` | 0 | 3 files、20/20 通过；未调整预算或跳过检查。 |
+| `pnpm typecheck` | 0 | 根 TypeScript 检查通过。 |
+| `pnpm lint` | 0 | ESLint、依赖版本、boundary 和中文注释检查通过。 |
+| `pnpm build` | 0 | 全部 public package 构建完成。 |
+| dist normalization check / core Node ESM import | 0 | 产物相对 import 和 Node ESM 消费通过。 |
+| `node tools/release/gate7-release-dry-run.mjs` | 0 | `status: ok`，未 publish，仍要求人工审批。 |
+| `node tools/release/check-gate7-third-party-smoke.mjs` | 0 | 本地 tarball install、no-alias、typecheck、Vite build、Chromium 1/1 全部通过；使用共享动态端口、`--strictPort` 和 `reuseExistingServer: false`。 |
+
+本次没有提交、push 或创建 PR，没有进入 License、DOCX、协作或商业发布阶段。`JWR-P2-211` 的 RTL、更广语言、字体和输入法矩阵仍未完成，不能据此宣称完整国际化已关闭。
+
 ### 安全依赖
 
 | 命令 | Exit | 结果 |

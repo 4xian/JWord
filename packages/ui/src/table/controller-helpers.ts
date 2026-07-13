@@ -156,16 +156,16 @@ export function createTableContextMenu(
   const group = document.createElement('div')
   const editGroup = document.createElement('div')
   const structureGroup = document.createElement('div')
-  const copyButton = createContextMenuButton('clipboard.copy', readTableText(i18n, 'copy', '复制'))
-  const cutButton = createContextMenuButton('clipboard.cut', readTableText(i18n, 'cut', '剪切'))
-  const pasteButton = createContextMenuButton('clipboard.paste', readTableText(i18n, 'paste', '粘贴'))
-  const insertRowBeforeButton = createContextMenuButton('table.insert-row-before', readTableText(i18n, 'insertRowBefore', '上方插入行'))
-  const insertRowAfterButton = createContextMenuButton('table.insert-row-after', readTableText(i18n, 'insertRowAfter', '下方插入行'))
-  const deleteRowButton = createContextMenuButton('table.delete-row', readTableText(i18n, 'deleteRow', '删除行'))
-  const insertColumnBeforeButton = createContextMenuButton('table.insert-column-before', readTableText(i18n, 'insertColumnBefore', '左侧插入列'))
-  const insertColumnAfterButton = createContextMenuButton('table.insert-column-after', readTableText(i18n, 'insertColumnAfter', '右侧插入列'))
-  const deleteColumnButton = createContextMenuButton('table.delete-column', readTableText(i18n, 'deleteColumn', '删除列'))
-  const mergeRightButton = createContextMenuButton('table.merge-right', readTableText(i18n, 'mergeRight', '向右合并'))
+  const copyButton = createContextMenuButton('clipboard.copy', readTableText(i18n, 'copy'))
+  const cutButton = createContextMenuButton('clipboard.cut', readTableText(i18n, 'cut'))
+  const pasteButton = createContextMenuButton('clipboard.paste', readTableText(i18n, 'paste'))
+  const insertRowBeforeButton = createContextMenuButton('table.insert-row-before', readTableText(i18n, 'insertRowBefore'))
+  const insertRowAfterButton = createContextMenuButton('table.insert-row-after', readTableText(i18n, 'insertRowAfter'))
+  const deleteRowButton = createContextMenuButton('table.delete-row', readTableText(i18n, 'deleteRow'))
+  const insertColumnBeforeButton = createContextMenuButton('table.insert-column-before', readTableText(i18n, 'insertColumnBefore'))
+  const insertColumnAfterButton = createContextMenuButton('table.insert-column-after', readTableText(i18n, 'insertColumnAfter'))
+  const deleteColumnButton = createContextMenuButton('table.delete-column', readTableText(i18n, 'deleteColumn'))
+  const mergeRightButton = createContextMenuButton('table.merge-right', readTableText(i18n, 'mergeRight'))
 
   root.className = 'jw-context-menu'
   root.hidden = true
@@ -196,16 +196,16 @@ export function createTableContextMenu(
 
 /** 动态刷新表格右键菜单文案。 */
 export function localizeTableContextMenu(menu: TableContextMenuElements, i18n: ResolvedJWordUiI18n): void {
-  setContextMenuButtonText(menu.copyButton, readTableText(i18n, 'copy', '复制'))
-  setContextMenuButtonText(menu.cutButton, readTableText(i18n, 'cut', '剪切'))
-  setContextMenuButtonText(menu.pasteButton, readTableText(i18n, 'paste', '粘贴'))
-  setContextMenuButtonText(menu.insertRowBeforeButton, readTableText(i18n, 'insertRowBefore', '上方插入行'))
-  setContextMenuButtonText(menu.insertRowAfterButton, readTableText(i18n, 'insertRowAfter', '下方插入行'))
-  setContextMenuButtonText(menu.deleteRowButton, readTableText(i18n, 'deleteRow', '删除行'))
-  setContextMenuButtonText(menu.insertColumnBeforeButton, readTableText(i18n, 'insertColumnBefore', '左侧插入列'))
-  setContextMenuButtonText(menu.insertColumnAfterButton, readTableText(i18n, 'insertColumnAfter', '右侧插入列'))
-  setContextMenuButtonText(menu.deleteColumnButton, readTableText(i18n, 'deleteColumn', '删除列'))
-  setContextMenuButtonText(menu.mergeRightButton, readTableText(i18n, 'mergeRight', '向右合并'))
+  setContextMenuButtonText(menu.copyButton, readTableText(i18n, 'copy'))
+  setContextMenuButtonText(menu.cutButton, readTableText(i18n, 'cut'))
+  setContextMenuButtonText(menu.pasteButton, readTableText(i18n, 'paste'))
+  setContextMenuButtonText(menu.insertRowBeforeButton, readTableText(i18n, 'insertRowBefore'))
+  setContextMenuButtonText(menu.insertRowAfterButton, readTableText(i18n, 'insertRowAfter'))
+  setContextMenuButtonText(menu.deleteRowButton, readTableText(i18n, 'deleteRow'))
+  setContextMenuButtonText(menu.insertColumnBeforeButton, readTableText(i18n, 'insertColumnBefore'))
+  setContextMenuButtonText(menu.insertColumnAfterButton, readTableText(i18n, 'insertColumnAfter'))
+  setContextMenuButtonText(menu.deleteColumnButton, readTableText(i18n, 'deleteColumn'))
+  setContextMenuButtonText(menu.mergeRightButton, readTableText(i18n, 'mergeRight'))
 }
 
 /** 创建表格行列尺寸拖拽 handle 容器。 */
@@ -299,7 +299,7 @@ export function syncResizeHandles(
     handle.style.height = `${Math.max(6, Math.round(geometry.height))}px`
     handle.style.borderRadius = '0'
     handle.style.cursor = 'col-resize'
-    handle.setAttribute('aria-label', readTableText(i18n, 'resizeColumn', '调整第 {index} 列宽度')
+    handle.setAttribute('aria-label', readTableText(i18n, 'resizeColumn')
       .replace('{index}', String(columnIndex + 1)))
     handle.setAttribute('data-jword-table-resize-handle', `column-${columnIndex}`)
     handle.addEventListener('pointerdown', onPointerDown)
@@ -323,7 +323,7 @@ export function syncResizeHandles(
     handle.style.height = '2px'
     handle.style.borderRadius = '0'
     handle.style.cursor = 'row-resize'
-    handle.setAttribute('aria-label', readTableText(i18n, 'resizeRow', '调整第 {index} 行高度')
+    handle.setAttribute('aria-label', readTableText(i18n, 'resizeRow')
       .replace('{index}', String(rowIndex + 1)))
     handle.setAttribute('data-jword-table-resize-handle', `row-${rowIndex}`)
     handle.addEventListener('pointerdown', onPointerDown)
@@ -476,12 +476,12 @@ export function preventDefaultEvent(event: Event): void {
 }
 
 /** 归一化 table controller 的异常消息。 */
-export function readTableErrorMessage(error: unknown): string {
+export function readTableErrorMessage(error: unknown, i18n?: ResolvedJWordUiI18n): string {
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message
   }
 
-  return '表格操作失败。'
+  return readJWordUiText(i18n ?? { messages: {} }, 'a11y.table.error')
 }
 
 /** 从 DOM 反推页面 scale。 */
@@ -625,6 +625,6 @@ function setContextMenuButtonText(button: HTMLButtonElement, text: string): void
 }
 
 /** 读取表格工具文案。 */
-function readTableText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `menu.table.${key}`, fallback)
+function readTableText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.table.${key}`)
 }

@@ -31,6 +31,7 @@ import {
   readDefaultDeferredMessage,
   normalizeTableDimension
 } from './state'
+import { readJWordUiText, type ResolvedJWordUiI18n } from '../i18n'
 import type { TableControllerState } from './table-state-sync'
 
 interface TableActionControllerOptions {
@@ -42,6 +43,7 @@ interface TableActionControllerOptions {
   readonly contextMenu: TableContextMenuElements
   readonly signal: AbortSignal
   readonly readonlyMode: boolean
+  readI18n(): ResolvedJWordUiI18n
   announce(message: string): void
   readCommandContext(): JWordTableCommandContext
   readTarget(): JWordTableSelectionTarget | null
@@ -60,13 +62,29 @@ export interface TableActionController {
 
 /** 创建表格动作控制器。 */
 export function createTableActionController(options: TableActionControllerOptions): TableActionController {
+  /** 读取当前语言的表格动作文案。 */
+  function tableText(key: string, replacements: Readonly<Record<string, string>> = {}): string {
+    let message = readJWordUiText(options.readI18n(), `a11y.table.${key}`)
+
+    for (const [placeholder, value] of Object.entries(replacements)) {
+      message = message.replace(`{${placeholder}}`, value)
+    }
+
+    return message
+  }
+
+  /** 读取当前语言的宿主未接入提示。 */
+  function deferredMessage(actionLabel: string): string {
+    return readDefaultDeferredMessage(actionLabel, options.readI18n())
+  }
+
   /** 统一执行命令型动作。 */
   async function runAction(
     actionLabel: string,
     runner: () => JWordTableCommandResult | Promise<JWordTableCommandResult>
   ): Promise<void> {
     if (options.readonlyMode) {
-      options.announce('当前为只读模式。')
+      options.announce(tableText('readonly'))
       return
     }
 
@@ -81,13 +99,13 @@ export function createTableActionController(options: TableActionControllerOption
       const result = await runner()
       const message = result.message ?? (
         result.kind === 'applied'
-          ? `${actionLabel}已完成。`
-          : readDefaultDeferredMessage(actionLabel)
+          ? tableText('completed', { action: actionLabel })
+          : tableText('deferred', { action: actionLabel })
       )
 
       options.announce(message)
     } catch (error) {
-      options.announce(readTableErrorMessage(error))
+      options.announce(readTableErrorMessage(error, options.readI18n()))
     } finally {
       options.state.busy = false
       options.refresh()
@@ -99,7 +117,7 @@ export function createTableActionController(options: TableActionControllerOption
   function bindActionEvents(): void {
     options.dom.insertTriggerButton.addEventListener('click', () => {
       if (options.readonlyMode) {
-        options.announce('当前为只读模式。')
+        options.announce(tableText('readonly'))
         return
       }
 
@@ -131,7 +149,7 @@ export function createTableActionController(options: TableActionControllerOption
       })
       button.addEventListener('click', () => {
         if (options.readonlyMode) {
-          options.announce('当前为只读模式。')
+          options.announce(tableText('readonly'))
           return
         }
 
@@ -152,7 +170,7 @@ export function createTableActionController(options: TableActionControllerOption
   /** 从锚点打开快捷工具条。 */
   function openQuickToolsFromAnchor(): void {
     if (options.readonlyMode) {
-      options.announce('当前为只读模式。')
+      options.announce(tableText('readonly'))
       return
     }
 
@@ -172,7 +190,7 @@ export function createTableActionController(options: TableActionControllerOption
   function bindInsertPanelEvents(): void {
     options.dom.customSizeButton.addEventListener('click', () => {
       if (options.readonlyMode) {
-        options.announce('当前为只读模式。')
+      options.announce(tableText('readonly'))
         return
       }
 
@@ -216,7 +234,7 @@ export function createTableActionController(options: TableActionControllerOption
           placement: 'before'
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('插入行')
+          message: deferredMessage('插入行')
         }
       })
     })
@@ -228,7 +246,7 @@ export function createTableActionController(options: TableActionControllerOption
           placement: 'after'
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('插入行')
+          message: deferredMessage('插入行')
         }
       })
     })
@@ -239,7 +257,7 @@ export function createTableActionController(options: TableActionControllerOption
           target
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('删除行')
+          message: deferredMessage('删除行')
         }
       })
     })
@@ -251,7 +269,7 @@ export function createTableActionController(options: TableActionControllerOption
           placement: 'before'
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('插入列')
+          message: deferredMessage('插入列')
         }
       })
     })
@@ -263,7 +281,7 @@ export function createTableActionController(options: TableActionControllerOption
           placement: 'after'
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('插入列')
+          message: deferredMessage('插入列')
         }
       })
     })
@@ -274,7 +292,7 @@ export function createTableActionController(options: TableActionControllerOption
           target
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('删除列')
+          message: deferredMessage('删除列')
         }
       })
     })
@@ -285,7 +303,7 @@ export function createTableActionController(options: TableActionControllerOption
           target
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('合并单元格')
+          message: deferredMessage('合并单元格')
         }
       })
     })
@@ -302,7 +320,7 @@ export function createTableActionController(options: TableActionControllerOption
         columns: options.state.insertColumns
       }) ?? {
         kind: 'deferred',
-        message: readDefaultDeferredMessage('插入表格')
+        message: deferredMessage('插入表格')
       }
     })
   }
@@ -315,7 +333,7 @@ export function createTableActionController(options: TableActionControllerOption
     const target = options.readTarget()
 
     if (target === null) {
-      options.announce('当前没有命中表格单元格，无法执行该操作。')
+      options.announce(tableText('targetMissing'))
       options.restoreEditorFocusSoon()
       return
     }
@@ -342,7 +360,7 @@ export function createTableActionController(options: TableActionControllerOption
           placement: 'before'
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('插入行')
+          message: deferredMessage('插入行')
         }
       })
     })
@@ -354,7 +372,7 @@ export function createTableActionController(options: TableActionControllerOption
           placement: 'after'
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('插入行')
+          message: deferredMessage('插入行')
         }
       })
     })
@@ -365,7 +383,7 @@ export function createTableActionController(options: TableActionControllerOption
           target
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('删除行')
+          message: deferredMessage('删除行')
         }
       })
     })
@@ -377,7 +395,7 @@ export function createTableActionController(options: TableActionControllerOption
           placement: 'before'
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('插入列')
+          message: deferredMessage('插入列')
         }
       })
     })
@@ -389,7 +407,7 @@ export function createTableActionController(options: TableActionControllerOption
           placement: 'after'
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('插入列')
+          message: deferredMessage('插入列')
         }
       })
     })
@@ -400,7 +418,7 @@ export function createTableActionController(options: TableActionControllerOption
           target
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('删除列')
+          message: deferredMessage('删除列')
         }
       })
     })
@@ -411,7 +429,7 @@ export function createTableActionController(options: TableActionControllerOption
           target
         }) ?? {
           kind: 'deferred',
-          message: readDefaultDeferredMessage('合并单元格')
+          message: deferredMessage('合并单元格')
         }
       })
     })
@@ -438,7 +456,7 @@ export function createTableActionController(options: TableActionControllerOption
     const target = options.state.contextMenuTarget
 
     if (target === null) {
-      options.announce('当前没有命中表格单元格，无法执行该操作。')
+      options.announce(tableText('targetMissing'))
       options.closeContextMenu()
       options.refresh()
       return Promise.resolve()
@@ -462,7 +480,7 @@ export function createTableActionController(options: TableActionControllerOption
   /** 写系统剪贴板。 */
   async function copySelectionToClipboard(selection: SelectionState | null): Promise<void> {
     if (selection === null) {
-      options.announce('当前没有可复制的表格内容。')
+      options.announce(tableText('copyMissing'))
       return
     }
 
@@ -470,7 +488,7 @@ export function createTableActionController(options: TableActionControllerOption
 
     if (clipboard === undefined || typeof clipboard.writeText !== 'function') {
       if (!runNativeExecCommand('copy')) {
-        options.announce('当前浏览器拒绝写入系统剪贴板。')
+        options.announce(tableText('clipboardWriteDenied'))
       }
       return
     }
@@ -479,7 +497,7 @@ export function createTableActionController(options: TableActionControllerOption
     const buffer = collectClipboardBuffer(options.hiddenTextarea, 'copy')
 
     if (buffer.plainText.length === 0) {
-      options.announce('当前没有可复制的表格内容。')
+      options.announce(tableText('copyMissing'))
       return
     }
 
@@ -491,7 +509,7 @@ export function createTableActionController(options: TableActionControllerOption
   /** 剪切当前表格内容。 */
   async function cutSelectionToClipboard(selection: SelectionState | null): Promise<void> {
     if (selection === null) {
-      options.announce('当前没有可剪切的表格内容。')
+      options.announce(tableText('cutMissing'))
       return
     }
 
@@ -499,7 +517,7 @@ export function createTableActionController(options: TableActionControllerOption
 
     if (clipboard === undefined || typeof clipboard.writeText !== 'function') {
       if (!runNativeExecCommand('cut')) {
-        options.announce('当前浏览器拒绝执行剪切。')
+        options.announce(tableText('cutDenied'))
       }
       return
     }
@@ -508,7 +526,7 @@ export function createTableActionController(options: TableActionControllerOption
     const buffer = collectClipboardBuffer(options.hiddenTextarea, 'copy')
 
     if (buffer.plainText.length === 0) {
-      options.announce('当前没有可剪切的表格内容。')
+      options.announce(tableText('cutMissing'))
       return
     }
 
@@ -526,14 +544,14 @@ export function createTableActionController(options: TableActionControllerOption
     const clipboard = navigator.clipboard
 
     if (clipboard === undefined || typeof clipboard.readText !== 'function') {
-      options.announce('当前浏览器不允许读取系统剪贴板。')
+      options.announce(tableText('clipboardReadDenied'))
       return
     }
 
     const text = await clipboard.readText()
 
     if (text.length === 0) {
-      options.announce('系统剪贴板当前没有文本内容。')
+      options.announce(tableText('clipboardEmpty'))
       return
     }
 

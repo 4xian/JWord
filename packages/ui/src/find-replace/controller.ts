@@ -28,6 +28,9 @@ import type { JWordFindReplacePanelElements } from '../types'
 import type { JWordReadonlyMode } from '../types'
 
 const FIND_REPLACE_OVERLAY_MATCH_LIMIT = 24
+const PANEL_VIEWPORT_PADDING_PX = 16
+const PANEL_ANCHOR_OFFSET_PX = 8
+const PANEL_WIDTH_PX = 560
 
 export interface CreateFindReplaceControllerOptions {
   readonly editor: Editor
@@ -78,8 +81,8 @@ export function createFindReplaceController(
     matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = matches.length === 0 ? -1 : 0
     lastMessage = matches.length === 0
-      ? readFindReplaceText(i18n, 'noResults', '未找到结果')
-      : readFindReplaceText(i18n, 'resultCount', '{count} 个结果').replace('{count}', String(matches.length))
+      ? readFindReplaceText(i18n, 'noResults')
+      : readFindReplaceText(i18n, 'resultCount').replace('{count}', String(matches.length))
     focusActiveMatch()
     refresh()
     options.announce?.(lastMessage)
@@ -122,7 +125,7 @@ export function createFindReplaceController(
       : buildReplaceMatchCommand(options.editor, match, elements.replacementInput.value)
 
     if (command === null) {
-      lastMessage = readFindReplaceText(i18n, 'replaceUnavailable', '当前结果无法替换')
+      lastMessage = readFindReplaceText(i18n, 'replaceUnavailable')
       refresh()
       options.announce?.(lastMessage)
       return
@@ -132,8 +135,8 @@ export function createFindReplaceController(
     matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = Math.min(activeIndex, matches.length - 1)
     lastMessage = matches.length === 0
-      ? readFindReplaceText(i18n, 'replaceNoRemaining', '已替换，未剩余结果')
-      : readFindReplaceText(i18n, 'replaceRemaining', '已替换，剩余 {count} 个结果')
+      ? readFindReplaceText(i18n, 'replaceNoRemaining')
+      : readFindReplaceText(i18n, 'replaceRemaining')
         .replace('{count}', String(matches.length))
     focusActiveMatch()
     refresh()
@@ -151,7 +154,7 @@ export function createFindReplaceController(
 
     matches = findTextMatches(options.editor, elements.queryInput.value, options.findOptions)
     activeIndex = matches.length === 0 ? -1 : 0
-    lastMessage = readFindReplaceText(i18n, 'replaceAllResult', '已替换 {count} 个结果')
+    lastMessage = readFindReplaceText(i18n, 'replaceAllResult')
       .replace('{count}', String(result.replacedCount))
     focusActiveMatch()
     refresh()
@@ -293,6 +296,21 @@ export function createFindReplaceController(
     refresh,
     destroy
   }
+}
+
+/** 把查找替换面板定位到 toolbar 按钮下方，并限制在视口两侧留白内。 */
+export function positionFindReplacePanelUnderAnchor(root: HTMLElement, anchor: HTMLElement): void {
+  const rect = anchor.getBoundingClientRect()
+  const viewportWidth = anchor.ownerDocument.defaultView?.innerWidth
+    ?? anchor.ownerDocument.documentElement.clientWidth
+  const panelWidth = Math.min(PANEL_WIDTH_PX, Math.max(0, viewportWidth - PANEL_VIEWPORT_PADDING_PX * 2))
+  const maxLeft = Math.max(PANEL_VIEWPORT_PADDING_PX, viewportWidth - PANEL_VIEWPORT_PADDING_PX - panelWidth)
+  const left = Math.min(Math.max(PANEL_VIEWPORT_PADDING_PX, rect.left), maxLeft)
+  const top = Math.max(0, rect.bottom + PANEL_ANCHOR_OFFSET_PX)
+
+  root.setAttribute('data-jword-anchored', 'true')
+  root.style.setProperty('--jw-find-replace-left', `${Math.round(left)}px`)
+  root.style.setProperty('--jw-find-replace-top', `${Math.round(top)}px`)
 }
 
 /** 同步查找命中 overlay。 */
@@ -458,6 +476,6 @@ function readMatchIndexText(matchCount: number, activeIndex: number): string {
 }
 
 /** 读取查找替换动态文案。 */
-function readFindReplaceText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `menu.findReplace.${key}`, fallback)
+function readFindReplaceText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.findReplace.${key}`)
 }

@@ -6,12 +6,14 @@
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor, SelectionState } from '@4xian/jword-core'
+import { readJWordUiText, type ResolvedJWordUiI18n } from '../i18n'
 import { collectClipboardBuffer, createClipboardData, dispatchClipboardEvent, runNativeExecCommand } from './native-clipboard'
 
 /** controller 提供给剪贴板动作的最小上下文。 */
 export interface SelectionActionsClipboardContext {
   readonly editor: Editor
   readonly hiddenTextarea: HTMLTextAreaElement
+  readonly readI18n: () => ResolvedJWordUiI18n
   readonly announce: (message: string) => void
   readonly clearStableContextPoint: () => void
   readonly restoreEditorFocusSoon: () => void
@@ -23,7 +25,7 @@ export async function copyStableSelectionToClipboard(
   selection: SelectionState | null
 ): Promise<void> {
   if (selection === null) {
-    context.announce('BLOCKED: 当前没有可复制的稳定选区。')
+    announceClipboardMessage(context, 'a11y.clipboard.copySelectionMissing')
     return
   }
 
@@ -31,7 +33,7 @@ export async function copyStableSelectionToClipboard(
 
   if (clipboard === undefined || typeof clipboard.writeText !== 'function') {
     if (!runNativeExecCommand('copy')) {
-      context.announce('BLOCKED: 当前浏览器拒绝写入系统剪贴板。')
+      announceClipboardMessage(context, 'a11y.clipboard.copyDenied')
     }
     return
   }
@@ -40,7 +42,7 @@ export async function copyStableSelectionToClipboard(
   const buffer = collectClipboardBuffer(context.hiddenTextarea, 'copy')
 
   if (buffer.plainText.length === 0) {
-    context.announce('BLOCKED: 当前稳定选区没有可复制文本。')
+    announceClipboardMessage(context, 'a11y.clipboard.copyTextMissing')
     return
   }
 
@@ -55,7 +57,7 @@ export async function cutStableSelection(
   selection: SelectionState | null
 ): Promise<void> {
   if (selection === null) {
-    context.announce('BLOCKED: 当前没有可剪切的稳定选区。')
+    announceClipboardMessage(context, 'a11y.clipboard.cutSelectionMissing')
     return
   }
 
@@ -63,7 +65,7 @@ export async function cutStableSelection(
 
   if (clipboard === undefined || typeof clipboard.writeText !== 'function') {
     if (!runNativeExecCommand('cut')) {
-      context.announce('BLOCKED: 当前浏览器拒绝执行剪切。')
+      announceClipboardMessage(context, 'a11y.clipboard.cutDenied')
     }
     return
   }
@@ -72,7 +74,7 @@ export async function cutStableSelection(
   const buffer = collectClipboardBuffer(context.hiddenTextarea, 'copy')
 
   if (buffer.plainText.length === 0) {
-    context.announce('BLOCKED: 当前稳定选区没有可剪切文本。')
+    announceClipboardMessage(context, 'a11y.clipboard.cutTextMissing')
     return
   }
 
@@ -113,14 +115,14 @@ export async function pastePlainTextFromClipboard(
   const clipboard = navigator.clipboard
 
   if (clipboard === undefined || typeof clipboard.readText !== 'function') {
-    context.announce('BLOCKED: 当前浏览器不允许读取纯文本剪贴板。')
+    announceClipboardMessage(context, 'a11y.clipboard.readDenied')
     return
   }
 
   const text = await clipboard.readText()
 
   if (text.length === 0) {
-    context.announce('BLOCKED: 系统剪贴板当前没有纯文本内容。')
+    announceClipboardMessage(context, 'a11y.clipboard.empty')
     return
   }
 
@@ -136,4 +138,12 @@ export async function pastePlainTextFromClipboard(
   }))
   context.clearStableContextPoint()
   context.restoreEditorFocusSoon()
+}
+
+/** 使用当前语言播报剪贴板阻断消息。 */
+function announceClipboardMessage(
+  context: SelectionActionsClipboardContext,
+  key: Parameters<typeof readJWordUiText>[1]
+): void {
+  context.announce(readJWordUiText(context.readI18n(), key))
 }

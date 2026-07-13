@@ -27,7 +27,9 @@ export function createRevisionPanelDom(
   i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
 ): JWordRevisionPanelElements {
   const root = document.createElement('section')
+  const header = document.createElement('div')
   const title = document.createElement('h2')
+  const closeButton = document.createElement('button')
   const list = document.createElement('div')
   const emptyState = document.createElement('p')
 
@@ -35,21 +37,29 @@ export function createRevisionPanelDom(
   root.setAttribute('data-jword-revisions-panel', 'true')
   root.hidden = true
 
+  header.className = 'jw-revisions-panel__header'
   title.className = 'jw-revisions-panel__title'
-  title.textContent = readRevisionsText(i18n, 'title', '修订记录')
+  title.textContent = readRevisionsText(i18n, 'title')
+  closeButton.type = 'button'
+  closeButton.className = 'jw-revisions-panel__close'
+  closeButton.textContent = '×'
+  setButtonLabel(closeButton, readRevisionsText(i18n, 'close'))
 
   list.className = 'jw-revisions-panel__list'
   list.setAttribute('data-jword-revision-list', 'true')
 
   emptyState.className = 'jw-revisions-panel__empty'
-  emptyState.textContent = readRevisionsText(i18n, 'empty', '暂无修订记录')
+  emptyState.textContent = readRevisionsText(i18n, 'empty')
 
-  root.append(title, list, emptyState)
+  header.append(title, closeButton)
+  root.append(header, list, emptyState)
   host.append(root)
 
   return {
     host,
     root,
+    title,
+    closeButton,
     list,
     emptyState
   }
@@ -72,12 +82,9 @@ export function localizeRevisionPanelDom(
   elements: JWordRevisionPanelElements,
   i18n: ResolvedJWordUiI18n
 ): void {
-  const title = elements.root.querySelector<HTMLElement>('.jw-revisions-panel__title')
-
-  if (title !== null) {
-    title.textContent = readRevisionsText(i18n, 'title', '修订记录')
-  }
-  elements.emptyState.textContent = readRevisionsText(i18n, 'empty', '暂无修订记录')
+  elements.title.textContent = readRevisionsText(i18n, 'title')
+  setButtonLabel(elements.closeButton, readRevisionsText(i18n, 'close'))
+  elements.emptyState.textContent = readRevisionsText(i18n, 'empty')
 }
 
 /**
@@ -126,13 +133,13 @@ function createRevisionItem(
   acceptButton.className = 'jw-revisions-panel__action'
   acceptButton.setAttribute('data-jword-revision-accept', 'true')
   acceptButton.setAttribute('data-jword-revision-id', revision.id)
-  acceptButton.textContent = readRevisionsText(i18n, 'accept', '接受')
+  acceptButton.textContent = readRevisionsText(i18n, 'accept')
 
   rejectButton.type = 'button'
   rejectButton.className = 'jw-revisions-panel__action'
   rejectButton.setAttribute('data-jword-revision-reject', 'true')
   rejectButton.setAttribute('data-jword-revision-id', revision.id)
-  rejectButton.textContent = readRevisionsText(i18n, 'reject', '拒绝')
+  rejectButton.textContent = readRevisionsText(i18n, 'reject')
 
   button.append(type, summary, meta)
   actions.append(acceptButton, rejectButton)
@@ -145,15 +152,21 @@ function createRevisionItem(
 function readRevisionTypeLabel(i18n: ResolvedJWordUiI18n, type: RevisionMetadata['type']): string {
   switch (type) {
     case 'insert':
-      return readRevisionsText(i18n, 'typeInsert', '插入')
+      return readRevisionsText(i18n, 'typeInsert')
     case 'delete':
-      return readRevisionsText(i18n, 'typeDelete', '删除')
+      return readRevisionsText(i18n, 'typeDelete')
     case 'format':
-      return readRevisionsText(i18n, 'typeFormat', '格式')
+      return readRevisionsText(i18n, 'typeFormat')
   }
 }
 
 /** 读取修订面板文案。 */
-function readRevisionsText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `menu.revisions.${key}`, fallback)
+function readRevisionsText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.revisions.${key}`)
+}
+
+/** 同步图标按钮的可访问名称和悬浮提示。 */
+function setButtonLabel(button: HTMLButtonElement, label: string): void {
+  button.title = label
+  button.setAttribute('aria-label', label)
 }

@@ -48,15 +48,15 @@ export function readLinkValidationError(
   i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
 ): string {
   if (draft.visibleText.length === 0) {
-    return readJWordUiText(i18n, 'dialog.link.errorVisibleTextRequired', '请输入显示文本。')
+    return readJWordUiText(i18n, 'dialog.link.errorVisibleTextRequired')
   }
 
   if (draft.url.length === 0) {
-    return readJWordUiText(i18n, 'dialog.link.errorUrlRequired', '请输入链接地址。')
+    return readJWordUiText(i18n, 'dialog.link.errorUrlRequired')
   }
 
   if (!isAllowedJWordLinkUrl(draft.url, policy)) {
-    return readJWordUiText(i18n, 'dialog.link.errorProtocolUnsupported', '链接地址协议不受支持。')
+    return readJWordUiText(i18n, 'dialog.link.errorProtocolUnsupported')
   }
 
   return ''

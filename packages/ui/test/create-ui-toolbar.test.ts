@@ -351,6 +351,101 @@ describe('createJWordUi toolbar config', () => {
     }
   })
 
+  test('工具栏同时只保留一个下拉或弹框并按内外点击收起', async () => {
+    const editorHost = document.createElement('div')
+    const toolbarHost = document.createElement('div')
+    const outside = document.createElement('button')
+    const editor = createEditor({ initialText: 'overlay lifecycle' })
+
+    document.body.append(editorHost, toolbarHost, outside)
+
+    try {
+      editor.mount(editorHost)
+      editor.focus()
+      const ui = createJWordUi({
+        editor,
+        editorHost,
+        toolbarHost,
+        findReplace: {},
+        headerFooter: {},
+        link: {}
+      })
+      const findButton = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-tool-id="document.findReplace"]')
+      const findPanel = editorHost.querySelector<HTMLElement>('[data-jword-find-replace]')
+        ?? toolbarHost.querySelector<HTMLElement>('[data-jword-find-replace]')
+      const findInput = findPanel?.querySelector<HTMLInputElement>('[data-jword-find-query-input]')
+      const headerButton = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-tool-id="document.headerFooter"]')
+      const headerPanel = editorHost.querySelector<HTMLElement>('[data-jword-header-footer]')
+        ?? toolbarHost.querySelector<HTMLElement>('[data-jword-header-footer]')
+      const fontTrigger = toolbarHost.querySelector<HTMLButtonElement>(
+        '[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger'
+      )
+      const fontWrapper = fontTrigger?.closest<HTMLElement>('.jw-toolbar__select-wrap')
+      const fontOption = fontWrapper?.querySelector<HTMLButtonElement>('.jw-toolbar__select-option')
+      const watermarkButton = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-tool-id="document.watermark"]')
+      const linkButton = toolbarHost.querySelector<HTMLButtonElement>('[data-jword-tool-id="insert.link"]')
+      const linkDialog = editorHost.querySelector<HTMLElement>('[data-jword-link-dialog]')
+        ?? toolbarHost.querySelector<HTMLElement>('[data-jword-link-dialog]')
+
+      expect(findButton).toBeInstanceOf(HTMLButtonElement)
+      expect(findPanel).toBeInstanceOf(HTMLElement)
+      expect(findInput).toBeInstanceOf(HTMLInputElement)
+      expect(headerButton).toBeInstanceOf(HTMLButtonElement)
+      expect(headerPanel).toBeInstanceOf(HTMLElement)
+      expect(fontTrigger).toBeInstanceOf(HTMLButtonElement)
+      expect(fontOption).toBeInstanceOf(HTMLButtonElement)
+      expect(watermarkButton).toBeInstanceOf(HTMLButtonElement)
+      expect(linkButton).toBeInstanceOf(HTMLButtonElement)
+      expect(linkDialog).toBeInstanceOf(HTMLElement)
+
+      findButton?.click()
+      expect(findPanel?.hidden).toBe(false)
+
+      findInput?.click()
+      expect(findPanel?.hidden).toBe(false)
+
+      headerButton?.click()
+      expect(findPanel?.hidden).toBe(true)
+      expect(headerPanel?.hidden).toBe(false)
+
+      fontTrigger?.click()
+      expect(headerPanel?.hidden).toBe(true)
+      expect(fontWrapper?.getAttribute('data-jword-open')).toBe('true')
+
+      fontOption?.click()
+      await Promise.resolve()
+      expect(fontWrapper?.getAttribute('data-jword-open')).toBe('false')
+
+      watermarkButton?.click()
+      const watermarkMenu = toolbarHost.querySelector<HTMLElement>('[data-jword-watermark-menu="true"]')
+
+      expect(watermarkMenu?.hidden).toBe(false)
+      headerButton?.click()
+      expect(watermarkMenu?.hidden).toBe(true)
+      expect(headerPanel?.hidden).toBe(false)
+
+      outside.click()
+      expect(headerPanel?.hidden).toBe(true)
+
+      linkButton?.click()
+      expect(linkDialog?.hidden).toBe(false)
+      linkDialog?.querySelector('input')?.click()
+      expect(linkDialog?.hidden).toBe(false)
+
+      findButton?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+      findButton?.click()
+      expect(linkDialog?.hidden).toBe(true)
+      expect(findPanel?.hidden).toBe(false)
+
+      ui.destroy()
+    } finally {
+      editor.destroy()
+      editorHost.remove()
+      toolbarHost.remove()
+      outside.remove()
+    }
+  })
+
   test('旧 visibleTools 常用模式仍只显示宿主声明的内建工具', () => {
     const editorHost = document.createElement('div')
     const toolbarHost = document.createElement('div')

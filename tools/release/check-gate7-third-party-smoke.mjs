@@ -7,6 +7,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -158,6 +159,7 @@ function writeEmptyProject(projectDir, packs) {
     dependencies,
     devDependencies: {
       '@playwright/test': readRootDevDependencyVersion('@playwright/test'),
+      '@types/node': readRootDevDependencyVersion('@types/node'),
       '@types/react': readRootDevDependencyVersion('@types/react'),
       '@types/react-dom': readRootDevDependencyVersion('@types/react-dom'),
       react: readRootDevDependencyVersion('react'),
@@ -228,10 +230,43 @@ function runViteBuild(projectDir) {
   })
 }
 
+/** 获取当前 smoke 进程使用的动态空闲端口。 */
+async function findAvailablePort() {
+  const server = createServer()
+
+  return await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+
+      if (address === null || typeof address === 'string') {
+        server.close()
+        reject(new Error('Failed to allocate a TCP port for the Gate 7 smoke.'))
+        return
+      }
+
+      server.close((error) => {
+        if (error !== undefined) {
+          reject(error)
+          return
+        }
+
+        resolve(address.port)
+      })
+    })
+  })
+}
+
 /** 执行 Chromium 浏览器 smoke。 */
-function runChromiumSmoke(projectDir) {
+async function runChromiumSmoke(projectDir) {
+  const port = await findAvailablePort()
+
   execFileSync('pnpm', ['run', 'e2e'], {
     cwd: projectDir,
+    env: {
+      ...process.env,
+      JWORD_GATE7_SMOKE_PORT: String(port)
+    },
     stdio: 'inherit'
   })
 }
@@ -260,7 +295,7 @@ const tsconfigSource = `${JSON.stringify({
     strict: true,
     skipLibCheck: true,
     lib: ['ES2022', 'DOM', 'DOM.Iterable'],
-    types: ['@playwright/test']
+    types: ['@playwright/test', 'node']
   },
   include: ['src/**/*.ts', 'browser-smoke.spec.ts', 'playwright.config.ts']
 }, null, 2)}\n`
@@ -449,12 +484,26 @@ export const consumedApis = {
 
 const playwrightConfigSource = String.raw`import { defineConfig, devices } from '@playwright/test'
 
+/** 读取 smoke 主进程分配给全部 Playwright 进程的端口。 */
+function readSmokePort(): number {
+  const port = Number.parseInt(process.env.JWORD_GATE7_SMOKE_PORT ?? '', 10)
+
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error('JWORD_GATE7_SMOKE_PORT must be a valid TCP port.')
+  }
+
+  return port
+}
+
+const port = readSmokePort()
+const baseURL = 'http://127.0.0.1:' + String(port)
+
 export default defineConfig({
   testDir: '.',
   testMatch: ['browser-smoke.spec.ts'],
   webServer: {
-    command: 'pnpm exec vite --host 127.0.0.1',
-    url: 'http://127.0.0.1:5173',
+    command: 'pnpm exec vite --host 127.0.0.1 --port ' + String(port) + ' --strictPort',
+    url: baseURL,
     reuseExistingServer: false,
     timeout: 120000
   },
@@ -463,7 +512,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: 'http://127.0.0.1:5173'
+        baseURL
       }
     }
   ]
@@ -489,7 +538,7 @@ installEmptyProject(projectDir)
 assertNoRepoAlias(projectDir)
 runTypecheck(projectDir)
 runViteBuild(projectDir)
-runChromiumSmoke(projectDir)
+await runChromiumSmoke(projectDir)
 
 console.log(JSON.stringify({
   status: 'ok',

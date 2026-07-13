@@ -2,7 +2,7 @@
 
 ## 包职责
 
-`@4xian/jword-ui` 是官方原生 TypeScript + DOM UI SDK。它依赖 `@4xian/jword-core` 的公开 facade、command builders、projection 和 geometry，不持有第二套编辑状态。它负责 toolbar、底部状态栏、面板、浮层、批注栏、链接弹窗、图片/表格工具、查找替换、目录、页眉页脚、修订面板、粘贴清洗、只读交互、主题/i18n 和 a11y 辅助层。
+`@4xian/jword-ui` 是官方原生 TypeScript + DOM UI SDK。它依赖 `@4xian/jword-core` 的公开 facade、command builders、projection 和 geometry，不持有第二套编辑状态。它负责 toolbar、底部状态栏、左右浮动工作区、Toast、面板、浮层、批注栏、链接弹窗、图片/表格工具、查找替换、目录、页眉页脚、修订面板、粘贴清洗、只读交互、主题/i18n、debug 日志和 a11y 辅助层。
 
 ## 入口与导出
 
@@ -21,6 +21,7 @@
 - StatusBar 配置、item IDs、statusBar elements、缩放范围、主题/语言切换类型。
 - 编辑器实例级页面水印配置 `JWordWatermarkOptions`，以及 `JWordUiInstance.setWatermark(...)` / `clearWatermark()` / `getWatermark()`。
 - Theme/i18n contract：主题 token、默认主题 token、默认 i18n 字典、字典合并；支持 `setTheme(...)` / `setLocale(...)` 动态刷新 toolbar/statusBar。
+- `JWordUiInstance.toast({ message, type, duration })` 顶部通知，以及 `debug: true | JWordDebugOptions` 实例级调试日志。
 - Media/table 默认 core command adapter。
 - Find/replace、header/footer、heading outline controller。
 - Comments、link、revision、readonly、user、media、table options 与元素类型。
@@ -30,6 +31,8 @@
 ## 主要模块目录
 
 - `assistive/`：live region、隐藏纯文本镜像。
+- `debug/`：默认关闭的结构化 UI 调试日志和 console adapter。
+- `toast/`：顶部单实例 Toast、定时关闭和 live-region 同步。
 - `toolbar/`：内建工具注册、DOM、专业/常用模式、状态同步、格式/段落/插入/页面/视图/导出动作、插件扩展。
 - `status-bar/`：底部状态栏 DOM、controller、mount 和状态统计。
 - `watermark/`：编辑器实例级页面水印与内置版权水印 DOM controller。
@@ -51,6 +54,16 @@
 ### UI 装配
 
 `createJWordUi()` 负责解析 toolbar/statusBar host、创建 live region/text mirror、应用主题、装配 toolbar/statusBar/media/table/comments/link/find-replace/header-footer/heading/revisions/selection-actions/paste/readonly，并返回 `elements`、`refresh()`、`destroy()`。未显式传 `statusBar: false` 时默认启用底部状态栏；未传 `toolbarHost` / `statusBar.host` 且已提供 `editorHost` 时，SDK 会形成 `toolbar / editor shell / statusBar` 三段式官方 UI 布局。
+
+默认目录挂在 editor region 左侧浮动工作区，修订记录挂在右侧浮动工作区；两侧均使用绝对定位覆盖正文，不参与正文宽度计算。批注仍按每页 Canvas 创建 page rail，不使用右侧工作区。显式传入目录或修订 `host` 时，SDK 尊重外部宿主。
+
+### Toast 与 debug 日志
+
+- `JWordUiInstance.toast({ message, type, duration })` 同一时刻只显示一条顶部 Toast，新消息替换旧消息；`duration <= 0` 时不自动关闭。
+- Toast 类型为 `info | success | warning | error`，并同步对应优先级的 live-region 播报。
+- 无选区点击批注会显示当前语言的 warning Toast；其他高频 live-region 消息不会自动全部转换成 Toast。
+- `debug` 默认关闭；`debug: true` 使用 console adapter，`debug: { enabled: true, logger }` 可由宿主接管结构化 entry。
+- Debug 日志使用稳定 `scope` / `event`，不属于用户界面文案，不进入 i18n 字典。
 
 ### Toolbar
 
@@ -107,6 +120,7 @@
 - Live region 去重播报，隐藏 text mirror 支持辅助读取。
 - Theme 写 `jw-root`、`data-theme` 和 `--jw-*` CSS custom properties；内建主题切换首批只暴露 `light` / `dark`。
 - i18n 合并宿主字典，缺省回退内建中文或调用点 fallback；状态栏语言切换首批只暴露 `zh-CN` / `en-US`。
+- Toast、修订结果等本批用户可感知文案已接入中英文字典；其余历史直接中文播报仍按功能域分批迁移，不能视为全项目治理完成。
 - `JWordUiInstance.setTheme(...)` / `setLocale(...)` 会刷新 toolbar、statusBar 和当前可见面板文案 / 样式。
 
 ### 页面水印
@@ -147,6 +161,8 @@
 - `packages/ui/test/create-ui-heading-outline.test.ts`
 - `packages/ui/test/create-ui-paste-readonly.test.ts`
 - `packages/ui/test/create-ui-revisions.test.ts`
+- `packages/ui/test/create-ui-toast.test.ts`
+- `packages/ui/test/create-ui-debug.test.ts`
 - `packages/ui/test/media-command-adapter.test.ts`
 - `packages/ui/test/paste-sanitizer.test.ts`
 - `packages/ui/test/readonly-interaction-guard.test.ts`
@@ -176,6 +192,7 @@
 - Header/footer controller 当前写 section 属性、页眉页脚 ID 和页码配置，不等同于完整页眉页脚正文编辑器。
 - Revisions controller 显示 metadata 并执行接受/拒绝，不是完整 track-changes 引擎。
 - i18n 当前内建重点覆盖中文与英文，不等同完整多语言包。
+- Debug 日志仅供开发诊断；开启时宿主仍应避免把正文、选区内容、token 或完整 URL 写入自定义 details。
 - 状态栏 MVP 不包含保存、协作、批注/修订汇总、企业治理、support bundle 或 AI 助手入口。
 
 ## 关键文件
@@ -189,6 +206,10 @@
 - `packages/ui/src/status-bar/`
 - `packages/ui/src/view-state.ts`
 - `packages/ui/src/ui-shell-layout.ts`
+- `packages/ui/src/side-workspace.ts`
+- `packages/ui/src/ui-positioning.ts`
+- `packages/ui/src/toast/`
+- `packages/ui/src/debug/`
 - `packages/ui/src/media/`
 - `packages/ui/src/table/`
 - `packages/ui/src/paste/sanitizer.ts`

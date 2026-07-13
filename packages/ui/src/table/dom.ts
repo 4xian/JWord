@@ -48,27 +48,27 @@ export function createTablePanelDom(
   const insertMenu = document.createElement('div')
   const insertPreviewLabel = document.createElement('p')
   const preview = document.createElement('div')
-  const customSizeButton = createButton(readTableText(i18n, 'customSize', '自定义行列'), 'data-jword-table-custom-size')
+  const customSizeButton = createButton(readTableText(i18n, 'customSize'), 'data-jword-table-custom-size')
   const customSizeDialog = document.createElement('div')
   const customSizeDialogPanel = document.createElement('div')
   const customSizeDialogTitle = document.createElement('p')
-  const insertRowsInput = createNumberInput(readTableText(i18n, 'rows', '行数'), 'data-jword-table-insert-rows')
-  const insertColumnsInput = createNumberInput(readTableText(i18n, 'columns', '列数'), 'data-jword-table-insert-columns')
-  const insertConfirmButton = createButton(readTableText(i18n, 'insert', '插入表格'), 'data-jword-table-insert-confirm')
-  const customSizeCancelButton = createButton(readTableText(i18n, 'cancel', '取消'), 'data-jword-table-custom-size-cancel')
+  const insertRowsInput = createNumberInput(readTableText(i18n, 'rows'), 'data-jword-table-insert-rows')
+  const insertColumnsInput = createNumberInput(readTableText(i18n, 'columns'), 'data-jword-table-insert-columns')
+  const insertConfirmButton = createButton(readTableText(i18n, 'insert'), 'data-jword-table-insert-confirm')
+  const customSizeCancelButton = createButton(readTableText(i18n, 'cancel'), 'data-jword-table-custom-size-cancel')
   const overlay = document.createElement('div')
   const topAnchor = document.createElement('button')
   const leftAnchor = document.createElement('button')
   const quickTools = document.createElement('div')
   const summary = document.createElement('p')
   const actionRow = createRow()
-  const insertRowBeforeButton = createIconButton(readTableText(i18n, 'insertRowBefore', '上方插入行'), 'data-jword-table-action', 'insert-row-before')
-  const insertRowAfterButton = createIconButton(readTableText(i18n, 'insertRowAfter', '下方插入行'), 'data-jword-table-action', 'insert-row-after')
-  const deleteRowButton = createIconButton(readTableText(i18n, 'deleteRow', '删除行'), 'data-jword-table-action', 'delete-row')
-  const insertColumnBeforeButton = createIconButton(readTableText(i18n, 'insertColumnBefore', '左侧插入列'), 'data-jword-table-action', 'insert-column-before')
-  const insertColumnAfterButton = createIconButton(readTableText(i18n, 'insertColumnAfter', '右侧插入列'), 'data-jword-table-action', 'insert-column-after')
-  const deleteColumnButton = createIconButton(readTableText(i18n, 'deleteColumn', '删除列'), 'data-jword-table-action', 'delete-column')
-  const mergeRightButton = createIconButton(readTableText(i18n, 'mergeRight', '向右合并'), 'data-jword-table-action', 'merge-right')
+  const insertRowBeforeButton = createIconButton(readTableText(i18n, 'insertRowBefore'), 'data-jword-table-action', 'insert-row-before')
+  const insertRowAfterButton = createIconButton(readTableText(i18n, 'insertRowAfter'), 'data-jword-table-action', 'insert-row-after')
+  const deleteRowButton = createIconButton(readTableText(i18n, 'deleteRow'), 'data-jword-table-action', 'delete-row')
+  const insertColumnBeforeButton = createIconButton(readTableText(i18n, 'insertColumnBefore'), 'data-jword-table-action', 'insert-column-before')
+  const insertColumnAfterButton = createIconButton(readTableText(i18n, 'insertColumnAfter'), 'data-jword-table-action', 'insert-column-after')
+  const deleteColumnButton = createIconButton(readTableText(i18n, 'deleteColumn'), 'data-jword-table-action', 'delete-column')
+  const mergeRightButton = createIconButton(readTableText(i18n, 'mergeRight'), 'data-jword-table-action', 'merge-right')
   const insertPreviewButtons: HTMLButtonElement[] = []
 
   root.className = 'jw-table-toolbar'
@@ -119,13 +119,13 @@ export function createTablePanelDom(
   customSizeDialog.hidden = true
   customSizeDialogPanel.className = 'jw-table-toolbar__dialog-panel'
   customSizeDialogTitle.className = 'jw-table-toolbar__dialog-title'
-  customSizeDialogTitle.textContent = readJWordUiText(i18n, 'dialog.table.customSizeTitle', '自定义表格尺寸')
+  customSizeDialogTitle.textContent = readJWordUiText(i18n, 'dialog.table.customSizeTitle')
 
   const customSizeFields = createRow()
   customSizeFields.classList.add('jw-table-toolbar__dialog-fields')
   customSizeFields.append(
-    createField(readTableText(i18n, 'rows', '行数'), insertRowsInput),
-    createField(readTableText(i18n, 'columns', '列数'), insertColumnsInput)
+    createField(readTableText(i18n, 'rows'), insertRowsInput),
+    createField(readTableText(i18n, 'columns'), insertColumnsInput)
   )
 
   const customSizeActions = createRow()
@@ -144,13 +144,13 @@ export function createTablePanelDom(
 
   topAnchor.type = 'button'
   topAnchor.className = 'jw-table-panel__anchor jw-table-panel__anchor--top'
-  topAnchor.setAttribute('aria-label', readTableText(i18n, 'openTopTools', '打开表格顶部快捷工具'))
+  topAnchor.setAttribute('aria-label', readTableText(i18n, 'openTopTools'))
   topAnchor.setAttribute('data-jword-table-anchor', 'top')
   topAnchor.setAttribute('data-jword-table-anchor-role', 'helper')
 
   leftAnchor.type = 'button'
   leftAnchor.className = 'jw-table-panel__anchor jw-table-panel__anchor--left'
-  leftAnchor.setAttribute('aria-label', readTableText(i18n, 'openLeftTools', '打开表格左侧快捷工具'))
+  leftAnchor.setAttribute('aria-label', readTableText(i18n, 'openLeftTools'))
   leftAnchor.setAttribute('data-jword-table-anchor', 'left')
   leftAnchor.setAttribute('data-jword-table-anchor-role', 'helper')
 
@@ -234,29 +234,29 @@ export function localizeTablePanelDom(dom: JWordTablePanelElements, i18n: Resolv
   if (triggerLabel !== null) {
     triggerLabel.textContent = title
   }
-  setButtonText(dom.customSizeButton, readTableText(i18n, 'customSize', '自定义行列'))
-  setButtonText(dom.customSizeCancelButton, readTableText(i18n, 'cancel', '取消'))
-  setButtonText(dom.insertConfirmButton, readTableText(i18n, 'insert', '插入表格'))
-  dom.insertRowsInput.setAttribute('aria-label', readTableText(i18n, 'rows', '行数'))
-  dom.insertColumnsInput.setAttribute('aria-label', readTableText(i18n, 'columns', '列数'))
+  setButtonText(dom.customSizeButton, readTableText(i18n, 'customSize'))
+  setButtonText(dom.customSizeCancelButton, readTableText(i18n, 'cancel'))
+  setButtonText(dom.insertConfirmButton, readTableText(i18n, 'insert'))
+  dom.insertRowsInput.setAttribute('aria-label', readTableText(i18n, 'rows'))
+  dom.insertColumnsInput.setAttribute('aria-label', readTableText(i18n, 'columns'))
   if (fieldLabels[0] !== undefined) {
-    fieldLabels[0].textContent = readTableText(i18n, 'rows', '行数')
+    fieldLabels[0].textContent = readTableText(i18n, 'rows')
   }
   if (fieldLabels[1] !== undefined) {
-    fieldLabels[1].textContent = readTableText(i18n, 'columns', '列数')
+    fieldLabels[1].textContent = readTableText(i18n, 'columns')
   }
   if (dialogTitle !== null) {
-    dialogTitle.textContent = readJWordUiText(i18n, 'dialog.table.customSizeTitle', '自定义表格尺寸')
+    dialogTitle.textContent = readJWordUiText(i18n, 'dialog.table.customSizeTitle')
   }
-  setButtonText(dom.insertRowBeforeButton, readTableText(i18n, 'insertRowBefore', '上方插入行'))
-  setButtonText(dom.insertRowAfterButton, readTableText(i18n, 'insertRowAfter', '下方插入行'))
-  setButtonText(dom.deleteRowButton, readTableText(i18n, 'deleteRow', '删除行'))
-  setButtonText(dom.insertColumnBeforeButton, readTableText(i18n, 'insertColumnBefore', '左侧插入列'))
-  setButtonText(dom.insertColumnAfterButton, readTableText(i18n, 'insertColumnAfter', '右侧插入列'))
-  setButtonText(dom.deleteColumnButton, readTableText(i18n, 'deleteColumn', '删除列'))
-  setButtonText(dom.mergeRightButton, readTableText(i18n, 'mergeRight', '向右合并'))
-  dom.topAnchor.setAttribute('aria-label', readTableText(i18n, 'openTopTools', '打开表格顶部快捷工具'))
-  dom.leftAnchor.setAttribute('aria-label', readTableText(i18n, 'openLeftTools', '打开表格左侧快捷工具'))
+  setButtonText(dom.insertRowBeforeButton, readTableText(i18n, 'insertRowBefore'))
+  setButtonText(dom.insertRowAfterButton, readTableText(i18n, 'insertRowAfter'))
+  setButtonText(dom.deleteRowButton, readTableText(i18n, 'deleteRow'))
+  setButtonText(dom.insertColumnBeforeButton, readTableText(i18n, 'insertColumnBefore'))
+  setButtonText(dom.insertColumnAfterButton, readTableText(i18n, 'insertColumnAfter'))
+  setButtonText(dom.deleteColumnButton, readTableText(i18n, 'deleteColumn'))
+  setButtonText(dom.mergeRightButton, readTableText(i18n, 'mergeRight'))
+  dom.topAnchor.setAttribute('aria-label', readTableText(i18n, 'openTopTools'))
+  dom.leftAnchor.setAttribute('aria-label', readTableText(i18n, 'openLeftTools'))
 
   for (const button of dom.insertPreviewButtons) {
     const rows = Number.parseInt(button.dataset.jwordRows ?? '0', 10)
@@ -391,13 +391,13 @@ function createField(label: string, input: HTMLInputElement): HTMLLabelElement {
 }
 
 /** 读取表格工具文案。 */
-function readTableText(i18n: ResolvedJWordUiI18n, key: string, fallback: string): string {
-  return readJWordUiText(i18n, `menu.table.${key}`, fallback)
+function readTableText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.table.${key}`)
 }
 
 /** 读取表格预览单元格文案。 */
 function readTablePreviewCellText(i18n: ResolvedJWordUiI18n, rows: number, columns: number): string {
-  return readTableText(i18n, 'previewCell', '{rows} 行 {columns} 列')
+  return readTableText(i18n, 'previewCell')
     .replace('{rows}', String(rows))
     .replace('{columns}', String(columns))
 }

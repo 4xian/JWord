@@ -69,9 +69,9 @@ function createPagePresetPluginExtension(i18n: ResolvedJWordUiI18n): JWordUiPlug
     pluginName: 'jword.ui',
     menus: [{
       name: 'pagePreset',
-      label: readJWordUiText(i18n, 'menu.pagePreset.label', '页面'),
-      ariaLabel: readJWordUiText(i18n, 'menu.pagePreset.ariaLabel', '页面尺寸'),
-      tooltip: readJWordUiText(i18n, 'menu.pagePreset.tooltip', '页面尺寸'),
+      label: readJWordUiText(i18n, 'menu.pagePreset.label'),
+      ariaLabel: readJWordUiText(i18n, 'menu.pagePreset.ariaLabel'),
+      tooltip: readJWordUiText(i18n, 'menu.pagePreset.tooltip'),
       items: [
         ...PAGE_PRESET_MENU_ITEMS.map((item) => createPagePresetAction(item, i18n)),
         createCustomPageSizeAction(i18n)
@@ -101,13 +101,11 @@ function shouldRenderPagePresetPlugin(options: ResolveToolbarPluginExtensionsOpt
 function createPagePresetAction(item: PagePresetMenuItem, i18n: ResolvedJWordUiI18n) {
   const label = readJWordUiText(
     i18n,
-    `toolbar.document.pagePreset.option.${item.preset}`,
-    item.labelFallback
+    `toolbar.document.pagePreset.option.${item.preset}`
   )
   const description = readJWordUiText(
     i18n,
-    `menu.pagePreset.option.${item.preset}.size`,
-    item.sizeFallback
+    `menu.pagePreset.option.${item.preset}.size`
   )
 
   return {
@@ -124,8 +122,8 @@ function createPagePresetAction(item: PagePresetMenuItem, i18n: ResolvedJWordUiI
 
 /** 创建自定义页面尺寸菜单动作。 */
 function createCustomPageSizeAction(i18n: ResolvedJWordUiI18n) {
-  const label = readJWordUiText(i18n, 'menu.pagePreset.option.custom.label', '自定义大小')
-  const description = readJWordUiText(i18n, 'menu.pagePreset.option.custom.size', '宽高和四边距')
+  const label = readJWordUiText(i18n, 'menu.pagePreset.option.custom.label')
+  const description = readJWordUiText(i18n, 'menu.pagePreset.option.custom.size')
 
   return {
     name: 'custom',

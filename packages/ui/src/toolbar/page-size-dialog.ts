@@ -75,13 +75,12 @@ export function openCustomPageSizeDialog(options: OpenCustomPageSizeDialogOption
   card.setAttribute('aria-modal', 'true')
   title.className = 'jw-page-size-dialog__title'
   title.setAttribute('data-jword-page-size-title', 'true')
-  title.textContent = readJWordUiText(options.i18n, 'dialog.pageSize.title', '自定义页面大小')
+  title.textContent = readJWordUiText(options.i18n, 'dialog.pageSize.title')
   description.className = 'jw-page-size-dialog__description'
   description.setAttribute('data-jword-page-size-description', 'true')
   description.textContent = readJWordUiText(
     options.i18n,
-    'dialog.pageSize.description',
-    '输入页面宽高和四边页边距，单位为厘米。'
+    'dialog.pageSize.description'
   )
   fieldList.className = 'jw-page-size-dialog__fields'
   fieldList.append(
@@ -99,11 +98,11 @@ export function openCustomPageSizeDialog(options: OpenCustomPageSizeDialogOption
   cancel.type = 'button'
   cancel.className = 'jw-page-size-dialog__button'
   cancel.setAttribute('data-jword-page-size-cancel', 'true')
-  cancel.textContent = readJWordUiText(options.i18n, 'dialog.pageSize.cancel', '取消')
+  cancel.textContent = readJWordUiText(options.i18n, 'dialog.pageSize.cancel')
   apply.type = 'submit'
   apply.className = 'jw-page-size-dialog__button jw-page-size-dialog__button--primary'
   apply.setAttribute('data-jword-page-size-apply', 'true')
-  apply.textContent = readJWordUiText(options.i18n, 'dialog.pageSize.apply', '应用')
+  apply.textContent = readJWordUiText(options.i18n, 'dialog.pageSize.apply')
   actions.append(cancel, apply)
   card.append(title, description, fieldList, error, actions)
   overlay.append(card)
@@ -143,47 +142,47 @@ function createDialogFields(
   options: OpenCustomPageSizeDialogOptions
 ): PageSizeDialogFields {
   const pageConfig = options.editor.getPageConfig()
-  const unit = readJWordUiText(options.i18n, 'dialog.pageSize.unitCm', '厘米')
+  const unit = readJWordUiText(options.i18n, 'dialog.pageSize.unitCm')
 
   return {
     width: createDialogField(ownerDocument, {
       name: 'width',
-      label: readJWordUiText(options.i18n, 'dialog.pageSize.width', '宽度'),
+      label: readJWordUiText(options.i18n, 'dialog.pageSize.width'),
       unit,
       value: formatCentimeters(twipsToCentimeters(pageConfig.widthTwips)),
       min: '0.1'
     }),
     height: createDialogField(ownerDocument, {
       name: 'height',
-      label: readJWordUiText(options.i18n, 'dialog.pageSize.height', '高度'),
+      label: readJWordUiText(options.i18n, 'dialog.pageSize.height'),
       unit,
       value: formatCentimeters(twipsToCentimeters(pageConfig.heightTwips)),
       min: '0.1'
     }),
     marginTop: createDialogField(ownerDocument, {
       name: 'marginTop',
-      label: readJWordUiText(options.i18n, 'dialog.pageSize.marginTop', '上边距'),
+      label: readJWordUiText(options.i18n, 'dialog.pageSize.marginTop'),
       unit,
       value: formatCentimeters(twipsToCentimeters(pageConfig.marginTwips.top)),
       min: '0'
     }),
     marginRight: createDialogField(ownerDocument, {
       name: 'marginRight',
-      label: readJWordUiText(options.i18n, 'dialog.pageSize.marginRight', '右边距'),
+      label: readJWordUiText(options.i18n, 'dialog.pageSize.marginRight'),
       unit,
       value: formatCentimeters(twipsToCentimeters(pageConfig.marginTwips.right)),
       min: '0'
     }),
     marginBottom: createDialogField(ownerDocument, {
       name: 'marginBottom',
-      label: readJWordUiText(options.i18n, 'dialog.pageSize.marginBottom', '下边距'),
+      label: readJWordUiText(options.i18n, 'dialog.pageSize.marginBottom'),
       unit,
       value: formatCentimeters(twipsToCentimeters(pageConfig.marginTwips.bottom)),
       min: '0'
     }),
     marginLeft: createDialogField(ownerDocument, {
       name: 'marginLeft',
-      label: readJWordUiText(options.i18n, 'dialog.pageSize.marginLeft', '左边距'),
+      label: readJWordUiText(options.i18n, 'dialog.pageSize.marginLeft'),
       unit,
       value: formatCentimeters(twipsToCentimeters(pageConfig.marginTwips.left)),
       min: '0'
@@ -238,12 +237,12 @@ function applyCustomPageSize(
   const values = readDialogValues(fields)
 
   if (values === null) {
-    writeDialogError(options.i18n, error, 'dialog.pageSize.errorInvalid', '请输入有效的页面宽高和页边距。')
+    writeDialogError(options.i18n, error, 'dialog.pageSize.errorInvalid')
     return
   }
 
   if (values.marginLeft + values.marginRight >= values.width || values.marginTop + values.marginBottom >= values.height) {
-    writeDialogError(options.i18n, error, 'dialog.pageSize.errorContent', '页边距不能大于或等于页面宽高。')
+    writeDialogError(options.i18n, error, 'dialog.pageSize.errorContent')
     return
   }
 
@@ -260,11 +259,10 @@ function applyCustomPageSize(
 function writeDialogError(
   i18n: ResolvedJWordUiI18n,
   error: HTMLElement,
-  key: 'dialog.pageSize.errorInvalid' | 'dialog.pageSize.errorContent',
-  fallback: string
+  key: 'dialog.pageSize.errorInvalid' | 'dialog.pageSize.errorContent'
 ): void {
   error.setAttribute('data-jword-page-size-error-key', key)
-  error.textContent = readJWordUiText(i18n, key, fallback)
+  error.textContent = readJWordUiText(i18n, key)
 }
 
 /** 读取并校验弹窗输入值。 */
@@ -337,8 +335,7 @@ function readNonNegativeNumber(input: HTMLInputElement): number | null {
 function readCustomPageSizeMessage(i18n: ResolvedJWordUiI18n, pageConfig: PageConfig): string {
   return readJWordUiText(
     i18n,
-    'a11y.pageSize.customApplied',
-    '已应用自定义页面大小，页面尺寸 {width} × {height} 厘米。'
+    'a11y.pageSize.customApplied'
   )
     .replace('{width}', formatCentimeters(twipsToCentimeters(pageConfig.widthTwips)))
     .replace('{height}', formatCentimeters(twipsToCentimeters(pageConfig.heightTwips)))

@@ -8,20 +8,19 @@
 
 import type { TextPosition, TextRange } from '../operations/transaction'
 import { cssPxToTwips } from './page-config'
-import type {
-  DocumentLayout,
-  InlineBox,
-  LayoutLookupCache,
-  LayoutRect,
-  LineBox,
-  TableBox,
-  TextFragment
-} from './types'
+import {
+  comparePositions,
+  isSamePosition,
+  isSameTextContainer,
+  locatePosition
+} from './query-position'
+import type { DocumentLayout, InlineBox, LayoutRect, LineBox, TableBox, TextFragment } from './types'
 
-const layoutLookupCache = new WeakMap<DocumentLayout, LayoutLookupCache>()
 const DEFAULT_CARET_HEIGHT_TWIPS = cssPxToTwips(16 * 1.2)
 const DOUBLE_CLICK_GRAPHEME_LEFT_RATIO = 0.35
 const DOUBLE_CLICK_GRAPHEME_RIGHT_RATIO = 0.65
+
+export { isSamePosition, locatePosition } from './query-position'
 
 export interface DocumentLayoutTextHit {
   readonly position: TextPosition
@@ -456,23 +455,6 @@ export function getSelectionRects(layout: DocumentLayout, range: TextRange): rea
   return Object.freeze(rects)
 }
 
-/** 为表格单元格文本片段创建可复用的查询行。 */
-function createTableFragmentLine(fragment: TextFragment): LineBox {
-  return {
-    kind: 'line',
-    pageIndex: fragment.pageIndex,
-    sectionId: fragment.sectionId,
-    paragraphId: fragment.blockId,
-    x: fragment.x,
-    y: fragment.y,
-    width: fragment.width,
-    height: fragment.height,
-    baseline: fragment.baseline,
-    fragments: Object.freeze([fragment]),
-    inlines: Object.freeze([])
-  }
-}
-
 /** 把表格单元格片段按同一行聚合，供选区矩形查询复用。 */
 function createTableFragmentLines(tables: readonly TableBox[]): readonly LineBox[] {
   const lines = new Map<string, TextFragment[]>()
@@ -591,79 +573,6 @@ function resolveGraphemeIndexAtOffset(fragment: TextFragment, offset: number): n
   }
 
   return fragment.end.graphemeIndex
-}
-
-export function locatePosition(
-  layout: DocumentLayout,
-  position: TextPosition
-): Readonly<{
-  line: LineBox
-  fragment?: TextFragment
-  inline?: InlineBox
-}> | undefined {
-  const cache = readLayoutLookupCache(layout)
-  const fragmentCandidates: Array<Readonly<{
-    line: LineBox
-    fragment: TextFragment
-  }>> = []
-  const inlineCandidates: Array<Readonly<{
-    line: LineBox
-    inline: InlineBox
-  }>> = []
-  const fragments = cache.fragmentsByContainerKey.get(createTextContainerKey(position))
-
-  if (fragments !== undefined) {
-    for (const fragment of fragments) {
-      if (containsPosition(fragment, position)) {
-        const line = layout.pages[fragment.pageIndex]?.lines.find((candidate) => {
-          return candidate.paragraphId === fragment.blockId
-            && candidate.fragments.some((item) => item === fragment)
-        }) ?? createTableFragmentLine(fragment)
-
-        if (line !== undefined) {
-          fragmentCandidates.push({
-            line,
-            fragment
-          })
-        }
-      }
-    }
-  }
-
-  const inlines = cache.inlinesByPositionKey.get(createTextPositionKey(position))
-
-  if (inlines !== undefined) {
-    for (const inline of inlines) {
-      const line = layout.pages[inline.pageIndex]?.lines.find((candidate) => {
-        return candidate.inlines.some((item) => item === inline)
-      })
-
-      if (line !== undefined) {
-        inlineCandidates.push({
-          line,
-          inline
-        })
-      }
-    }
-  }
-
-  const candidates = fragmentCandidates.length > 0 ? fragmentCandidates : inlineCandidates
-
-  if (candidates.length === 0) {
-    return undefined
-  }
-
-  return position.assoc !== undefined && position.assoc < 0
-    ? candidates[0]
-    : candidates[candidates.length - 1]
-}
-
-function containsPosition(fragment: TextFragment, position: TextPosition): boolean {
-  return fragment.sectionId === position.sectionId
-    && fragment.blockId === position.blockId
-    && fragment.runId === position.runId
-    && position.graphemeIndex >= fragment.start.graphemeIndex
-    && position.graphemeIndex <= fragment.end.graphemeIndex
 }
 
 function offsetInFragment(fragment: TextFragment, position: TextPosition): number {
@@ -910,127 +819,6 @@ function orderRange(layout: DocumentLayout, range: TextRange): TextRange | undef
     anchor: range.focus,
     focus: range.anchor
   }
-}
-
-function comparePositions(
-  layout: DocumentLayout,
-  left: TextPosition,
-  right: TextPosition
-): number | undefined {
-  if (isSameTextContainer(left, right)) {
-    return left.graphemeIndex - right.graphemeIndex
-  }
-
-  const leftOrder = findContainerOrder(layout, left)
-  const rightOrder = findContainerOrder(layout, right)
-
-  if (leftOrder === undefined || rightOrder === undefined) {
-    return undefined
-  }
-
-  return leftOrder - rightOrder
-}
-
-function findContainerOrder(layout: DocumentLayout, position: TextPosition): number | undefined {
-  return readLayoutLookupCache(layout).containerOrderByKey.get(createTextContainerKey(position))
-}
-
-function readLayoutLookupCache(layout: DocumentLayout): LayoutLookupCache {
-  const cached = layoutLookupCache.get(layout)
-
-  if (cached !== undefined) {
-    return cached
-  }
-
-  const containerOrderByKey = new Map<string, number>()
-  const fragmentsByContainerKey = new Map<string, TextFragment[]>()
-  const inlinesByPositionKey = new Map<string, InlineBox[]>()
-  let order = 0
-
-  for (const page of layout.pages) {
-    for (const line of page.lines) {
-      for (const fragment of line.fragments) {
-        const containerKey = createTextContainerKey(fragment.start)
-        const fragments = fragmentsByContainerKey.get(containerKey) ?? []
-
-        fragments.push(fragment)
-        fragmentsByContainerKey.set(containerKey, fragments)
-
-        if (!containerOrderByKey.has(containerKey)) {
-          containerOrderByKey.set(containerKey, order)
-        }
-
-        order += 1
-      }
-
-      for (const inline of line.inlines) {
-        const containerKey = createTextContainerKey(inline.at)
-        const positionKey = createTextPositionKey(inline.at)
-        const inlines = inlinesByPositionKey.get(positionKey) ?? []
-
-        inlines.push(inline)
-        inlinesByPositionKey.set(positionKey, inlines)
-
-        if (!containerOrderByKey.has(containerKey)) {
-          containerOrderByKey.set(containerKey, order)
-        }
-
-        order += 1
-      }
-    }
-
-    for (const block of page.blocks) {
-      if (block.kind !== 'table') {
-        continue
-      }
-
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          for (const fragment of cell.fragments) {
-            const containerKey = createTextContainerKey(fragment.start)
-            const fragments = fragmentsByContainerKey.get(containerKey) ?? []
-
-            fragments.push(fragment)
-            fragmentsByContainerKey.set(containerKey, fragments)
-
-            if (!containerOrderByKey.has(containerKey)) {
-              containerOrderByKey.set(containerKey, order)
-            }
-
-            order += 1
-          }
-        }
-      }
-    }
-  }
-
-  const nextCache: LayoutLookupCache = {
-    containerOrderByKey,
-    fragmentsByContainerKey,
-    inlinesByPositionKey
-  }
-
-  layoutLookupCache.set(layout, nextCache)
-
-  return nextCache
-}
-
-function createTextContainerKey(position: TextPosition): string {
-  return `${position.sectionId}\u0000${position.blockId}\u0000${position.runId}`
-}
-
-function createTextPositionKey(position: TextPosition): string {
-  return `${createTextContainerKey(position)}\u0000${position.graphemeIndex}`
-}
-
-function isSameTextContainer(left: TextPosition, right: TextPosition): boolean {
-  return left.sectionId === right.sectionId
-    && left.blockId === right.blockId
-    && left.runId === right.runId
-}
-
-export function isSamePosition(left: TextPosition, right: TextPosition): boolean {
-  return isSameTextContainer(left, right) && left.graphemeIndex === right.graphemeIndex
 }
 
 function isTrailingInlineBoundary(position: TextPosition): boolean {

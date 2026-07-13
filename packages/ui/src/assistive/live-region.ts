@@ -9,6 +9,8 @@
 export interface LiveRegionAnnounceOptions {
   readonly force?: boolean
   readonly priority?: 'polite' | 'assertive'
+  readonly source?: string
+  readonly event?: string
 }
 
 export interface LiveRegionController {
@@ -20,6 +22,11 @@ export interface LiveRegionController {
 
 export interface CreateLiveRegionOptions {
   readonly host: HTMLElement | null
+  readonly onAnnounce?: (
+    message: string,
+    options: LiveRegionAnnounceOptions,
+    priority: 'polite' | 'assertive'
+  ) => void
 }
 
 /**
@@ -44,11 +51,13 @@ export function createLiveRegion(options: CreateLiveRegionOptions): LiveRegionCo
     }
 
     lastMessage = message
+    const priority = resolveLiveRegionPriority(message, announceOptions)
 
     if (options.host !== null) {
-      options.host.setAttribute('aria-live', resolveLiveRegionPriority(message, announceOptions))
+      options.host.setAttribute('aria-live', priority)
       options.host.textContent = message
     }
+    options.onAnnounce?.(message, announceOptions, priority)
   }
 
   /**

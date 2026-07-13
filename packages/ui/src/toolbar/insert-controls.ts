@@ -6,6 +6,11 @@
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
+import {
+  bindToolbarButton,
+  type ToolbarActionContext
+} from './toolbar-state-sync'
+
 export interface ToolbarInsertActions {
   readonly openComment?: () => void
   readonly openLink?: () => void
@@ -15,6 +20,29 @@ export interface ToolbarInsertActionContext {
   readonly readonlyEnabled: boolean
   readonly insertActions?: ToolbarInsertActions | undefined
   announce(message: string): void
+}
+
+/** 绑定批注和链接插入入口。 */
+export function bindInsertControls(
+  context: ToolbarActionContext,
+  insertActions: ToolbarInsertActions | undefined
+): void {
+  const { dom, readonlyMode } = context
+
+  bindToolbarButton(context, dom.controls['insert.comment'], () => {
+    openCommentFromToolbar({
+      readonlyEnabled: readonlyMode.enabled,
+      insertActions,
+      announce: context.announce
+    })
+  }, { restoreEditorFocus: false })
+  bindToolbarButton(context, dom.controls['insert.link'], () => {
+    openLinkFromToolbar({
+      readonlyEnabled: readonlyMode.enabled,
+      insertActions,
+      announce: context.announce
+    })
+  }, { restoreEditorFocus: false })
 }
 
 /** 打开批注侧栏入口。 */

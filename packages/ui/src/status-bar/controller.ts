@@ -227,7 +227,7 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
 
       themeName = nextTheme
       options.setTheme({ name: nextTheme })
-      announce(readJWordUiText(i18n, 'a11y.statusBar.themeChanged', '主题已切换为 {theme}。')
+      announce(readJWordUiText(i18n, 'a11y.statusBar.themeChanged')
         .replace('{theme}', readThemeAnnouncementName(nextTheme)))
       refresh()
     }, { signal: signalController.signal })
@@ -333,7 +333,7 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
   function applyZoomPercent(percent: number): void {
     const nextPercent = viewController.applyZoomPercent(percent)
 
-    announce(readJWordUiText(i18n, 'a11y.statusBar.zoomChanged', '缩放已调整为 {percent}%。')
+    announce(readJWordUiText(i18n, 'a11y.statusBar.zoomChanged')
       .replace('{percent}', String(nextPercent)))
     refresh()
   }
@@ -342,7 +342,7 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
   function applyZoomStep(direction: -1 | 1): void {
     const nextPercent = viewController.applyZoomStep(direction)
 
-    announce(readJWordUiText(i18n, 'a11y.statusBar.zoomChanged', '缩放已调整为 {percent}%。')
+    announce(readJWordUiText(i18n, 'a11y.statusBar.zoomChanged')
       .replace('{percent}', String(nextPercent)))
     refresh()
   }
@@ -355,7 +355,7 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
       return
     }
 
-    announce(readJWordUiText(i18n, 'a11y.statusBar.zoomChanged', '缩放已调整为 {percent}%。')
+    announce(readJWordUiText(i18n, 'a11y.statusBar.zoomChanged')
       .replace('{percent}', String(nextPercent)))
     refresh()
   }
@@ -372,13 +372,13 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
     const selection = options.editor.getSelection()
 
     if (selection === null || isSelectionCollapsed(selection)) {
-      return readJWordUiText(i18n, 'statusBar.stats.selectionUnavailable', '选区统计暂不可用')
+      return readJWordUiText(i18n, 'statusBar.stats.selectionUnavailable')
     }
 
     const selectedText = readSelectionText(options.editor, selection)
 
     if (selectedText.length === 0 || selectedText === '跨段选区') {
-      return readJWordUiText(i18n, 'statusBar.stats.selectionUnavailable', '选区统计暂不可用')
+      return readJWordUiText(i18n, 'statusBar.stats.selectionUnavailable')
     }
 
     const stats = createStatusBarTextStats(selectedText)
@@ -480,7 +480,7 @@ function readStatusBarBrandLabel(
     return ''
   }
 
-  return brand?.label ?? readJWordUiText(i18n, 'statusBar.brand.label', '@JWord')
+  return brand?.label ?? readJWordUiText(i18n, 'statusBar.brand.label')
 }
 
 /** 判断品牌节点是否被删除、隐藏或改写。 */

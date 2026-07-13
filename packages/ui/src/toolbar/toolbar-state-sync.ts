@@ -14,6 +14,7 @@ import type {
 } from '../types'
 import type { LiveRegionController } from '../assistive/live-region'
 import type { TextMirrorController } from '../assistive/text-mirror'
+import type { ResolvedJWordUiI18n } from '../i18n'
 import type { ToolbarDom } from './dom'
 import { renderToolbarState } from './dom'
 import { buildToolbarState } from './state'
@@ -34,6 +35,7 @@ export interface ToolbarActionContext {
   readonly editor: Editor
   readonly readonlyMode: ToolbarReadonlyMode
   readonly signal: AbortSignal
+  readI18n(): ResolvedJWordUiI18n
   announce(message: string, refreshMirror?: boolean): void
   render(): void
   markToolbarTransaction(): void
@@ -48,6 +50,7 @@ interface CreateToolbarStateSyncOptions {
   readonly readonlyMode: ToolbarReadonlyMode
   readHeadingOutlineAvailable(): boolean
   readHeadingOutlineActive(): boolean
+  readRevisionsActive(): boolean
   readActiveColorPicker(): 'textColor' | 'backgroundColor' | null
 }
 
@@ -67,7 +70,8 @@ export function createToolbarStateSync(options: CreateToolbarStateSyncOptions): 
     if (readonlyMode.enabled) {
       renderToolbarState(dom, buildToolbarState(editor), null, {
         headingOutline: false,
-        headingOutlineAvailable: readonlyMode.allowNavigation && options.readHeadingOutlineAvailable()
+        headingOutlineAvailable: readonlyMode.allowNavigation && options.readHeadingOutlineAvailable(),
+        revisions: false
       })
 
       disableReadonlyToolbarControls(dom, readonlyMode)
@@ -76,7 +80,8 @@ export function createToolbarStateSync(options: CreateToolbarStateSyncOptions): 
 
     renderToolbarState(dom, buildToolbarState(editor), options.readActiveColorPicker(), {
       headingOutline: options.readHeadingOutlineActive(),
-      headingOutlineAvailable: options.readHeadingOutlineAvailable()
+      headingOutlineAvailable: options.readHeadingOutlineAvailable(),
+      revisions: options.readRevisionsActive()
     })
   }
 

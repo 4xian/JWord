@@ -170,7 +170,7 @@ describe('toolbar select dom', () => {
     }
   })
 
-  test('renders heading outline as a toggle button without toolbar caret', () => {
+  test('renders heading outline as a toggle button without a dropdown arrow', () => {
     const host = document.createElement('div')
     const dom = createToolbarDom(host, resolveToolbarConfig({
       visibleTools: ['document.findReplace', 'document.headingOutline']
@@ -185,8 +185,8 @@ describe('toolbar select dom', () => {
       const findReplace = host.querySelector<HTMLElement>('[data-jword-tool-id="document.findReplace"]')
       const headingOutline = host.querySelector<HTMLElement>('[data-jword-tool-id="document.headingOutline"]')
 
-      expect(findReplace?.querySelector('.jw-toolbar__button-caret')).toBeInstanceOf(HTMLElement)
-      expect(headingOutline?.querySelector('.jw-toolbar__button-caret')).toBeNull()
+      expect(findReplace?.querySelector('.jw-toolbar__select-arrow')).toBeInstanceOf(HTMLElement)
+      expect(headingOutline?.querySelector('.jw-toolbar__select-arrow')).toBeNull()
       expect(headingOutline?.getAttribute('aria-pressed')).toBe('true')
     } finally {
       destroyToolbarDom(dom)
@@ -222,7 +222,7 @@ describe('toolbar select dom', () => {
       )
       const button = host.querySelector<HTMLElement>('[data-jword-tool-id="document.headerFooter"]')
       const buttonIcon = button?.querySelector<HTMLElement>('.jw-toolbar__button-icon')
-      const buttonCaret = button?.querySelector<HTMLElement>('.jw-toolbar__button-caret')
+      const buttonArrow = button?.querySelector<HTMLElement>('.jw-toolbar__select-arrow')
       const buttonRow = button?.querySelector<HTMLElement>(':scope > .jw-toolbar__button-icon-row')
       const buttonLabel = button?.querySelector<HTMLElement>(':scope > .jw-toolbar__button-label')
 
@@ -233,7 +233,7 @@ describe('toolbar select dom', () => {
       expect(selectRow?.contains(selectFieldLabel ?? null)).toBe(false)
       expect(buttonRow).toBeInstanceOf(HTMLElement)
       expect(buttonIcon?.parentElement).toBe(buttonRow)
-      expect(buttonCaret?.parentElement).toBe(buttonRow)
+      expect(buttonArrow?.parentElement).toBe(buttonRow)
       expect(buttonLabel?.parentElement).toBe(button)
       expect(buttonRow?.contains(buttonLabel ?? null)).toBe(false)
       expect(getComputedStyle(selectArrow!).position).not.toBe('absolute')
@@ -241,8 +241,8 @@ describe('toolbar select dom', () => {
       expect(getComputedStyle(iconlessSelectArrow!).marginLeft).toBe('0px')
       expect(getComputedStyle(selectFieldLabel!).position).not.toBe('absolute')
       expect(getComputedStyle(selectFieldLabel!).display).toBe('block')
-      expect(getComputedStyle(buttonCaret!).position).not.toBe('absolute')
-      expect(getComputedStyle(buttonCaret!).marginLeft).toBe('3px')
+      expect(getComputedStyle(buttonArrow!).position).not.toBe('absolute')
+      expect(getComputedStyle(buttonArrow!).marginLeft).toBe('4px')
       expect(getComputedStyle(buttonLabel!).position).not.toBe('absolute')
     } finally {
       destroyToolbarDom(dom)

@@ -18,6 +18,7 @@
 - 查看底部状态栏首批实施方案：[status-bar-mvp-implementation-plan.md](status-bar-mvp-implementation-plan.md)。
 - 查看顶部工具栏双模式实施方案：[toolbar-modes-implementation-plan.md](toolbar-modes-implementation-plan.md)。
 - 查看页面水印与版权防篡改实施方案：[watermark-and-brand-protection-implementation-plan.md](watermark-and-brand-protection-implementation-plan.md)。
+- 查看左右浮动工作区、Toast、调试日志与 i18n 治理方案：[editor-workspaces-toast-debug-i18n-implementation-plan.md](editor-workspaces-toast-debug-i18n-implementation-plan.md)。
 - 做代码审查时，优先按每篇文档的“关键源码入口”和“主要测试/验收入口”回到源码核对。
 - 后续如果删除旧需求/实施计划文档，这组文档应继续保留，作为“当前实现事实”的入口。
 

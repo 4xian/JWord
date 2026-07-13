@@ -17,6 +17,8 @@ import {
   type ParagraphList,
   type SelectionState
 } from '@4xian/jword-core'
+import { readJWordUiText } from '../i18n'
+import type { JWordToolbarToolId } from '../types'
 import {
   isToolbarPlaceholderSelectValue,
   parseParagraphListSelectValue,
@@ -43,7 +45,14 @@ export function bindParagraphControls(context: ToolbarActionContext): void {
       return
     }
 
-    applyParagraphAlignment(context, value, readParagraphAlignmentText(value) ?? '段落对齐')
+    applyParagraphAlignment(
+      context,
+      value,
+      readJWordUiText(
+        context.readI18n(),
+        `toolbar.paragraph.alignment.option.${value}`
+      )
+    )
   })
   bindToolbarButton(context, dom.controls['paragraph.indentDecrease'], () => {
     adjustParagraphIndentBy(context, -360)
@@ -153,13 +162,13 @@ function applyParagraphAlignment(context: ToolbarActionContext, value: 'left' | 
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce(`BLOCKED: ${label} 需要当前有可格式化的段落选区。`)
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (formattingState.paragraph.alignment.mixed !== true && formattingState.paragraph.alignment.value === value) {
-    context.announce(`${label} 已经处于目标状态。`)
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -170,17 +179,18 @@ function applyParagraphAlignment(context: ToolbarActionContext, value: 'left' | 
 
 /** 应用段落左缩进。 */
 function applyParagraphIndentLeft(context: ToolbarActionContext, value: number): void {
+  const label = readParagraphControlLabel(context, 'paragraph.indentLeft')
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce('BLOCKED: 左缩进需要当前有可格式化的段落选区。')
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (formattingState.paragraph.indentLeftTwips.mixed !== true && (formattingState.paragraph.indentLeftTwips.value ?? 0) === value) {
-    context.announce('左缩进 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -188,7 +198,10 @@ function applyParagraphIndentLeft(context: ToolbarActionContext, value: number):
   const command = buildSetParagraphIndentCommand(context.editor.getProjection(), selection, value)
 
   if (command === null) {
-    context.announce('BLOCKED: 当前没有可应用左缩进的段落目标。')
+    context.announce(readJWordUiText(
+      context.readI18n(),
+      'a11y.toolbar.paragraph.targetUnavailable'
+    ).replace('{label}', label))
     context.render()
     return
   }
@@ -201,11 +214,15 @@ function applyParagraphIndentLeft(context: ToolbarActionContext, value: number):
 
 /** 按腾讯文档式按钮对当前段落做缩进步进，并在 0 处钳制。 */
 function adjustParagraphIndentBy(context: ToolbarActionContext, deltaTwips: number): void {
+  const label = readParagraphControlLabel(
+    context,
+    deltaTwips > 0 ? 'paragraph.indentIncrease' : 'paragraph.indentDecrease'
+  )
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce(`BLOCKED: ${deltaTwips > 0 ? '增加缩进' : '减少缩进'} 需要当前有可格式化的段落选区。`)
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
@@ -213,7 +230,7 @@ function adjustParagraphIndentBy(context: ToolbarActionContext, deltaTwips: numb
   const command = buildAdjustParagraphIndentCommand(context.editor, selection, deltaTwips)
 
   if (command === null) {
-    context.announce(deltaTwips > 0 ? '增加缩进 已经处于目标状态。' : '减少缩进 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -226,17 +243,18 @@ function adjustParagraphIndentBy(context: ToolbarActionContext, deltaTwips: numb
 
 /** 应用段落行距。 */
 function applyParagraphLineHeight(context: ToolbarActionContext, value: number): void {
+  const label = readParagraphControlLabel(context, 'paragraph.lineHeight')
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce('BLOCKED: 行距需要当前有可格式化的段落选区。')
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.lineHeight, value)) {
-    context.announce('行距 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -247,17 +265,18 @@ function applyParagraphLineHeight(context: ToolbarActionContext, value: number):
 
 /** 应用段前间距。 */
 function applyParagraphSpacingBefore(context: ToolbarActionContext, value: number): void {
+  const label = readParagraphControlLabel(context, 'paragraph.spacingBefore')
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce('BLOCKED: 段前间距需要当前有可格式化的段落选区。')
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.spacingBeforeTwips, value)) {
-    context.announce('段前间距 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -268,17 +287,18 @@ function applyParagraphSpacingBefore(context: ToolbarActionContext, value: numbe
 
 /** 应用段后间距。 */
 function applyParagraphSpacingAfter(context: ToolbarActionContext, value: number): void {
+  const label = readParagraphControlLabel(context, 'paragraph.spacingAfter')
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce('BLOCKED: 段后间距需要当前有可格式化的段落选区。')
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.spacingAfterTwips, value)) {
-    context.announce('段后间距 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -289,17 +309,18 @@ function applyParagraphSpacingAfter(context: ToolbarActionContext, value: number
 
 /** 应用首行缩进。 */
 function applyParagraphFirstLineIndent(context: ToolbarActionContext, value: number): void {
+  const label = readParagraphControlLabel(context, 'paragraph.firstLineIndent')
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce('BLOCKED: 首行缩进需要当前有可格式化的段落选区。')
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.firstLineIndentTwips, value)) {
-    context.announce('首行缩进 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -310,17 +331,18 @@ function applyParagraphFirstLineIndent(context: ToolbarActionContext, value: num
 
 /** 应用悬挂缩进。 */
 function applyParagraphHangingIndent(context: ToolbarActionContext, value: number): void {
+  const label = readParagraphControlLabel(context, 'paragraph.hangingIndent')
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce('BLOCKED: 悬挂缩进需要当前有可格式化的段落选区。')
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (isParagraphNumberStateAlreadyApplied(formattingState.paragraph.hangingIndentTwips, value)) {
-    context.announce('悬挂缩进 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -331,17 +353,18 @@ function applyParagraphHangingIndent(context: ToolbarActionContext, value: numbe
 
 /** 应用段落样式。 */
 function applyParagraphStyle(context: ToolbarActionContext, value: string): void {
+  const label = readParagraphControlLabel(context, 'paragraph.style')
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce('BLOCKED: 段落样式需要当前有可格式化的段落选区。')
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (formattingState.paragraph.styleId.mixed !== true && formattingState.paragraph.styleId.value === value) {
-    context.announce('段落样式 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -352,17 +375,18 @@ function applyParagraphStyle(context: ToolbarActionContext, value: string): void
 
 /** 应用段落列表；清空列表时先走当前 UI 层兼容 command。 */
 function applyParagraphList(context: ToolbarActionContext, value: ParagraphList | null): void {
+  const label = readParagraphControlLabel(context, 'paragraph.list')
   const selection = context.editor.getSelection()
   const formattingState = context.editor.getSelectionFormattingState()
 
   if (selection === null || formattingState.paragraph === null) {
-    context.announce('BLOCKED: 列表语义需要当前有可格式化的段落选区。')
+    announceParagraphSelectionRequired(context, label)
     context.render()
     return
   }
 
   if (areParagraphListsEquivalent(formattingState.paragraph.list.value ?? null, value, formattingState.paragraph.list.mixed)) {
-    context.announce('列表语义 已经处于目标状态。')
+    announceParagraphAlreadyApplied(context, label)
     context.render()
     return
   }
@@ -371,7 +395,10 @@ function applyParagraphList(context: ToolbarActionContext, value: ParagraphList 
     const command = buildClearParagraphListCommand(context.editor, selection)
 
     if (command === null) {
-      context.announce('BLOCKED: 当前没有可清空的列表目标。')
+      context.announce(readJWordUiText(
+        context.readI18n(),
+        'a11y.toolbar.paragraph.clearListUnavailable'
+      ))
       context.render()
       return
     }
@@ -385,6 +412,30 @@ function applyParagraphList(context: ToolbarActionContext, value: ParagraphList 
 
   context.markToolbarTransaction()
   context.editor.setParagraphList(value)
+}
+
+/** 读取当前语言的段落工具名称。 */
+function readParagraphControlLabel(
+  context: ToolbarActionContext,
+  toolId: JWordToolbarToolId
+): string {
+  return readJWordUiText(context.readI18n(), `toolbar.${toolId}.label`)
+}
+
+/** 播报段落格式缺少有效选区。 */
+function announceParagraphSelectionRequired(context: ToolbarActionContext, label: string): void {
+  context.announce(readJWordUiText(
+    context.readI18n(),
+    'a11y.toolbar.paragraph.selectionRequired'
+  ).replace('{label}', label))
+}
+
+/** 播报段落格式已经处于目标状态。 */
+function announceParagraphAlreadyApplied(context: ToolbarActionContext, label: string): void {
+  context.announce(readJWordUiText(
+    context.readI18n(),
+    'a11y.toolbar.paragraph.alreadyApplied'
+  ).replace('{label}', label))
 }
 
 /** 判断段落数字格式是否已处于目标状态。 */
