@@ -74,7 +74,7 @@
   - [x] 红灯已修复并重跑：Firefox 全选选区渲染问题已在 `packages/core/src/editor/runtime-selection.ts` 收口，focused 与全量 E2E 通过。
   - [x] 更新稳定矩阵文档，区分 fresh pass、known failure、not run。
 - 证据产出：命令输出摘要、本地日志索引、失败重跑摘要、稳定矩阵更新。
-- 当前记录：基础命令和长矩阵结果见 `docs/current-implementation/verification-2026-07-07.md`；真实 publish 未执行，仍归 `JW-BACKLOG-006` 和人工审批。
+- 当前记录：基础命令和长矩阵结果摘要见 `docs/sdk/stable-e2e-matrix.md`；真实 publish 未执行，仍归 `JW-BACKLOG-006` 和人工审批。
 
 ### JW-BACKLOG-004：Plugin、decorations、observability 公开 API 稳定化评审
 
@@ -91,11 +91,17 @@
 - 验收标准：
   - [x] 列出公开插件、decorations、observability / diagnostics 入口的稳定级别；当前结论为继续保持 experimental。
   - [x] stable 项已有 `pnpm test:types`、公开 API catalog 与 package export audit 入口。
-  - [x] experimental 项已在 `docs/current-implementation/api-stability-review.md` 和 `docs/sdk/public-api.md` 明确命名、文档口径和迁移风险。
+  - [x] experimental 项已在 `docs/sdk/public-api.md` 明确命名、文档口径和迁移风险。
   - [x] 插件命令、middleware、keybinding、decoration、lifecycle 与 telemetry sink 的错误隔离已有 focused 测试证据。
-  - [x] 已更新 `docs/sdk/public-api.md`、`docs/current-implementation/api-stability-review.md` 与对应包实现摘要。
+  - [x] 已更新 `docs/sdk/public-api.md` 与对应包实现摘要。
 - 证据产出：API 审计表、类型测试、错误隔离测试、SDK 文档更新。
-- 当前记录：评审结果见 `docs/current-implementation/api-stability-review.md`；当前不升 stable，后续升 stable 前置条件已在评审文档中列出。
+- 当前记录：当前不升 stable；以下是未来升 stable 的前置条件，不阻断本次评审收口：
+  - [ ] 为 stable 候选类型补齐 TSDoc 和 SDK 示例。
+  - [ ] 为 plugin command input/output 定义推荐 schema 和命名规范。
+  - [ ] 为 telemetry event 增加事件版本字段或事件扩展策略。
+  - [ ] 为 diagnostics snapshot 字段定义新增、弃用和删除规则。
+  - [ ] 为 adapter registry 增加跨包第三方示例和类型测试。
+  - [ ] 明确 decorations 继续保持 experimental，或拆出 stable 的只读 highlight 子集。
 
 ### JW-BACKLOG-005：全局工程硬约束证据审计
 
@@ -115,7 +121,7 @@
   - [x] 无证据或需人工复验的约束已进入 backlog，不继续作为已满足事实表述。
   - [x] 删除或归档旧资料后，工程约束仍可通过当前文档独立理解。
 - 证据产出：工程约束审计文档、缺口 issue 列表、相关测试链接。
-- 当前记录：工程约束证据索引见 `docs/current-implementation/engineering-constraints.md`。
+- 当前记录：工程约束由本索引、`AGENTS.md`、`docs/current-implementation/README.md`、测试、脚本和 SDK 文档共同承载。
 
 ### JW-BACKLOG-006：真实 registry publish readiness
 
@@ -132,7 +138,7 @@
 - 验收标准：
   - [x] 明确首批 dry-run 候选包、paid/restricted 包与真实发布前仍需人工确认的包状态。
   - [x] 每个包都有发布元数据审计结果。
-  - [x] release dry-run 与第三方消费 smoke 已通过；完整 fresh run 结果记录在 `docs/current-implementation/verification-2026-07-07.md`。
+  - [x] release dry-run 与第三方消费 smoke 已通过；结果摘要记录在 `docs/sdk/stable-e2e-matrix.md`，发布前仍需按验证计划 fresh run。
   - [x] 形成真实发布前人工审批清单，包含 registry、版本、license metadata、token、2FA、provenance、dist-tag 与 rollback 策略确认点。
   - [x] 未经人工确认不执行真实 publish；当前所有包仍为 `private: true`。
 - 证据产出：package publish audit、dry-run 日志、runbook。
@@ -154,7 +160,7 @@
   - [x] 每条摘要都有当前可核对的事实入口或明确标为历史背景。
   - [x] 删除旧资料后，代码审查仍能理解为什么存在这些范围限制。
 - 证据产出：历史验证摘要文档、SDK 文档中的限制说明更新。
-- 当前记录：历史验证摘要见 `docs/current-implementation/historical-verification-summary.md`；SDK 侧限制说明已由 `docs/sdk/browser-support.md`、`docs/sdk/advanced-formats.md`、`docs/sdk/public-api.md` 和 `docs/sdk/stable-e2e-matrix.md` 承载。
+- 当前记录：原历史摘要中的有效限制已合并到 `docs/sdk/browser-support.md`、`docs/sdk/advanced-formats.md`、`docs/sdk/public-api.md` 和 `docs/sdk/stable-e2e-matrix.md`。
 
 ## 2. 后续版本路线图
 
@@ -367,7 +373,6 @@
   - [ ] 新增 `examples/vanilla/tests/gate7-status-bar.e2e.ts`，覆盖初始统计/页码/缩放、100%、适应宽度、演示模式、主题和语言。
   - [ ] 发版前补截图级人工验收与 fresh run；`pnpm lint:comments`、UI focused test、typecheck 需重新执行并记录。
 - 收口结论：当前不再继续扩大 MVP 功能范围；可继续实施的状态栏工程任务只剩专门 vanilla E2E，其余协作/保存/企业治理/diagnostics/AI 能力分别进入后续 roadmap。
-- 实施方案：`docs/current-implementation/status-bar-mvp-implementation-plan.md`。
 
 
 ### JW-ROADMAP-020：顶部工具栏专业 / 常用双模式
@@ -390,7 +395,6 @@
   - [x] 真实页面手测确认功能基本可用；后续若发现问题按独立 bug 处理。
 - 后续非阻断：
   - [ ] 如需发版归档，补截图级人工验收或 vanilla focused E2E，覆盖默认专业模式、Tab 切换、常用模式切换和页面 Tab 自定义纸张。
-- 实施方案：`docs/current-implementation/toolbar-modes-implementation-plan.md`。
 
 
 ### JW-ROADMAP-021：页面水印与版权防篡改
@@ -415,7 +419,6 @@
   - [x] 工具 Tab 水印菜单可设置多行内容、字体大小和颜色，并可清除。
   - [x] 版权 `hidden` / `restore` / `watermarkFallback` 三种策略有 focused 测试覆盖。
   - [x] 动态语言和暗色主题下菜单、tooltip、aria 与样式同步。
-- 实施方案：`docs/current-implementation/watermark-and-brand-protection-implementation-plan.md`。
 
 
 ### JW-ROADMAP-016：底部栏协作、保存、批注与修订状态

@@ -1,32 +1,34 @@
-# JWord 当前实现摘要索引
+# JWord 当前实现与整改索引
 
-> 快照日期：2026-07-09。本文档集记录当前仓库真实代码、package manifest、示例工程和现有验收入口，不把旧需求、计划或报告当作已实现事实。
+> 本文档集只提供当前实现事实、binding 决策、当前问题和整改路线；计划或报告不能覆盖当前源码与可复跑验证。
 
-## 使用方式
+## 当前权威入口
 
-- 查看包能力：进入 `docs/current-implementation/packages/`。
-- 查看示例用途和启动方式：进入 `docs/current-implementation/examples/`。
-- 查看未完成事项和后续路线图：进入 [backlog.md](backlog.md)。
-- 查看工程约束审计：[engineering-constraints.md](engineering-constraints.md)。
-- 查看插件/观测 API 稳定性评审：[api-stability-review.md](api-stability-review.md)。
-- 查看基础验证记录：[verification-2026-07-07.md](verification-2026-07-07.md)。
-- 查看发布元数据审计：[release-metadata-audit.md](release-metadata-audit.md)。
-- 查看历史验证摘要：[historical-verification-summary.md](historical-verification-summary.md)。
-- 查看屏幕阅读器人工验证方法：[screen-reader-manual-verification.md](screen-reader-manual-verification.md)。
-- 查看 2026-07-10 全项目审查：[reviews/2026-07-10-full-review/README.md](reviews/2026-07-10-full-review/README.md)。
-- 查看一级 OEM 功能授权与开放文档访问实施方案：[oem-licensing-open-access-implementation-plan.md](oem-licensing-open-access-implementation-plan.md)。
-- 查看底部状态栏首批实施方案：[status-bar-mvp-implementation-plan.md](status-bar-mvp-implementation-plan.md)。
-- 查看顶部工具栏双模式实施方案：[toolbar-modes-implementation-plan.md](toolbar-modes-implementation-plan.md)。
-- 查看页面水印与版权防篡改实施方案：[watermark-and-brand-protection-implementation-plan.md](watermark-and-brand-protection-implementation-plan.md)。
-- 查看左右浮动工作区、Toast、调试日志与 i18n 治理方案：[editor-workspaces-toast-debug-i18n-implementation-plan.md](editor-workspaces-toast-debug-i18n-implementation-plan.md)。
-- 做代码审查时，优先按每篇文档的“关键源码入口”和“主要测试/验收入口”回到源码核对。
-- 后续如果删除旧需求/实施计划文档，这组文档应继续保留，作为“当前实现事实”的入口。
+- 查看当前代码能力：进入 `packages/`、`examples/`、`sdk/`。
+- 查看当前审查、问题台账和阶段路线：[reviews/current-full-review/README.md](reviews/current-full-review/README.md)。
+- 查看明确的第一步、下一步和阶段退出标准：[统一整改路线](reviews/current-full-review/09-remediation-roadmap.md)。
+- 查看产品、商业与法律批准状态：[OEM License Phase 0 决策记录](oem-licensing-phase0-decision-record.md)。
+- 查看 JWL2、License runtime 和 OEM 专项技术设计：[OEM 实施方案](oem-licensing-open-access-implementation-plan.md)。
+- 查看当前问题之外的人工验证与未来能力：[backlog.md](backlog.md)。
+
+## 当前支持文档
+
+- [发布元数据审计](release-metadata-audit.md)
+- [屏幕阅读器人工验证](screen-reader-manual-verification.md)
+
+## 文档维护规则
+
+- 新增 package 时，先补 export map，再同步 package 摘要、公开 API 文档、类型测试和 release dry-run 清单。
+- 新增公开 API 时，先确定 stable、experimental 或 internal 分级，再同步 SDK 文档、类型测试和 export audit。
+- 新增诊断码时，先修改 `fixtures/collab/diagnostics-registry.json`，再运行生成脚本并更新 SDK 文档。
+- 新增或调整页面元素、工具栏、状态栏、弹窗、下拉菜单、按钮、图标、提示、可见文案或可见样式时，必须同步评估 i18n 与主题切换影响；若有影响，需补齐 `zh-CN` / `en-US` 语言数据、aria/live region 文案，以及亮色/暗色主题下的颜色、背景、hover、focus、disabled、overlay 等样式。
+- 新增工程约束时，必须指向当前源码、manifest、脚本、测试或 SDK 文档；没有证据的约束进入 backlog，不写成已满足事实。
 
 ## packages
 
 - [core](packages/core.md)：框架无关编辑器内核、文档模型、事务、布局、渲染、协作桥接、插件与 diagnostics。
 - [ui](packages/ui.md)：官方 DOM UI、toolbar、底部状态栏、面板、粘贴、只读、主题/i18n、a11y。
-- [native](packages/native.md)：免费 `.jword` 原生包保存、打开、校验、迁移、worker。
+- [native](packages/native.md)：`.jword` 原生包保存、打开、校验、迁移、worker。
 - [docx](packages/docx.md)：DOCX 导入/导出、OPC/OOXML、roundtrip、worker、插件 adapter。
 - [pdf](packages/pdf.md)：从 core layout 导出 PDF、字体、图片、PDF.js visual report、worker。
 - [collab](packages/collab.md)：协同客户端 SDK、provider adapter、awareness、history/offline、auto-insert。
@@ -50,7 +52,7 @@
 
 - [SDK 文档索引](sdk/README.md)：记录 `docs/sdk` 与真实代码/测试入口的对应关系。
 - [公开 API 与导入边界](sdk/public-api.md)：package export map、stable/experimental/internal 分级、类型测试和 no-alias smoke。
-- [免费 Quickstart](sdk/quickstart.md)：core + ui + native 的最小接入。
+- [基础 Quickstart](sdk/quickstart.md)：core + ui + native 的最小接入。
 - [.jword 原生格式](sdk/jword-format.md)：native package entries、schema、checksum、worker。
 - [DOCX/PDF 高级格式](sdk/advanced-formats.md)：docx/pdf worker、授权边界和兼容限制。
 - [协作客户端](sdk/collaboration.md)：client SDK、provider adapter、history/offline/auto-insert。
@@ -63,5 +65,5 @@
 ## 当前边界
 
 - 所有包的 `package.json` 当前均为 `private: true`；本文档描述实现能力，不等同于已经完成 registry 发布。
-- 本文档集只描述当前真实实现、当前验证入口和当前 backlog；不依赖历史实施资料。
+- 本文档集只描述当前真实实现、当前验证入口和当前 backlog。
 - 这些摘要不是测试结果；验收状态仍应以实际运行对应命令为准。

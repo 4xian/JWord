@@ -40,4 +40,4 @@ Gate 7 对外浏览器支持矩阵。本文是 1.0-stable SDK 的公开支持口
 
 当前仓库已有 axe-core serious/critical 扫描与键盘 smoke，用于防止明显无障碍结构回归；这些自动化检查不等同屏幕阅读器真实朗读验证。
 
-屏幕阅读器人工矩阵仍为 pending：发布材料不得宣称 VoiceOver、NVDA、JAWS 或其他读屏组合已经完成朗读顺序、状态提示和复杂交互验证。人工操作步骤记录在 `docs/current-implementation/screen-reader-manual-verification.md`；需要补证的范围记录在 `docs/current-implementation/backlog.md` 的 `JW-BACKLOG-001`；历史原因和当前入口记录在 `docs/current-implementation/historical-verification-summary.md`。
+屏幕阅读器人工矩阵仍为 pending：发布材料不得宣称 VoiceOver、NVDA、JAWS 或其他读屏组合已经完成朗读顺序、状态提示和复杂交互验证。人工操作步骤记录在 `docs/current-implementation/screen-reader-manual-verification.md`；需要补证的范围记录在 `docs/current-implementation/backlog.md` 的 `JW-BACKLOG-001`。

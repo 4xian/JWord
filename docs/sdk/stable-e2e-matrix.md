@@ -26,8 +26,6 @@
 | 三浏览器 E2E | `pnpm test:e2e` | fresh pass | Chromium / Firefox / WebKit `329 passed`、`7 skipped`；perf-chromium `4 passed`。 |
 | benchmark | `pnpm bench` | fresh pass | Gate 4.5、Gate 2、Phase 4、Gate 5、Gate 6 benchmark 均 `status: ok`。 |
 
-本次 fresh run 中发现并修复 Firefox 全选选区渲染红灯：全文选择前先刷新当前 layout，避免段落拆分后的待续增量布局影响选区绘制。详情见 `docs/current-implementation/verification-2026-07-07.md`。
-
 ## 浏览器矩阵
 
 Playwright Chromium / Firefox / WebKit 最新版是自动回归矩阵；最低版本承诺以 [`browser-support.md`](./browser-support.md) 为准。

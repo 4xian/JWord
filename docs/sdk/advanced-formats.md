@@ -65,4 +65,4 @@ DOCX、PDF 和 native worker 都提供 capability detection：`detectDocxWorkerC
 - Worker fallback none 由 Gate 7 worker capability test 锁定。
 - 当前 `fixtures/docx/compatibility-results.json` 中 14 个 T1/T2 DOCX 导出 fixture 已通过自动 package graph、roundtrip diff 与 Open XML validator 检查。
 - 当前 Microsoft Word 桌面版人工证据仍不是闭环：14 个 DOCX fixture 均为 `pending/not-run`。
-- Microsoft Word 桌面人工证据未补齐时保持 pending，不把 automated fixture 结果写成桌面 Word 全兼容；`.doc` 只作为 Word 另存人工观察，不是当前 SDK 读写能力；历史边界摘要见 `docs/current-implementation/historical-verification-summary.md`。
+- Microsoft Word 桌面人工证据未补齐时保持 pending，不把 automated fixture 结果写成桌面 Word 全兼容；`.doc` 只作为 Word 另存人工观察，不是当前 SDK 读写能力。
