@@ -16,7 +16,7 @@
 ## 协作、服务端和授权
 
 - [Collaboration](./collaboration.md)：collab client、remote cursor、offline、history、auto-insert、版本握手。
-- [Self-host server](./collab-server.md)：server 部署、auth/tenant/license/storage hook、health/version、WebSocket 代理。
+- [Self-host server](./collab-server.md)：版本化 Docker 镜像交付边界、health/readiness、持久化、License secret 和 HTTP/WSS 代理。
 - [Licensing](./licensing.md)：edition matrix、feature key、license token、未授权失败和私有 registry。
 
 ## 交付与维护

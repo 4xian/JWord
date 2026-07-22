@@ -17,7 +17,6 @@ import type {
 } from '@4xian/jword-docx'
 import {
   assertJWordFeatureEntitled,
-  createInsecureTestOnlyJWordLicenseSignature,
   isJWordLicenseDiagnosticCode,
   type JWordLicenseEntitlement,
   type JWordLicenseFeatureKey,
@@ -33,7 +32,7 @@ import {
 import { createDocxWorkerHost, type DocxWorkerHost } from './docx-worker-host'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN } from '../../../fixtures/license/insecure-test-only-jwl1-fixture.mjs'
 
 type DocxRuntime = typeof import('@4xian/jword-docx')
 type PdfRuntime = typeof import('@4xian/jword-pdf')
@@ -806,13 +805,13 @@ function readDemoLicense(): JWordLicenseEntitlement | null {
   })
 }
 
-/** 为 DOCX demo 创建带确定性签名的本地测试授权。 */
+/** 为 DOCX demo 创建携带固定 insecure-test-only token 的本地测试授权。 */
 function createSignedDocxDemoLicense(
   entitlement: JWordLicenseSignaturePayload
 ): JWordLicenseEntitlement {
   return {
     ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+    signature: INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN
   }
 }
 

@@ -22,7 +22,17 @@ import {
 import { copyBytesToArrayBuffer, isRecord, stringifyJson } from './utils.js'
 import { assertNotAborted, emitProgress } from './progress.js'
 import { createPackageError, createWarning } from './diagnostics.js'
+import { parseCurrentJWordDocument } from './document-schema.js'
+import { validateUniqueNativePackageEntryNames } from './package-entry-name.js'
+import {
+  JWORD_NATIVE_PACKAGE_LIMITS,
+  assertNativePackageLimit,
+  readNativePackageEntryLimit
+} from './package-read-budget.js'
 import { createChecksums, summarizeResources } from './package-validation.js'
+import { parseStrictJsonRecord } from './strict-json.js'
+import { preflightNativeZip } from './zip-preflight.js'
+import { createPackedResourceDocument } from './packed-resource-document.js'
 import type {
   JWordPackageDiagnostic,
   JWordPackageManifest,
@@ -40,6 +50,8 @@ export interface PackedResource {
   readonly warning?: JWordPackageWarning
 }
 
+const textEncoder = new TextEncoder()
+
 /** 保存 Editor、projection 或 canonical document 为 .jword zip package。 */
 export async function saveJWordDocument(
   editorOrModel: Editor | DocumentProjection | Document,
@@ -48,16 +60,26 @@ export async function saveJWordDocument(
   assertNotAborted(options.signal, options.requestId)
   emitProgress('save', 0, options)
 
-  const document = cloneDocument(readDocumentFromInput(editorOrModel), options.requestId)
-  const metadata = createPackageMetadata(options.metadata)
-  const resources = await collectPackedResources(document.resources ?? [], options)
+  const sourceDocument = parseCurrentJWordDocument(readDocumentFromInput(editorOrModel), options.requestId)
+  const metadataSnapshot = createMetadataSnapshot(options.metadata, options.requestId)
+  const metadata = metadataSnapshot.metadata
+  const resources = await collectPackedResources(sourceDocument.resources ?? [], options)
+  const snapshot = createDocumentSnapshot(
+    createPackedResourceDocument(sourceDocument, resources),
+    options.requestId
+  )
+  const document = snapshot.document
   const warnings = resources.flatMap((item) => item.warning === undefined ? [] : [item.warning])
   const manifest = createManifest(document, resources, options.featureFlags ?? [])
+  assertSavePackageEntries(manifest, options.requestId)
+  const manifestJson = stringifyJson(manifest)
+  const documentJson = snapshot.json
+  const metadataJson = metadataSnapshot.json
   const zip = new JSZip()
 
-  zip.file('manifest.json', stringifyJson(manifest))
-  zip.file('document.json', stringifyJson(document))
-  zip.file('metadata.json', stringifyJson(metadata))
+  zip.file('manifest.json', manifestJson)
+  zip.file('document.json', documentJson)
+  zip.file('metadata.json', metadataJson)
   zip.folder('resources')
 
   for (const resource of resources) {
@@ -71,14 +93,32 @@ export async function saveJWordDocument(
   assertNotAborted(options.signal, options.requestId)
 
   const checksums = await createChecksums(zip, manifest.packageEntries, resources, options)
+  assertNativePackageLimit(
+    Object.keys(checksums.entries).length,
+    JWORD_NATIVE_PACKAGE_LIMITS.itemCount,
+    options.requestId,
+    'checksums.json'
+  )
+  const checksumsJson = stringifyJson(checksums)
+
+  assertSavePackageBytes({
+    manifestJson,
+    documentJson,
+    metadataJson,
+    checksumsJson,
+    resources,
+    ...(options.requestId === undefined ? {} : { requestId: options.requestId })
+  })
 
   assertNotAborted(options.signal, options.requestId)
 
-  zip.file('checksums.json', stringifyJson(checksums))
+  zip.file('checksums.json', checksumsJson)
 
   const bytes = await generateZipBytes(zip, options)
 
   assertNotAborted(options.signal, options.requestId)
+  assertNativePackageLimit(bytes.byteLength, JWORD_NATIVE_PACKAGE_LIMITS.inputBytes, options.requestId)
+  preflightNativeZip(bytes, options.requestId)
 
   const summaries = summarizeResources(manifest, checksums)
   const diagnostics = warnings.map((warning): JWordPackageDiagnostic => warning)
@@ -87,6 +127,7 @@ export async function saveJWordDocument(
     ...options,
     total: bytes.byteLength
   })
+  assertNotAborted(options.signal, options.requestId)
 
   return {
     bytes,
@@ -128,12 +169,34 @@ function isDocumentProjection(input: Editor | DocumentProjection | Document): in
   return isRecord(document) && document.kind === 'document'
 }
 
-/** 深拷贝 document，避免保存流程持有调用方可变引用。 */
-function cloneDocument(document: Document, requestId?: string): Document {
+/** 创建受共享 JSON 预算和 current schema 约束的 document 快照。 */
+function createDocumentSnapshot(
+  document: Document,
+  requestId?: string
+): { readonly document: Document, readonly json: string } {
+  let json: string
+
   try {
-    return JSON.parse(JSON.stringify(document)) as Document
+    json = stringifyJson(document)
   } catch {
     throw createPackageError('JWORD_NATIVE_DOCUMENT_INVALID', 'document 无法序列化为 JSON', requestId, 'document.json')
+  }
+
+  assertNativePackageLimit(
+    textEncoder.encode(json).byteLength,
+    JWORD_NATIVE_PACKAGE_LIMITS.documentBytes,
+    requestId,
+    'document.json'
+  )
+  const snapshot = parseStrictJsonRecord(json, {
+    entry: 'document.json',
+    invalidCode: 'JWORD_NATIVE_DOCUMENT_INVALID',
+    ...(requestId === undefined ? {} : { requestId })
+  })
+
+  return {
+    document: parseCurrentJWordDocument(snapshot, requestId),
+    json
   }
 }
 
@@ -146,6 +209,36 @@ function createPackageMetadata(metadata: JWordPackageMetadata | undefined): JWor
     modifiedAt: now,
     application: JWORD_NATIVE_CREATED_BY,
     ...(metadata ?? {})
+  }
+}
+
+/** 创建受共享 JSON 深度、value 数和字节预算约束的 metadata 快照。 */
+function createMetadataSnapshot(
+  metadata: JWordPackageMetadata | undefined,
+  requestId?: string
+): { readonly metadata: JWordPackageMetadata, readonly json: string } {
+  let json: string
+
+  try {
+    json = stringifyJson(createPackageMetadata(metadata))
+  } catch {
+    throw createPackageError('JWORD_NATIVE_METADATA_INVALID', 'JWORD_NATIVE_METADATA_INVALID', requestId, 'metadata.json')
+  }
+
+  assertNativePackageLimit(
+    textEncoder.encode(json).byteLength,
+    JWORD_NATIVE_PACKAGE_LIMITS.metadataBytes,
+    requestId,
+    'metadata.json'
+  )
+
+  return {
+    metadata: parseStrictJsonRecord(json, {
+      entry: 'metadata.json',
+      invalidCode: 'JWORD_NATIVE_METADATA_INVALID',
+      ...(requestId === undefined ? {} : { requestId })
+    }),
+    json
   }
 }
 
@@ -166,7 +259,7 @@ function createManifest(
     formatVersion: JWORD_NATIVE_FORMAT_VERSION,
     schemaVersion: JWORD_NATIVE_SCHEMA_VERSION,
     createdBy: JWORD_NATIVE_CREATED_BY,
-    minimumReaderVersion: 1,
+    minimumReaderVersion: JWORD_NATIVE_FORMAT_VERSION,
     featureFlags,
     packageEntries: [
       'manifest.json',
@@ -192,6 +285,9 @@ async function collectPackedResources(
   options: SaveJWordDocumentOptions
 ): Promise<readonly PackedResource[]> {
   const packed: PackedResource[] = []
+  let packedBytes = 0
+
+  assertNativePackageLimit(resources.length, JWORD_NATIVE_PACKAGE_LIMITS.itemCount, options.requestId)
 
   for (const resource of resources) {
     assertNotAborted(options.signal, options.requestId)
@@ -199,9 +295,20 @@ async function collectPackedResources(
     const bytes = readPackableResourceBytes(resource, options.requestId)
 
     if (resource.status === 'success' && bytes !== undefined) {
+      assertNativePackageLimit(
+        bytes.byteLength,
+        JWORD_NATIVE_PACKAGE_LIMITS.packedResourceBytes,
+        options.requestId
+      )
+      packedBytes += bytes.byteLength
+      assertNativePackageLimit(
+        packedBytes,
+        JWORD_NATIVE_PACKAGE_LIMITS.totalUncompressedBytes,
+        options.requestId
+      )
       packed.push({
         resource,
-        path: `resources/${encodeResourceId(resource.id)}`,
+        path: createPackedResourcePath(resource.id, options.requestId),
         bytes
       })
       continue
@@ -226,18 +333,51 @@ function readPackableResourceBytes(resource: Resource, requestId?: string): Uint
     return decodeDataUrl(resource.source.url, resource.id, requestId)
   }
 
+  if (resource.source.kind === 'packedResource') {
+    throw createPackageError(
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      requestId,
+      'document.json'
+    )
+  }
+
   const fallback = resource.source.kind === 'blobUrl' ? resource.metadata?.nativeBytesBase64 : undefined
 
   if (typeof fallback === 'string' && fallback.length > 0) {
     return base64ToBytes(fallback)
   }
 
+  if (resource.source.kind === 'blobUrl') {
+    throw createPackageError(
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      requestId,
+      'document.json'
+    )
+  }
+
   return undefined
 }
 
-/** 编码资源 ID 为 zip entry 名称。 */
-function encodeResourceId(id: string): string {
-  return encodeURIComponent(id)
+/** 创建经过共用名称规则校验的 packed resource 路径。 */
+function createPackedResourcePath(id: string, requestId?: string): string {
+  try {
+    const encoded = encodeURIComponent(id)
+    const safeEncoded = encoded === '.' ? '%2E' : encoded === '..' ? '%2E%2E' : encoded
+    const path = `resources/${safeEncoded}`
+
+    validateUniqueNativePackageEntryNames([{ name: path, directory: false }], requestId)
+
+    return path
+  } catch {
+    throw createPackageError(
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      requestId,
+      'document.json'
+    )
+  }
 }
 
 /** 解码 dataUrl 为字节。 */
@@ -249,18 +389,27 @@ function decodeDataUrl(url: string, resourceId: string, requestId?: string): Uin
       'JWORD_NATIVE_DOCUMENT_INVALID',
       `资源 ${resourceId} 的 dataUrl 无效`,
       requestId,
-      `resources/${encodeResourceId(resourceId)}`
+      'document.json'
     )
   }
 
   const header = url.slice(0, commaIndex)
   const body = url.slice(commaIndex + 1)
 
-  if (header.endsWith(';base64')) {
-    return base64ToBytes(body)
-  }
+  try {
+    if (header.endsWith(';base64')) {
+      return base64ToBytes(body)
+    }
 
-  return new TextEncoder().encode(decodeURIComponent(body))
+    return new TextEncoder().encode(decodeURIComponent(body))
+  } catch {
+    throw createPackageError(
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      requestId,
+      'document.json'
+    )
+  }
 }
 
 /** 把 base64 字符串转换为字节。 */
@@ -284,4 +433,63 @@ function generateZipBytes(zip: JSZip, options: SaveJWordDocumentOptions): Promis
       total: 100
     })
   })
+}
+
+/** 校验保存器将生成的 entry 数量、名称和规范化唯一性。 */
+function assertSavePackageEntries(manifest: JWordPackageManifest, requestId?: string): void {
+  assertNativePackageLimit(manifest.resources.length, JWORD_NATIVE_PACKAGE_LIMITS.itemCount, requestId, 'manifest.json')
+  assertNativePackageLimit(manifest.packageEntries.length, JWORD_NATIVE_PACKAGE_LIMITS.itemCount, requestId, 'manifest.json')
+  assertNativePackageLimit(manifest.packageEntries.length, JWORD_NATIVE_PACKAGE_LIMITS.entryCount, requestId)
+
+  try {
+    validateUniqueNativePackageEntryNames(
+      manifest.packageEntries.map((name) => ({ name, directory: name.endsWith('/') })),
+      requestId
+    )
+  } catch {
+    throw createPackageError(
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      requestId,
+      'document.json'
+    )
+  }
+}
+
+/** 校验四个 JSON 与 packed resource 的保存侧实际字节预算。 */
+function assertSavePackageBytes(input: {
+  readonly manifestJson: string
+  readonly documentJson: string
+  readonly metadataJson: string
+  readonly checksumsJson: string
+  readonly resources: readonly PackedResource[]
+  readonly requestId?: string
+}): void {
+  const jsonEntries = [
+    ['manifest.json', input.manifestJson],
+    ['document.json', input.documentJson],
+    ['metadata.json', input.metadataJson],
+    ['checksums.json', input.checksumsJson]
+  ] as const
+  let totalJsonBytes = 0
+
+  for (const [entry, text] of jsonEntries) {
+    const byteLength = textEncoder.encode(text).byteLength
+
+    assertNativePackageLimit(byteLength, readNativePackageEntryLimit(entry), input.requestId, entry)
+    totalJsonBytes += byteLength
+  }
+
+  assertNativePackageLimit(totalJsonBytes, JWORD_NATIVE_PACKAGE_LIMITS.totalJsonBytes, input.requestId)
+
+  const totalResourceBytes = input.resources.reduce(
+    (total, resource) => total + (resource.bytes?.byteLength ?? 0),
+    0
+  )
+
+  assertNativePackageLimit(
+    totalJsonBytes + totalResourceBytes,
+    JWORD_NATIVE_PACKAGE_LIMITS.totalUncompressedBytes,
+    input.requestId
+  )
 }

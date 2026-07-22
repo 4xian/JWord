@@ -12,11 +12,10 @@ import {
   type JWordLicenseFeatureKey
 } from '@4xian/jword-collab'
 import {
-  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement,
   type JWordLicenseSignaturePayload
 } from '@4xian/jword-license'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN } from '../../../fixtures/license/insecure-test-only-jwl1-fixture.mjs'
 
 export interface BrowserHandshakeHarnessInput {
   readonly serverUrl: string
@@ -76,7 +75,7 @@ export async function runPublicCollabBrowserHandshake(
   }
 }
 
-/** 创建浏览器握手测试使用的签名授权。 */
+/** 创建浏览器握手测试使用的固定 insecure-test-only 授权。 */
 function createBrowserHandshakeLicense(): JWordLicenseEntitlement {
   const entitlement: JWordLicenseSignaturePayload = {
     customerId: 'browser-customer',
@@ -89,7 +88,7 @@ function createBrowserHandshakeLicense(): JWordLicenseEntitlement {
 
   return {
     ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+    signature: INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN
   }
 }
 

@@ -10,34 +10,16 @@ import { createHash } from 'node:crypto'
 
 import type { DocumentProjection } from '@4xian/jword-core'
 import {
-  createInsecureTestOnlyJWordLicenseSignature,
-  type JWordLicenseEntitlement,
-  type JWordLicenseSignaturePayload
+  type JWordLicenseEntitlement
 } from '@4xian/jword-license'
 import JSZip from 'jszip'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../../fixtures/license/test-only-entitlement-fixture.mjs'
 
-/** 创建 DOCX public API 测试使用的有效授权。 */
+/** 创建 DOCX public API 业务测试使用的 test-only entitlement。 */
 export function createDocxPublicApiLicense(features: readonly string[]): JWordLicenseEntitlement {
-  return createSignedDocxPublicApiLicense({
-    customerId: 'customer-docx-public-api',
-    licenseToken: 'token-docx-public-api',
-    features,
-    issuer: 'jword-test-issuer',
-    issuedAt: '2026-05-01T00:00:00Z',
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid'
+  return createTestOnlyJWordLicenseEntitlement(features, {
+    customerId: 'customer-docx-public-api'
   })
-}
-
-/** 为 DOCX public API fixture entitlement 创建确定性签名。 */
-function createSignedDocxPublicApiLicense(
-  entitlement: JWordLicenseSignaturePayload
-): JWordLicenseEntitlement {
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
 }
 
 /** 创建公开 API 测试使用的最小只读文档投影。 */

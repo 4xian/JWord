@@ -13,6 +13,7 @@
     "eslint.config.js",
     "rollup.config.mjs",
     "vitest.config.ts",
+    "fixtures/license/test-only-license-vitest-setup.ts",
     "playwright.config.ts",
     "tools/**/*.ts",
     "packages/*/src/**/*.ts",

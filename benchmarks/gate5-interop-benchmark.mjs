@@ -16,12 +16,10 @@ import {
 import { createEditor } from '../packages/core/dist/index.js'
 import { exportPdfFromLayout } from '../packages/pdf/dist/index.js'
 import {
-  GATE5_FORMAT_FEATURES,
-  createInsecureTestOnlyJWordLicenseSignature
+  GATE5_FORMAT_FEATURES
 } from '../packages/license/dist/index.js'
+import { INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN } from '../fixtures/license/insecure-test-only-jwl1-fixture.mjs'
 
-// 这里用脚本级 fixture 保持 benchmark 可重复，不依赖外部二进制样本。
-const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
 const fixtures = [
   {
     id: 'gate5-small-text',
@@ -524,7 +522,7 @@ function createBenchmarkLicense() {
 
   return {
     ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+    signature: INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN
   }
 }
 

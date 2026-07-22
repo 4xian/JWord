@@ -88,6 +88,7 @@ test('Gate 4.5 native controls save and reopen through the lazy public runtime',
 test('Gate 4.5 native save keeps uploaded file image resources across reopen', async ({ page }) => {
   await page.goto('/test-fixture.html')
   await page.waitForFunction(() => window.__jwordTestFixture?.media !== undefined)
+  await page.getByRole('tab', { name: '插入' }).click()
   await page.locator('[data-jword-media-trigger="true"]').click()
   await page.locator('[data-jword-media-file-input="true"]').setInputFiles('fixtures/gate4/media-inline.svg')
   await expect.poll(() => page.evaluate(() => window.__jwordTestFixture?.media.readUploadLog().length ?? 0)).toBe(1)

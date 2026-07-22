@@ -74,7 +74,6 @@ export interface PdfError {
   readonly heightTwips?: number
   readonly recoverable?: boolean
   readonly feature?: JWordLicenseFeatureKey
-  readonly customerId?: string
 }
 
 export interface ExportPdfOptions {

@@ -11,8 +11,7 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { createServer, type IncomingMessage } from 'node:http'
 import type { EditorEventListener } from '@4xian/jword-core'
-import { createInsecureTestOnlyJWordLicenseSignature } from '@4xian/jword-license'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../../fixtures/license/test-only-entitlement-fixture.mjs'
 
 import {
   GATE6_COLLAB_FEATURES,
@@ -558,7 +557,7 @@ describe('@4xian/jword-collab public client SDK', () => {
 
     expect(connection.status).toBe('error')
     expect(connection.diagnostics).toMatchObject([{
-      code: 'COLLAB_LICENSE_MISSING',
+      code: 'JWORD_LICENSE_MISSING',
       severity: 'error',
       recoverable: true
     }])
@@ -916,22 +915,11 @@ async function readRequestJson(request: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
 }
 
-/** 创建覆盖 Gate 6 所有高级协作能力的测试授权。 */
+/** 创建覆盖 Gate 6 业务路径的 test-only entitlement。 */
 function createGate6License() {
-  const entitlement = {
-    customerId: 'customer-public-client',
-    licenseToken: 'license-public-client',
-    features: Object.values(GATE6_COLLAB_FEATURES),
-    issuer: 'jword-test-issuer',
-    issuedAt: '2026-05-01T00:00:00Z',
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid' as const
-  }
-
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
+  return createTestOnlyJWordLicenseEntitlement(Object.values(GATE6_COLLAB_FEATURES), {
+    customerId: 'customer-public-client'
+  })
 }
 
 /** 创建测试用 stable anchor snapshot。 */

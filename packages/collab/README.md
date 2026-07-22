@@ -1,6 +1,6 @@
 # @4xian/jword-collab
 
-Gate 6 商业协作 client 包只暴露公开 API。第三方宿主从空项目接入时，应先安装基础包、协作高级包、授权包和 self-host server 包，再由宿主自己的 editor facade 传入协作 SDK。
+Gate 6 商业协作 client 包只暴露浏览器公开 API。客户应用安装基础包、协作高级包和所需浏览器依赖，再由自己的 editor facade 传入协作 SDK；self-host 服务端由客户运维侧部署 JWord 版本化 Docker 镜像，不在应用代码中安装 server package。
 
 ## Public API
 
@@ -10,21 +10,8 @@ import {
   connectJWordCollaboration,
   createMemoryCollabProviderAdapter
 } from '@4xian/jword-collab'
-import { createJWordCollabServer } from '@4xian/jword-collab-server'
-
-const server = createJWordCollabServer({
-  address: '127.0.0.1',
-  port: 4188,
-  featureFlags: Object.values(GATE6_COLLAB_FEATURES),
-  licenseHook: ({ feature }) => ({
-    ok: feature === GATE6_COLLAB_FEATURES.server || feature === GATE6_COLLAB_FEATURES.history,
-    diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
-  })
-})
-
-const state = await server.start()
 const connection = await connectJWordCollaboration(editor, {
-  serverUrl: state.httpUrl,
+  serverUrl: 'https://collab.example.test',
   documentId: 'doc-a',
   roomId: 'room-a',
   user: {
@@ -57,14 +44,14 @@ session.write('协作内容')
 ## Boundaries
 
 - 基础编辑器和 `.jword` 原生保存能力不依赖本包。
-- 第三方宿主只使用 `connectJWordCollaboration()`、`createMemoryCollabProviderAdapter()`、`GATE6_COLLAB_FEATURES` 和 self-host server 公开 API。
+- 客户应用只使用 `connectJWordCollaboration()`、浏览器 provider adapter、`GATE6_COLLAB_FEATURES` 和已部署的 HTTP/WSS endpoint，不导入服务端 npm package。
 - 自动插入必须传入显式 `position` 或 `range`，不得默认读取 live caret。
 - 历史版本通过 `connection.history.recordVersion()`、`listVersions()`、`previewVersion()` 和 `restoreVersion()` 接入。
-- 未授权失败必须先返回 diagnostics，再阻止 provider 连接或 server 写入。license 层的 `JWORD_LICENSE_MISSING` 在协作 client 中归一为 `COLLAB_LICENSE_MISSING`。
+- 未授权失败必须先返回 diagnostics，再阻止 provider 连接或 server 写入。协作 client 原样传播 license 层的 `JWORD_*` 稳定诊断 code。
 
 ## Smoke
 
-仓库内的第三方空项目 smoke 脚本会从当前 workspace 打包基础包、高级包和 server 包，安装到临时空项目，并只通过公开 API 启动协作、自动插入、历史版本和未授权失败演示。
+仓库内现有 Gate 6 smoke 仍会打包 server package 做内部 no-alias 架构验证；该结果不代表客户应从 npm 集成服务端，也不等于 LIC-309 正式镜像验收。
 
 ```sh
 node tools/release/check-gate6-third-party-smoke.mjs

@@ -12,6 +12,7 @@ import type { Block, Comment, CommentMessage, ImageInline, ModelProperties, Revi
 import { createDocumentProjection } from '../model/projection'
 import { createOperationAdapter } from './operation-adapter'
 import { createProjectionAfterOperationTransaction, readProjectionBeforeTransaction } from './projection-dirty-scope'
+import { hasYjsTransactionChanged } from './yjs-transaction-change'
 import { createJWordError } from '../shared/errors'
 import type { DocumentProjection } from '../model/projection'
 import type { TextRangeRecord } from '../model/position'
@@ -602,17 +603,23 @@ export function createTransactionPipeline(
       const stateBefore = readStateVectorForUpdateByteLength(doc, updateByteLengthDiagnostics)
       const previousProjection = readProjectionBeforeTransaction(doc, currentProjection)
 
+      let transaction: Y.Transaction | undefined
+
       internalTransactionDepth += 1
       try {
-        doc.transact(() => {
+        doc.transact((currentTransaction) => {
+          transaction = currentTransaction
           adapter.applyAll(operations)
         }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
       } finally {
         internalTransactionDepth -= 1
       }
+      const dirty = transaction !== undefined && hasYjsTransactionChanged(transaction)
+      const updateByteLength = readUpdateByteLength(doc, stateBefore, dirty)
 
-      const updateByteLength = readUpdateByteLength(doc, stateBefore)
-      currentProjection = createProjectionAfterOperationTransaction(doc, previousProjection, operations)
+      currentProjection = dirty
+        ? createProjectionAfterOperationTransaction(doc, previousProjection, operations)
+        : previousProjection ?? createDocumentProjection(doc)
       const result = {
         commandName: command.name,
         origin: metadataSnapshot.origin,
@@ -620,7 +627,7 @@ export function createTransactionPipeline(
         operations,
         operationKinds,
         projection: currentProjection,
-        dirty: operations.length > 0,
+        dirty,
         diagnostic: createTransactionDiagnostic(command.name, operationKinds, metadataSnapshot, updateByteLength)
       }
 
@@ -632,20 +639,20 @@ export function createTransactionPipeline(
       validateTransactionName('applySyncUpdate', metadata)
 
       const metadataSnapshot = { ...metadata }
-      const stateBefore = Y.encodeStateVector(doc)
+      const stateBefore = readStateVectorForUpdateByteLength(doc, updateByteLengthDiagnostics)
       const previousProjection = readProjectionBeforeTransaction(doc, currentProjection)
 
-      internalTransactionDepth += 1
-      try {
-        Y.applyUpdate(doc, update, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
-      } finally {
-        internalTransactionDepth -= 1
-      }
+      const transaction = captureYjsTransaction(doc, () => {
+        internalTransactionDepth += 1
+        try {
+          Y.applyUpdate(doc, update, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+        } finally {
+          internalTransactionDepth -= 1
+        }
+      })
+      const dirty = transaction !== undefined && hasYjsTransactionChanged(transaction)
+      const updateByteLength = readUpdateByteLength(doc, stateBefore, dirty)
 
-      const dirty = hasDocumentStateChanged(doc, stateBefore)
-      const updateByteLength = updateByteLengthDiagnostics && dirty
-        ? Y.encodeStateAsUpdate(doc, stateBefore).byteLength
-        : 0
       currentProjection = dirty === false && previousProjection !== undefined
         ? previousProjection
         : createDocumentProjection(doc)
@@ -670,17 +677,24 @@ export function createTransactionPipeline(
       const metadataSnapshot = { ...metadata }
       const stateBefore = readStateVectorForUpdateByteLength(doc, updateByteLengthDiagnostics)
 
+      const previousProjection = readProjectionBeforeTransaction(doc, currentProjection)
+      let transaction: Y.Transaction | undefined
+
       internalTransactionDepth += 1
       try {
-        doc.transact(() => {
+        doc.transact((currentTransaction) => {
+          transaction = currentTransaction
           mutation()
         }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
       } finally {
         internalTransactionDepth -= 1
       }
+      const dirty = transaction !== undefined && hasYjsTransactionChanged(transaction)
+      const updateByteLength = readUpdateByteLength(doc, stateBefore, dirty)
 
-      const updateByteLength = readUpdateByteLength(doc, stateBefore)
-      currentProjection = createDocumentProjection(doc)
+      currentProjection = dirty
+        ? createDocumentProjection(doc)
+        : previousProjection ?? createDocumentProjection(doc)
       const result = {
         commandName,
         origin: metadataSnapshot.origin,
@@ -688,7 +702,7 @@ export function createTransactionPipeline(
         operations: [],
         operationKinds: [],
         projection: currentProjection,
-        dirty: true,
+        dirty,
         diagnostic: createTransactionDiagnostic(commandName, [], metadataSnapshot, updateByteLength)
       }
 
@@ -706,42 +720,34 @@ function readStateVectorForUpdateByteLength(doc: Y.Doc, enabled: boolean): Uint8
 }
 
 /** 在诊断模式下计算本次事务实际产生的 update 长度。 */
-function readUpdateByteLength(doc: Y.Doc, stateBefore: Uint8Array | undefined): number {
-  if (stateBefore === undefined) {
-    return 0
-  }
-
-  if (hasDocumentStateChanged(doc, stateBefore) === false) {
+function readUpdateByteLength(
+  doc: Y.Doc,
+  stateBefore: Uint8Array | undefined,
+  dirty: boolean
+): number {
+  if (stateBefore === undefined || dirty === false) {
     return 0
   }
 
   return Y.encodeStateAsUpdate(doc, stateBefore).byteLength
 }
 
-/** 比较事务前后的 Y.Doc state vector，避免默认路径编码完整 update。 */
-function hasDocumentStateChanged(doc: Y.Doc, stateBefore: Uint8Array): boolean {
-  const stateAfter = Y.encodeStateVector(doc)
-
-  if (areUint8ArraysEqual(stateBefore, stateAfter)) {
-    return false
+/** 执行一次 Yjs 写入并在成功或异常后清理临时 transaction listener。 */
+function captureYjsTransaction(doc: Y.Doc, action: () => void): Y.Transaction | undefined {
+  let capturedTransaction: Y.Transaction | undefined
+  /** 捕获当前公开入口触发的 transaction。 */
+  const listener = (transaction: Y.Transaction) => {
+    capturedTransaction ??= transaction
   }
 
-  return true
-}
-
-/** 对比两个 Yjs state vector 是否完全一致。 */
-function areUint8ArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
-  if (left.byteLength !== right.byteLength) {
-    return false
+  doc.on('afterTransaction', listener)
+  try {
+    action()
+  } finally {
+    doc.off('afterTransaction', listener)
   }
 
-  for (let index = 0; index < left.byteLength; index += 1) {
-    if (left[index] !== right[index]) {
-      return false
-    }
-  }
-
-  return true
+  return capturedTransaction
 }
 
 function createTransactionDiagnostic(

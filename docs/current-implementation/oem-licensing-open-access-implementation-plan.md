@@ -1,6 +1,6 @@
 # 一级 OEM 功能授权与开放文档访问实施方案
 
-> 文档状态：Phase 0 产品与技术输入已冻结；License Phase 1 尚未开始；正式发布仍等待法律审核
+> 文档状态：Phase 0 产品与技术输入已冻结；License Phase 1 已完成内部实施退出，LIC-100 至 LIC-111 均已收口；LIC-107B2 的最低浏览器人工认证按明确风险接受延期为发布前门禁，不阻断后续内部阶段；正式发布仍等待人工认证与法律审核
 >
 > 编写日期：2026-07-10
 >
@@ -23,7 +23,7 @@ Phase 0 已冻结 Licensee、SKU、期限、环境、交付权、首期范围和
 5. 首期范围是 Base、Professional Editing 和 Formats；DOCX 先承诺经验证的受限兼容子集，Collaboration 及自动插入延后。
 6. 商业授权与终端用户身份、文档访问和数据合规保持正交。
 
-当前实现不能直接承载该售卖模式。`packages/license/src/index.ts:147` 内置的默认公钥对应仓库公开测试私钥，且 DOCX/PDF 默认调用路径无法配置正式信任根，任何持有仓库测试私钥的人都可以生成当前运行时接受的 token。修复该问题是所有收费 PoC 之前的 P0 阻断。
+当前实现不能直接承载该售卖模式。`LIC-100` 已移除默认测试公钥回退，`LIC-101` 已拆分 License 内部职责，`LIC-102` 已实现内部严格 JWL2 parser 和固定签名输入，`LIC-103` 已接入固定 `issuer=jword`、`keyId=jword-prod-2026-k1` 与批准的生产公钥，并删除调用方换根能力。`LIC-104` 已在固定 trust lookup 和 Ed25519 验签成功后校验时间关系，再把已验签 class、module features 和期限登记到模块私有 WeakMap，并公开冻结的最小 handle 与集中 `is/assert`。`LIC-105` 已增加 identity-checked worker transfer，DTO 只携带原始 token，worker 必须通过既有激活路径重新验签并创建新 handle。`LIC-106` 已从正式根入口、生产源码、dist 和 tarball 删除测试 signer 与签名能力，等价 JWL1 测试签发只保留在仓库 fixture support。`LIC-107A` 已使用精确 `@noble/curves@2.2.0` 替换自研 Ed25519 verifier，`LIC-107B1` 已完成 Node、当前三浏览器、真实 module Dedicated Worker 和第三方 tarball/no-alias 自动验证；这些结果不代表对依赖做了独立密码学审计，也不是最低版本证据。`LIC-108A` 已把受控签发工具切换为严格 JWL2-only，固定生产 issuer/keyId、canonical claims、四种 class 期限和资源上限，拒绝重复顶层 key，强制路径私钥 realpath 位于仓库外，并用固定 production golden vector 锁定 signer/runtime canonical bytes。`LIC-108B` 已增加固定生产 trust store 的离线验签/裁剪 CLI，不输出 token 或密钥材料。`LIC-110` 已完成 B1 隔离 trust replacement 和 B2 License 测试消费者/产物隔离收口；默认 production trust 仍拒绝测试 token，DOCX/PDF/Collaboration 不在本批次迁移。`LIC-111` 已把四个消费包改为必需 License peer，并通过 pnpm/npm、Node 20.19.0、Vite ES2022 和当前三浏览器验证单一 runtime；重复 runtime 继续按 WeakMap identity fail closed，只能转移 token 后在接收 runtime 重新激活。最低浏览器证据、JWL1 调用方迁移和后续 Phase 2/4 仍未完成。关闭剩余 SEC-01 仍是所有收费 PoC 之前的 P0 阻断。
 
 ## 2. Phase 0 已批准基线
 
@@ -68,12 +68,12 @@ Phase 0 已冻结 Licensee、SKU、期限、环境、交付权、首期范围和
 
 | 现状 | 代码证据 | 影响 |
 | --- | --- | --- |
-| JWL1 公开 entitlement 重复暴露签名 claims | `packages/license/src/index.ts:62-107` | 调用方需要拼装大量字段，interface 与实现几乎同样复杂 |
-| 默认信任仓库测试公钥 | `packages/license/src/index.ts:145-148,287-311` | 当前付费 token 可被公开测试私钥伪造 |
-| 测试签发 helper 从正式根入口导出 | `packages/license/src/index.ts:233-245` | 正式 interface 混入测试能力 |
-| 调用方可逐次传公钥 | `packages/license/src/index.ts:103-107` | 信任根由调用方决定，商业信任模型不成立 |
+| JWL1 公开 entitlement 重复暴露签名 claims | `packages/license/src/legacy-jwl1.ts`、`packages/license/src/index.ts` | LIC-101 已拆分内部职责，但公开 interface 仍要求调用方拼装 claims |
+| 固定生产 trust root、激活、opaque handle 与 worker transfer 已接入 | `packages/license/src/trust-store.ts`、`packages/license/src/verify-jwl2.ts`、`packages/license/src/license.ts` | LIC-103/104/105 已完成；商业 worker 调用方留待 Phase 2/3 迁移 |
+| 测试签发 helper 已移出正式根入口 | `fixtures/license/create-insecure-test-only-jwl1-token.ts` | LIC-106 已完成；support 不进入 package export、dist 或 tarball |
+| Ed25519 验签已迁移到成熟实现 | `packages/license/src/crypto.ts`、`@noble/curves@2.2.0` | LIC-107A/B1 已完成；LIC-107B2 最低浏览器人工认证 Deferred，不阻断内部阶段，也不宣称依赖已被独立审计或最低版本已经实测 |
 | DOCX/PDF 只接收 raw entitlement | `packages/docx/src/types.ts:272-290`、`packages/pdf/src/types.ts:80-89` | 业务调用方必须搬运授权 claims |
-| worker 直接传递 entitlement | `packages/docx/src/worker.ts:189-193`、`packages/pdf/src/worker-api.ts:68-88` | 消息面过宽，且继续依赖默认测试信任根 |
+| worker 直接传递 entitlement | `packages/docx/src/worker.ts:189-193`、`packages/pdf/src/worker-api.ts:68-88` | 消息面过宽；旧 JWL1 fixture 当前 fail closed，后续仍需迁移 handle/transfer |
 | worker request 复用普通 runtime options | `packages/docx/src/types.ts:422-443`、`packages/pdf/src/types.ts:80-88,127-132` | `AbortSignal`、callback 与授权对象混入 structured-clone DTO |
 | collab client 要求 license、features、validation | `packages/collab/src/client-types.ts:76-87` | 客户端可以声明要检查的 feature 和信任配置 |
 | history 每次发送完整 entitlement | `packages/collab/src/client-history.ts:427-433` | token/claims 进入网络、代理和日志面 |
@@ -118,6 +118,8 @@ JWord 受控签发环境
 #### Collaboration deployment module
 
 协作服务端启动时绑定一个已激活的 OEM license。HTTP、WebSocket、history 和 auto-insert relay 复用同一个内部 license context，不再从浏览器接收 entitlement。服务端 module 自己知道每个操作所需 feature。
+
+正式交付面只提供版本化 Docker 镜像。客户应用代码只集成浏览器 SDK 并连接 HTTP/WSS endpoint；Node 和 `@4xian/jword-collab-server` 位于镜像内，不作为客户直接 npm 集成面。未来新增的任何 JWord 正式服务端也必须遵守同一 Docker-only 交付规则。
 
 #### Document access module
 
@@ -270,7 +272,7 @@ interface TrustedJWordLicenseKey {
 
 测试不通过公开 `publicKey` option 注入信任根。Vitest 使用 test-only module replacement 把 `trust-store.ts` 替换为临时测试公钥，随后通过正式 public activation 路径验收；该 replacement、私钥与 signer 只位于 `packages/license/test/`，不进入 `src`、exports 或 tarball。受控发布环境另用当前 signing production key 签发短期 canary token，对正式 artifact 做一次激活 smoke；canary token 不提交仓库。
 
-`packages/license/src/crypto.ts` 应迁移到成熟、经过独立审计的 Ed25519 实现；选定依赖前需核对当前最低浏览器、Node 和 worker 支持矩阵。若暂时保留自研实现，则不能进入收费 GA，除非取得独立密码学审计和标准向量/模糊测试证据。
+`packages/license/src/crypto.ts` 已在 `LIC-107A` 迁移到精确 `@noble/curves@2.2.0` 的 `@noble/curves/ed25519.js`，保持同步内部 interface，并显式使用 `{ zip215: false }`。RFC 8032、篡改、非法长度/编码和 small-order/non-canonical 拒绝已有聚焦回归；本项目不宣称 `@noble/curves@2.2.0` 已经独立密码学审计。`LIC-107B1` 已验证当前 Node/三浏览器/Dedicated Worker/tarball，`LIC-107B2` 的 Node 20.19.0 也已通过。Chrome 100、Edge 100、Firefox 128 和 Safari 16.4 的真实环境人工认证按明确风险接受延期，不阻断内部阶段，但完成前不得宣称最低浏览器版本已经实测认证。
 
 ## 7. 目标公开 interface
 
@@ -302,7 +304,7 @@ export function isJWordFeatureLicensed(
 实现要求：
 
 - `JWordLicense` 只暴露宿主确需显示的 `licenseId` 与必填 `expiresAt`；license class、feature set、原始 token 和完整 claims 不公开。
-- license module 使用模块私有 `WeakMap<object, InternalLicenseState>` 登记每个 handle；`Object.freeze()` 只保证表面不可变，不作为身份或安全边界。
+- JWL2 parser 输出仅是未验签内部数据，不代表可信授权，也不得直接登记为 handle；只有固定 trust lookup 和 Ed25519 验签成功后，license module 才能使用模块私有 `WeakMap<object, InternalLicenseState>` 登记可信状态。`Object.freeze()` 只保证表面不可变，不作为身份或安全边界。
 - `assertJWordFeatureLicensed()` 与 `isJWordFeatureLicensed()` 必须先从私有 WeakMap 验证 identity，再读取私有 module feature 与期限状态，不能信任调用方对象上的属性或方法；固定 server preset 的 class 检查使用内部签名状态，不接受宿主自报 class。
 - paid module 必须调用集中 assert，手工构造、类型断言、复制或 structured clone 得到的同形对象均以 `JWORD_LICENSE_HANDLE_INVALID` 拒绝。
 - DOCX、PDF、collab-server 必须解析到同一份 `@4xian/jword-license` runtime；package/peer dependency 与第三方 tarball smoke 需要验证不存在重复 runtime identity。
@@ -342,6 +344,8 @@ export function createJWordLicenseTransfer(
 ): JWordLicenseTransfer
 ```
 
+Opaque handle 的 JSON、复制和 structured clone 均不得携带 token；`JWordLicenseTransfer` 是 structured clone 明确携带 token 的唯一例外。该 transfer 是 bearer material DTO，不具有可信 identity，接收侧必须重新激活。
+
 规则：
 
 1. `createJWordLicenseTransfer()` 先验证 handle 的 WeakMap identity，再从私有状态读取 token；不提供公开 token getter。
@@ -355,7 +359,7 @@ export function createJWordLicenseTransfer(
 
 ### 7.4 当前第二批：单 Host EditorShell
 
-项目当前执行顺序已经冻结为：前两批工程基线与单 Host `EditorShell` 已完成，Phase 0 产品与技术输入也已冻结；License Phase 1 尚未开始。该顺序不改变“任何收费 PoC 前必须完成 License Phase 1”的安全退出条件。
+项目当前执行顺序已经冻结为：前两批工程基线与单 Host `EditorShell` 已完成，Phase 0 产品与技术输入也已冻结；License Phase 1 已完成内部实施退出，LIC-100 至 LIC-111 均已收口。LIC-107B2 的最低浏览器人工认证转为对应兼容声明和商业 GA 前门禁，不阻断进入后续内部阶段；任何对外收费 PoC 仍必须遵守届时适用的发布证据、法律和安全门禁。
 
 默认基础集成只传一个根元素：
 
@@ -537,7 +541,7 @@ return 'write'
 | --- | --- |
 | `src/index.ts` | 收敛为稳定 re-export；删除测试 signer、raw entitlement 和调用方公钥 options |
 | `src/features.ts`（新增） | 三个模块级 `JWORD_FEATURES` 与 `JWordFeature` |
-| `src/license.ts`（新增） | 实现 handle、`activateJWordLicense()`、`assertJWordFeatureLicensed()`、worker transfer |
+| `src/license.ts`（新增） | 已实现 handle、`activateJWordLicense()`、`is/assert` 与 identity-checked worker transfer |
 | `src/jwl2.ts`（新增） | token 解析、schema 校验、canonical payload 和签名输入 |
 | `src/trust-store.ts`（新增） | 内置生产 `issuer + keyId` trust set；不导出修改入口 |
 | `src/errors.ts`（新增） | 稳定错误、metadata 和无敏感信息诊断 |
@@ -610,8 +614,8 @@ return 'write'
 
 | 文件 | 改造 |
 | --- | --- |
-| `tools/license/issue-license.mjs` | 只签 JWL2；严格校验模块、class、期限、`issuer=jword`、`keyId`，并与 runtime golden vector 锁定 |
-| `tools/license/verify-license.mjs`（新增） | 离线验签/裁剪检查工具，不输出 token |
+| `tools/license/issue-license.mjs` | LIC-108A（Completed）：只签 JWL2；严格校验模块、class、期限、重复顶层 key、`issuer=jword`、`keyId` 与仓库外私钥路径，并与固定 production runtime golden vector 锁定 |
+| `tools/license/verify-license.mjs` | LIC-108B（Completed）：只从 stdin 或 `--token-file` 读取 token，固定生产 trust store，支持审计用 `--at`，成功只输出含 `checkedAt` 的裁剪 JSON，不输出 token |
 | `fixtures/license/*` | 固定测试 token/key；测试私钥不被正式 package 接受 |
 | `examples/docx/src/main.ts` | 用 demo 专用 JWL2 激活流程，不从生产根入口签发 |
 | `examples/collab/*` | server 持有 license；client 不再传 entitlement/features |
@@ -623,6 +627,16 @@ return 'write'
 | `tools/release/check-gate5-commercial-pack.mjs` | 禁止测试 signer、私钥、fixture key 进入产物 |
 | `tools/release/check-gate6-commercial-pack.mjs` | 同上，并检查 server 不含 allow-all preset |
 
+LIC-108B 的 CLI 契约冻结如下：
+
+- token 输入只能在 stdin 与 `--token-file <path>` 中二选一；禁止命令行内联 token、public key、issuer、keyId、私钥、trust store 或测试信任根覆盖。文件输入与非空 stdin 同时出现、未知/重复参数、参数缺值和非法 `--at` 属于 CLI 使用错误。
+- stdin/file 只允许一个无前导或额外尾随空白的 JWL2 token，可接受唯一末尾 `LF` 或 `CRLF`；原始输入最多为 16 KiB 加 2-byte 行尾。空输入、超限、多行和不可读文件稳定拒绝。
+- `--at` 必须是有效规范 `YYYY-MM-DDTHH:mm:ss.sssZ` UTC 时间；缺省使用系统时间。它只用于可重复测试、历史审计和故障重放，保留 runtime 的 5 分钟未来时钟偏差，不得作为 Collaboration Server、商业模块或客户 runtime 的授权输入。
+- CLI 固定通过 `@4xian/jword-license` 公开根入口完成 production trust lookup、Ed25519 验签和时间检查；不复制 verifier、不导入 signer、不扩展 package export、dist 或 tarball。CLI 进程可只在激活调用期间临时固定 `Date.now()`，随后恢复。
+- 成功时 exit 0、stderr 为空，stdout 只输出固定字段顺序的裁剪 JSON：`status`、`checkedAt`、schema/identity/class/features/期限；Evaluation 省略 `subscriptionEndsAt`。`status=valid` 只表示 token 在 `checkedAt` 时有效，不构成可信当前时间证明，也不产生可供业务 runtime 使用的 handle。
+- token 无效、未生效或过期时 exit 1、stdout 为空，stderr 只输出 `JWORD_LICENSE_SIGNATURE_INVALID`、`JWORD_LICENSE_NOT_YET_VALID` 或 `JWORD_LICENSE_EXPIRED`。参数/输入源错误时 exit 2，只输出工具内部 `JWORD_LICENSE_CLI_USAGE_INVALID` 或 `JWORD_LICENSE_CLI_INPUT_INVALID`；这两个 code 不进入公开 runtime diagnostic。
+- stdout/stderr 禁止包含原始 token、payload JSON/segment/bytes、signing input、signature、公私钥、token hash、原始异常、stack 或未登记字段。离线 wall clock 无法抵抗拥有宿主控制权的调用方回拨或替换时间；更强防回拨能力需要后续独立批准在线短期凭据或受控服务端时间方案。
+
 ## 11. 分阶段实施任务
 
 ### 项目级前置批次
@@ -632,7 +646,7 @@ return 'write'
 1. 修复根 `pnpm typecheck` 中 vanilla demo hook 可选性错误，并以同一命令验证退出 0。
 2. 实现第 7.4 节单 Host EditorShell，更新 Quickstart 与默认 demo，并用最少测试锁定上中下结构、高级 slot 优先级、构造回滚和统一 destroy。
 
-项目级前置批次已经完成。Phase 0 产品与技术输入已关闭；本次只回写文档，Phase 1 尚未开始。Phase 1 仍是任何收费 PoC 前必须完成的安全阻断。
+项目级前置批次已经完成。Phase 0 产品与技术输入已关闭；Phase 1 已完成内部实施退出，LIC-100 至 LIC-111 均已收口。LIC-107B2 的最低浏览器人工认证按明确风险接受延期到对应对外兼容声明和商业 GA 前，不再阻断后续内部阶段。
 
 ### Phase 0：冻结商业与协议输入
 
@@ -658,18 +672,34 @@ return 'write'
 
 任务：
 
-- [ ] LIC-100 先写最小红灯测试：仓库公开测试私钥签发的 token 在生产入口必须失败。
-- [ ] LIC-101 拆分 module feature、error、JWL2、trust store 和 handle 文件。
-- [ ] LIC-102 实现 JWL2 parser、固定签名输入和严格 schema；只接受已批准最小 claims、四种 `licenseClass` 和三个模块 feature，并把 class 保存在不可伪造的内部状态中。
-- [ ] LIC-103 实现内置 `issuer=jword`、首个 `keyId=jword-prod-2026-k1` 的 trust store，删除默认测试公钥回退。
-- [ ] LIC-104 实现 WeakMap-branded opaque handle、集中 `is/assert` 和运行时时间检查；`expiresAt` 必填，15 天宽限只由 signer 编入时间。
-- [ ] LIC-105 实现 identity-checked worker transfer；确保 token/claims 不进入 `toJSON`、structured clone、error 或日志。
-- [ ] LIC-106 移除根入口测试 signer；测试签发移入 test-only support。
-- [ ] LIC-107 替换/审计 Ed25519 实现并补标准向量。
-- [ ] LIC-108 更新签发工具，只允许已登记模块、规范 UTC 时间、审批输入中的 class/期限和协议资源上限；试用固定 30 天无宽限，订阅 `expiresAt` 包含 15 天宽限。签发工具和台账负责环境授权事实，runtime 不接收宿主自报的真实环境。
-- [ ] LIC-109 增加 JWL2 稳定诊断，删除 JWL1-only、server-unavailable 和调用方宽限状态 code，不保留对外兼容映射。
-- [ ] LIC-110 建立 test-only trust replacement、临时 key 与 signer/runtime golden vector；正式 root export 不提供信任根注入。
-- [ ] LIC-111 锁定单一 license runtime 依赖，增加重复 runtime/伪造 handle 的第三方消费验证。
+- [x] LIC-100 已完成最小红绿回归：仓库公开测试私钥签发的 token 在无可信生产 trust root 的公开入口失败；未引入测试、临时或假生产 key。
+- [x] LIC-101 已拆分 module feature、error、JWL1 兼容、JWL2、trust store 和 `license.ts`（后续 handle 承载文件）；根入口公开导出与运行时行为保持不变，未进入 parser、trust lookup 或 handle 实现。
+- [x] LIC-102 已实现两阶段严格 JWL2 parser、固定 `JWL2.<payload>` 签名输入和严格 schema；只接受已批准最小 claims、四种 `licenseClass` 和三个模块 feature。parser 输出仅是未验签内部数据，不建立可信 identity，也不得直接进入 handle 状态。
+- [x] LIC-103 已实现内置 `issuer=jword`、首个 `keyId=jword-prod-2026-k1` 与批准生产公钥的固定 trust lookup，保持默认测试公钥已移除并删除调用方公钥注入；完整 claims 仅在 Ed25519 验签成功后解析。
+- [x] LIC-104 已仅在 LIC-103 验签成功且时间关系有效后，把 `licenseClass`、module features 和期限写入模块私有 WeakMap，并生成 WeakMap-branded opaque handle；集中实现 `is/assert` 和每次访问时的到期检查，`expiresAt` 必填，15 天宽限只由 signer 编入时间。手工调用 parser、普通对象、类型断言、对象复制或 structured clone 均不能获得可信 handle。
+- [x] LIC-105 已实现 identity-checked worker transfer；原始 token 只保存在 WeakMap 私有状态，并仅通过单字段 `JWordLicenseTransfer` DTO 进入 structured clone。伪造、复制或 cloned handle 不能创建 transfer；handle、error、diagnostic 和日志不携带 token，transfer 不携带 claims 或平行授权字段，接收侧通过既有 `activateJWordLicense()` 完整重新验签和校验时间。
+- [x] LIC-106 已从根入口、production src、dist 和 tarball 删除测试 signer 与 `signEd25519`；等价 JWL1 测试签发只保留在 `fixtures/license/`，浏览器示例和 `.mjs` smoke 改用固定 insecure-test-only token，未增加 testing export 或 test trust replacement。
+- [x] LIC-107 替换/审计 Ed25519 实现并补标准向量；内部实施已收口，最低浏览器人工认证单独 Deferred。
+  - [x] LIC-107A：使用精确 `@noble/curves@2.2.0` 与 `@noble/curves/ed25519.js` 替换自研 verifier，保持同步 interface、长度预检、catch/fail-closed 和 `{ zip215: false }`；RFC 8032 与严格拒绝向量已通过。
+  - [x] LIC-107B1：独立 smoke 从本地 tarball 安装到临时空项目，已验证 Node、Vite ES2022、当前 Chromium/Firefox/WebKit、真实 module Dedicated Worker、transfer、篡改拒绝、no-alias 和单一 noble 依赖树。
+  - [x] LIC-107B2（Conditionally Accepted；manual certification deferred）：Node 20.19.0 已在固定 Docker 镜像中通过 tarball/public-entry/no-alias 最低版本验证，当前 Playwright 三浏览器和真实 module Dedicated Worker 也已通过。Chrome 100、Edge 100、Firefox 128 和 Safari 16.4 尚未实测；该矩阵转为对外最低版本认证和商业 GA 前门禁，不阻断内部阶段，且不得用当前浏览器结果冒充最低版本证据。
+- [x] LIC-108 已收口受控 JWL2 签发与离线验签/裁剪工具。
+  - [x] LIC-108A：`tools/license/issue-license.mjs` 只签 JWL2，固定 `schemaVersion=2`、`issuer=jword`、`keyId=jword-prod-2026-k1` 和 UTF-8 `JWL2.<payloadSegment>` 签名输入；严格拒绝重复顶层 key、未知字段/class/feature、重复或乱序 feature、非规范 UTC 时间和错误期限。Evaluation 固定 30 天无宽限，订阅类固定 `subscriptionEndsAt + 15 天`；路径私钥经 realpath 后必须位于仓库外，固定 production golden vector 已锁定 signer/runtime canonical bytes，README 已记录输入、私钥和外部台账边界。
+  - [x] LIC-108B：已按批准契约新增 `tools/license/verify-license.mjs`，只从 stdin 或文件读取 token，通过构建后的 License 根入口使用固定生产 trust store；支持审计用 `--at`，成功仅输出带 `checkedAt` 的固定裁剪 JSON，失败只输出稳定 code，未扩展公开 License API、exports、dist 或 tarball。
+- [x] LIC-109 增加 JWL2 稳定诊断，删除 JWL1-only、server-unavailable 和调用方宽限状态 code，不保留对外兼容映射；runtime、worker、server 和协议只把语言无关 code 与必要结构化字段作为稳定契约，用户可见翻译由 UI、wrapper 或宿主展示层按 locale 完成。
+  - [x] LIC-109A：公开 `activateJWordLicense()` 已稳定区分 token、issuer、key、Ed25519 签名、未来生效和过期失败；非法 canonical claims 与期限关系统一为 `JWORD_LICENSE_TOKEN_INVALID`。License runtime metadata 只保留 `severity` 与 `recoverable`，Collab 暂时保留既有 alias 但 message 改为语言无关 `JWORD_*` code；registry 只新增三个 JWL2 code。LIC-108B CLI 继续把新增 token/issuer/key 失败收口为既有 `JWORD_LICENSE_SIGNATURE_INVALID`。
+  - [x] LIC-109B1：删除公开在线授权诊断，旧 `server-unavailable` 输入继续 fail closed；warning 只保留 code，License error 删除 `customerId`，offline grace 停止授权且兼容结果固定为 `false`。旧 JWL1 类型与协议暂时保留。
+  - [x] LIC-109B2：DOCX/PDF 公开错误和 worker 序列化删除 `customerId`，License 错误只传递语言无关 code、`feature` 与 `requestId` 等必要字段；未迁移调用方到 JWL2 handle。
+  - [x] LIC-109B3：Collaboration 删除动态 License alias 并原样传播 `JWORD_*` code；registry 删除四个旧 alias，保留真正的网络错误 `COLLAB_SERVER_UNAVAILABLE`，同步 Collab Server hook、测试和第三方 smoke。
+  - [x] LIC-109B4：registry、SDK 码表和 core summary 已同步为 190 个 code，手写 SDK/package 文档和实施状态已同步；旧 JWL1 等值过期边界、offline grace 过期描述和公开 API `customerId` 文案复核项已收口。focused、registry、typecheck、lint、build、pack 与产物扫描通过。Gate 6 整体 smoke/Collab 旧 happy-path 测试仍在进入本次 alias 行为前被 JWL1 fail-closed 阻断，保持为 Phase 2/Phase 4 调用方迁移证据，不恢复测试 trust root 或 insecure 绕过。
+- [x] LIC-110 建立 test-only trust replacement 与临时测试 key；不得用测试信任根替代 LIC-108A 的固定 production signer/runtime golden vector，正式 root export 不提供信任根注入。
+  - [x] LIC-110B1：新增隔离 JWL2 test-only key、固定 token 和 Node-only signer fixture；focused test 通过 test-local `vi.mock('../src/trust-store.js')` 仅额外识别 `jword-test-lic110-k1`，其它 issuer/keyId 委托真实 production trust lookup。production golden token、未知 key、篡改 payload/signature、公开 transfer 重激活和默认 production trust 拒绝均已覆盖；未修改生产 License src、公开 export、package subpath、DOCX/PDF/Collaboration 或旧 JWL1 测试。
+- [x] LIC-110B2：`packages/license/test/jwl2.test.ts` 已改用固定 `TEST_ONLY_JWL2_TOKEN`，不再跨协议复用 JWL1 seed；`entitlement.test.ts` 的 JWL1 fail-closed 回归保持不变。Gate 5 与 commercial pack 已扫描 test-only JWL2 seed、公钥、token、signer、keyId 及实际材料，确保不进入 `packages/license/src`、`dist`、exports 或 tarball；未迁移 DOCX/PDF/Collaboration、benchmarks、examples 或 third-party smoke。
+- [x] LIC-111 锁定单一 license runtime 依赖，增加重复 runtime/伪造 handle 的第三方消费验证。
+  - [x] LIC-111B1：DOCX、PDF、Collaboration 和 Collab Server 将 `@4xian/jword-license` 从普通 dependency 改为必需 `peerDependencies: workspace:*`，仓库开发由 `devDependencies: workspace:*` 提供；pnpm/npm 空项目均只解析一个 canonical runtime，两个独立 runtime 对跨副本、伪造、复制和 structured clone handle 全部 fail closed，transfer 只含 token，接收 runtime 重新激活后创建本地 handle。Node 20.19.0 与 pnpm 9.14.2 固定容器回归通过。
+  - [x] LIC-111B2：同一 identity smoke 的 `--browser` 模式使用 Vite ES2022 和 build-only `chunk.modules` 证据，确认 DOCX/PDF/Collab tarball entry 均进入 module graph、License canonical module 只有一个且不来自 workspace，Collab Server 未进入浏览器 bundle；当前 Chromium、Firefox、WebKit 均通过公开入口激活与 formats 检查。该证据只覆盖当前 Playwright 版本，不替代 LIC-107B2 最低浏览器矩阵。
+
+LIC-100 至 LIC-111 的命令、数量和失败边界统一记录在 [当前验证计划](reviews/current-full-review/10-verification-plan.md)。当前已证明固定 production golden token 能在当前 Node、浏览器主线程和真实 module Dedicated Worker 完成 trust lookup、严格 Ed25519 验签、时间校验、WeakMap handle 激活和 identity-checked transfer；篡改 token 在主线程和 Worker 均被拒绝。正式 License 产物不提供测试 signer 或 Ed25519 签名入口，受控仓库工具已能签发和离线检查可由公开入口激活的严格 JWL2。JWL2 公开激活路径提供 token、issuer、key、signature、not-yet-valid 和 expired 的稳定语言无关诊断；旧在线授权 code、自然语言 warning message、License/worker `customerId` 和 Collab License alias 已删除，offline grace 不再产生授权作用。正常 pnpm/npm 与 Vite 消费路径只解析一个 License runtime，重复副本不共享 WeakMap handle。Phase 1 已完成内部实施退出；LIC-107B2 最低浏览器人工认证、旧 JWL1 类型和调用方迁移分别留作发布前认证、Phase 4 与 Phase 2 工作。
 
 退出标准：
 
@@ -715,7 +745,13 @@ return 'write'
 - [ ] LIC-306 新增内部 `authorizeDocumentAccess()`，所有 action 恒定返回 write。
 - [ ] LIC-307 WebSocket 成功 admission 后 role 固定 write；license 到期后的下一次写入被拒绝。
 - [ ] LIC-308 直接删除 tenant 传输字段和旧角色表面能力，声明 documentId 全部署唯一。
-- [ ] LIC-309 改造 Docker/启动示例，缺 license 或签名 `licenseClass` 不是 `production` 时 production preset 不监听；disaster-recovery preset 同样固定要求 `disasterRecovery`。运行中失效时 `/ready` 返回 503；production 不提供 allow-all preset，也不接受宿主传入 class 覆盖 preset 上下文。
+- [ ] LIC-309 建立正式版本化 Docker 镜像和启动契约；客户应用只集成浏览器 SDK，不直接导入 server npm package。缺 license 或签名 `licenseClass` 不是 `production` 时 production preset 不监听；disaster-recovery preset 同样固定要求 `disasterRecovery`。运行中失效时 `/ready` 返回 503；production 不提供 allow-all preset，也不接受宿主传入 class 覆盖 preset 上下文。后续所有正式 JWord 服务端沿用同一 Docker-only 交付规则。LIC-309 按以下子批次实施，全部保持 Pending，必须逐批批准后再修改代码：
+  - [ ] LIC-309A：生产镜像基础。建立多阶段构建和最小 runtime layer，在镜像内固定经验证的 Node 版本，以非 root 用户运行；客户宿主不执行 `pnpm install`，正式镜像不包含测试、fixture、source map、License signer、私钥、测试 seed 或测试 trust root。
+  - [ ] LIC-309B：HTTP/WSS 正式入口。默认由同一版本镜像同时提供 HTTP API 和 Hocuspocus/Yjs WebSocket；允许未来以同一镜像的显式 role/command 拆成 HTTP 与 WS deployment 独立扩容，但不得形成两套 admission、License context 或协议实现。
+  - [ ] LIC-309C：License 与 secret。只从只读 Docker/Kubernetes secret 或文件加载 deployment JWL2；在绑定业务端口前完成激活、class/preset 和 `collaboration` 校验，缺失或无效时 fail closed，运行中过期时 `/ready` 返回 503 并拒绝后续受控写入。签发工具、私钥和 KMS/HSM 不进入客户镜像。
+  - [ ] LIC-309D：生产持久化。移除 volatile-only production 路径，通过 `@4xian/jword-persistence` adapter 接入外部 PostgreSQL、对象存储和确有需要时的 Redis；数据库不与应用进程放入同一生产容器，并补迁移、事务/CAS、幂等、双实例一致性、备份和恢复契约。
+  - [ ] LIC-309E：生产准入与运行治理。HTTP/WS 复用可信 `actorId`、Origin allowlist、可信代理和共享限流；提供独立 liveness/readiness、结构化日志和 metrics。TLS/HTTPS/WSS 由 ingress 或反向代理终止，镜像不内置客户证书。
+  - [ ] LIC-309F：部署模板与发布验收。提供不包含开发 allow-all preset 的 Docker Compose 参考部署；Kubernetes manifest/Helm chart 仅在商业交付范围单独批准后增加。对同一不可变 image digest 完成 SDK→HTTPS/WSS、重启、断连重连、License 失效、持久化恢复和双实例验证，并生成 SBOM、生产依赖清单、镜像漏洞扫描和镜像 digest 证据。
 - [ ] LIC-310 更新协作 diagnostics registry 和协议版本。
 - [ ] LIC-311 删除全部协作操作级 feature gate；offline、history、multiplayer、server 和自动插入统一归属 `collaboration`，并在 SDK 文档说明本地 helper 不是独立 DRM。
 
@@ -727,6 +763,8 @@ return 'write'
 - 未通过 admission 的请求在数据读取前被拒绝。
 - `collaboration` 缺失或过期时全部服务端协作入口失败；模块有效时，部署 capability 可以关闭 history 或自动插入，但不能产生新的授权。
 - 该阶段技术完成也不自动进入首期销售；还必须完成生产数据面、备份恢复和独立销售批准。
+- 客户业务代码只消费浏览器 SDK 和 HTTP/WSS endpoint；服务端以镜像运行，Node 只存在容器内。
+- LIC-309A 至 LIC-309F 全部通过前，现有 `packages/collab-server/Dockerfile` 继续只视为开发/架构证明，不得发布为客户生产镜像。
 
 ### Phase 4：删除 JWL1 与旧公开 interface
 
@@ -806,6 +844,9 @@ return 'write'
 | 浏览器宿主自报当前环境 | 不作为授权输入；实际用途由合同、制品权限、审批和台账执行 |
 | 手工伪造 handle | assert 拒绝 |
 | structured clone/copy handle | assert 拒绝且不泄漏 claims/token |
+| 可信 handle 创建并 clone transfer | DTO 只含 token；重新激活为新的可信 handle |
+| 伪造、复制或 cloned handle 创建 transfer | `HANDLE_INVALID`，错误不泄漏 token |
+| 篡改、格式错误或过期 transfer token | 接收侧重新激活时稳定拒绝 |
 | 重复 JSON key、未知字段、非规范 base64url、错误长度/排序/上限 | 严格拒绝 |
 | signer golden vector | runtime、worker 和 server 结果一致 |
 
@@ -891,7 +932,13 @@ node tools/release/check-gate7-third-party-smoke.mjs
 - `JWORD_FEATURE_NOT_ENTITLED`
 - `JWORD_LICENSE_HANDLE_INVALID`
 
-`JWORD_LICENSE_SERVER_UNAVAILABLE` 仅属于旧在线状态假象；JWL2 V1 纯离线验签不再产生该 code。
+旧在线授权状态诊断已从公开类型和 registry 删除；JWL2 V1 只执行离线验签。旧 JWL1 `server-unavailable` 类型输入仍保留到 Phase 4，但统一 fail closed 为 `JWORD_LICENSE_SIGNATURE_INVALID`，不提供公开兼容映射。
+
+诊断的 i18n 边界固定如下：
+
+- License runtime、worker、server、日志和跨进程/跨网络协议只返回稳定 code 与必要结构化字段，不把中文或英文 message/description 固化为协议兼容面。
+- JWord 内建用户界面必须为用户可见的 License 提示提供 `zh-CN` / `en-US` 文案，并同步覆盖 tooltip、aria-label 和 live region；React/Vue wrapper 或 OEM 宿主可按相同 code 提供自定义 locale 映射。
+- locale 切换只改变展示文本，不得改变授权结论、错误 code、恢复性 metadata 或日志聚合维度；日志不随 locale 输出不同自然语言模板。
 
 ### 15.2 日志与指标
 
@@ -919,7 +966,7 @@ node tools/release/check-gate7-third-party-smoke.mjs
 - `jword_collab_operation_denied_total{operation,reason}`。
 
 licenseId、Named Product、一级 OEM 标识和 documentId 不作为指标 label，避免敏感信息与高基数。
-admission denial 与 license denial 分开计数。统一 error/logger serializer 只接受 allowlist metadata；验证 `JSON.stringify(handle)`、`structuredClone(handle)`、worker error、日志与 support bundle 均不泄漏 token 或完整 claims。
+admission denial 与 license denial 分开计数。统一 error/logger serializer 只接受 allowlist metadata；验证 `JSON.stringify(handle)`、`structuredClone(handle)`、worker error、日志与 support bundle 均不泄漏 token 或完整 claims。`JWordLicenseTransfer` 的 structured clone 按协议明确携带 token，是唯一例外；不得记录或展开该 DTO，也不得给它增加 claims、features、licenseClass 或其它平行授权字段。
 
 ## 16. 发布、轮换、续期与回滚
 
@@ -1071,6 +1118,6 @@ Phase 0 产品输入已经冻结，但 `LIC-013` 和实现验收未完成，因�
 
 ### Follow-ups
 
-- 项目级前置工程批次和 Phase 0 文档冻结已经完成；获得单独代码实施授权后先执行 Phase 1，再按首期 Phase 2/4/5 与后续条件 Phase 3 的真实依赖推进。
+- 项目级前置工程批次、Phase 0 文档冻结和 License Phase 1 已经完成内部实施退出；LIC-107B2 最低浏览器人工认证按明确风险接受延期为发布前门禁。SEC-01 仍因 JWL1、`allowInsecureFixtureLicense` 和后续调用方迁移继续 Open；当前可以按统一整改路线进入阶段 2，OEM Phase 2/4/5 与条件 Phase 3 仍按各自依赖推进。
 - 与全项目审查 P0 发布、协作数据面和 DOCX 兼容整改并行管理。
 - 在任何收费 PoC 前优先完成 Phase 1，并验证仓库测试私钥不再被生产入口接受。

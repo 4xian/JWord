@@ -17,6 +17,11 @@ import {
   createMemoryPersistenceAdapter,
   createUnavailableIndexedDbOfflineAdapter
 } from '../src/index'
+import { hashYjsLogicalContent } from '../src/yjs-logical-content'
+import {
+  createNestedFormattedRun,
+  readNestedFormattedRun
+} from './yjs-document-test-fixtures'
 import type {
   JWordMemoryPersistenceHistoryService,
   JWordOfflineAdapter,
@@ -441,6 +446,88 @@ describe('@4xian/jword-persistence memory adapter', () => {
     expect(readNestedBodyText(current)).toBe('nested-v1')
   })
 
+  /** 验证公开恢复入口同时保留 Y.Text delta attributes 与 canonical run properties。 */
+  it('preserves Y.Text attributes without regressing canonical run properties', async () => {
+    const adapter = createMemoryPersistenceAdapter()
+    const source = new Y.Doc()
+    const original = createNestedFormattedRun(source)
+    const topLevelText = source.getText('body')
+
+    original.text.applyDelta([{
+      insert: 'v1',
+      attributes: {
+        bold: true,
+        color: '#123456'
+      }
+    }])
+    topLevelText.applyDelta([{
+      insert: 'top-v1',
+      attributes: {
+        italic: true
+      }
+    }])
+    original.properties.set('bold', true)
+    const first = await adapter.appendUpdate({
+      documentId: 'doc-formatted-restore',
+      update: Y.encodeStateAsUpdate(source),
+      label: 'formatted-v1'
+    })
+    original.text.delete(0, original.text.length)
+    original.text.insert(0, 'v2')
+    topLevelText.delete(0, topLevelText.length)
+    topLevelText.insert(0, 'top-v2')
+    original.properties.set('bold', false)
+    await adapter.appendUpdate({
+      documentId: 'doc-formatted-restore',
+      update: Y.encodeStateAsUpdate(source),
+      label: 'formatted-v2'
+    })
+
+    const preview = await adapter.createPreview({
+      documentId: 'doc-formatted-restore',
+      versionId: first.version.versionId
+    })
+    const previewRun = readNestedFormattedRun(preview.doc)
+    const target = new Y.Doc()
+
+    target.getArray<Y.Map<unknown>>('sections')
+    const restored = await adapter.restoreVersion({
+      documentId: 'doc-formatted-restore',
+      versionId: first.version.versionId,
+      targetDoc: target
+    })
+    expect(restored.diagnostics).toEqual([])
+    const formattedRun = readNestedFormattedRun(target)
+
+    expect(previewRun.text.toDelta()).toEqual([{
+      insert: 'v1',
+      attributes: {
+        bold: true,
+        color: '#123456'
+      }
+    }])
+    expect(preview.doc.getText('body').toDelta()).toEqual([{
+      insert: 'top-v1',
+      attributes: {
+        italic: true
+      }
+    }])
+    expect(formattedRun.text.toDelta()).toEqual([{
+      insert: 'v1',
+      attributes: {
+        bold: true,
+        color: '#123456'
+      }
+    }])
+    expect(target.getText('body').toDelta()).toEqual([{
+      insert: 'top-v1',
+      attributes: {
+        italic: true
+      }
+    }])
+    expect(formattedRun.properties.get('bold')).toBe(true)
+  })
+
   it('returns restore diagnostics without mutating the target when saved updates are invalid', async () => {
     const adapter = createMemoryPersistenceAdapter()
     const current = new Y.Doc()
@@ -465,6 +552,299 @@ describe('@4xian/jword-persistence memory adapter', () => {
       ]
     })
     expect(current.getText('body').toString()).toBe('safe-current')
+  })
+
+  /** 验证 memory commit 失败时目标文档和历史状态保持不变。 */
+  it('keeps target and history unchanged when the prepared memory commit fails', async () => {
+    const historyService = createMemoryPersistenceHistoryService()
+    const adapter = createMemoryPersistenceAdapter({ historyService })
+    const current = new Y.Doc()
+    const text = current.getText('body')
+
+    text.insert(0, 'v1')
+    const first = await adapter.appendUpdate({
+      documentId: 'doc-memory-commit-failure',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v1'
+    })
+    text.insert(text.length, '-v2')
+    await adapter.appendUpdate({
+      documentId: 'doc-memory-commit-failure',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v2'
+    })
+    /** 模拟 memory history state 提交失败。 */
+    historyService.documents.set = () => {
+      throw new Error('memory commit failed')
+    }
+
+    const restored = await adapter.restoreVersion({
+      documentId: 'doc-memory-commit-failure',
+      versionId: first.version.versionId,
+      targetDoc: current
+    })
+    const state = historyService.documents.get('doc-memory-commit-failure')
+
+    expect(restored.version).toBeUndefined()
+    expect(restored.diagnostics).toEqual([
+      expect.objectContaining({ code: 'PERSISTENCE_RESTORE_FAILED' })
+    ])
+    expect(current.getText('body').toString()).toBe('v1-v2')
+    expect(state?.updates).toHaveLength(2)
+    expect(state?.versions).toHaveLength(2)
+  })
+
+  /** 验证 target 应用前 observer 抛错时不会提前提交 restore history。 */
+  it('keeps target and history unchanged when a target observer throws before apply', async () => {
+    const historyService = createMemoryPersistenceHistoryService()
+    const adapter = createMemoryPersistenceAdapter({ historyService })
+    const current = new Y.Doc()
+    const text = current.getText('body')
+
+    text.insert(0, 'v1')
+    const first = await adapter.appendUpdate({
+      documentId: 'doc-observer-before-restore',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v1'
+    })
+    text.insert(text.length, '-v2')
+    await adapter.appendUpdate({
+      documentId: 'doc-observer-before-restore',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v2'
+    })
+    /** 模拟 target 事务开始前的 observer 异常。 */
+    current.on('beforeTransaction', () => {
+      throw new Error('observer failed before apply')
+    })
+
+    await expect(adapter.restoreVersion({
+      documentId: 'doc-observer-before-restore',
+      versionId: first.version.versionId,
+      targetDoc: current
+    })).rejects.toThrow('observer failed before apply')
+
+    const state = historyService.documents.get('doc-observer-before-restore')
+
+    expect(current.getText('body').toString()).toBe('v1-v2')
+    expect(state?.updates).toHaveLength(2)
+    expect(state?.versions).toHaveLength(2)
+    expect(state?.snapshots).toHaveLength(0)
+    expect(state?.pendingRestore).toBeUndefined()
+  })
+
+  /** 验证 memory finalize 失败时 pending 不进入版本列表，并可由下一次 restore 完成。 */
+  it('recovers a pending memory restore after finalize fails', async () => {
+    const historyService = createMemoryPersistenceHistoryService()
+    const adapter = createMemoryPersistenceAdapter({ historyService })
+    const current = new Y.Doc()
+    const text = current.getText('body')
+
+    text.insert(0, 'v1')
+    const first = await adapter.appendUpdate({
+      documentId: 'doc-memory-recovery',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v1'
+    })
+    text.insert(text.length, '-v2')
+    await adapter.appendUpdate({
+      documentId: 'doc-memory-recovery',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v2'
+    })
+    const target = new Y.Doc()
+
+    target.getText('body').insert(0, 'v1')
+
+    const set = historyService.documents.set.bind(historyService.documents)
+    let setCalls = 0
+    /** 在第三次 state 写入时模拟 finalize 失败。 */
+    historyService.documents.set = (documentId, state) => {
+      setCalls += 1
+      if (setCalls === 3) {
+        throw new Error('memory finalize failed')
+      }
+      return set(documentId, state)
+    }
+
+    const firstRestore = await adapter.restoreVersion({
+      documentId: 'doc-memory-recovery',
+      versionId: first.version.versionId,
+      targetDoc: target
+    })
+    const pending = historyService.documents.get('doc-memory-recovery')
+
+    expect(firstRestore.version).toBeUndefined()
+    expect(firstRestore.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PERSISTENCE_RESTORE_RECOVERY_REQUIRED',
+        recoverable: true
+      })
+    ])
+    expect(pending?.pendingRestore?.phase).toBe('target-applied')
+    await expect(adapter.listVersions('doc-memory-recovery')).resolves.toHaveLength(2)
+
+    historyService.documents.set = set
+    const recoveryAdapter = createMemoryPersistenceAdapter({ historyService })
+    const recoveryTarget = new Y.Doc()
+
+    recoveryTarget.getText('body').insert(0, 'v1-v2')
+    const recovered = await recoveryAdapter.restoreVersion({
+      documentId: 'doc-memory-recovery',
+      versionId: first.version.versionId,
+      targetDoc: recoveryTarget
+    })
+    const committed = historyService.documents.get('doc-memory-recovery')
+
+    expect(recovered.diagnostics).toEqual([])
+    expect(recovered.version).toMatchObject({
+      restoreSourceVersionId: first.version.versionId,
+      updateCount: 3
+    })
+    expect(committed?.pendingRestore).toBeUndefined()
+    await expect(recoveryAdapter.listVersions('doc-memory-recovery')).resolves.toHaveLength(3)
+    expect(recoveryTarget.getText('body').toString()).toBe('v1')
+  })
+
+  /** 验证 memory 无法取消 pending 时返回 recovery-required，而不是普通 restore failure。 */
+  it('reports recovery-required when memory pending cancellation fails', async () => {
+    const historyService = createMemoryPersistenceHistoryService()
+    const adapter = createMemoryPersistenceAdapter({ historyService })
+    const current = new Y.Doc()
+    const text = current.getText('body')
+
+    text.insert(0, 'v1')
+    const first = await adapter.appendUpdate({
+      documentId: 'doc-memory-cancel-failure',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v1'
+    })
+    text.insert(text.length, '-v2')
+    await adapter.appendUpdate({
+      documentId: 'doc-memory-cancel-failure',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v2'
+    })
+
+    const set = historyService.documents.set.bind(historyService.documents)
+    let setCalls = 0
+    /** 在第二次 state 写入时模拟 pending 取消失败。 */
+    historyService.documents.set = (documentId, state) => {
+      setCalls += 1
+      if (setCalls === 2) {
+        throw new Error('memory pending cancellation failed')
+      }
+      return set(documentId, state)
+    }
+    /** 模拟 target 事务开始前的 observer 异常。 */
+    current.on('beforeTransaction', () => {
+      throw new Error('observer failed before apply')
+    })
+
+    const restored = await adapter.restoreVersion({
+      documentId: 'doc-memory-cancel-failure',
+      versionId: first.version.versionId,
+      targetDoc: current
+    })
+    const pending = historyService.documents.get('doc-memory-cancel-failure')
+
+    expect(restored.version).toBeUndefined()
+    expect(restored.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PERSISTENCE_RESTORE_RECOVERY_REQUIRED',
+        recoverable: true
+      })
+    ])
+    expect(pending?.pendingRestore?.phase).toBe('prepared')
+    expect(current.getText('body').toString()).toBe('v1-v2')
+
+    historyService.documents.set = set
+    const recovered = await adapter.restoreVersion({
+      documentId: 'doc-memory-cancel-failure',
+      versionId: first.version.versionId,
+      targetDoc: current
+    })
+
+    expect(recovered.version).toBeUndefined()
+    expect(recovered.diagnostics).toEqual([
+      expect.objectContaining({ code: 'PERSISTENCE_RESTORE_FAILED' })
+    ])
+    expect(historyService.documents.get('doc-memory-cancel-failure')?.pendingRestore).toBeUndefined()
+  })
+
+  /** 验证 target observer 在应用后抛错时已提交恢复仍返回成功。 */
+  it('returns success when a target observer throws after the prepared content was applied', async () => {
+    const adapter = createMemoryPersistenceAdapter()
+    const current = new Y.Doc()
+    const text = current.getText('body')
+
+    text.insert(0, 'v1')
+    const first = await adapter.appendUpdate({
+      documentId: 'doc-observer-restore',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v1'
+    })
+    text.insert(text.length, '-v2')
+    await adapter.appendUpdate({
+      documentId: 'doc-observer-restore',
+      update: Y.encodeStateAsUpdate(current),
+      label: 'v2'
+    })
+    /** 模拟 target 应用完成后的 observer 异常。 */
+    current.on('afterTransaction', () => {
+      throw new Error('observer failed after apply')
+    })
+
+    const restored = await adapter.restoreVersion({
+      documentId: 'doc-observer-restore',
+      versionId: first.version.versionId,
+      targetDoc: current
+    })
+
+    expect(restored.diagnostics).toEqual([])
+    expect(restored.version).toMatchObject({
+      restoreSourceVersionId: first.version.versionId,
+      updateCount: 3
+    })
+    expect(current.getText('body').toString()).toBe('v1')
+    await expect(adapter.listVersions('doc-observer-restore')).resolves.toHaveLength(3)
+  })
+
+  /** 验证 logical-content hash 忽略 Yjs 编辑历史并保留文本 attributes。 */
+  it('hashes logical Yjs content independently from client history and includes text attributes', () => {
+    const first = new Y.Doc()
+    const second = new Y.Doc()
+    const withDifferentAttributes = new Y.Doc()
+
+    first.getText('body').applyDelta([{
+      insert: 'same',
+      attributes: { bold: true, color: '#123456' }
+    }])
+    second.getText('body').applyDelta([{
+      insert: 'sa',
+      attributes: { color: '#123456', bold: true }
+    }, {
+      insert: 'me',
+      attributes: { bold: true, color: '#123456' }
+    }])
+    withDifferentAttributes.getText('body').applyDelta([{
+      insert: 'same',
+      attributes: { bold: false, color: '#123456' }
+    }])
+    const firstMetadata = first.getMap<unknown>('metadata')
+    const secondMetadata = second.getMap<unknown>('metadata')
+    const differentAttributesMetadata = withDifferentAttributes.getMap<unknown>('metadata')
+
+    firstMetadata.set('object', { z: 2, a: true })
+    firstMetadata.set('binary', new Uint8Array([0, 127, 255]))
+    secondMetadata.set('binary', new Uint8Array([0, 127, 255]))
+    secondMetadata.set('object', { a: true, z: 2 })
+    differentAttributesMetadata.set('object', { z: 2, a: true })
+    differentAttributesMetadata.set('binary', new Uint8Array([0, 127, 255]))
+
+    expect(Array.from(Y.encodeStateAsUpdate(first))).not.toEqual(Array.from(Y.encodeStateAsUpdate(second)))
+    expect(hashYjsLogicalContent(first)).toBe(hashYjsLogicalContent(second))
+    expect(hashYjsLogicalContent(withDifferentAttributes)).not.toBe(hashYjsLogicalContent(first))
   })
 
   it('keeps the latest version restorable after compaction', async () => {
@@ -546,44 +926,12 @@ function readBodyText(update: Uint8Array): string {
 
 /** 创建模拟 core document-store 的嵌套正文 Y.Text。 */
 function createNestedBodyText(doc: Y.Doc): Y.Text {
-  const sections = doc.getArray<Y.Map<unknown>>('sections')
-  const section = new Y.Map<unknown>()
-  const blocks = new Y.Array<Y.Map<unknown>>()
-  const paragraph = new Y.Map<unknown>()
-  const runs = new Y.Array<Y.Map<unknown>>()
-  const run = new Y.Map<unknown>()
-  const text = new Y.Text()
-
-  run.set('text', text)
-  runs.push([run])
-  paragraph.set('runs', runs)
-  blocks.push([paragraph])
-  section.set('blocks', blocks)
-  sections.push([section])
-
-  return text
+  return createNestedFormattedRun(doc).text
 }
 
 /** 读取模拟 core document-store 的嵌套正文。 */
 function readNestedBodyText(doc: Y.Doc): string {
-  const section = doc.getArray<Y.Map<unknown>>('sections').get(0)
-  const blocks = section?.get('blocks')
-
-  if (!(blocks instanceof Y.Array)) {
-    return ''
-  }
-
-  const paragraph = blocks.get(0)
-  const runs = paragraph?.get('runs')
-
-  if (!(runs instanceof Y.Array)) {
-    return ''
-  }
-
-  const run = runs.get(0)
-  const text = run?.get('text')
-
-  return text instanceof Y.Text ? text.toString() : ''
+  return readNestedFormattedRun(doc).text.toString()
 }
 
 interface MemoryPersistenceAdapterStateProbe {

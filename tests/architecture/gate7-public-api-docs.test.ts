@@ -28,7 +28,6 @@ const requiredPackages = [
   '@4xian/jword-pdf',
   '@4xian/jword-persistence',
   '@4xian/jword-collab',
-  '@4xian/jword-collab-server',
   '@4xian/jword-license'
 ]
 
@@ -160,6 +159,9 @@ describe('Gate 7 public API docs and examples', () => {
       expect(examples, packageName).toContain(`from '${packageName}'`)
       expect(typeFixture, packageName).toContain(`from '${packageName}'`)
     }
+
+    expect(examples).not.toContain("from '@4xian/jword-collab-server'")
+    expect(typeFixture).not.toContain("from '@4xian/jword-collab-server'")
 
     for (const forbidden of forbiddenExampleImports) {
       expect(examples, forbidden).not.toContain(forbidden)

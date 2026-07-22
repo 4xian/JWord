@@ -2,7 +2,9 @@
 
 ## 包职责
 
-`@4xian/jword-collab-server` 是协同 self-host server 模块，提供 Node HTTP server、可嵌入 request handler、server-backed history service、auto-insert relay 授权入口，以及 Hocuspocus/Yjs WebSocket 服务控制器。生产数据库、租户系统、用户认证和 license 判定由宿主通过 hooks 注入。
+`@4xian/jword-collab-server` 是协同 self-host server 的镜像内部实现模块，提供 Node HTTP server、request handler、server-backed history service、auto-insert relay 授权入口，以及 Hocuspocus/Yjs WebSocket 服务控制器。客户应用代码只集成浏览器 SDK，不直接安装该 package；正式服务端统一通过 JWord 版本化 Docker 镜像交付。
+
+当前正式镜像仍属于 `LIC-309` Pending。现有 Node API、hooks 和 Dockerfile 用于仓库开发、架构验证与后续镜像组装，不是已批准的客户生产部署面。
 
 ## 入口与导出
 
@@ -114,6 +116,8 @@ Hocuspocus server 当前能力：
 
 ## 当前限制/注意点
 
+- 当前 Dockerfile 不满足生产镜像契约：正式镜像必须去除 allow-all license/admission、volatile-only storage，增加只读 License secret、持久化、readiness/liveness、备份恢复和不可变 image digest 验证。
+- 客户宿主不直接安装 Node 或导入服务端 npm package；Node 版本由 JWord 镜像固定，客户运维侧只提供 Docker 兼容环境、存储、secret 和 HTTP/WSS 反向代理。
 - `createJWordCollabServer()` 是 HTTP server，不自动启动 Hocuspocus WebSocket；WS 要单独用 `createJWordCollabHocuspocusServer()`。
 - 未传 `historyStorage` 时只有 volatile memory storage，不是生产数据库。
 - HTTP `authHook` 当前输入只有 requestId、method、path，不直接暴露 Authorization header/token；需要更细认证时应由宿主外层封装或扩展。
@@ -134,4 +138,3 @@ Hocuspocus server 当前能力：
 - `packages/collab-server/src/http-utils.ts`
 - `packages/collab-server/README.md`
 - `packages/collab-server/Dockerfile`
-

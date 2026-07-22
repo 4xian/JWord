@@ -26,7 +26,16 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 /** 序列化稳定 JSON。 */
 export function stringifyJson(input: unknown): string {
-  return `${JSON.stringify(input, null, 2)}\n`
+  return `${JSON.stringify(input, rejectNonFiniteJsonNumber, 2)}\n`
+}
+
+/** 在 JSON.stringify 静默转换前拒绝非有限数字。 */
+function rejectNonFiniteJsonNumber(_key: string, value: unknown): unknown {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw new TypeError('non-finite JSON number')
+  }
+
+  return value
 }
 
 /** 判断未知值是否为对象记录。 */

@@ -30,6 +30,8 @@ export default defineConfig({
     }
   },
   test: {
+    maxWorkers: 4,
+    setupFiles: ['./fixtures/license/test-only-license-vitest-setup.ts'],
     include: [
       'packages/**/*.test.ts',
       'packages/**/*.spec.ts',

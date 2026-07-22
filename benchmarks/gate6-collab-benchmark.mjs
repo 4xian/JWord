@@ -19,9 +19,6 @@ import {
   GATE6_COLLAB_FEATURES
 } from '../packages/collab/dist/index.js'
 import {
-  createInsecureTestOnlyJWordLicenseSignature
-} from '../packages/license/dist/index.js'
-import {
   createJWordCollabServer
 } from '../packages/collab-server/dist/index.js'
 import {
@@ -29,8 +26,8 @@ import {
   createVolatileHistoryStorage,
   createUnavailableIndexedDbOfflineAdapter
 } from '../packages/persistence/dist/index.js'
+import { INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN } from '../fixtures/license/insecure-test-only-jwl1-fixture.mjs'
 
-const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
 const fixtures = [
   {
     id: 'gate6-1k',
@@ -766,7 +763,7 @@ function createBenchmarkLicense() {
 
   return {
     ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+    signature: INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN
   }
 }
 

@@ -14,10 +14,11 @@ import {
   type DocumentLayout,
   layoutDocument
 } from '@4xian/jword-core'
-import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
+import type { JWordLicenseEntitlement } from '@4xian/jword-license'
 import { describe, expect, it } from 'vitest'
 
 import type {
+  PdfError,
   PdfExportImageInput,
   PdfImageAsset,
   PdfWorkerResponse
@@ -31,7 +32,7 @@ import {
   handlePdfWorkerRequest,
   readPdfImageAsset
 } from '../src/worker'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../../fixtures/license/test-only-entitlement-fixture.mjs'
 
 describe('@4xian/jword-pdf worker runtime', () => {
   it('fails export before mapping layout when license is missing', async () => {
@@ -249,6 +250,23 @@ describe('@4xian/jword-pdf worker runtime', () => {
         cancelled: true
       }
     })
+    const legacyLicenseError = {
+      code: 'JWORD_LICENSE_SIGNATURE_INVALID',
+      message: 'JWORD_LICENSE_SIGNATURE_INVALID: pdf.export',
+      requestId: 'pdf-worker-license-1',
+      feature: 'pdf.export',
+      customerId: 'customer-must-not-cross-worker'
+    } satisfies PdfError & { readonly customerId: string }
+
+    expect(createPdfErrorResponse(legacyLicenseError)).toEqual({
+      kind: 'error',
+      error: {
+        code: 'JWORD_LICENSE_SIGNATURE_INVALID',
+        message: 'JWORD_LICENSE_SIGNATURE_INVALID: pdf.export',
+        requestId: 'pdf-worker-license-1',
+        feature: 'pdf.export'
+      }
+    })
     expect(createPdfTransferables(buffer)).toEqual([buffer])
     expect(createPdfTransferables(new Uint8Array(buffer))).toEqual([buffer])
   })
@@ -293,22 +311,11 @@ describe('@4xian/jword-pdf worker runtime', () => {
   })
 })
 
-/** 创建 PDF worker 测试使用的有效授权。 */
+/** 创建 PDF worker 业务测试使用的 test-only entitlement。 */
 function createWorkerLicense(features: readonly string[]): JWordLicenseEntitlement {
-  const entitlement: JWordLicenseSignaturePayload = {
-    customerId: 'customer-pdf-worker',
-    licenseToken: 'token-pdf-worker',
-    features,
-    issuer: 'jword-test-issuer',
-    issuedAt: '2026-05-01T00:00:00Z',
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid' as const
-  }
-
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
+  return createTestOnlyJWordLicenseEntitlement(features, {
+    customerId: 'customer-pdf-worker'
+  })
 }
 
 /** 创建 worker 测试使用的最小空 layout。 */

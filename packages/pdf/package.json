@@ -30,9 +30,14 @@
   },
   "dependencies": {
     "@4xian/jword-core": "workspace:*",
-    "@4xian/jword-license": "workspace:*",
     "fontkit": "2.0.4",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "4.10.38"
+  },
+  "peerDependencies": {
+    "@4xian/jword-license": "workspace:*"
+  },
+  "devDependencies": {
+    "@4xian/jword-license": "workspace:*"
   }
 }

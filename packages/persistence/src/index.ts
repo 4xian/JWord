@@ -7,10 +7,32 @@
  */
 
 import * as Y from 'yjs'
+import { PERSISTENCE_DIAGNOSTIC_CODE_METADATA } from './diagnostics.js'
+import { createDiagnostic, isRecoverableDiagnostic } from './persistence-diagnostic.js'
+import { getRestoreAppendBarrier, type RestoreAppendBarrier } from './restore-append-barrier.js'
 import {
-  PERSISTENCE_DIAGNOSTIC_CODE_METADATA
-} from './diagnostics.js'
+  completePreparedRestore,
+  recoverCompletedRestore as recoverCompletedRestoreOperation,
+  recoverPendingRestore as recoverPendingRestoreOperation
+} from './restore-coordinator.js'
 import { hashSha256Bytes } from './sha256.js'
+import { hashYjsLogicalContent } from './yjs-logical-content.js'
+import {
+  createEmptyDocumentWithSharedTypes,
+  prepareDocumentContent
+} from './yjs-document-content.js'
+import {
+  assertHistoryAppendAllowed,
+  cloneRestorePending,
+  createRestoreMetadata,
+  createRestoreCompletion,
+  createRestorePending,
+  getNextHistorySequence
+} from './restore-operation.js'
+import type {
+  JWordRestoreCompletion,
+  JWordRestorePending
+} from './restore-operation.js'
 import type {
   JWordPersistenceDiagnosticCode,
   JWordPersistenceDiagnosticSeverity
@@ -46,7 +68,10 @@ export type {
 export type {
   CreateStoragePersistenceAdapterOptions,
   JWordHistoryStorage,
+  JWordHistoryStorageCompletedRestore,
+  JWordHistoryStorageCompareAndSwapResult,
   JWordHistoryStorageDocument,
+  JWordHistoryStoragePendingRestore,
   JWordSerializedSnapshotRecord,
   JWordSerializedUpdateLogRecord
 } from './storage-history-adapter.js'
@@ -257,6 +282,8 @@ export interface JWordMemoryPersistenceDocumentState {
   readonly updates: JWordUpdateLogRecord[]
   readonly versions: JWordVersionRecord[]
   readonly snapshots: JWordSnapshotRecord[]
+  readonly pendingRestore?: JWordRestorePending
+  readonly completedRestore?: JWordRestoreCompletion
 }
 
 export interface JWordMemoryPersistenceHistoryService {
@@ -275,8 +302,6 @@ interface MemoryDocumentState extends JWordMemoryPersistenceDocumentState {
   readonly versions: JWordVersionRecord[]
   readonly snapshots: JWordSnapshotRecord[]
 }
-
-type JWordYjsSharedType = Y.Doc['share'] extends Map<string, infer SharedType> ? SharedType : never
 
 /** 创建可被多个 adapter 共享的内存 document history service。 */
 export function createMemoryPersistenceHistoryService(): JWordMemoryPersistenceHistoryService {
@@ -318,16 +343,27 @@ class MemoryPersistenceHistoryService implements JWordMemoryPersistenceHistorySe
 
 class MemoryPersistenceAdapter implements JWordPersistenceSnapshotAdapter {
   private readonly documents: Map<string, JWordMemoryPersistenceDocumentState>
+  private readonly restoreAppendBarrier: RestoreAppendBarrier
 
   /** 绑定内存 history service，默认保持单 adapter 独立状态。 */
   constructor(private readonly historyService: JWordMemoryPersistenceHistoryService) {
     this.documents = historyService.documents
+    this.restoreAppendBarrier = getRestoreAppendBarrier(historyService)
   }
 
   /** 追加一条 Yjs binary update 并生成一个可列出的历史版本。 */
   async appendUpdate(input: AppendJWordUpdateInput): Promise<AppendJWordUpdateResult> {
+    return this.restoreAppendBarrier.runAppend(input.documentId,
+      () => this.appendUpdateWithoutRestoreOverlap(input)
+    )
+  }
+
+  /** 在 restore 屏障内追加 update 与版本。 */
+  private async appendUpdateWithoutRestoreOverlap(input: AppendJWordUpdateInput): Promise<AppendJWordUpdateResult> {
     const state = this.ensureDocumentState(input.documentId)
-    const sequence = state.updates.length + 1
+
+    assertHistoryAppendAllowed(state.pendingRestore)
+    const sequence = getNextHistorySequence(state.updates)
     const versionId = `version-${sequence}`
     const createdAt = input.createdAt ?? new Date().toISOString()
     const updateBytes = copyBytes(input.update)
@@ -497,6 +533,38 @@ class MemoryPersistenceAdapter implements JWordPersistenceSnapshotAdapter {
 
   /** 先构建隔离预览，成功后再用单次事务替换目标文档可见内容。 */
   async restoreVersion(input: RestoreJWordVersionInput): Promise<RestoreJWordVersionResult> {
+    return this.restoreAppendBarrier.runRestore<RestoreJWordVersionResult>(
+      input.documentId,
+      () => ({ diagnostics: [createDiagnostic('PERSISTENCE_RESTORE_FAILED', input.documentId, input.versionId)] }),
+      () => this.restoreVersionWithoutAppendOverlap(input)
+    )
+  }
+
+  /** 在 append 屏障内执行 restore pending/finalize/recovery。 */
+  private async restoreVersionWithoutAppendOverlap(
+    input: RestoreJWordVersionInput
+  ): Promise<RestoreJWordVersionResult> {
+    const state = this.ensureDocumentState(input.documentId)
+    const recovered = await this.recoverPendingRestore(input, state)
+
+    if (recovered !== undefined) {
+      return recovered
+    }
+
+    const completed = recoverCompletedRestoreOperation({
+      documentId: input.documentId,
+      versionId: input.versionId,
+      targetDoc: input.targetDoc,
+      completion: state.completedRestore,
+      latestUpdate: state.updates.at(-1),
+      latestVersion: state.versions.at(-1),
+      origin: input.origin ?? 'jword-persistence-restore'
+    })
+
+    if (completed !== undefined) {
+      return completed
+    }
+
     const preview = await this.createPreview(input).catch(() => undefined)
 
     if (preview === undefined) {
@@ -511,19 +579,91 @@ class MemoryPersistenceAdapter implements JWordPersistenceSnapshotAdapter {
       }
     }
 
+    let prepared: {
+      readonly doc: Y.Doc
+      readonly hash: string
+      readonly beforeTargetHash: string
+      readonly pending: JWordRestorePending
+      readonly version: JWordVersionRecord
+    }
+
     try {
-      replaceDocumentContent(input.targetDoc, preview.doc, input.origin ?? 'jword-persistence-restore')
-      const restored = await this.appendRestoreVersion(input, input.targetDoc, preview.version)
-      return {
-        version: restored,
-        diagnostics: preview.diagnostics
+      const beforeTargetHash = hashYjsLogicalContent(input.targetDoc)
+      const doc = prepareDocumentContent(
+        input.targetDoc,
+        preview.doc,
+        state.updates.map((update) => update.update),
+        input.origin ?? 'jword-persistence-restore'
+      )
+      const hash = hashYjsLogicalContent(doc)
+      const restore = this.prepareRestoreVersion(input, state, doc, preview.version)
+      const pending = createRestorePending({
+        sourceVersionId: preview.version.versionId,
+        targetBeforeHash: beforeTargetHash,
+        preparedHash: hash,
+        update: restore.update,
+        version: restore.version
+      })
+      const committedDoc = createEmptyDocumentWithSharedTypes(doc)
+
+      Y.applyUpdate(committedDoc, restore.update.update)
+      if (hashYjsLogicalContent(committedDoc) !== hash) {
+        throw new Error('prepared 与 committed history 的逻辑内容不一致')
+      }
+
+      prepared = {
+        doc,
+        hash,
+        beforeTargetHash,
+        pending,
+        version: restore.version
       }
     } catch {
       return {
-        version: preview.version,
         diagnostics: [createDiagnostic('PERSISTENCE_RESTORE_FAILED', input.documentId, input.versionId)]
       }
     }
+
+    let pendingState: JWordMemoryPersistenceDocumentState
+
+    try {
+      pendingState = {
+        updates: [...state.updates],
+        versions: [...state.versions],
+        snapshots: [...state.snapshots],
+        pendingRestore: cloneRestorePending(prepared.pending)
+      }
+      this.documents.set(input.documentId, pendingState)
+    } catch {
+      return {
+        diagnostics: [createDiagnostic('PERSISTENCE_RESTORE_FAILED', input.documentId, input.versionId)]
+      }
+    }
+
+    return completePreparedRestore({
+      documentId: input.documentId,
+      versionId: input.versionId,
+      targetDoc: input.targetDoc,
+      preparedDoc: prepared.doc,
+      pending: prepared.pending,
+      state: pendingState,
+      origin: input.origin ?? 'jword-persistence-restore',
+      successDiagnostics: preview.diagnostics,
+      /** 取消 target 应用前失败的 memory pending。 */
+      cancelPending: (currentState) => this.cancelPendingRestore(input.documentId, currentState),
+      /** 持久化 memory target-applied phase。 */
+      markTargetApplied: (currentState, pending) => this.markPendingTargetApplied(
+        input.documentId,
+        currentState,
+        pending
+      ),
+      /** finalize memory pending 到普通历史。 */
+      finalizePending: (currentState, pending) => this.finalizePendingRestore(
+        input.documentId,
+        currentState,
+        pending
+      )
+    })
   }
 
   /** 将 compaction 边界版本保存为 snapshot，并把更早版本标记为不可恢复。 */
@@ -564,56 +704,112 @@ class MemoryPersistenceAdapter implements JWordPersistenceSnapshotAdapter {
     }
   }
 
-  /** 记录一次成功恢复产生的新版本。 */
-  private appendRestoreVersion(
+  /** 在临时 history state 中准备一次 restore update 与版本记录。 */
+  private prepareRestoreVersion(
     input: RestoreJWordVersionInput,
-    targetDoc: Y.Doc,
+    state: JWordMemoryPersistenceDocumentState,
+    preparedDoc: Y.Doc,
     sourceVersion: JWordVersionRecord
-  ): JWordVersionRecord {
-    const state = this.ensureDocumentState(input.documentId)
-    const sequence = state.updates.length + 1
-    const versionId = `version-${sequence}`
-    const updateBytes = Y.encodeStateAsUpdate(targetDoc)
-    const stateVector = encodeStateVectorFromUpdate(updateBytes)
-    const sha256 = hashBytes(updateBytes)
-    const createdAt = new Date().toISOString()
-    const origin = input.origin ?? 'version-restore'
-    const label = `restore:${sourceVersion.label ?? sourceVersion.versionId}`
-    const update: JWordUpdateLogRecord = {
-      updateId: `update-${sequence}`,
+  ): { readonly update: JWordUpdateLogRecord, readonly version: JWordVersionRecord } {
+    return createRestoreMetadata({
       documentId: input.documentId,
-      versionId,
-      update: updateBytes,
-      byteLength: updateBytes.byteLength,
-      sha256,
-      stateVector,
-      createdAt,
-      sequence,
-      label,
-      origin,
-      ...(sourceVersion.roomId === undefined ? {} : { roomId: sourceVersion.roomId }),
-      ...(sourceVersion.clientId === undefined ? {} : { clientId: sourceVersion.clientId }),
-      ...(sourceVersion.authorId === undefined ? {} : { authorId: sourceVersion.authorId })
-    }
-    const version: JWordVersionRecord = {
-      versionId,
-      documentId: input.documentId,
-      createdAt,
-      updateCount: sequence,
-      label,
-      origin,
-      byteLength: update.byteLength,
-      sha256,
-      stateVector: copyBytes(stateVector),
-      restoreSourceVersionId: sourceVersion.versionId,
-      ...(update.roomId === undefined ? {} : { roomId: update.roomId }),
-      ...(update.clientId === undefined ? {} : { clientId: update.clientId }),
-      ...(update.authorId === undefined ? {} : { authorId: update.authorId })
+      sequence: getNextHistorySequence(state.updates),
+      preparedDoc,
+      sourceVersion,
+      input
+    })
+  }
+
+  /** 检查并完成上一次未 finalize 的 pending restore。 */
+  private async recoverPendingRestore(
+    input: RestoreJWordVersionInput,
+    state: JWordMemoryPersistenceDocumentState
+  ): Promise<RestoreJWordVersionResult | undefined> {
+    const pending = state.pendingRestore
+
+    if (pending === undefined) {
+      return undefined
     }
 
-    state.updates.push(update)
-    state.versions.push(version)
-    return version
+    return recoverPendingRestoreOperation({
+      documentId: input.documentId,
+      versionId: input.versionId,
+      targetDoc: input.targetDoc,
+      pending,
+      state,
+      origin: input.origin ?? 'jword-persistence-restore',
+      /** 取消 target 尚未应用的 memory pending。 */
+      cancelPending: (currentState) => this.cancelPendingRestore(input.documentId, currentState),
+      /** 持久化 memory recovery 的 target-applied phase。 */
+      markTargetApplied: (currentState, appliedPending) => this.markPendingTargetApplied(
+        input.documentId,
+        currentState,
+        appliedPending
+      ),
+      /** finalize memory recovery pending 到普通历史。 */
+      finalizePending: (currentState, appliedPending) => this.finalizePendingRestore(
+        input.documentId,
+        currentState,
+        appliedPending
+      )
+    })
+  }
+
+  /** 持久化 target 已应用阶段，并返回供 finalize 使用的新状态。 */
+  private markPendingTargetApplied(
+    documentId: string,
+    state: JWordMemoryPersistenceDocumentState,
+    pending: JWordRestorePending
+  ): JWordMemoryPersistenceDocumentState | undefined {
+    const appliedState: JWordMemoryPersistenceDocumentState = {
+      updates: [...state.updates],
+      versions: [...state.versions],
+      snapshots: [...state.snapshots],
+      pendingRestore: cloneRestorePending(pending)
+    }
+
+    try {
+      this.documents.set(documentId, appliedState)
+      return appliedState
+    } catch {
+      return undefined
+    }
+  }
+
+  /** 取消 target 应用前失败的 pending restore。 */
+  private cancelPendingRestore(
+    documentId: string,
+    state: JWordMemoryPersistenceDocumentState
+  ): boolean {
+    try {
+      this.documents.set(documentId, {
+        updates: [...state.updates],
+        versions: [...state.versions],
+        snapshots: [...state.snapshots]
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** finalize pending restore，使其 update/version 进入普通历史列表。 */
+  private finalizePendingRestore(
+    documentId: string,
+    state: JWordMemoryPersistenceDocumentState,
+    pending: JWordRestorePending
+  ): boolean {
+    try {
+      this.documents.set(documentId, {
+        updates: [...state.updates, pending.update],
+        versions: [...state.versions, pending.version],
+        snapshots: [...state.snapshots],
+        completedRestore: createRestoreCompletion(pending)
+      })
+      return true
+    } catch {
+      return false
+    }
   }
 
   /** 读取或初始化某个 document 的内存状态。 */
@@ -640,11 +836,6 @@ class UnavailableIndexedDbOfflineAdapter implements JWordOfflineAdapter {
   }
 }
 
-/** 判断诊断是否允许调用方使用降级结果继续预览。 */
-function isRecoverableDiagnostic(diagnostic: JWordPersistenceDiagnostic): boolean {
-  return diagnostic.recoverable
-}
-
 /** 判断诊断是否必须阻断 restore 写入当前文档。 */
 function isBlockingDiagnostic(diagnostic: JWordPersistenceDiagnostic): boolean {
   return !diagnostic.recoverable
@@ -667,27 +858,6 @@ function encodeStateVectorFromUpdate(update: Uint8Array): Uint8Array {
 /** 生成标准 SHA-256 十六进制摘要。 */
 function hashBytes(bytes: Uint8Array): string {
   return hashSha256Bytes(bytes)
-}
-
-/** 用诊断 metadata 生成运行时 diagnostic。 */
-function createDiagnostic(
-  code: JWordPersistenceDiagnosticCode,
-  documentId?: string,
-  versionId?: string,
-  snapshotId?: string
-): JWordPersistenceDiagnostic {
-  const metadata = PERSISTENCE_DIAGNOSTIC_CODE_METADATA[code]
-
-  return {
-    code,
-    severity: metadata.severity,
-    message: metadata.description,
-    recoverable: metadata.recoverable,
-    ...('fallback' in metadata ? { fallback: metadata.fallback } : {}),
-    ...(documentId === undefined ? {} : { documentId }),
-    ...(versionId === undefined ? {} : { versionId }),
-    ...(snapshotId === undefined ? {} : { snapshotId })
-  }
 }
 
 /** 为不存在的版本返回占位版本，保持 createSnapshot 失败结果结构稳定。 */
@@ -826,162 +996,4 @@ function findNearestSnapshot(
   return state.snapshots
     .filter((snapshot) => snapshot.updateCount <= version.updateCount)
     .sort((left, right) => right.updateCount - left.updateCount)[0]
-}
-
-/** 用 preview 文档的顶层共享类型替换目标文档的可见内容。 */
-function replaceDocumentContent(targetDoc: Y.Doc, previewDoc: Y.Doc, origin: string): void {
-  targetDoc.transact(() => {
-    for (const name of targetDoc.share.keys()) {
-      const targetType = targetDoc.share.get(name)
-
-      if (targetType !== undefined) {
-        replaceSharedType(name, targetType, previewDoc)
-      }
-    }
-
-    for (const [name, previewType] of previewDoc.share) {
-      if (targetDoc.share.has(name)) {
-        continue
-      }
-      createAndFillSharedType(targetDoc, name, previewType)
-    }
-  }, origin)
-}
-
-/** 按 Yjs 顶层共享类型替换内容。 */
-function replaceSharedType(name: string, targetType: JWordYjsSharedType, previewDoc: Y.Doc): void {
-  if (isYText(targetType)) {
-    const previewType = previewDoc.share.has(name) ? previewDoc.getText(name) : undefined
-    targetType.delete(0, targetType.length)
-    if (previewType !== undefined) {
-      targetType.insert(0, previewType.toString())
-    }
-    return
-  }
-
-  if (isYArray(targetType)) {
-    const previewType = previewDoc.share.has(name) ? previewDoc.getArray(name) : undefined
-    targetType.delete(0, targetType.length)
-    if (previewType !== undefined) {
-      targetType.insert(0, cloneArrayValues(previewType))
-    }
-    return
-  }
-
-  if (isYMap(targetType)) {
-    const previewType = previewDoc.share.has(name) ? previewDoc.getMap(name) : undefined
-    for (const key of Array.from(targetType.keys())) {
-      targetType.delete(key)
-    }
-    if (previewType !== undefined) {
-      for (const [key, value] of previewType) {
-        targetType.set(key, cloneSharedValue(value))
-      }
-    }
-  }
-}
-
-/** 创建目标文档缺失的顶层共享类型并填充 preview 内容。 */
-function createAndFillSharedType(targetDoc: Y.Doc, name: string, previewType: JWordYjsSharedType): void {
-  if (isYText(previewType)) {
-    targetDoc.getText(name).insert(0, previewType.toString())
-    return
-  }
-
-  if (isYArray(previewType)) {
-    targetDoc.getArray(name).insert(0, cloneArrayValues(previewType))
-    return
-  }
-
-  if (isYMap(previewType)) {
-    const target = targetDoc.getMap(name)
-    for (const [key, value] of previewType) {
-      target.set(key, cloneSharedValue(value))
-    }
-    return
-  }
-
-  const previewText = targetDoc.share.has(name) ? undefined : targetDoc.getText(name)
-  if (previewText !== undefined) {
-    previewText.insert(0, previewType.toString())
-  }
-}
-
-/** 递归克隆 Y.Array 内容，避免把已挂载的 preview 类型插入目标文档。 */
-function cloneArrayValues(array: Y.Array<unknown>): unknown[] {
-  return array.toArray().map(cloneSharedValue)
-}
-
-/** 递归克隆可嵌套的 Yjs 共享类型或普通 JSON 值。 */
-function cloneSharedValue(value: unknown): unknown {
-  if (isYText(value)) {
-    const cloned = new Y.Text()
-
-    if (value.length > 0) {
-      cloned.insert(0, value.toString())
-    }
-
-    return cloned
-  }
-
-  if (isYArray(value)) {
-    const cloned = new Y.Array<unknown>()
-    const values = cloneArrayValues(value)
-
-    if (values.length > 0) {
-      cloned.insert(0, values)
-    }
-
-    return cloned
-  }
-
-  if (isYMap(value)) {
-    const cloned = new Y.Map<unknown>()
-
-    for (const [key, child] of value) {
-      cloned.set(key, cloneSharedValue(child))
-    }
-
-    return cloned
-  }
-
-  return value
-}
-
-/** 判断共享类型是否按 Y.Text API 工作。 */
-function isYText(value: unknown): value is Y.Text {
-  return value instanceof Y.Text || (
-    typeof value === 'object'
-    && value !== null
-    && 'insert' in value
-    && 'delete' in value
-    && 'length' in value
-    && 'toString' in value
-    && !('toArray' in value)
-    && !('keys' in value)
-  )
-}
-
-/** 判断共享类型是否按 Y.Array API 工作。 */
-function isYArray(value: unknown): value is Y.Array<unknown> {
-  return value instanceof Y.Array || (
-    typeof value === 'object'
-    && value !== null
-    && 'insert' in value
-    && 'delete' in value
-    && 'length' in value
-    && 'toArray' in value
-  )
-}
-
-/** 判断共享类型是否按 Y.Map API 工作。 */
-function isYMap(value: unknown): value is Y.Map<unknown> {
-  return value instanceof Y.Map || (
-    typeof value === 'object'
-    && value !== null
-    && 'set' in value
-    && 'delete' in value
-    && 'keys' in value
-    && Symbol.iterator in value
-  )
 }

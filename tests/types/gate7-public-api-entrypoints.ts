@@ -104,10 +104,19 @@ import {
 } from '@4xian/jword-collab-server'
 import {
   GATE5_FORMAT_FEATURES,
+  JWORD_FEATURES,
+  activateJWordLicense,
   assertJWordFeatureEntitled,
+  assertJWordFeatureLicensed,
+  createJWordLicenseTransfer,
+  isJWordFeatureLicensed,
+  type JWordFeature,
+  type JWordLicense,
   type JWordLicenseDiagnosticCode,
   type JWordLicenseEntitlement,
-  type JWordLicenseFeatureKey
+  type JWordLicenseFeatureKey,
+  type JWordLicenseTransfer,
+  type JWordLicenseToken
 } from '@4xian/jword-license'
 import {
   JWordReactEditor,
@@ -261,3 +270,8 @@ expectType<typeof assertJWordFeatureEntitled>(assertJWordFeatureEntitled)
 expectType<JWordLicenseFeatureKey>(GATE5_FORMAT_FEATURES.docxImport)
 expectType<JWordLicenseEntitlement>(undefined as unknown as JWordLicenseEntitlement)
 expectType<JWordLicenseDiagnosticCode>(undefined as unknown as JWordLicenseDiagnosticCode)
+expectType<JWordFeature>(JWORD_FEATURES.formats)
+expectType<JWordLicense>(activateJWordLicense(undefined as unknown as JWordLicenseToken))
+expectType<JWordLicenseTransfer>(createJWordLicenseTransfer(undefined as unknown as JWordLicense))
+expectType<boolean>(isJWordFeatureLicensed(undefined, JWORD_FEATURES.formats))
+expectType<void>(assertJWordFeatureLicensed(undefined, JWORD_FEATURES.formats))

@@ -274,7 +274,11 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorFormattingFaca
 
       const result = this.pipeline.run(command, metadata)
 
-      if (!hasSelectionAfter) {
+      if (shouldTrackHistory && result.dirty === false) {
+        this.history.discardNextTransactionMetadata(historyScope)
+      }
+
+      if (!hasSelectionAfter || result.dirty === false) {
         this.refreshMountedSelectionRuntime(selectionBefore)
       }
       this.emitSelectionChange()

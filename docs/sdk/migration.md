@@ -22,7 +22,7 @@ collab client/server 版本策略必须 fail-fast：`COLLAB_PROTOCOL_MISMATCH`�
 
 ## License contract migration
 
-license token schema 变更必须保留明确诊断：签名失败为 `JWORD_LICENSE_SIGNATURE_INVALID`，feature key 缺失为 `JWORD_FEATURE_NOT_ENTITLED`，server unavailable 为 `JWORD_LICENSE_SERVER_UNAVAILABLE`。旧 fixture 签名只能在显式 insecure test-only 选项下接受。
+license token schema 变更必须保留明确诊断：envelope、canonical claims 或期限关系错误为 `JWORD_LICENSE_TOKEN_INVALID`，不受信 issuer 为 `JWORD_LICENSE_ISSUER_INVALID`，未知 keyId 为 `JWORD_LICENSE_KEY_UNKNOWN`，受信 key 的 Ed25519 验签失败为 `JWORD_LICENSE_SIGNATURE_INVALID`，feature key 缺失为 `JWORD_FEATURE_NOT_ENTITLED`。JWL2 V1 不访问在线授权服务；旧 JWL1 server 状态与签名路径继续 fail closed，旧 fixture 签名只能在显式 insecure test-only 选项下接受。
 
 ## 验证
 

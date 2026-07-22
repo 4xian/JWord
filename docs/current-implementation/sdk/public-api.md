@@ -14,7 +14,7 @@
 
 - 免费基础：`@4xian/jword-core`、`@4xian/jword-ui`、`@4xian/jword-native`。
 - 高级格式：`@4xian/jword-docx`、`@4xian/jword-pdf`、`@4xian/jword-license`。
-- 高级协作：`@4xian/jword-collab`、`@4xian/jword-collab-server`、`@4xian/jword-persistence`。
+- 高级协作客户面：`@4xian/jword-collab` 及浏览器侧依赖；`@4xian/jword-collab-server` 仅作为版本化 Docker 镜像内部实现，不是客户应用 npm 集成面。
 - 集成扩展：`@4xian/jword-react`、`@4xian/jword-vue`、`@4xian/jword-devtools`。
 
 所有包的 `exports` 都指向 `dist`，不公开 `src` 子路径。`docx`、`pdf`、`native` 额外公开 `./worker`；`collab` 额外公开 `./experimental`。

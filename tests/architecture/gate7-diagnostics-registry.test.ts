@@ -23,7 +23,7 @@ const diagnosticDefinitionFiles = [
   'packages/docx/src/diagnostics.ts',
   'packages/pdf/src/diagnostics.ts',
   'packages/native/src/types.ts',
-  'packages/license/src/index.ts'
+  'packages/license/src/errors.ts'
 ] as const
 
 const nonDiagnosticTokens = new Set([

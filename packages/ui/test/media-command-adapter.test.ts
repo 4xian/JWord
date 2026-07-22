@@ -7,10 +7,10 @@
  */
 
 import { describe, expect, test } from 'vitest'
-import { createEditor, createSelectionState, type Resource } from '@4xian/jword-core'
-import { createCoreMediaCommandAdapter } from '../src/index'
+import { createEditor, createSelectionState } from '@4xian/jword-core'
+import { createCoreMediaCommandAdapter, type JWordMediaResource } from '../src/index'
 
-const INLINE_RESOURCE: Resource = {
+const INLINE_RESOURCE: JWordMediaResource = {
   kind: 'resource',
   id: 'media-adapter-inline-image',
   mime: 'image/png',

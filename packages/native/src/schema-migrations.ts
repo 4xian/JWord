@@ -6,12 +6,10 @@
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
-import type { Document } from '@4xian/jword-core'
-
 import { JWORD_NATIVE_SCHEMA_VERSION } from './types.js'
-import { createDiagnostic, createPackageError, createWarning } from './diagnostics.js'
+import { createPackageError, createWarning } from './diagnostics.js'
+import type { VersionedJWordDocument } from './document-schema.js'
 import type {
-  JWordPackageDiagnostic,
   JWordPackageMigrationReport
 } from './types.js'
 
@@ -19,7 +17,7 @@ interface SchemaMigrationStep {
   readonly id: string
   readonly from: number
   readonly to: number
-  readonly migrate: (document: Document) => Document
+  readonly migrate: (document: unknown) => unknown
 }
 
 const SCHEMA_MIGRATION_STEPS: readonly SchemaMigrationStep[] = [
@@ -28,21 +26,36 @@ const SCHEMA_MIGRATION_STEPS: readonly SchemaMigrationStep[] = [
     from: 0,
     to: 1,
     migrate: migrateSchema0To1
+  },
+  {
+    id: 'schema-1-to-2',
+    from: 1,
+    to: 2,
+    migrate: migrateSchema1To2
   }
 ]
 
-/** 执行 schema migration。 */
-export function migrateDocument(
-  document: Document,
+/** 对已通过来源版本 parser 的 document 执行 schema migration。 */
+export function migrateJWordDocument(
+  document: VersionedJWordDocument,
   sourceVersion: number,
   requestId?: string
 ): {
-  readonly document: Document
+  readonly document: VersionedJWordDocument
   readonly report: JWordPackageMigrationReport
 } {
   const appliedSteps: string[] = []
-  let currentDocument = document
+  let currentDocument = document.value
   let currentVersion = sourceVersion
+
+  if (document.schemaVersion !== sourceVersion) {
+    throw createPackageError(
+      'JWORD_NATIVE_SCHEMA_UNSUPPORTED',
+      'JWORD_NATIVE_SCHEMA_UNSUPPORTED',
+      requestId,
+      'manifest.json'
+    )
+  }
 
   while (currentVersion !== JWORD_NATIVE_SCHEMA_VERSION) {
     const step = findSchemaMigrationStep(currentVersion)
@@ -82,7 +95,10 @@ export function migrateDocument(
       ]
 
   return {
-    document: currentDocument,
+    document: {
+      schemaVersion: currentVersion,
+      value: currentDocument
+    },
     report: {
       sourceVersion,
       targetVersion: JWORD_NATIVE_SCHEMA_VERSION,
@@ -92,50 +108,19 @@ export function migrateDocument(
   }
 }
 
-/** 检查 schema migration 是否存在可达路径。 */
-export function inspectSchemaMigrationSupport(
-  sourceVersion: number,
-  diagnostics: JWordPackageDiagnostic[],
-  requestId?: string
-): void {
-  if (sourceVersion >= JWORD_NATIVE_SCHEMA_VERSION || hasSchemaMigrationPath(sourceVersion)) {
-    return
-  }
-
-  diagnostics.push(createDiagnostic({
-    code: 'JWORD_NATIVE_SCHEMA_UNSUPPORTED',
-    severity: 'error',
-    recoverable: false,
-    message: `schemaVersion ${sourceVersion} 无法迁移到当前 schema ${JWORD_NATIVE_SCHEMA_VERSION}`,
-    entry: 'manifest.json',
-    requestId
-  }))
-}
-
-/** 判断 schema migration 是否可达当前版本。 */
-function hasSchemaMigrationPath(sourceVersion: number): boolean {
-  let currentVersion = sourceVersion
-
-  while (currentVersion !== JWORD_NATIVE_SCHEMA_VERSION) {
-    const step = findSchemaMigrationStep(currentVersion)
-
-    if (step === undefined || step.to <= currentVersion || step.to > JWORD_NATIVE_SCHEMA_VERSION) {
-      return false
-    }
-
-    currentVersion = step.to
-  }
-
-  return true
-}
-
 /** 查找从指定 schema 版本出发的迁移步骤。 */
 function findSchemaMigrationStep(sourceVersion: number): SchemaMigrationStep | undefined {
   return SCHEMA_MIGRATION_STEPS.find((step) => step.from === sourceVersion)
 }
 
 /** 执行 schema 0 到 1 的显式空迁移。 */
-function migrateSchema0To1(document: Document): Document {
+function migrateSchema0To1(document: unknown): unknown {
   // schema 0 与 1 的 canonical document 结构一致，此步骤仅冻结迁移链语义。
+  return document
+}
+
+/** 执行 schema 1 到 2 的显式空迁移。 */
+function migrateSchema1To2(document: unknown): unknown {
+  // schema 2 新增 package 逻辑资源引用，旧 document 无需改写即可进入当前 parser。
   return document
 }

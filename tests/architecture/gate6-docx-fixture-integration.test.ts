@@ -19,13 +19,13 @@ import {
   convertDocxImportDocumentToCoreDocument,
   importDocx
 } from '@4xian/jword-docx'
-import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
+import type { JWordLicenseEntitlement } from '@4xian/jword-license'
 import {
   createMemoryPersistenceAdapter,
   createUnavailableIndexedDbOfflineAdapter
 } from '@4xian/jword-persistence'
 import { describe, expect, it } from 'vitest'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../fixtures/license/test-only-entitlement-fixture.mjs'
 
 describe('Gate 6 DOCX imported fixture integration', () => {
   it('loads the T1 imported DOCX fixture into the same Y.Doc path for collab, history and auto insert', async () => {
@@ -195,22 +195,11 @@ async function loadGate6DocxFixture(fixtureId: string): Promise<Gate6DocxFixture
   }
 }
 
-/** 创建 Gate 6 DOCX fixture 导入测试使用的有效授权。 */
+/** 创建 Gate 6 DOCX fixture 业务测试使用的 test-only entitlement。 */
 function createGate6DocxFixtureLicense(): JWordLicenseEntitlement {
-  const entitlement: JWordLicenseSignaturePayload = {
-    customerId: 'customer-gate6-docx-fixture',
-    licenseToken: 'token-gate6-docx-fixture',
-    features: ['docx.import'],
-    issuer: 'jword-test-issuer',
-    issuedAt: '2026-05-01T00:00:00Z',
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid'
-  }
-
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
+  return createTestOnlyJWordLicenseEntitlement(['docx.import'], {
+    customerId: 'customer-gate6-docx-fixture'
+  })
 }
 
 /** 从 registry 中读取指定 DOCX fixture。 */

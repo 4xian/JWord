@@ -30,7 +30,12 @@
   },
   "dependencies": {
     "@4xian/jword-core": "workspace:*",
-    "@4xian/jword-license": "workspace:*",
     "jszip": "3.10.1"
+  },
+  "peerDependencies": {
+    "@4xian/jword-license": "workspace:*"
+  },
+  "devDependencies": {
+    "@4xian/jword-license": "workspace:*"
   }
 }

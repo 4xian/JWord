@@ -22,9 +22,9 @@ export function createLicenseDiagnostic(error: unknown, clientId: string): JWord
   const metadata = JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA[licenseCode]
 
   return createCollabDiagnostic(
-    licenseCode.replace('JWORD_', 'COLLAB_'),
+    licenseCode,
     metadata.severity,
-    metadata.description,
+    licenseCode,
     metadata.recoverable,
     clientId
   )

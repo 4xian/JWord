@@ -501,6 +501,22 @@ describe('@4xian/jword-docx public API basics', () => {
         requestId: 'docx-worker-1'
       }
     })
+    const legacyLicenseError = {
+      name: 'JWordLicenseError',
+      code: 'JWORD_LICENSE_SIGNATURE_INVALID',
+      message: 'JWORD_LICENSE_SIGNATURE_INVALID: docx.import',
+      requestId: 'docx-worker-license-1',
+      feature: 'docx.import',
+      customerId: 'customer-must-not-cross-worker'
+    } satisfies DocxError & { readonly customerId: string }
+
+    expect(createDocxErrorEvent('docx-worker-license-1', legacyLicenseError).error).toEqual({
+      name: 'JWordLicenseError',
+      code: 'JWORD_LICENSE_SIGNATURE_INVALID',
+      message: 'JWORD_LICENSE_SIGNATURE_INVALID: docx.import',
+      requestId: 'docx-worker-license-1',
+      feature: 'docx.import'
+    })
     expect(createDocxTransferables(buffer)).toEqual([buffer])
     expect(createDocxTransferables(new Uint8Array(buffer))).toEqual([buffer])
   })

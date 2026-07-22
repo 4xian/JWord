@@ -290,16 +290,16 @@ export function createJWordCollabFeatureGate(
       feature
     }
   } catch (error) {
-    const code = readCollabLicenseDiagnosticCode(error)
-    const metadata = JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA[readLicenseDiagnosticCode(error)]
+    const licenseCode = readLicenseDiagnosticCode(error)
+    const metadata = JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA[licenseCode]
 
     return {
       ok: false,
       feature,
       diagnostic: createDiagnostic(
-        code,
+        licenseCode,
         metadata.severity,
-        metadata.description,
+        licenseCode,
         metadata.recoverable
       )
     }
@@ -722,11 +722,6 @@ function createDiagnostic(
       recoverable,
       clientId
     }
-}
-
-// 读取授权错误对应的协作诊断码。
-function readCollabLicenseDiagnosticCode(error: unknown): string {
-  return readLicenseDiagnosticCode(error).replace('JWORD_', 'COLLAB_')
 }
 
 // 读取公开授权错误码，未知错误统一按缺少授权处理。

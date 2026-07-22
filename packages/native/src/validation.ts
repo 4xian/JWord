@@ -16,12 +16,14 @@ import {
   type JWordPackageErrorCode,
   type JWordPackageManifest
 } from './types.js'
+import { createDiagnostic } from './diagnostics.js'
 import { isRecord } from './utils.js'
 
 interface JWordPackageIntegrityInput {
   readonly manifest: JWordPackageManifest
   readonly document?: Document
   readonly checksums?: JWordPackageChecksums
+  readonly verifiedResourceEntries?: ReadonlySet<string>
   readonly requestId?: string
 }
 
@@ -50,6 +52,18 @@ export function inspectJWordPackageIntegrity(input: JWordPackageIntegrityInput):
 
   if (input.document !== undefined) {
     inspectDocumentResourceReferences(input.document, input.manifest, diagnostics, input.requestId)
+
+    if (input.manifest.formatVersion === JWORD_NATIVE_FORMAT_VERSION) {
+      inspectPackedResourceReferences(
+        input.document,
+        input.manifest,
+        input.verifiedResourceEntries ?? new Set(),
+        diagnostics,
+        input.requestId
+      )
+    } else {
+      inspectLegacyResourceSources(input.document, diagnostics, input.requestId)
+    }
   }
 
   return { diagnostics }
@@ -61,7 +75,7 @@ function inspectManifestVersions(
   diagnostics: JWordPackageDiagnostic[],
   requestId?: string
 ): void {
-  if (manifest.formatVersion !== JWORD_NATIVE_FORMAT_VERSION) {
+  if (manifest.formatVersion !== 1 && manifest.formatVersion !== JWORD_NATIVE_FORMAT_VERSION) {
     diagnostics.push(createErrorDiagnostic(
       'JWORD_NATIVE_FORMAT_UNSUPPORTED',
       `formatVersion ${manifest.formatVersion} 不受当前 reader 支持`,
@@ -86,6 +100,98 @@ function inspectManifestVersions(
       'manifest.json',
       requestId
     ))
+  }
+}
+
+/** 拒绝旧格式中无法由旧 reader 理解的格式 2 逻辑资源引用。 */
+function inspectLegacyResourceSources(
+  document: Document,
+  diagnostics: JWordPackageDiagnostic[],
+  requestId?: string
+): void {
+  if ((document.resources ?? []).some((resource) => resource.source.kind === 'packedResource')) {
+    diagnostics.push(createErrorDiagnostic(
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      'JWORD_NATIVE_DOCUMENT_INVALID',
+      'document.json',
+      requestId
+    ))
+  }
+}
+
+/** 校验格式 2 的 document 逻辑资源引用与 manifest 及已验证 entry 一致。 */
+function inspectPackedResourceReferences(
+  document: Document,
+  manifest: JWordPackageManifest,
+  verifiedResourceEntries: ReadonlySet<string>,
+  diagnostics: JWordPackageDiagnostic[],
+  requestId?: string
+): void {
+  const documentResources = new Map((document.resources ?? []).map((resource) => [resource.id, resource]))
+  const manifestResources = new Map(manifest.resources.map((resource) => [resource.id, resource]))
+
+  for (const resource of document.resources ?? []) {
+    const manifestResource = manifestResources.get(resource.id)
+
+    if (manifestResource === undefined) {
+      diagnostics.push(createErrorDiagnostic(
+        'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+        'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+        'document.json',
+        requestId
+      ))
+      return
+    }
+
+    if (manifestResource.mime !== resource.mime) {
+      diagnostics.push(createErrorDiagnostic(
+        'JWORD_NATIVE_RESOURCE_MIME_MISMATCH',
+        'JWORD_NATIVE_RESOURCE_MIME_MISMATCH',
+        'document.json',
+        requestId
+      ))
+      return
+    }
+
+    if (resource.source.kind === 'packedResource') {
+      if (
+        !manifestResource.packed
+        || manifestResource.path !== resource.source.url
+        || !verifiedResourceEntries.has(resource.source.url)
+      ) {
+        diagnostics.push(createErrorDiagnostic(
+          'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+          'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+          'document.json',
+          requestId
+        ))
+        return
+      }
+
+      continue
+    }
+
+    if (manifestResource.packed) {
+      diagnostics.push(createErrorDiagnostic(
+        'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+        'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+        'document.json',
+        requestId
+      ))
+      return
+    }
+  }
+
+  for (const manifestResource of manifest.resources) {
+    if (!documentResources.has(manifestResource.id)) {
+      diagnostics.push(createErrorDiagnostic(
+        'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+        'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+        'document.json',
+        requestId
+      ))
+      return
+    }
   }
 }
 
@@ -163,7 +269,7 @@ function inspectDocumentResourceReferences(
       diagnostics.push(createErrorDiagnostic(
         'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
         `document 引用了未在 manifest.resources 声明的资源 ${resourceId}`,
-        resourceId,
+        'document.json',
         requestId
       ))
     }
@@ -214,16 +320,16 @@ function collectNestedResourceIds(input: unknown, references: Set<string>): void
 /** 创建不可恢复错误诊断。 */
 function createErrorDiagnostic(
   code: JWordPackageErrorCode,
-  message: string,
+  _message: string,
   entry: string,
   requestId?: string
 ): JWordPackageDiagnostic {
-  return {
+  return createDiagnostic({
     code: code as JWordPackageDiagnosticCode,
     severity: 'error',
     recoverable: false,
-    message,
+    message: code,
     entry,
     ...(requestId === undefined ? {} : { requestId })
-  }
+  })
 }

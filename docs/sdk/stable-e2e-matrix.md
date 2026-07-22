@@ -11,7 +11,7 @@
 | Vue 2 direct integration demo | `examples/vue2` | `pnpm --filter @4xian/jword-example-vue2 typecheck && pnpm --filter @4xian/jword-example-vue2 build` |
 | native save/open | `@4xian/jword-native` | `pnpm exec vitest run tests/architecture/gate7-free-quickstart.test.ts --reporter=verbose` |
 | DOCX/PDF | `@4xian/jword-docx` / `@4xian/jword-pdf` | Gate 5 fixture diff、PDF visual report、worker capability test |
-| collab client/server | `@4xian/jword-collab` / `@4xian/jword-collab-server` | Gate 6 collab server/client focused tests |
+| collab browser SDK / Docker server | `@4xian/jword-collab` / 镜像内部 `@4xian/jword-collab-server` | Gate 6 client/server focused tests；LIC-309 后增加正式镜像验收 |
 | plugin | `@4xian/jword-core` plugin host | `pnpm exec playwright test examples/vanilla/tests/gate7-plugin-error.e2e.ts --project=chromium` |
 | release/no-alias | local tarball external project | `node tools/release/check-gate7-third-party-smoke.mjs` |
 
@@ -29,6 +29,8 @@
 ## 浏览器矩阵
 
 Playwright Chromium / Firefox / WebKit 最新版是自动回归矩阵；最低版本承诺以 [`browser-support.md`](./browser-support.md) 为准。
+
+License 的当前三浏览器和 Dedicated Worker 自动证据归 `LIC-107B1`；`LIC-107B2` 的 Node 20.19.0 已通过，Chrome 100、Edge 100、Firefox 128、Safari 16.4 真实最低版本人工认证为 Deferred。该状态不阻断内部阶段，但完成前不得对外宣称最低版本已经实测认证。
 
 ## 收口规则
 

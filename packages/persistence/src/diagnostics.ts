@@ -43,6 +43,12 @@ export const PERSISTENCE_DIAGNOSTIC_CODE_METADATA = {
     severity: 'error',
     description: '版本恢复在隔离文档构建阶段失败，当前文档未写入。',
     recoverable: false
+  },
+  PERSISTENCE_RESTORE_RECOVERY_REQUIRED: {
+    severity: 'error',
+    description: '版本恢复已留下待恢复操作，需要重试以完成或修复恢复。',
+    recoverable: true,
+    fallback: 'retry-restore-recovery'
   }
 } as const satisfies Record<string, JWordPersistenceDiagnosticCodeMetadata>
 

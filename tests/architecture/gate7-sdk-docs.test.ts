@@ -101,7 +101,7 @@ const requiredDocumentTokens: Readonly<Record<keyof typeof docs, readonly string
     'React wrapper',
     'Vue wrapper',
     'DOCX/PDF',
-    'collab client/server',
+    'collab browser SDK / Docker server',
     'release/no-alias',
     'node tools/release/check-gate7-third-party-smoke.mjs'
   ]

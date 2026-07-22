@@ -4,7 +4,7 @@
 
 JWord 已具备编辑器 core、UI、native、DOCX/PDF、协作、持久化、License 和框架 wrapper，但以下闭环仍未完成：
 
-- 生产 License 信任根和 JWL2 runtime。
+- License 遗留 insecure fixture、旧调用方迁移和最低浏览器人工认证。
 - 不可信 `.jword` 文件资源预算和严格 schema 校验。
 - 原子恢复、资源重开和远端纯删除 update 的投影刷新。
 - 可安装 artifact、第三方消费、发布 metadata 和回滚证据。
@@ -16,7 +16,7 @@ JWord 已具备编辑器 core、UI、native、DOCX/PDF、协作、持久化、Li
 
 ## 当前 P0
 
-1. `SEC-01`：默认验签公钥对应仓库公开测试私钥，商业 token 可伪造。
+1. `SEC-01`：生产 trust root 和 JWL2 runtime 已收口，但遗留 insecure fixture 与旧调用方尚未迁移；最低浏览器人工认证延期为发布前门禁。
 2. `SEC-02/COLLAB-01/COLLAB-02`：协作 admission 无真实凭据，history 作者和时间来自客户端 body。
 3. `SEC-03/FMT-01`：`.jword` 解压没有输入、entry、解压体积、压缩比和 JSON 预算。
 4. `SEC-04/PERS-01`：restore 先修改目标文档再持久化，失败后状态不一致。
@@ -33,7 +33,7 @@ JWord 已具备编辑器 core、UI、native、DOCX/PDF、协作、持久化、Li
 
 ### Base + Professional Editing + Formats
 
-需要完成 License Phase 1、Formats 授权迁移、JWL1 删除、artifact 消费、格式数据损失处理、受限 DOCX 兼容说明和商业发布门禁。
+License Phase 1 已完成内部实施退出；正式交付仍需补齐延期的最低浏览器人工认证，并完成 Formats 授权迁移、JWL1 删除、artifact 消费、格式数据损失处理、受限 DOCX 兼容说明和商业发布门禁。
 
 ### Collaboration
 
@@ -49,5 +49,8 @@ JWord 已具备编辑器 core、UI、native、DOCX/PDF、协作、持久化、Li
 - `In Progress`：已开始修改，但退出标准未全部满足。
 - `Closed`：聚焦验证和阶段验证通过，证据已记录。
 - `Deferred`：明确不属于当前销售或实现范围，并有进入条件。
+- `Conditionally Accepted` / `Accepted for internal progression`：经明确风险接受，现有证据足以继续内部阶段，但尚有不得冒充完成的发布前证据或门禁。
+- `Completed for internal progression`：当前阶段的内部实施退出标准已满足，不等于外部兼容认证、商业 GA 或正式发布门禁已完成。
+- `Verified`：该项要求的自动与人工证据均已完成，可按其明确范围形成对外结论。
 
 没有代码位置、验证命令和结果时，不得把问题标记为 `Closed`。

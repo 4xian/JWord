@@ -24,10 +24,17 @@ Gate 7 Step 7.1 公开 API 清单。本文只记录当前仓库已经实现并�
 
 ## 浏览器支持矩阵
 
-- 公开最低版本承诺见 [`browser-support.md`](./browser-support.md)。
-- 桌面编辑支持 Chrome / Edge ≥ 114、Firefox ≥ 115 ESR、Safari ≥ 16.4。
+- 公开最低兼容目标与认证状态见 [`browser-support.md`](./browser-support.md)。
+- 桌面编辑目标是 Chrome / Edge ≥ 100、Firefox ≥ 128、Safari ≥ 16.4；`LIC-107B2` 人工认证当前为 Deferred，内部阶段已条件性接受，但完成前不宣称已完成最低版本实测认证。
 - 窄屏仅承诺分页滚动预览与工具栏样式适配，不建立单独的窄屏平台能力口径。
-- 发布包与示例构建 target 对齐 ES2022；Playwright Chromium / Firefox / WebKit 最新版项目用于浏览器族回归，不等同于最低版本实验室认证。
+- 发布包与示例构建 target 保持 ES2022；target 只是语法转换输入，不自动提供运行时 API polyfill。后续浏览器代码必须核对公开矩阵，否则需要 feature detection、fallback/polyfill 或重新批准提高下限。
+- Playwright Chromium / Firefox / WebKit 最新版项目用于浏览器族回归，不等同于最低版本实验室认证。
+
+## 客户交付边界
+
+- 客户应用代码只集成浏览器 SDK；纯浏览器集成不要求客户宿主安装 Node。
+- 协作等正式服务端统一以 JWord 提供的版本化 Docker 镜像交付；Node 和服务端 npm package 位于镜像内，客户业务代码不直接导入 `@4xian/jword-collab-server`。
+- 客户运维侧负责在 Docker 兼容环境部署镜像、挂载持久化存储和只读 secret，客户浏览器 SDK 只连接对外 HTTP/WSS endpoint。
 
 ## Release / no-alias 验收
 
@@ -41,7 +48,7 @@ Gate 7 Step 7.1 公开 API 清单。本文只记录当前仓库已经实现并�
 - free：`@4xian/jword-core`、`@4xian/jword-ui`、`@4xian/jword-native`、基础 `@4xian/jword-persistence` contract 和基础 diagnostics。
 - free base contract：`@4xian/jword-persistence` 的基础 storage contract、基础 diagnostics、memory/storage adapter 类型；协作相关 persistence adapter 只有在 paid collaboration 场景中作为高级能力被消费。
 - paid format：`@4xian/jword-docx`、`@4xian/jword-pdf`，feature key 来自 `GATE5_FORMAT_FEATURES`。
-- paid collaboration：`@4xian/jword-collab`、`@4xian/jword-collab-server`、协作相关 persistence adapter 和 `@4xian/jword-license`，feature key 来自 `GATE6_COLLAB_FEATURES`。
+- paid collaboration：客户代码消费 `@4xian/jword-collab` 及浏览器侧依赖；正式服务端通过版本化 Docker 镜像交付，镜像内部使用 `@4xian/jword-collab-server`，feature key 来自 `GATE6_COLLAB_FEATURES`。
 - paid entitlement：`@4xian/jword-license` 负责授权 entitlement、feature key 和授权诊断，不读取用户文档内容。
 
 ## Gate 7 frozen surface sources
@@ -74,7 +81,7 @@ Docs, type tests, wrappers and examples must consume these frozen sources. 需�
 - `JWordDiagnosticsSnapshot.collaboration` / `server`：只包含 handshake/server 摘要，不包含 token、cookie 或 secret。
 - `JWordDiagnosticsSnapshot.plugins`：插件诊断只保留 `pluginName`、`code`、`lifecycle`、`commandName`、`reasonCode` 与 `recoverable`。
 
-Feature key handoff：Gate 5 高级格式能力必须使用 `GATE5_FORMAT_FEATURES`；Gate 6 协同、离线、历史、服务端和自动插入能力必须使用 `GATE6_COLLAB_FEATURES`。授权失败诊断只允许携带 feature key、customer id、稳定诊断码和可恢复标记，不携带用户文档内容。
+Feature key handoff：Gate 5 高级格式能力必须使用 `GATE5_FORMAT_FEATURES`；Gate 6 协同、离线、历史、服务端和自动插入能力必须使用 `GATE6_COLLAB_FEATURES`。授权失败诊断只允许携带稳定 `code` 与必要的 `feature`、`requestId`、`recoverable` 等结构化字段，不携带 `customerId`、token、signature 或用户文档内容。
 
 ## @4xian/jword-core
 
@@ -465,6 +472,8 @@ Internal：
 
 Edition：paid collaboration
 
+交付边界：本节记录当前镜像内部 package 的实现面，用于仓库架构、类型和镜像组装验证；它不是客户应用的 npm 集成清单。正式服务端只通过版本化 Docker 镜像交付，生产镜像在 LIC-309 完成前保持 Pending。
+
 Stable：
 
 - `createJWordCollabServer()`
@@ -518,6 +527,7 @@ Stable：
 - `GATE5_FORMAT_FEATURES`
 - `GATE6_COLLAB_FEATURES`
 - `assertJWordFeatureEntitled()`
+- `createJWordLicenseTransfer()`
 - `createJWordLicenseError()`
 - `isJWordLicenseDiagnosticCode()`
 - `JWordLicenseFeatureKey`
@@ -525,6 +535,7 @@ Stable：
 - `JWordLicenseStatus`
 - `JWordLicenseDiagnosticCodeMetadata`
 - `JWordLicenseEntitlement`
+- `JWordLicenseTransfer`
 - `JWordLicenseValidationOptions`
 - `JWordLicenseValidationResult`
 - `JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA`

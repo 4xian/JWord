@@ -195,7 +195,7 @@ describe('@4xian/jword-collab-server', () => {
 
         return {
           ok: false,
-          diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
+          diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED'
         }
       }
     })
@@ -441,7 +441,7 @@ describe('@4xian/jword-collab-server', () => {
       authHook: () => ({ ok: true }),
       licenseHook: () => ({
         ok: false,
-        diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
+        diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED'
       })
     })
 
@@ -466,7 +466,7 @@ describe('@4xian/jword-collab-server', () => {
     expect(response.status).toBe(403)
     expect(body).toMatchObject({
       ok: false,
-      diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED',
+      diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED',
       requestId: expect.any(String)
     })
     expect(storage.saveCount).toBe(0)
@@ -595,7 +595,7 @@ describe('@4xian/jword-collab-server', () => {
       authHook: () => ({ ok: true }),
       licenseHook: () => ({
         ok: false,
-        diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
+        diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED'
       })
     })
     const cases = [
@@ -615,7 +615,7 @@ describe('@4xian/jword-collab-server', () => {
       expect(response.statusCode).toBe(403)
       expect(response.readJson()).toMatchObject({
         ok: false,
-        diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED',
+        diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED',
         requestId: expect.any(String)
       })
       expect(request.bodyReadCount).toBe(0)
@@ -710,7 +710,7 @@ describe('@4xian/jword-collab-server', () => {
       authHook: () => ({ ok: true }),
       licenseHook: () => ({
         ok: false,
-        diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
+        diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED'
       })
     })
 
@@ -732,7 +732,7 @@ describe('@4xian/jword-collab-server', () => {
     expect(response.status).toBe(403)
     expect(body).toMatchObject({
       ok: false,
-      diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED',
+      diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED',
       requestId: expect.any(String)
     })
     expect(body).not.toHaveProperty('chunkLength')
@@ -794,7 +794,7 @@ describe('@4xian/jword-collab-server', () => {
 
         return {
           ok: false,
-          diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
+          diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED'
         }
       },
       logger: {
@@ -833,7 +833,7 @@ describe('@4xian/jword-collab-server', () => {
     })
     expect(denied).toMatchObject({
       ok: false,
-      diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED',
+      diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED',
       requestId: expect.any(String)
     })
   })

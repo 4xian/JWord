@@ -14,6 +14,7 @@
 ## 当前支持文档
 
 - [发布元数据审计](release-metadata-audit.md)
+- [LIC-107B2 最低浏览器人工验证](license-minimum-browser-manual-verification.md)
 - [屏幕阅读器人工验证](screen-reader-manual-verification.md)
 
 ## 文档维护规则
@@ -22,6 +23,7 @@
 - 新增公开 API 时，先确定 stable、experimental 或 internal 分级，再同步 SDK 文档、类型测试和 export audit。
 - 新增诊断码时，先修改 `fixtures/collab/diagnostics-registry.json`，再运行生成脚本并更新 SDK 文档。
 - 新增或调整页面元素、工具栏、状态栏、弹窗、下拉菜单、按钮、图标、提示、可见文案或可见样式时，必须同步评估 i18n 与主题切换影响；若有影响，需补齐 `zh-CN` / `en-US` 语言数据、aria/live region 文案，以及亮色/暗色主题下的颜色、背景、hover、focus、disabled、overlay 等样式。
+- 新增或调整跨层 diagnostic 时，runtime、worker、server 和协议只返回语言无关的稳定 code 与必要结构化字段，不把中文或英文文案固化为协议契约；UI、wrapper 或宿主展示层负责按 locale 映射用户可见文案，并同步覆盖 tooltip、aria-label 与 live region。诊断真源和阶段验收入口分别见 [诊断码与 support bundle](sdk/diagnostics-and-support.md) 和 [当前验证计划](reviews/current-full-review/10-verification-plan.md)。
 - 新增工程约束时，必须指向当前源码、manifest、脚本、测试或 SDK 文档；没有证据的约束进入 backlog，不写成已满足事实。
 
 ## packages
@@ -34,7 +36,7 @@
 - [collab](packages/collab.md)：协同客户端 SDK、provider adapter、awareness、history/offline、auto-insert。
 - [collab-server](packages/collab-server.md)：协同 HTTP/WS server、history service、Hocuspocus server、权限 hooks。
 - [persistence](packages/persistence.md)：Yjs update log、snapshot、版本预览/恢复、IndexedDB offline adapter。
-- [license](packages/license.md)：商业能力 entitlement、JWL1 token、本地授权校验。
+- [license](packages/license.md)：JWL2 固定 trust 验签、公开激活、opaque handle、旧 entitlement 兼容和当前 fail-closed 边界。
 - [devtools](packages/devtools.md)：opt-in diagnostics 浮动面板。
 - [react](packages/react.md)：React wrapper、SSR 空壳、生命周期、ref/context。
 - [vue](packages/vue.md)：Vue wrapper、SSR 空壳、生命周期、provide/inject。
@@ -57,7 +59,7 @@
 - [DOCX/PDF 高级格式](sdk/advanced-formats.md)：docx/pdf worker、授权边界和兼容限制。
 - [协作客户端](sdk/collaboration.md)：client SDK、provider adapter、history/offline/auto-insert。
 - [协作服务端](sdk/collab-server.md)：self-host server、HTTP/WS、hooks、history service。
-- [授权与收费能力](sdk/licensing.md)：feature keys、JWL1 token、enforcement 位置。
+- [授权与收费能力](sdk/licensing.md)：module feature、JWL2 激活/handle、旧 entitlement 和 enforcement 迁移边界。
 - [诊断码与 support bundle](sdk/diagnostics-and-support.md)：diagnostics registry、隐私裁剪、导出边界。
 - [浏览器支持与稳定矩阵](sdk/browser-and-e2e.md)：最低浏览器版本、窄屏边界、发布前矩阵。
 - [迁移与兼容策略](sdk/migration.md)：semver、schema、protocol、license contract。

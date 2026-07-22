@@ -2,7 +2,7 @@
  * @vitest-environment node
  *
  * 职责：锁定 Gate 7 示例矩阵只能通过 package 入口消费 SDK，不导入 monorepo 内部源码。
- * 边界：只扫描 examples 源码和 package manifest，不执行浏览器或构建。
+ * 边界：只扫描 examples 源码与指定 E2E fixture 的导入，并检查所需公开示例 token；不执行浏览器或构建。
  * 协作模块：vanilla/react/vue/vue2/docx/collab 示例、public API catalog 和 no-alias release smoke。
  * 约束：examples 可以在 Vite config 中为 workspace 开发态配置 alias，但业务源码必须像第三方项目一样写 package specifier。
  */
@@ -21,10 +21,14 @@ const exampleRoots = [
   'examples/collab'
 ] as const
 
+const additionalPublicImportFiles = [
+  'examples/vanilla/tests/fixtures/test-fixture.ts'
+] as const
+
 const requiredExampleTokens = [
-  ['examples/vanilla/src/main.ts', "import('@4xian/jword-devtools')"],
-  ['examples/vanilla/src/main.ts', 'readDemoThemeOptions'],
-  ['examples/vanilla/src/main.ts', 'readDemoI18nOptions'],
+  ['examples/vanilla/tests/fixtures/test-fixture.ts', "import('@4xian/jword-devtools')"],
+  ['examples/vanilla/tests/fixtures/test-fixture.ts', 'readDemoThemeOptions'],
+  ['examples/vanilla/tests/fixtures/test-fixture.ts', 'readDemoI18nOptions'],
   ['examples/react/src/App.tsx', '@4xian/jword-react'],
   ['examples/react/src/App.tsx', '<main className="jword-react-example"'],
   ['examples/vue/src/App.vue', '@4xian/jword-vue'],
@@ -45,13 +49,21 @@ const requiredExampleTokens = [
 describe('Gate 7 examples public import matrix', () => {
   it('keeps example source imports on package entrypoints instead of monorepo internals', () => {
     const failures: string[] = []
+    const scannedFiles: string[] = []
 
     for (const root of exampleRoots) {
       for (const file of listSourceFiles(join(root, 'src'))) {
+        scannedFiles.push(file)
         collectInternalImportFailures(file, readFileSync(file, 'utf8'), failures)
       }
     }
 
+    for (const file of additionalPublicImportFiles) {
+      scannedFiles.push(file)
+      collectInternalImportFailures(file, readFileSync(file, 'utf8'), failures)
+    }
+
+    expect(scannedFiles).toContain('examples/vanilla/tests/fixtures/test-fixture.ts')
     expect(failures).toEqual([])
   })
 

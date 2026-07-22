@@ -25,12 +25,12 @@
 | `@4xian/jword-devtools` | public | true | `.` | `dist` | 无直接外部运行依赖 | opt-in 面板包；真实发布需确认浏览器 DOM 使用说明。 |
 | `@4xian/jword-react` | public | true | `.` | `dist` | peer `react`, `react-dom` | peerDependencies 已声明；真实发布需确认 peer 版本范围策略。 |
 | `@4xian/jword-vue` | public | true | `.` | `dist` | peer `vue` | peerDependencies 已声明；真实发布需确认 peer 版本范围策略。 |
-| `@4xian/jword-license` | restricted | true | `.` | `dist`, `README.md` | 无 | paid 基础包；真实发布需确认私有 registry 与访问控制。 |
+| `@4xian/jword-license` | restricted | true | `.` | `dist`, `README.md` | `@noble/curves`、`@noble/hashes` | paid 基础包；真实发布需确认私有 registry、访问控制和依赖许可证。 |
 | `@4xian/jword-docx` | restricted | true | `.`, `./worker` | `dist` | `jszip` | paid format；真实发布需确认授权 gating 和 worker 说明。 |
 | `@4xian/jword-pdf` | restricted | true | `.`, `./worker` | `dist` | `fontkit`, `pdf-lib`, `pdfjs-dist` | paid format；真实发布需确认依赖体积和 license。 |
 | `@4xian/jword-persistence` | restricted | true | `.` | `dist`, `README.md` | `y-indexeddb`, `yjs` | storage 能力包；真实发布需确认 IndexedDB 浏览器边界。 |
 | `@4xian/jword-collab` | restricted | true | `.`, `./experimental` | `dist`, `README.md` | `@hocuspocus/provider`, `y-protocols`, `yjs` | paid collab；experimental 子入口需发布说明。 |
-| `@4xian/jword-collab-server` | restricted | true | `.` | `dist`, `README.md` | `@hocuspocus/server`, `y-protocols`, `yjs` | server 包；真实发布需确认 Node runtime 和部署说明。 |
+| `@4xian/jword-collab-server` | image-internal | true | `.` | `dist`, `README.md` | `@hocuspocus/server`, `y-protocols`, `yjs` | 不作为客户 npm 集成面；由 LIC-309 组装进版本化 Docker 镜像。 |
 
 ## 发布顺序建议
 
@@ -39,7 +39,7 @@
 1. free 基础：`core` → `ui` → `native`。
 2. paid 基础：`license`。
 3. paid formats：`docx`、`pdf`。
-4. persistence / collab：`persistence` → `collab` → `collab-server`。
+4. persistence / collab：发布浏览器侧 `persistence` → `collab`；`collab-server` 不进入客户 npm 发布批次，由单独的版本化 Docker 镜像流程交付。
 5. tooling / wrappers：`devtools`、`react`、`vue`。
 
 任何批次发布前都必须完成：版本号确认、license metadata、registry access、dry-run、tarball 内容审计、外部项目 no-alias smoke、人工审批。

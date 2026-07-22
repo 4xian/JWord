@@ -1,8 +1,8 @@
 # @4xian/jword-collab-server
 
-正式 self-host 服务包提供 Gate 6 商业协作服务端的 Node 入口和可嵌入 HTTP handler。当前公开 HTTP API 包含 `/health`、`/version`、`/history/versions` 和 `/license/status`；每个 JSON 响应都包含 `requestId`，便于日志关联。
+本 package 是 Gate 6 商业协作服务端的镜像内部实现，提供 Node 入口和 HTTP handler。客户应用不直接安装或导入本 package；正式 self-host 服务只通过 JWord 版本化 Docker 镜像交付。当前生产镜像仍为 `LIC-309` Pending，以下入口只用于仓库开发、架构测试和镜像组装。当前 JSON 响应继续携带 `requestId`，便于内部日志与 smoke 关联。
 
-## Local Node
+## 仓库内部 Local Node
 
 ```ts
 import {
@@ -22,14 +22,14 @@ const server = createJWordCollabServer({
   }),
   licenseHook: ({ feature }) => ({
     ok: feature === GATE6_COLLAB_FEATURES.server || feature === GATE6_COLLAB_FEATURES.history,
-    diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
+    diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED'
   })
 })
 
 await server.start()
 ```
 
-## Embedded Handler
+## 仓库内部 Embedded Handler
 
 ```ts
 import { createServer } from 'node:http'
@@ -50,6 +50,8 @@ createServer((request, response) => {
 
 ## Environment
 
+这些变量描述当前内部实现，不是最终客户镜像契约；正式镜像必须固定 Node runtime，并通过容器 secret、持久化和 readiness 契约收口配置。
+
 - `JWORD_COLLAB_HOST`: listen address, for containers normally `0.0.0.0`.
 - `JWORD_COLLAB_PORT`: HTTP listen port.
 - `JWORD_COLLAB_ALLOWED_ORIGINS`: comma separated browser origins allowed by CORS.
@@ -69,3 +71,5 @@ Formal Hocuspocus WebSocket connections use tenant-scoped document names and per
 ## History And License
 
 `historyStorage` is supplied by the host so production deployments can use their own database. The service checks `authHook` and then `licenseHook` before reading or writing history storage; client-side license checks are only UX hints. History operations for the same document are serialized with a bounded lock queue. Hosts can set `maxHistoryDocumentLockQueueDepth` to tune backpressure; overflow returns HTTP 429 with `JWORD_COLLAB_HISTORY_LOCK_QUEUE_EXCEEDED`.
+
+当前示例中的 hook 与 storage 组合不能作为客户生产镜像发布。LIC-309 必须删除 allow-all preset 和 volatile-only storage，改为只读 License secret、持久化、HTTP/WSS 统一 admission、readiness/liveness、备份恢复与不可变 image digest 验收。

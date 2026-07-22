@@ -32,10 +32,18 @@ export function createDocxProgressEvent(
 
 /** 创建 DOCX worker 错误事件。 */
 export function createDocxErrorEvent(requestId: string, error: DocxError): DocxErrorEvent {
+  const serializedError: DocxError = {
+    name: error.name,
+    code: error.code,
+    message: error.message,
+    ...(error.requestId === undefined ? {} : { requestId: error.requestId }),
+    ...(error.feature === undefined ? {} : { feature: error.feature })
+  }
+
   return {
     type: 'error',
     requestId,
-    error
+    error: serializedError
   }
 }
 

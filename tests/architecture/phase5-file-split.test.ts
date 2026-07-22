@@ -3,7 +3,7 @@
  *
  * 职责：锁定 Phase 5 超大文件拆分专项的机器验收条件。
  * 边界：只检查已进入拆分执行的文件，不替代 package 级行为测试。
- * 协作模块：当前 Phase 5 拆分边界、packages/ui/src/create-ui.ts、packages/core/src/operations/command-builders.ts、packages/core/src/editor/text-editing-runtime.ts、packages/core/src/operations/operation-adapter.ts、packages/ui/src/toolbar/controller.ts、packages/core/src/model/document-store.ts、packages/native/src/index.ts、packages/core/src/layout/engine.ts、packages/ui/src/media/image-selection-controller.ts、packages/ui/src/selection-actions/controller.ts、packages/ui/src/table/controller.ts、packages/core/test/editor/input-runtime.test.ts、packages/core/test/layout/runtime.test.ts、packages/core/test/editor/facade-runtime.test.ts、examples/vanilla/tests/gate3-toolbar.e2e.ts、examples/vanilla/tests/gate3-input.e2e.ts 与拆分后的内部模块。
+ * 协作模块：当前 Phase 5 拆分边界、packages/ui/src/create-ui.ts、packages/core/src/operations/command-builders.ts、packages/core/src/editor/text-editing-runtime.ts、packages/core/src/operations/operation-adapter.ts、packages/ui/src/toolbar/controller.ts、packages/core/src/model/document-store.ts、packages/native/src/index.ts、packages/core/src/layout/engine.ts、packages/ui/src/media/image-selection-controller.ts、packages/ui/src/selection-actions/controller.ts、packages/ui/src/table/controller.ts、Core 历史测试入口与拆分后的内部模块。
  * 约束：拆分批次只允许收敛文件体量和目标结构，公开导出面保持不变。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
@@ -128,7 +128,6 @@ const inputRuntimeTestTargetFiles = [
   'packages/core/test/editor/editor-test-helpers.ts'
 ] as const
 const inputRuntimeTestEntryPath = 'packages/core/test/editor/input-runtime.test.ts'
-const inputRuntimeTestMaxLines = 400
 const layoutRuntimeTestTargetFiles = [
   'packages/core/test/layout/runtime-pagination.test.ts',
   'packages/core/test/layout/runtime-wrapping.test.ts',
@@ -137,7 +136,6 @@ const layoutRuntimeTestTargetFiles = [
   'packages/core/test/layout/runtime-test-helpers.ts'
 ] as const
 const layoutRuntimeTestEntryPath = 'packages/core/test/layout/runtime.test.ts'
-const layoutRuntimeTestMaxLines = 400
 const facadeRuntimeTestTargetFiles = [
   'packages/core/test/editor/facade-document.test.ts',
   'packages/core/test/editor/facade-command.test.ts',
@@ -146,7 +144,6 @@ const facadeRuntimeTestTargetFiles = [
   'packages/core/test/editor/facade-test-helpers.ts'
 ] as const
 const facadeRuntimeTestEntryPath = 'packages/core/test/editor/facade-runtime.test.ts'
-const facadeRuntimeTestMaxLines = 400
 const gate3ToolbarE2eTargetFiles = [
   'examples/vanilla/tests/gate3-toolbar-format.e2e.ts',
   'examples/vanilla/tests/gate3-toolbar-paragraph.e2e.ts',
@@ -256,28 +253,25 @@ describe('Phase 5 file split targets', () => {
     expect(lineCount).toBeLessThanOrEqual(tableControllerMaxLines)
   })
 
-  it('splits input-runtime tests by input path and materializes T1 modules', () => {
+  it('splits input-runtime tests by input path and removes the obsolete empty entry', () => {
     const missingFiles = inputRuntimeTestTargetFiles.filter((path) => !existsSync(path))
-    const lineCount = readLineCount(inputRuntimeTestEntryPath)
 
     expect(missingFiles).toEqual([])
-    expect(lineCount).toBeLessThanOrEqual(inputRuntimeTestMaxLines)
+    expect(existsSync(inputRuntimeTestEntryPath)).toBe(false)
   })
 
-  it('splits layout runtime tests by layout concern and materializes T2 modules', () => {
+  it('splits layout runtime tests by layout concern and removes the obsolete empty entry', () => {
     const missingFiles = layoutRuntimeTestTargetFiles.filter((path) => !existsSync(path))
-    const lineCount = readLineCount(layoutRuntimeTestEntryPath)
 
     expect(missingFiles).toEqual([])
-    expect(lineCount).toBeLessThanOrEqual(layoutRuntimeTestMaxLines)
+    expect(existsSync(layoutRuntimeTestEntryPath)).toBe(false)
   })
 
-  it('splits facade runtime tests by facade concern and materializes T3 modules', () => {
+  it('splits facade runtime tests by facade concern and removes the obsolete empty entry', () => {
     const missingFiles = facadeRuntimeTestTargetFiles.filter((path) => !existsSync(path))
-    const lineCount = readLineCount(facadeRuntimeTestEntryPath)
 
     expect(missingFiles).toEqual([])
-    expect(lineCount).toBeLessThanOrEqual(facadeRuntimeTestMaxLines)
+    expect(existsSync(facadeRuntimeTestEntryPath)).toBe(false)
   })
 
   it('splits gate3 toolbar e2e tests by user path and materializes T4 modules', () => {

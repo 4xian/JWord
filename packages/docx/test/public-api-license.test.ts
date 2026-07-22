@@ -9,7 +9,6 @@
  */
 
 import type { JWordLicenseEntitlement, JWordLicenseSignaturePayload } from '@4xian/jword-license'
-import { createInsecureTestOnlyJWordLicenseSignature } from '@4xian/jword-license'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -22,6 +21,8 @@ import {
   createProjection
 } from './public-api-fixtures'
 import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createInsecureTestOnlyJWordLicenseSignature } from '../../../fixtures/license/create-insecure-test-only-jwl1-token'
+import { createTestOnlyJWordLicenseEntitlement } from '../../../fixtures/license/test-only-entitlement-fixture.mjs'
 
 describe('@4xian/jword-docx public API license boundary', () => {
   it('fails import before reading invalid bytes when license is missing', async () => {
@@ -41,8 +42,7 @@ describe('@4xian/jword-docx public API license boundary', () => {
     })).rejects.toMatchObject({
       name: 'JWordLicenseError',
       code: 'JWORD_FEATURE_NOT_ENTITLED',
-      feature: 'docx.import',
-      customerId: 'customer-docx-public'
+      feature: 'docx.import'
     })
   })
 
@@ -66,22 +66,21 @@ describe('@4xian/jword-docx public API license boundary', () => {
     })
   })
 
-  it('fails import when entitlement signature is tampered', async () => {
+  it('fails import for legacy JWL1 even when public entitlement fields are tampered', async () => {
     await expect(importDocx(await createMinimalDocxPackage(), {
       requestId: 'docx-public-license-signature-invalid-1',
       license: {
-        ...createDocxPublicLicense(['docx.import']),
+        ...createLegacyJwl1DocxPublicLicense(['docx.import']),
         features: ['docx.export']
       }
     })).rejects.toMatchObject({
       name: 'JWordLicenseError',
       code: 'JWORD_LICENSE_SIGNATURE_INVALID',
-      feature: 'docx.import',
-      customerId: 'customer-docx-public'
+      feature: 'docx.import'
     })
   })
 
-  it('keeps import and export available with matching DOCX features', async () => {
+  it('keeps import and export business coverage through the test-only entitlement seam', async () => {
     const exportResult = await exportDocx(createProjection(), {
       requestId: 'docx-public-license-export-ok-1',
       license: createDocxPublicLicense(['docx.export'])
@@ -102,8 +101,15 @@ describe('@4xian/jword-docx public API license boundary', () => {
   })
 })
 
-/** 创建 DOCX public API 授权测试使用的有效 entitlement。 */
+/** 创建 DOCX public API 业务测试使用的 test-only entitlement。 */
 function createDocxPublicLicense(features: readonly string[]): JWordLicenseEntitlement {
+  return createTestOnlyJWordLicenseEntitlement(features, {
+    customerId: 'customer-docx-public'
+  })
+}
+
+/** 创建必须由真实生产入口 fail closed 的旧 JWL1 entitlement。 */
+function createLegacyJwl1DocxPublicLicense(features: readonly string[]): JWordLicenseEntitlement {
   const entitlement: JWordLicenseSignaturePayload = {
     customerId: 'customer-docx-public',
     licenseToken: 'token-docx-public',

@@ -50,9 +50,8 @@ Collaboration 保持 private/unpublished 时，阶段 6 不阻断 Base + Profess
 
 ## 5. 当前执行关系
 
-1. 先执行 OEM Phase 1，关闭 `SEC-01`、`SEC-06`。
-   Phase 1 依赖批准的 `jword-prod-2026-k1` 生产公钥；缺失时只能继续非密钥子任务，不能关闭阶段。
-2. 再执行 native、恢复和 core 数据正确性。
+1. OEM Phase 1 已完成内部实施退出；`SEC-06` 最低浏览器人工认证延期为发布前门禁，`SEC-01` 因旧调用方和 JWL1 兼容入口继续由后续阶段关闭。
+2. 当前执行 native、恢复和 core 数据正确性。
 3. 建立可安装 artifact 和第三方消费基线。
 4. 执行 OEM Phase 2、Formats 正确性和 OEM Phase 4。
 5. 处理 core、UI 和 wrapper 产品化问题。

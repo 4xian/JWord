@@ -37,8 +37,8 @@ const gate6DocumentedBoundaryTokens = [
   '不读取 live caret',
   'examples/collab',
   'paid collaboration edition',
-  '付费能力必须在 worker、server 或 package 执行层调用',
-  '浏览器按钮隐藏、文档提示或 wrapper props 不是授权边界'
+  '付费能力当前仍在 worker、server 或 package 执行层调用',
+  '浏览器按钮隐藏、文档提示或 wrapper props 始终不是授权边界'
 ] as const
 const coreStableEntryFiles = [
   'packages/core/src/index.ts',
@@ -115,6 +115,27 @@ describe('Gate 6 commercial readiness', () => {
     }
   })
 
+  it('documents Docker-only production server delivery without exposing Node integration to customer apps', () => {
+    const serverDeployment = readFileSync('docs/sdk/collab-server.md', 'utf8')
+    const publicExamples = readFileSync('docs/sdk/public-api-examples.md', 'utf8')
+
+    for (const token of [
+      '版本化 Docker 镜像',
+      '客户应用代码只集成浏览器 SDK',
+      '不需要直接安装 Node',
+      'HTTP/WSS endpoint',
+      'allow-all `licenseHook`',
+      'volatile storage',
+      'LIC-309',
+      'Pending'
+    ]) {
+      expect(serverDeployment, token).toContain(token)
+    }
+
+    expect(publicExamples).toContain('浏览器 client 和 Docker endpoint')
+    expect(publicExamples).not.toContain("from '@4xian/jword-collab-server'")
+  })
+
   it('documents Gate 6 acceptance and forbidden boundaries only after evidence exists', () => {
     const sdkDocs = readEvidenceFiles([
       'docs/sdk/collaboration.md',
@@ -149,10 +170,9 @@ describe('Gate 6 commercial readiness', () => {
       'COLLAB_SERVER_TOO_OLD',
       'COLLAB_CLIENT_TOO_OLD',
       'COLLAB_FEATURE_FLAGS_MISSING',
-      'COLLAB_LICENSE_MISSING',
-      'COLLAB_LICENSE_EXPIRED',
-      'COLLAB_FEATURE_NOT_ENTITLED',
-      'COLLAB_LICENSE_SERVER_UNAVAILABLE',
+      'JWORD_LICENSE_MISSING',
+      'JWORD_LICENSE_SIGNATURE_INVALID',
+      'JWORD_FEATURE_NOT_ENTITLED',
       'createPresenceDisplayUsers',
       '正在输入',
       'requires explicit auto insert position or range and never reads live caret',

@@ -271,8 +271,7 @@ function readDocxWorkerError(error: unknown, requestId: string): DocxError {
       code: error.code,
       message: error.message,
       requestId: error.requestId ?? requestId,
-      ...(error.feature === undefined ? {} : { feature: error.feature }),
-      ...(error.customerId === undefined ? {} : { customerId: error.customerId })
+      ...(error.feature === undefined ? {} : { feature: error.feature })
     }
   }
 
@@ -290,7 +289,6 @@ function isDocxWorkerError(error: unknown): error is Error & {
   readonly code: DocxError['code']
   readonly requestId?: string
   readonly feature?: JWordLicenseFeatureKey
-  readonly customerId?: string
 } {
   const code = (error as { readonly code?: unknown }).code
 

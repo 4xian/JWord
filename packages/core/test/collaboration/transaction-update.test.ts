@@ -9,7 +9,7 @@
  */
 
 import * as Y from 'yjs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   DOCUMENT_STORE_FIELDS,
@@ -111,6 +111,50 @@ describe('Gate 6 transaction update hook', () => {
       requestId: 'local-command-1'
     })
     expect(result.diagnostic.updateByteLength).toBeGreaterThan(0)
+  })
+
+  /** raw update 必须保留远端 transaction 语义并清理临时监听器。 */
+  it('captures raw remote transactions and removes the temporary listener on success and error', () => {
+    const source = createInitializedStore('远端')
+    const target = createDocumentStore()
+    const pipeline = createTransactionPipeline(target.doc)
+    const observed: Y.Transaction[] = []
+    const onSpy = vi.spyOn(target.doc, 'on')
+    const offSpy = vi.spyOn(target.doc, 'off')
+    /** 记录独立 observer 看到的本次 raw update transaction。 */
+    const observer = (transaction: Y.Transaction) => {
+      observed.push(transaction)
+    }
+
+    target.doc.on('afterTransaction', observer)
+    const successOnCallCount = onSpy.mock.calls.length
+    const update = Y.encodeStateAsUpdate(source.doc)
+
+    pipeline.applyUpdate(update, {
+      origin: 'remote-user',
+      requestId: 'listener-success'
+    })
+
+    const successListener = onSpy.mock.calls[successOnCallCount]?.[1]
+
+    expect.soft(observed).toHaveLength(1)
+    expect.soft(observed[0]?.origin).toBe('remote-user')
+    expect.soft(observed[0]?.local).toBe(false)
+    expect.soft(onSpy.mock.calls.length).toBeGreaterThan(successOnCallCount)
+    expect.soft(offSpy).toHaveBeenCalledWith('afterTransaction', successListener)
+
+    onSpy.mockClear()
+    offSpy.mockClear()
+
+    expect(() => pipeline.applyUpdate(new Uint8Array([255]), {
+      origin: 'remote-user',
+      requestId: 'listener-error'
+    })).toThrow()
+
+    const errorListener = onSpy.mock.calls[0]?.[1]
+
+    expect.soft(onSpy.mock.calls.length).toBeGreaterThan(0)
+    expect.soft(offSpy).toHaveBeenCalledWith('afterTransaction', errorListener)
   })
 })
 

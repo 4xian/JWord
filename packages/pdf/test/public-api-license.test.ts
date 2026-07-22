@@ -14,13 +14,12 @@ import {
   layoutDocument,
   type DocumentLayout
 } from '@4xian/jword-core'
-import type { JWordLicenseEntitlement, JWordLicenseSignaturePayload } from '@4xian/jword-license'
-import { createInsecureTestOnlyJWordLicenseSignature } from '@4xian/jword-license'
+import type { JWordLicenseEntitlement } from '@4xian/jword-license'
 import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 
 import { exportPdfFromLayout } from '../src/index'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../../fixtures/license/test-only-entitlement-fixture.mjs'
 
 describe('@4xian/jword-pdf public API license boundary', () => {
   it('fails export before mapping layout when license is missing', async () => {
@@ -40,12 +39,11 @@ describe('@4xian/jword-pdf public API license boundary', () => {
     })).rejects.toMatchObject({
       name: 'JWordLicenseError',
       code: 'JWORD_FEATURE_NOT_ENTITLED',
-      feature: 'pdf.export',
-      customerId: 'customer-pdf-public'
+      feature: 'pdf.export'
     })
   })
 
-  it('keeps export available with a matching PDF feature', async () => {
+  it('keeps export business coverage through the test-only entitlement seam', async () => {
     const result = await exportPdfFromLayout(createLicenseTestLayout(), {
       requestId: 'pdf-public-license-export-ok-1',
       license: createPdfPublicLicense(['pdf.export'])
@@ -62,22 +60,11 @@ describe('@4xian/jword-pdf public API license boundary', () => {
   })
 })
 
-/** 创建 PDF public API 授权测试使用的有效 entitlement。 */
+/** 创建 PDF public API 业务测试使用的 test-only entitlement。 */
 function createPdfPublicLicense(features: readonly string[]): JWordLicenseEntitlement {
-  const entitlement: JWordLicenseSignaturePayload = {
-    customerId: 'customer-pdf-public',
-    licenseToken: 'token-pdf-public',
-    features,
-    issuer: 'jword-test-issuer',
-    issuedAt: '2026-05-01T00:00:00Z',
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid'
-  }
-
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
+  return createTestOnlyJWordLicenseEntitlement(features, {
+    customerId: 'customer-pdf-public'
+  })
 }
 
 /** 创建授权边界测试使用的最小 layout。 */

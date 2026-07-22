@@ -11,5 +11,5 @@
 export const JWORD_DIAGNOSTICS_REGISTRY_SUMMARY = {
   source: 'fixtures/collab/diagnostics-registry.json',
   schemaVersion: 1,
-  codeCount: 190
+  codeCount: 192
 } as const

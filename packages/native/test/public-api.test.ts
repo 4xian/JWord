@@ -7,7 +7,7 @@
  * 约束：测试使用最小样例覆盖关键路径，损坏资源和 schema 兼容由稳定诊断判定。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import JSZip from 'jszip'
 
 import {
@@ -37,9 +37,9 @@ describe('@4xian/jword-native public API', () => {
       'resources/'
     ])
     expect(result.manifest).toMatchObject({
-      formatVersion: 1,
-      schemaVersion: 1,
-      minimumReaderVersion: 1,
+      formatVersion: 2,
+      schemaVersion: 2,
+      minimumReaderVersion: 2,
       packageEntries: [
         'manifest.json',
         'document.json',
@@ -103,7 +103,12 @@ describe('@4xian/jword-native public API', () => {
     const checksums = JSON.parse(await zip.file('checksums.json')?.async('string') ?? '{}') as {
       readonly entries: Record<string, { readonly mime: string, readonly byteLength: number, readonly sha256: string }>
     }
+    const packageDocument = JSON.parse(await zip.file('document.json')?.async('string') ?? '{}') as Document
     const loaded = await loadJWordDocument(save.bytes)
+    const secondSave = await saveJWordDocument(loaded.document)
+    const secondZip = await JSZip.loadAsync(secondSave.bytes)
+    const secondDocumentJson = await secondZip.file('document.json')?.async('string') ?? ''
+    const secondPackageDocument = JSON.parse(secondDocumentJson) as Document
 
     expect(zip.file('resources/image-packed')).not.toBeNull()
     expect(zip.file('resources/image-external')).toBeNull()
@@ -112,6 +117,19 @@ describe('@4xian/jword-native public API', () => {
       byteLength: 4
     })
     expect(save.warnings.map(readWarningCode)).toContain('JWORD_NATIVE_RESOURCE_UNPACKED')
+    expect(packageDocument.resources?.[0]?.source).toEqual({
+      kind: 'packedResource',
+      url: 'resources/image-packed'
+    })
+    expect(loaded.document.resources?.[0]?.source).toEqual({
+      kind: 'dataUrl',
+      url: 'data:image/png;base64,QUJDRA=='
+    })
+    expect(secondPackageDocument.resources?.[0]?.source).toEqual({
+      kind: 'packedResource',
+      url: 'resources/image-packed'
+    })
+    expect(secondDocumentJson).not.toContain('QUJDRA==')
     expect(loaded.resources).toEqual([
       {
         id: 'image-packed',
@@ -126,6 +144,45 @@ describe('@4xian/jword-native public API', () => {
         packed: false
       }
     ])
+  })
+
+  /** 验证格式 1 的内联 source 与 packed entry 仍按旧 reader 语义加载。 */
+  it('loads legacy format 1 resource packages without exposing logical references', async () => {
+    const legacyPackage = await createLegacyFormat1ResourcePackage()
+    const loaded = await loadJWordDocument(legacyPackage)
+    const missingPackage = await removeZipEntry(legacyPackage, 'resources/image-legacy-format-1')
+    const missingLoaded = await loadJWordDocument(missingPackage)
+
+    expect(loaded.document.resources?.[0]?.source).toEqual({
+      kind: 'dataUrl',
+      url: 'data:image/png;base64,QUJDRA=='
+    })
+    expect(loaded.migrationReport).toMatchObject({
+      sourceVersion: 1,
+      targetVersion: 2,
+      appliedSteps: ['schema-1-to-2']
+    })
+    expect(missingLoaded.document.resources?.[0]?.source).toEqual({
+      kind: 'dataUrl',
+      url: 'data:image/png;base64,QUJDRA=='
+    })
+    expect(missingLoaded.warnings.map(readWarningCode)).toContain('JWORD_NATIVE_RESOURCE_MISSING')
+  })
+
+  it.each([
+    ['percent encoding', 'data:image/png,%E0%A4%A'],
+    ['base64', 'data:image/png;base64,%%%']
+  ] as const)('maps invalid data URL %s to a stable document error', async (_label, url) => {
+    await expect(saveJWordDocument(createImageDocument([
+      createPngResource('image-invalid-data-url', url)
+    ]), {
+      requestId: 'native-invalid-data-url'
+    })).rejects.toMatchObject({
+      code: 'JWORD_NATIVE_DOCUMENT_INVALID',
+      message: 'JWORD_NATIVE_DOCUMENT_INVALID',
+      requestId: 'native-invalid-data-url',
+      entry: 'document.json'
+    })
   })
 
   it('packs blobUrl resources from nativeBytesBase64 metadata fallback', async () => {
@@ -146,6 +203,8 @@ describe('@4xian/jword-native public API', () => {
       requestId: 'native-blob-fallback-save'
     })
     const zip = await JSZip.loadAsync(save.bytes)
+    const packageDocumentJson = await zip.file('document.json')?.async('string') ?? ''
+    const packageDocument = JSON.parse(packageDocumentJson) as Document
     const validation = await validateJWordPackage(save.bytes)
     const loaded = await loadJWordDocument(save.bytes)
 
@@ -153,6 +212,16 @@ describe('@4xian/jword-native public API', () => {
     expect(save.warnings).toEqual([])
     expect(validation.valid).toBe(true)
     expect(validation.diagnostics).toEqual([])
+    expect(packageDocument.resources?.[0]?.source).toEqual({
+      kind: 'packedResource',
+      url: 'resources/image-blob-fallback'
+    })
+    expect(packageDocumentJson).not.toContain('nativeBytesBase64')
+    expect(packageDocumentJson).not.toContain('QUJDRA==')
+    expect(loaded.document.resources?.[0]?.source).toEqual({
+      kind: 'dataUrl',
+      url: 'data:image/png;base64,QUJDRA=='
+    })
     expect(loaded.resources).toEqual([
       {
         id: 'image-blob-fallback',
@@ -164,17 +233,118 @@ describe('@4xian/jword-native public API', () => {
     ])
   })
 
-  it('reports missing resource as recoverable warning and hash mismatch as corrupt error', async () => {
+  /** 验证无 fallback bytes 的 blob URL 被稳定拒绝且不会触发网络读取。 */
+  it('rejects blobUrl resources without fallback bytes and does not fetch the URL', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const resource: Resource = {
+      kind: 'resource',
+      id: 'image-blob-without-bytes',
+      mime: 'image/png',
+      source: {
+        kind: 'blobUrl',
+        url: 'blob:https://example.invalid/no-fallback'
+      },
+      status: 'success'
+    }
+
+    try {
+      await expect(saveJWordDocument(createImageDocument([resource]), {
+        requestId: 'native-blob-without-bytes'
+      })).rejects.toMatchObject({
+        code: 'JWORD_NATIVE_DOCUMENT_INVALID',
+        message: 'JWORD_NATIVE_DOCUMENT_INVALID',
+        requestId: 'native-blob-without-bytes',
+        entry: 'document.json'
+      })
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
+  /** 验证运行时 data URL 预算在首次 base64 分配前执行。 */
+  it('rejects data URL materialization before base64 allocation exceeds the total budget', async () => {
+    const save = await saveJWordDocument(createImageDocument([
+      createPngResource('image-budget-a', 'data:image/png;base64,QQ=='),
+      createPngResource('image-budget-b', 'data:image/png;base64,QQ==')
+    ]))
+    const zip = await JSZip.loadAsync(save.bytes)
+    const checksums = JSON.parse(await zip.file('checksums.json')?.async('string') ?? '{}') as {
+      entries: Record<string, { mime: string, byteLength: number, sha256: string }>
+    }
+    const resourceBytes = new Uint8Array(30 * 1024 * 1024)
+    const resourceHash = await sha256ForTest(resourceBytes)
+
+    for (const path of ['resources/image-budget-a', 'resources/image-budget-b']) {
+      zip.file(path, resourceBytes)
+      checksums.entries[path] = {
+        mime: 'image/png',
+        byteLength: resourceBytes.byteLength,
+        sha256: resourceHash
+      }
+    }
+
+    zip.file('checksums.json', JSON.stringify(checksums, null, 2))
+
+    const oversizedMaterializationPackage = await zip.generateAsync({ type: 'uint8array' })
+    const btoaSpy = vi.spyOn(globalThis, 'btoa')
+
+    try {
+      await expect(loadJWordDocument(oversizedMaterializationPackage)).rejects.toMatchObject({
+        code: 'JWORD_NATIVE_PACKAGE_RESOURCE_LIMIT_EXCEEDED'
+      })
+      expect(btoaSpy).not.toHaveBeenCalled()
+    } finally {
+      btoaSpy.mockRestore()
+    }
+  })
+
+  /** 验证格式 2 的逻辑资源缺失与 checksum 损坏均不可恢复。 */
+  it('rejects missing logical packed resources and hash mismatches as corrupt errors', async () => {
     const save = await saveJWordDocument(createImageDocument([
       createPngResource('image-missing', 'data:image/png;base64,QUJDRA==')
     ]))
     const missingPackage = await removeZipEntry(save.bytes, 'resources/image-missing')
-    const missingLoaded = await loadJWordDocument(missingPackage)
+    const missingValidation = await validateJWordPackage(missingPackage)
     const corruptPackage = await overwriteZipEntry(save.bytes, 'resources/image-missing', new Uint8Array([1, 2, 3]))
 
-    expect(missingLoaded.warnings.map(readWarningCode)).toContain('JWORD_NATIVE_RESOURCE_MISSING')
+    expect(missingValidation.valid).toBe(false)
+    expect(missingValidation.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
+      recoverable: false
+    }))
+    expect(JSON.stringify(missingValidation.diagnostics)).not.toContain('resources/image-missing')
+    await expect(loadJWordDocument(missingPackage)).rejects.toMatchObject({
+      code: 'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING'
+    })
     await expect(loadJWordDocument(corruptPackage)).rejects.toMatchObject({
       code: 'JWORD_NATIVE_HASH_MISMATCH'
+    })
+  })
+
+  it('uses stable diagnostic codes as public message values', async () => {
+    const save = await saveJWordDocument(createTextDocument('document-native-stable-message', 'stable message'))
+    const missingManifestPackage = await removeZipEntry(save.bytes, 'manifest.json')
+    const validation = await validateJWordPackage(missingManifestPackage)
+
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'JWORD_NATIVE_MANIFEST_MISSING',
+      message: 'JWORD_NATIVE_MANIFEST_MISSING'
+    }))
+    await expect(loadJWordDocument(missingManifestPackage)).rejects.toMatchObject({
+      code: 'JWORD_NATIVE_MANIFEST_MISSING',
+      message: 'JWORD_NATIVE_MANIFEST_MISSING'
+    })
+
+    const controller = new AbortController()
+
+    controller.abort()
+
+    await expect(saveJWordDocument(createTextDocument('document-native-stable-cancel', 'cancel'), {
+      signal: controller.signal
+    })).rejects.toMatchObject({
+      code: 'JWORD_NATIVE_USER_CANCELLED',
+      message: 'JWORD_NATIVE_USER_CANCELLED'
     })
   })
 
@@ -192,9 +362,18 @@ describe('@4xian/jword-native public API', () => {
       ...manifest,
       packageEntries: ['manifest.json', 'document.json', 'metadata.json']
     }))
+    const logicalReferenceSave = await saveJWordDocument(createImageDocument([
+      createPngResource('image-format-2-only', 'data:image/png;base64,QQ==')
+    ]))
+    const legacyLogicalReferencePackage = await replaceZipJsonEntry(logicalReferenceSave.bytes, 'manifest.json', (manifest) => ({
+      ...manifest,
+      formatVersion: 1,
+      minimumReaderVersion: 1
+    }))
 
     expect((await validateJWordPackage(unsupportedFormatPackage)).diagnostics).toContainEqual(expect.objectContaining({
       code: 'JWORD_NATIVE_FORMAT_UNSUPPORTED',
+      message: 'JWORD_NATIVE_FORMAT_UNSUPPORTED',
       recoverable: false
     }))
     expect((await validateJWordPackage(futureReaderPackage)).diagnostics).toContainEqual(expect.objectContaining({
@@ -209,13 +388,24 @@ describe('@4xian/jword-native public API', () => {
     await expect(loadJWordDocument(unsupportedFormatPackage)).rejects.toMatchObject({
       code: 'JWORD_NATIVE_FORMAT_UNSUPPORTED'
     })
+    await expect(loadJWordDocument(legacyLogicalReferencePackage)).rejects.toMatchObject({
+      code: 'JWORD_NATIVE_DOCUMENT_INVALID'
+    })
   })
 
   it('reports corrupted metadata with metadata-specific diagnostics', async () => {
     const save = await saveJWordDocument(createTextDocument('document-native-metadata-invalid', 'metadata'))
-    const corruptedMetadataPackage = await overwriteZipEntry(save.bytes, 'metadata.json', new TextEncoder().encode('[]'))
+    const zip = await JSZip.loadAsync(save.bytes)
+    const metadataText = await zip.file('metadata.json')?.async('string') ?? ''
+    const invalidMetadata = `["${'x'.repeat(metadataText.length - 4)}"]`
+    const corruptedMetadataPackage = await overwriteZipEntry(
+      save.bytes,
+      'metadata.json',
+      new TextEncoder().encode(invalidMetadata)
+    )
     const validation = await validateJWordPackage(corruptedMetadataPackage)
 
+    expect(validation.diagnostics).toHaveLength(1)
     expect(validation.diagnostics).toContainEqual(expect.objectContaining({
       code: 'JWORD_NATIVE_METADATA_INVALID',
       entry: 'metadata.json',
@@ -240,23 +430,62 @@ describe('@4xian/jword-native public API', () => {
         packed: true
       }]
     }))
-    const missingDocumentRefSave = await saveJWordDocument({
+    const missingDocumentRef = {
       ...createTextDocument('document-native-missing-resource-ref', 'missing resource ref'),
       resourceIds: ['image-missing-from-manifest'],
       resources: []
-    })
+    }
+    const externalResource: Resource = {
+      kind: 'resource',
+      id: 'image-external-integrity',
+      mime: 'image/png',
+      source: {
+        kind: 'externalUrl',
+        url: 'https://example.invalid/integrity.png'
+      },
+      status: 'success'
+    }
+    const externalSave = await saveJWordDocument(createImageDocument([externalResource]))
+    const externalMimeMismatchPackage = await replaceZipJsonEntry(
+      externalSave.bytes,
+      'manifest.json',
+      (manifest) => ({
+        ...manifest,
+        resources: [{
+          id: 'image-external-integrity',
+          mime: 'image/jpeg',
+          packed: false
+        }]
+      })
+    )
+    const extraManifestResourcePackage = await replaceZipJsonEntry(save.bytes, 'manifest.json', (manifest) => ({
+      ...manifest,
+      resources: [
+        ...manifest.resources as readonly unknown[],
+        {
+          id: 'image-manifest-only',
+          mime: 'image/png',
+          packed: false
+        }
+      ]
+    }))
 
     expect((await validateJWordPackage(mimeMismatchPackage)).diagnostics).toContainEqual(expect.objectContaining({
       code: 'JWORD_NATIVE_RESOURCE_MIME_MISMATCH',
-      entry: 'resources/image-integrity',
+      entry: 'document.json',
       recoverable: false
     }))
-    expect((await validateJWordPackage(missingDocumentRefSave.bytes)).diagnostics).toContainEqual(expect.objectContaining({
+    expect((await validateJWordPackage(externalMimeMismatchPackage)).diagnostics).toContainEqual(expect.objectContaining({
+      code: 'JWORD_NATIVE_RESOURCE_MIME_MISMATCH',
+      entry: 'document.json',
+      recoverable: false
+    }))
+    expect((await validateJWordPackage(extraManifestResourcePackage)).diagnostics).toContainEqual(expect.objectContaining({
       code: 'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING',
-      entry: 'image-missing-from-manifest',
+      entry: 'document.json',
       recoverable: false
     }))
-    await expect(loadJWordDocument(missingDocumentRefSave.bytes)).rejects.toMatchObject({
+    await expect(saveJWordDocument(missingDocumentRef)).rejects.toMatchObject({
       code: 'JWORD_NATIVE_RESOURCE_REFERENCE_MISSING'
     })
   })
@@ -264,6 +493,7 @@ describe('@4xian/jword-native public API', () => {
   it('migrates old schema packages and rejects unsupported schema versions with diagnostics', async () => {
     const oldPackage = await createPackageWithSchemaVersion(0)
     const migrated = await loadJWordDocument(oldPackage)
+    const oldValidation = await validateJWordPackage(oldPackage)
     const unsupportedOldPackage = await createPackageWithSchemaVersion(-1)
     const unsupportedValidation = await validateJWordPackage(unsupportedOldPackage)
     const futurePackage = await createPackageWithSchemaVersion(999)
@@ -271,21 +501,29 @@ describe('@4xian/jword-native public API', () => {
 
     expect(migrated.migrationReport).toEqual({
       sourceVersion: 0,
-      targetVersion: 1,
-      appliedSteps: ['schema-0-to-1'],
+      targetVersion: 2,
+      appliedSteps: ['schema-0-to-1', 'schema-1-to-2'],
       warnings: [
         expect.objectContaining({
           code: 'JWORD_NATIVE_OLD_SCHEMA_MIGRATED'
         })
       ]
     })
+    expect(oldValidation.valid).toBe(true)
+    expect(oldValidation.warnings).toContainEqual(expect.objectContaining({
+      code: 'JWORD_NATIVE_OLD_SCHEMA_MIGRATED',
+      message: 'JWORD_NATIVE_OLD_SCHEMA_MIGRATED'
+    }))
+    expect(oldValidation.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'JWORD_NATIVE_OLD_SCHEMA_MIGRATED'
+    }))
     expect(unsupportedValidation.valid).toBe(false)
     expect(unsupportedValidation.diagnostics).toContainEqual(expect.objectContaining({
-      code: 'JWORD_NATIVE_SCHEMA_UNSUPPORTED',
+      code: 'JWORD_NATIVE_MANIFEST_INVALID',
       recoverable: false
     }))
     await expect(loadJWordDocument(unsupportedOldPackage)).rejects.toMatchObject({
-      code: 'JWORD_NATIVE_SCHEMA_UNSUPPORTED'
+      code: 'JWORD_NATIVE_MANIFEST_INVALID'
     })
     expect(validation.valid).toBe(false)
     expect(validation.diagnostics).toContainEqual(expect.objectContaining({
@@ -315,6 +553,14 @@ describe('@4xian/jword-native public API', () => {
 /** 读取 warning code，保持断言聚焦在稳定诊断码。 */
 function readWarningCode(warning: JWordPackageWarning): string {
   return warning.code
+}
+
+/** 使用独立 Web Crypto 路径生成测试 package 的已知 checksum。 */
+async function sha256ForTest(bytes: Uint8Array): Promise<string> {
+  const buffer = new Uint8Array(bytes).buffer
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer)
+
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 /** 创建最小纯文本文档。 */
@@ -361,7 +607,14 @@ function createImageDocument(resources: readonly Resource[]): Document {
 /** 创建覆盖表格、图片、批注、页眉页脚和修订 metadata 的 canonical 文档。 */
 function createRichDocument(): Document {
   const rangeSnapshot = createRangeSnapshot('rich-range')
-  const imageResource = createPngResource('rich-image-resource', 'data:image/png;base64,QUJDRA==')
+  const imageResource: Resource = {
+    ...createPngResource('rich-image-resource', 'data:image/png;base64,QUJDRA=='),
+    metadata: {
+      futureResourceField: {
+        nested: ['preserved']
+      }
+    }
+  }
 
   return {
     kind: 'document',
@@ -386,6 +639,11 @@ function createRichDocument(): Document {
           {
             kind: 'paragraph',
             id: 'rich-heading',
+            properties: {
+              futureParagraphField: {
+                nested: [1, true, null]
+              }
+            },
             styleId: 'heading-1',
             runs: [
               {
@@ -595,15 +853,69 @@ async function replaceZipJsonEntry(
   return zip.generateAsync({ type: 'uint8array' })
 }
 
+/** 创建 document 内联 data URL 且 ZIP 同时携带资源 entry 的真实格式 1 package。 */
+async function createLegacyFormat1ResourcePackage(): Promise<Uint8Array> {
+  const save = await saveJWordDocument(createImageDocument([
+    createPngResource('image-legacy-format-1', 'data:image/png;base64,QUJDRA==')
+  ]))
+  const zip = await JSZip.loadAsync(save.bytes)
+  const manifest = JSON.parse(await zip.file('manifest.json')?.async('string') ?? '{}') as {
+    formatVersion: number
+    schemaVersion: number
+    minimumReaderVersion: number
+  }
+  const document = JSON.parse(await zip.file('document.json')?.async('string') ?? '{}') as Document
+  const checksums = JSON.parse(await zip.file('checksums.json')?.async('string') ?? '{}') as {
+    entries: Record<string, { mime: string, byteLength: number, sha256: string }>
+  }
+
+  if (document.resources === undefined) {
+    throw new Error('expected legacy resource fixture')
+  }
+
+  const legacyDocument: Document = {
+    ...document,
+    resources: document.resources.map((resource) => ({
+      ...resource,
+      source: {
+        kind: 'dataUrl',
+        url: 'data:image/png;base64,QUJDRA=='
+      }
+    }))
+  }
+  const documentJson = `${JSON.stringify(legacyDocument, null, 2)}\n`
+  const documentBytes = new TextEncoder().encode(documentJson)
+
+  manifest.formatVersion = 1
+  manifest.schemaVersion = 1
+  manifest.minimumReaderVersion = 1
+  checksums.entries['document.json'] = {
+    mime: 'application/json',
+    byteLength: documentBytes.byteLength,
+    sha256: await sha256ForTest(documentBytes)
+  }
+  zip.file('manifest.json', JSON.stringify(manifest, null, 2))
+  zip.file('document.json', documentJson)
+  zip.file('checksums.json', JSON.stringify(checksums, null, 2))
+
+  return zip.generateAsync({ type: 'uint8array' })
+}
+
 /** 创建指定 schemaVersion 的测试包。 */
 async function createPackageWithSchemaVersion(schemaVersion: number): Promise<Uint8Array> {
   const save = await saveJWordDocument(createTextDocument(`document-native-schema-${schemaVersion}`, 'schema'))
   const zip = await JSZip.loadAsync(save.bytes)
   const manifest = JSON.parse(await zip.file('manifest.json')?.async('string') ?? '{}') as {
+    formatVersion: number
     schemaVersion: number
+    minimumReaderVersion: number
   }
 
   manifest.schemaVersion = schemaVersion
+  if (schemaVersion === 0) {
+    manifest.formatVersion = 1
+    manifest.minimumReaderVersion = 1
+  }
   zip.file('manifest.json', JSON.stringify(manifest, null, 2))
 
   return zip.generateAsync({ type: 'uint8array' })

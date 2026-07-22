@@ -2,11 +2,11 @@
 
 ## Demo 做什么
 
-`examples/collab` 是协作能力的第三方宿主演示。页面先创建基础 editor/UI，再按 URL 参数懒加载内存 runtime 或真实 Hocuspocus runtime，覆盖协作连接、presence/awareness、离线状态、版本历史、自动插入、DOCX 导入到协作文档、本地 self-host Hocuspocus 服务和 HTTP history API。
+`examples/collab` 是协作能力的浏览器 SDK 与仓库开发 harness。页面先创建基础 editor/UI，再按 URL 参数懒加载内存 runtime 或真实 Hocuspocus runtime，覆盖协作连接、presence/awareness、离线状态、版本历史、自动插入、DOCX 导入到协作文档、本地 self-host Hocuspocus 服务和 HTTP history API。其本地 Node server 不是客户生产集成方式；正式服务端必须由版本化 Docker 镜像提供。
 
 ## 依赖哪些包
 
-运行依赖来自 `examples/collab/package.json`：
+运行依赖来自 `examples/collab/package.json`；其中 server 依赖只服务仓库本地 harness 和镜像前置验证：
 
 - `@4xian/jword-core`
 - `@4xian/jword-ui`

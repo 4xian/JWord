@@ -12,7 +12,6 @@ import { createServer, type IncomingMessage } from 'node:http'
 
 import type { EditorEventListener } from '@4xian/jword-core'
 import {
-  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement,
   type JWordLicenseSignaturePayload
 } from '@4xian/jword-license'
@@ -26,6 +25,7 @@ import {
 } from '@4xian/jword-collab'
 import { describe, expect, it } from 'vitest'
 import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createInsecureTestOnlyJWordLicenseSignature } from '../../../fixtures/license/create-insecure-test-only-jwl1-token'
 
 describe('collaboration history base64 codec', () => {
   it('records and restores a 1MB update without stack overflow', async () => {

@@ -64,7 +64,6 @@ export interface DocxError {
   readonly message: string
   readonly requestId?: string
   readonly feature?: JWordLicenseFeatureKey
-  readonly customerId?: string
 }
 
 export interface DocxOpaquePreservation {

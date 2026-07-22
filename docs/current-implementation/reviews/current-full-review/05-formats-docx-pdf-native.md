@@ -27,13 +27,16 @@
 - 触发场景：运行期插入的 blobUrl 图片（无 nativeBytesBase64）→ 保存 → 关闭 → 重开。
 - 后果：图片引用变失效 blob URL，正文图片彻底丢失（即便打包了字节也不会被重新关联）。
 - 建议修复：加载时读取 packed resource 字节并把 source 重建为 dataUrl/内存字节；保存时对无字节的 blobUrl 主动解析或明确失败，而非静默保留死链接。
-- 当前结论：**确认**。保存侧可能只留下不可复用 blob URL，加载侧即使发现 packed resource 也只返回摘要，没有回挂 document resource。
+- B0 结论：**确认，Phase 2B B3 已修复**。原保存侧可能只留下不可复用 blob URL，原加载侧即使发现 packed resource 也只返回摘要，没有回挂 document resource。
 - 详细修复步骤：
   1. 明确 native 可持久化资源形态：插入资源时就保留 bytes/可序列化来源，不能把短生命周期 blob URL 当持久化身份。
   2. 保存前遍历所有被文档引用的资源并解析为 bytes；无法解析的 blob URL 返回稳定阻断诊断，不能只 warning 后报告保存成功。
   3. 写包时把 `document.json` 的 source 改为逻辑 packed-resource 引用，并保证 path/id/mime/checksum 一一对应。
   4. 加载时读取、校验并重建 resource source（data URL、内存 bytes 或有明确 revoke 生命周期的新 object URL），再返回 document。
   5. 增加保存后销毁原 blob URL、重新加载仍可读取相同图片字节的 roundtrip 测试。
+- Phase 2B 实施状态：格式/schema 升级为 2，writer 的 `minimumReaderVersion` 为 2，reader 继续支持格式 1 与 schema 0/1。格式 2 的 `document.json` 使用 `{ kind: 'packedResource', url: 'resources/<id>' }`，load 只在 checksum/integrity 全部通过后按现有总预算重建运行时 `dataUrl`；save-load-save 不把 base64 写回 `document.json`。
+- 保存边界：data URL 可直接打包；blob URL 仅在有 `metadata.nativeBytesBase64` 时打包，并从 package document metadata 移除 fallback。无 fallback 的 blob URL 和直接保存 unresolved packed-resource 都稳定拒绝，不调用 `fetch`。公开 diagnostic 的任意资源路径、URL 或 ID 统一脱敏为 `document.json`。
+- 关闭边界：B3 focused/package/architecture/type/lint、B4 及根测试均通过，FMT-03 已正式 `Closed`。本方案不新增 bytes DTO、object URL owner 或 Worker transferable，最低浏览器认证继续 `Deferred/not-run`。
 
 ## FMT-04（P1）native 取消（AbortSignal）无法真正中断解压
 
@@ -129,6 +132,14 @@
   2. 保留 `Number.isFinite` 作为防御性断言，但测试重点是 JSON 可表达的负数、小数和超安全整数。
   3. 解析后再核对 checksum byteLength 与实际 entry 大小，版本比较只接收已校验整数。
   4. 增加负版本、小数版本、负 byteLength 和超安全整数四个表驱动 case，不添加无法通过 JSON.parse 的 NaN fixture。
+
+### Phase 2A B1-B5 当前实施状态
+
+`FMT-01`、`FMT-04`、`FMT-06`、`FMT-10` 的 B1-B5 已完成。后续复核发现的开放字段有限数字、非法 data URL、保存最终进度取消竞态、ZIP64 回归矩阵和逐方法中文注释问题，以及最终残留的攻击者 `resourceId` 公开 diagnostic `entry` 泄漏、entry 间取消和 Worker 中途取消证据缺口均已修复，Standards/Spec 双轴复审无剩余 finding；这些 finding 与 Phase 2A 已重新 `Closed`。最低浏览器人工认证仍单独 deferred。
+
+### Phase 2B B3 当前实施状态
+
+FMT-03 的 F2 + C1 实现和 B3 双轴复核已完成，Standards/Spec 均为 `PASS`、0 finding。B4 的 Phase 2B focused/package/architecture/type/build/lint 门禁、根 `pnpm test` 与当前 Chromium/Firefox/WebKit 6/6 smoke 均通过，FMT-03 已 `Closed`。
 
 ## 正向确认（非缺陷）
 

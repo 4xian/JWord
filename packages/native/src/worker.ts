@@ -176,7 +176,7 @@ function createJWordNativeWorkerCancelledEvent(requestId: string): JWordNativeWo
   return createJWordNativeErrorEvent(requestId, {
     name: 'JWordNativePackageError',
     code: 'JWORD_NATIVE_WORKER_CANCELLED',
-    message: '任务已取消',
+    message: 'JWORD_NATIVE_WORKER_CANCELLED',
     recoverable: false,
     requestId
   })

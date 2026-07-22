@@ -10,6 +10,7 @@ import * as Y from 'yjs'
 
 import type { DocumentStore } from '../model/document-store'
 import type { SelectionRestoreSnapshot } from '../model/selection'
+import { hasYjsTransactionChanged } from './yjs-transaction-change'
 
 type HistoryStackItem = NonNullable<ReturnType<Y.UndoManager['undo']>>
 
@@ -177,7 +178,8 @@ function createScopedHistoryManager(
   const pendingMetadata: HistoryEntryMetadata[] = []
   const undoManager = new Y.UndoManager(doc, {
     trackedOrigins: new Set(trackedOrigins),
-    captureTimeout: captureTimeout ?? 500
+    captureTimeout: captureTimeout ?? 500,
+    captureTransaction: hasYjsTransactionChanged
   })
 
   undoManager.on('stack-item-added', (event) => {

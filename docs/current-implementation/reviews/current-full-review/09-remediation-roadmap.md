@@ -9,6 +9,7 @@
 3. 开始前先用同一条聚焦验证复现；修改后复跑同一验证，再扩大到阶段矩阵。
 4. 只修改当前阶段必需文件；发现新问题先登记，不自动扩大范围。
 5. 不执行真实 publish，不自动提交代码。真实发布必须同时满足 `LIC-013` 和阶段 7 门禁。
+6. i18n 是所有后续阶段的横切验收项：新增或修改用户可见文本、tooltip、aria-label 或 live region 时，必须同步提供 `zh-CN` / `en-US` 文案；跨层 diagnostic 在 runtime、worker、server、日志和协议中只使用语言无关的稳定 code 与必要结构化字段，由 UI、wrapper 或宿主展示层负责本地化。
 
 ## 2. 阶段总览
 
@@ -17,8 +18,8 @@
 | 0A | 基础反馈环和单 Host EditorShell | Completed | 已退出 |
 | 0B | UI 工作区、Toast、debug、i18n | Completed | 已退出 |
 | 0C | OEM Phase 0 产品与技术输入 | Completed / 法律 Deferred | 允许内部实施，阻断外部发布 |
-| 1 | 重建 License 深模块 | **Next / Not Started** | 阻断收费 PoC 和商业模块迁移 |
-| 2 | 不可信文件、恢复和 core 数据正确性 | Pending | 阻断可处理不可信文档和受控 PoC |
+| 1 | 重建 License 深模块 | **Completed for internal progression / LIC-107B2 manual certification deferred** | 已退出；最低浏览器人工认证仅阻断对应对外兼容声明和商业 GA |
+| 2 | 不可信文件、恢复和 core 数据正确性 | Closed | Phase 2 已完成；下一步为 Phase 3 |
 | 3 | 发布 artifact 与第三方消费基线 | Pending | 阻断客户交付 |
 | 4 | Professional Editing、Formats 和 JWL1 移除 | Pending | 阻断首期商业模块发售 |
 | 5 | Core、UI、wrapper 产品化 | Pending | 阻断公开承诺范围内的 SDK GA |
@@ -36,13 +37,13 @@
 
 ### 阶段 0B：UI 工作区、Toast、debug、i18n
 
-已完成既定中英文治理和 UI 模块接入。RTL、更广语言、字体和输入法矩阵继续归阶段 8，不重开已完成实施方案。
+已完成既定中英文基础设施和 UI 模块接入。后续新增文案及本轮审查确认的遗留硬编码继续按执行规则在对应阶段关闭，不重开阶段 0B；RTL、更广语言、字体和输入法矩阵继续归阶段 8。
 
 ### 阶段 0C：OEM Phase 0
 
 `LIC-000` 至 `LIC-012` 已批准。`LIC-013` 保持 `Deferred`：允许内部技术实施，但真实 npm 发布、商业 package 交付和签约必须 fail closed。
 
-## 阶段 1：重建 License 深模块（当前下一步）
+## 阶段 1：重建 License 深模块（已完成内部实施退出）
 
 ### 目标
 
@@ -55,17 +56,28 @@
 
 ### 前置输入
 
-- 必须获得批准的 `jword-prod-2026-k1` 生产公钥，才能关闭 `LIC-103` 和本阶段。
-- 生产公钥缺失时保持 fail closed；测试 key、临时 key 或调用方注入 key 均不能作为生产 trust store。
+- 已获得批准的 `jword-prod-2026-k1` 生产公钥并用于关闭 `LIC-103`；只有公钥进入仓库。
+- 测试 key、临时 key 或调用方注入 key 均不能作为生产 trust store；私钥不得进入仓库、测试或日志。
 
 ### 实施顺序
 
-1. `LIC-100`：先增加生产入口拒绝仓库测试私钥 token 的红灯测试。
-2. `LIC-101/102`：拆分 JWL2 schema、feature、error、trust store 和 handle；实现严格 parser。
-3. `LIC-103/106/110`：固定生产 `issuer + keyId` trust store，移除默认测试公钥、正式 signer export 和调用方换根入口。
-4. `LIC-104/105`：实现 WeakMap-branded handle、时间检查和 identity-checked worker transfer。
-5. `LIC-107`：迁移成熟 Ed25519 实现，或完成独立审计、标准向量和必要的模糊验证。
-6. `LIC-108/109/111`：收口签发工具、稳定 diagnostics 和单一 runtime identity。
+1. `LIC-100`（Completed）：生产入口拒绝仓库测试私钥 token 的回归已完成；缺少可信生产 trust root 时保持 fail closed。
+2. `LIC-101`（Completed）：已拆分 feature、error、JWL1 兼容、JWL2 数据形状、trust store 数据形状和未来 handle 承载文件；根入口公开导出与运行时行为保持不变。
+3. `LIC-102`（Completed）：已实现两阶段严格 JWL2 parser、固定 `JWL2.<payload>` 签名输入、最小 claims、四种 `licenseClass`、三个模块 feature、资源上限和 canonical 校验；parser 输出仅是未验签内部数据，不建立可信授权 identity，也不得直接进入 handle 状态。
+4. `LIC-103`（Completed）：已固定生产 `issuer + keyId` trust lookup，保持默认测试公钥已移除，删除调用方换根入口，并在完整 claims 解析前完成 Ed25519 验签。
+5. `LIC-104`（Completed）：仅在 LIC-103 验签成功且时间关系有效后，把 `licenseClass`、module features 和期限登记到模块私有 WeakMap，再生成不可伪造 handle；手工调用 parser、普通对象、类型断言、对象复制或 structured clone 均不能获得可信 handle。
+6. `LIC-105`（Completed）：可信 handle 通过 WeakMap identity 后才能创建只含原始 token 的 structured-clone transfer；接收侧复用既有激活路径重新验签、校验时间并创建新 handle。
+7. `LIC-106`（Completed）：正式根入口、production src、dist 和 tarball 已删除测试 signer 与 Ed25519 签名入口；等价 JWL1 测试签发只存在于仓库 fixture support，浏览器示例和 `.mjs` smoke 只使用固定 fixture token。
+8. `LIC-107`（Completed for internal progression）：实现、当前运行时和 Node 最低版本证据已收口；最低浏览器人工认证按明确风险接受延期，不再阻断后续内部阶段。
+   - `LIC-107A`（Completed）：使用精确 `@noble/curves@2.2.0` 和 `@noble/curves/ed25519.js` 替换自研 verifier，保持同步 interface 与 `{ zip215: false }` 严格校验，并通过 RFC 8032、篡改、非法输入和 small-order/non-canonical 拒绝回归。
+   - `LIC-107B1`（Completed）：独立 smoke 已从本地 tarball 安装到临时空项目，验证 Node、Vite ES2022、当前 Chromium/Firefox/WebKit、真实 module Dedicated Worker、transfer、篡改拒绝、no-alias 与单一 noble 依赖树。
+   - `LIC-107B2`（Conditionally Accepted；manual certification deferred）：Node 20.19.0 已在固定 Docker 镜像中通过，当前 Chromium、Firefox、WebKit 和真实 module Dedicated Worker 自动回归也已通过。Chrome 100、Edge 100、Firefox 128 和 Safari 16.4 尚未实测；该人工矩阵转为对外最低版本认证和商业 GA 前门禁，不再阻断内部阶段推进。最新版 Playwright 结果仍不得描述为最低版本实测证据。
+9. `LIC-108`（Completed）：`LIC-108A` 严格 JWL2 signer 与 `LIC-108B` 离线验签/裁剪 CLI 均已按批准契约完成；CLI 固定生产 trust store，只输出裁剪 JSON 或稳定 code，不扩展公开 License API。
+10. `LIC-109`（Completed）：JWL2 核心诊断、旧在线状态/offline grace/customerId 清理、DOCX/PDF worker DTO、Collab License alias 和 registry/docs 已收口；runtime/协议只把语言无关 code 与必要结构化字段作为契约。
+11. `LIC-110`（Completed）：B1 建立隔离 JWL2 test-only trust/key，B2 迁移 `jwl2.test.ts` 到固定 JWL2 fixture，并在 Gate 5、dist、exports 与 tarball 扫描测试 seed、公钥、keyId、signer 和 fixture 泄漏；不迁移 DOCX/PDF/Collaboration，默认 production trust 继续拒绝测试 token。
+12. `LIC-111`（Completed）：B1 将 DOCX、PDF、Collaboration 和 Collab Server 改为必需 License peer 与仓库 devDependency，并验证 pnpm/npm、Node 20.19.0 单 runtime 及双 runtime fail closed；B2 通过 Vite ES2022 `chunk.modules` 和当前 Chromium/Firefox/WebKit 证明三个浏览器消费包进入同一 License runtime module graph。当前浏览器结果不替代 LIC-107B2 最低版本证据。
+
+`LIC-103` 至 `LIC-111` 的命令、数量和失败边界统一记录在 [当前验证计划](10-verification-plan.md)。公开 JWL2 激活、WeakMap handle、时间关系、运行时 feature 检查、identity-checked worker transfer、正式 signer 移除、当前运行时 smoke、严格 JWL2 signer、离线 verifier、稳定诊断、test-only trust/key 产物隔离和单一 runtime identity 已完成。`LIC-107B2` 的最低浏览器人工认证已按明确风险接受转为发布前 Deferred 门禁，阶段 1 对内部研发视为完成并允许进入阶段 2；SEC-01 仍因 JWL1、`allowInsecureFixtureLicense` 和后续调用方迁移保持 Open。
 
 ### 最小退出标准
 
@@ -75,12 +87,13 @@
 - 未知 issuer/keyId/class/feature、非规范时间、未来生效、过期和篡改 token 稳定拒绝。
 - 正式 tarball 不含私钥、测试 signer、测试 trust store 或调用方换根入口；JWL1 接受路径在阶段 4C 删除。
 - 标准向量、focused license tests、typecheck 和 package build 通过。
+- Node 20.19.0 已有真实最低版本证据；Chrome 100、Edge 100、Firefox 128 和 Safari 16.4 的人工认证按明确风险接受延期到对应对外兼容声明和商业 GA 前，当前最新版浏览器 smoke 不能替代或冒充该证据。
 
 ### 明确不做
 
 不修改 DOCX/native 资源预算，不改协作 admission，不做 OEM Phase 2/3/4/5，不清理 UI 或 wrapper。
 
-## 阶段 2：不可信文件、恢复和 core 数据正确性
+## 阶段 2：不可信文件、恢复和 core 数据正确性（Closed）
 
 ### 目标
 
@@ -93,23 +106,36 @@
 - 拒绝重复关键 entry、路径穿越、负数/小数计数字段和超预算包。
 - 明确 JSZip hard cancel 的真实能力；无法中断的阶段不得虚假声明已取消。
 
+当前状态：Phase 2A、2B 保持 `Closed`。Phase 2C 原 B4 关单曾被多页公开 seam 反例推翻：后页 no-op 后的首页远端删除会让 layout 复用过期前缀。`CORE-01` 与 B3/B4 已完成重开修复、全量门禁和最终 Standards/Spec 双轴复审，Phase 2C 重新 `Closed`；下一边界为 Phase 3。
+
 ### 子批次 2B：恢复与资源 roundtrip
 
 - Finding：`SEC-04/PERS-01`、`FMT-03`、`PERS-03`。
-- 在隔离 Y.Doc 中准备恢复，通过事务/CAS 原子提交。
-- packed resource 重开后重建可渲染资源，并定义 object URL 生命周期。
-- 通用 Y.Text attributes 的无损需求按 P2 独立处理，不把 JWord run.properties 误判为丢失。
+- 已在隔离 Y.Doc 中准备恢复；memory 与 storage 统一按 `prepared -> target-applied -> finalized` 编排，pending 不进入普通版本列表，旧 storage 在 restore 时仍 fail closed。
+- 已使用格式/schema 2 的 packed-resource 逻辑引用，checksum/integrity 通过后重建运行时 data URL；本方案不引入 object URL owner。
+- 两个正式 adapter 已无损复制通用 Y.Text attributes，并单独断言 JWord `run.properties` 不回归；collab 示例仍留作后续独立任务。
+- 历史顺序与 append 屏障修复已通过 B2 Standards/Spec 双轴复审，均为 `PASS`、0 finding。B4 中 Persistence focused 为 2 文件/33 测试、package 为 4 文件/41 测试；Native focused 为 2 文件/24 测试、package 为 7 文件/141 测试；fresh build、Core、architecture、types、typecheck、lint 和 whitespace 均通过，B4 最终 Standards/Spec 复审也均为 `PASS`、0 finding。`TEST-BASELINE-01` 收口后根 `pnpm test` 为 235 文件、1238 测试全部通过，Phase 2B 已关单。通用 append CAS/幂等、multi-instance、外部 operation store 和完整 PERS-02 继续归入 Phase 6B。
+
+### TEST-BASELINE-01：历史功能测试基线恢复（2026-07-19）
+
+- 已完成：License test-only seam 与真实 public root marker 拒绝回归、Gate 7 vanilla fixture 路径及其内部导入扫描、3 个 Core 空测试入口删除及 Phase 5 split 断言同步；Gate 5 commercial readiness 通过 `vitest.config.ts` 的 `maxWorkers: 4` 稳定为 6/6。
+- 当时根测试：`pnpm test` pretest build 通过；235 个文件、1238 个测试全部通过。该数字是 TEST-BASELINE-01 历史收口证据，不是 Phase 2C 最新根测试。
+- Toolbar DOM 测试已移除没有独立设计规范的精确像素间距断言，保留结构分组和非绝对定位契约；Gate 0 Husky 测试按当前 pre-commit 只执行 `pnpm lint` 的真实契约收窄，focused 为 1/1。
+- 状态：`Closed`。该基线不再阻断 Phase 2C；Phase 2C 最新根测试为 236 个文件、1244 个测试，见下方子批次 2C 重开证据。
 
 ### 子批次 2C：远端纯删除 update
 
 - Finding：`CORE-01`、相关 `CORE-05` dirty 语义。
-- 用纯删除 update 和幂等重放先建立回归测试，再统一真实 transaction 变化判定。
+- 已用纯删除 update 和幂等重放建立公开 seam 回归，并让 `run()`、`applyUpdate()`、`runMutation()` 统一按真实 Yjs transaction 的 struct/state 推进或 delete set 判定 dirty。
+- dirty false 已复用 projection/layout、过滤空 history 和 metadata，并避免 shared Editor 的 selection/document refresh；`selectionAfter` 保持独立 selection-only refresh。
+- 原关闭状态已被多页反例推翻：后页 no-op 遗留的局部范围会污染后续首页 raw/shared 删除布局。当前已让 dirty `applySyncUpdate()` 和共享 Editor 接收其他实例 dirty 事务时从第一页全量失效，并清除 `layoutDirtyRange`。
+- 状态：`Closed`。新增多页与同名本地 command 回归均由红转绿；focused 5 文件/24 测试、Core 73 文件/371 测试、architecture 3 文件/19 测试和根测试 236 文件/1244 测试全部通过，最终 Standards/Spec 均为 `PASS`、0 finding。
 
 ### 退出标准
 
 - ZIP bomb、大 JSON、重复 entry、异常压缩比和错误嵌套 schema 稳定拒绝。
-- 保存 -> 关闭 -> 重开 -> 图片渲染成功。
-- 故障注入后当前文档和 history 均不变。
+- 保存 -> 关闭 -> 重开后 packed bytes 重建为可渲染 data URL，save-load-save 不把 base64 写回 `document.json`。
+- memory/storage 的 pending 创建、取消、finalize、CAS 冲突、提交后确认丢失、恢复重试与 observer 前后抛错矩阵证明：普通失败不留下已完成 restore，divergence/recovery-required 可后续收敛，成功只在已确认 finalize 后返回且重试不重复追加。
 - 远端纯删除立即刷新 projection/layout，幂等 update 不产生虚假 dirty。
 
 ## 阶段 3：发布 artifact 与第三方消费基线
@@ -160,7 +186,7 @@
 - Professional Editing、DOCX、PDF 和 worker 对同一 token 结果一致。
 - Base artifact 不含商业实现，商业 artifact 不含源码/source map。
 - 正式入口、tarball、示例和文档不存在 JWL1 接受路径。
-- DOCX 受限兼容矩阵、默认另存和用户可见 diagnostic 与销售材料一致。
+- DOCX 受限兼容矩阵、默认另存和用户可见 diagnostic 与销售材料一致；底层 package/worker 保持语言无关 code，内建展示层补齐 `zh-CN` / `en-US`。
 
 ## 阶段 5：Core、UI、wrapper 产品化
 
@@ -175,12 +201,13 @@
 - 查询首尾空格、dirty 语义和监听器异常必须有明确公开行为。
 - UI DOM 从 root ownerDocument/defaultView 派生，禁止继续扩大跨 realm 全局 DOM 依赖。
 - React/Vue 的 readonly、theme、locale、uiOptions 和 controlled value 按稳定契约更新。
+- UI-08 列出的硬编码文案迁入 i18n 字典；新增或修改的 tooltip、aria-label、live region 和错误提示同步补齐 `zh-CN` / `en-US`。
 - destroy 和构造失败使用独立清理步骤，单个失败不得跳过后续资源释放。
 - 水印和 brand 不宣传为客户端不可绕过的安全边界。
 
 ### 退出标准
 
-公开承诺的 Vanilla/React/Vue/iframe 路径有最少 runtime 回归；构造、更新、销毁和跨 realm 路径无资源残留或重复加载。
+公开承诺的 Vanilla/React/Vue/iframe 路径有最少 runtime 回归；构造、更新、销毁和跨 realm 路径无资源残留或重复加载。动态 locale 切换不得重建 editor 或 UI root；中文用户界面不得泄漏字典 key，英文用户界面不得残留硬编码中文；用户可见文本、tooltip、aria-label 和 live region 必须同步更新。
 
 ## 阶段 6：Collaboration 授权与生产数据面（条件阶段）
 
@@ -198,12 +225,26 @@
 ### 子批次 6B：生产数据面
 
 - Finding：`PERS-02`、`SEC-05/COLLAB-05/COLLAB-06`、`COLLAB-07`。
-- 建立事务/CAS/幂等 history、Origin allowlist、可信代理和共享限流策略。
+- 为通用 append 建立事务/CAS/幂等 history，并处理 multi-instance、外部 operation store、Origin allowlist、可信代理和共享限流策略；不重复实现已在 2B 前移的 restore 专用 pending 协议与单进程 restore/append 屏障。
 - 提供 HTTP+WSS、持久化、readiness/liveness、日志、metrics、备份恢复和 Docker/Compose runbook。
+- 所有正式 JWord 服务端只通过不可变版本与 digest 的 Docker 镜像交付；Node 和 server npm package 只位于镜像内，客户应用代码只集成浏览器 SDK并连接 HTTP/WSS endpoint。
+
+### LIC-309 实施编排
+
+LIC-309 是阶段 6 的生产交付收口项，不是独立于 admission 和生产数据面的快捷 Docker 打包。按以下顺序分批批准和验收：
+
+1. `LIC-309A` 生产镜像基础：多阶段构建、固定 Node runtime、非 root、最小运行层和敏感/测试资产排除。
+2. `LIC-309B` HTTP/WSS 正式入口：同一镜像默认同时提供 HTTP 与 WebSocket；若拆 deployment，仍复用同一版本镜像、协议和内部 context。该项依赖 `LIC-300/301` 的 deployment factory 与共享 context。
+3. `LIC-309C` License/secret：启动前 fail-closed、preset/class 固定、运行中过期 readiness 与写入拒绝。该项依赖 `LIC-301/304`，不得恢复 allow-all `licenseHook`。
+4. `LIC-309D` 生产持久化：外部数据库/对象存储 adapter、事务/CAS、幂等、迁移、双实例、备份恢复。该项必须与子批次 6B 的 `PERS-02` 一并关闭。
+5. `LIC-309E` 准入和运行治理：可信 `actorId`、Origin、代理、共享限流、health/readiness、日志与 metrics。该项依赖 `LIC-305` 和子批次 6B 的 `SEC-05/COLLAB-05/COLLAB-06`。
+6. `LIC-309F` 部署模板与发布验收：Docker Compose 参考部署、同一 image digest 的端到端和故障恢复验证、SBOM、生产依赖清单与镜像扫描；Kubernetes/Helm 需按交付范围另行批准。
+
+每个子批次完成后立即停止等待复核；不得因镜像能够 build/start 就跳过 admission、License、持久化或故障恢复门禁，也不得把现有 Dockerfile 描述为客户生产镜像。
 
 ### 退出标准
 
-未准入请求在 storage 前拒绝；双实例并发不丢更新；重启、断网重连、备份恢复和 license 到期路径通过；缺生产配置时拒绝启动。
+未准入请求在 storage 前拒绝；双实例并发不丢更新；重启、断网重连、备份恢复和 license 到期路径通过；缺生产配置时拒绝启动。客户宿主不需要直接安装 Node 或导入服务端 npm package，生产镜像不得包含 allow-all admission/license preset 或 volatile-only storage。`LIC-309A` 至 `LIC-309F` 均有同一不可变 image digest 下的可复核证据后，才能关闭 LIC-309。
 
 ## 阶段 7：商业发布、法律和运营闭环
 

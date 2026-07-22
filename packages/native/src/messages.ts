@@ -106,9 +106,10 @@ export function serializeJWordNativePackageError(
     return {
       name: error.name,
       code: error.code,
-      message: error.message,
+      message: error.code,
       recoverable: error.recoverable,
       ...(error.entry === undefined ? {} : { entry: error.entry }),
+      ...(error.path === undefined ? {} : { path: error.path }),
       requestId: error.requestId ?? requestId
     }
   }
@@ -116,7 +117,7 @@ export function serializeJWordNativePackageError(
   return {
     name: 'JWordNativePackageError',
     code: 'JWORD_NATIVE_WORKER_ERROR',
-    message: error instanceof Error ? error.message : String(error),
+    message: 'JWORD_NATIVE_WORKER_ERROR',
     recoverable: false,
     requestId
   }

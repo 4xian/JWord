@@ -19,7 +19,8 @@ import type {
   JWordPackageManifest,
   JWordPackageResourceSummary,
   JWordPackageWarning,
-  SaveJWordDocumentOptions
+  SaveJWordDocumentOptions,
+  ValidateJWordPackageOptions
 } from './types.js'
 
 /** 创建 package checksums。 */
@@ -65,34 +66,75 @@ export async function createChecksums(
 
 /** 校验 checksum 和资源 entry。 */
 export async function inspectChecksums(
-  zip: JSZip,
+  zip: { readEntry(entry: string): Promise<Uint8Array | undefined> },
   checksums: JWordPackageChecksums,
   diagnostics: JWordPackageDiagnostic[],
   warnings: JWordPackageWarning[],
-  requestId?: string
-): Promise<void> {
-  for (const [entry, checksum] of Object.entries(checksums.entries)) {
-    const file = zip.file(entry)
+  options: ValidateJWordPackageOptions,
+  retainedEntries: ReadonlySet<string>
+): Promise<ReadonlyMap<string, Uint8Array>> {
+  const verifiedEntries = new Map<string, Uint8Array>()
 
-    if (file === null) {
-      const warning = createWarning('JWORD_NATIVE_RESOURCE_MISSING', `${entry} 缺失，正文仍可恢复。`, requestId, entry)
+  assertNotAborted(options.signal, options.requestId)
+
+  for (const [entry, checksum] of Object.entries(checksums.entries)) {
+    assertNotAborted(options.signal, options.requestId)
+    const bytes = await zip.readEntry(entry)
+    assertNotAborted(options.signal, options.requestId)
+
+    if (bytes === undefined) {
+      const warning = createWarning(
+        'JWORD_NATIVE_RESOURCE_MISSING',
+        `${entry} 缺失，正文仍可恢复。`,
+        options.requestId,
+        entry
+      )
       warnings.push(warning)
       diagnostics.push(warning)
       continue
     }
 
-    const bytes = await file.async('uint8array')
     const actualHash = await sha256Hex(bytes)
+    assertNotAborted(options.signal, options.requestId)
 
     if (actualHash !== checksum.sha256 || bytes.byteLength !== checksum.byteLength) {
-      diagnostics.push(createDiagnostic({
-        code: 'JWORD_NATIVE_HASH_MISMATCH',
-        severity: 'error',
-        recoverable: false,
-        message: `${entry} checksum 不匹配`,
-        entry,
-        requestId
-      }))
+      diagnostics.push(createHashMismatchDiagnostic(entry, options.requestId))
+      continue
+    }
+
+    if (retainedEntries.has(entry)) {
+      verifiedEntries.set(entry, bytes)
+    }
+  }
+
+  return verifiedEntries
+}
+
+/** 在解压 checksum 目标前对比中央目录声明长度。 */
+export function inspectChecksumEntryMetadata(
+  zip: {
+    readonly entries: readonly {
+      readonly name: string
+      readonly directory: boolean
+      readonly uncompressedSize: number
+    }[]
+  },
+  checksums: JWordPackageChecksums,
+  diagnostics: JWordPackageDiagnostic[],
+  requestId?: string
+): void {
+  const metadataByName = new Map(zip.entries.map((entry) => [entry.name, entry]))
+
+  for (const [entry, checksum] of Object.entries(checksums.entries)) {
+    const metadata = metadataByName.get(entry)
+
+    if (
+      metadata !== undefined &&
+      !metadata.directory &&
+      metadata.uncompressedSize !== checksum.byteLength
+    ) {
+      diagnostics.push(createHashMismatchDiagnostic(entry, requestId))
+      return
     }
   }
 }
@@ -124,4 +166,19 @@ function readEntryMime(entry: string, resources: readonly PackedResource[]): str
   }
 
   return 'application/json'
+}
+
+/** 创建不复制 checksum 输入内容的稳定 mismatch diagnostic。 */
+function createHashMismatchDiagnostic(
+  entry: string,
+  requestId?: string
+): JWordPackageDiagnostic {
+  return createDiagnostic({
+    code: 'JWORD_NATIVE_HASH_MISMATCH',
+    severity: 'error',
+    recoverable: false,
+    message: 'JWORD_NATIVE_HASH_MISMATCH',
+    entry,
+    requestId
+  })
 }

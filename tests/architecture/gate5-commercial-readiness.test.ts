@@ -9,7 +9,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('Gate 5 commercial readiness', () => {
@@ -28,12 +28,9 @@ describe('Gate 5 commercial readiness', () => {
         }
       }
     })
-    expect(docxPackage.dependencies).toMatchObject({
-      '@4xian/jword-license': 'workspace:*'
-    })
-    expect(pdfPackage.dependencies).toMatchObject({
-      '@4xian/jword-license': 'workspace:*'
-    })
+    expect(Object.keys(licensePackage.exports ?? {})).toEqual(['.'])
+    assertLicensePeerDependency(docxPackage)
+    assertLicensePeerDependency(pdfPackage)
   })
 
   it('provides a release check for private registry, pack contents, export maps and lazy loading', () => {
@@ -60,6 +57,7 @@ describe('Gate 5 commercial readiness', () => {
       expect(packageReport.npmPackDryRun.requiredFilesMissing).toEqual([])
       expect(packageReport.npmPackDryRun.forbiddenFiles).toEqual([])
       expect(packageReport.npmPackDryRun.sourceMapLeaks).toEqual([])
+      expect(packageReport.npmPackDryRun.forbiddenTextLeaks).toEqual([])
       expect(packageReport.npmPackDryRun.files).toContain('package.json')
       expect(packageReport.npmPackDryRun.files.some((file) => file.startsWith('src/'))).toBe(false)
       expect(packageReport.npmPackDryRun.files.some((file) => file.startsWith('test/'))).toBe(false)
@@ -74,17 +72,37 @@ describe('Gate 5 commercial readiness', () => {
     ])
   })
 
-  it('blocks the legacy FNV helper from the public license signing path', () => {
-    const source = readFileSync('packages/license/src/index.ts', 'utf8')
+  it('keeps legacy JWL1 fail closed without exposing production signing capability', () => {
+    const publicSource = readEvidenceFiles([
+      'packages/license/src/index.ts',
+      'packages/license/src/license.ts'
+    ])
+    const legacySource = readFileSync('packages/license/src/legacy-jwl1.ts', 'utf8')
+    const productionSource = readTypeScriptFilesUnder('packages/license/src')
+    const productionDist = readPublishedTextFilesUnder('packages/license/dist')
+    const jwl2VerifierSource = readFileSync('packages/license/src/verify-jwl2.ts', 'utf8')
     const issueScript = readFileSync('tools/license/issue-license.mjs', 'utf8')
 
     expect(existsSync('tools/license/issue-license.mjs')).toBe(true)
-    expect(source).toContain("const JWORD_LICENSE_TOKEN_VERSION = 'JWL1'")
-    expect(source).toContain('verifyEd25519')
-    expect(source).toContain('allowInsecureFixtureLicense')
-    expect(source).toContain('createInsecureTestOnlyJWordLicenseSignature')
-    expect(source).not.toContain('createJWordLicenseSignature')
-    expect(source).not.toContain('readJWordLicenseVerifierMaterial')
+    expect(legacySource).toContain("const JWORD_LICENSE_TOKEN_VERSION = 'JWL1'")
+    expect(legacySource).not.toContain('verifyEd25519')
+    expect(legacySource).toContain(
+      'if (token.startsWith(`${JWORD_LICENSE_TOKEN_VERSION}.`)) {\n    return { ok: false }\n  }'
+    )
+    expect(jwl2VerifierSource).toContain('verifyEd25519')
+    expect(jwl2VerifierSource).toContain('lookupTrustedJWordLicensePublicKey')
+    expect(legacySource).not.toContain('publicKeyBase64Url')
+    expect(publicSource).not.toContain('publicKeyBase64Url')
+    expect(legacySource).toContain('allowInsecureFixtureLicense')
+    expect(productionSource).not.toContain('createInsecureTestOnlyJWordLicenseSignature')
+    expect(productionSource).not.toContain('signEd25519')
+    expect(publicSource).not.toContain('createJWordLicenseSignature')
+    expect(publicSource).not.toContain('readJWordLicenseVerifierMaterial')
+    for (const marker of readTestOnlyJwl2ForbiddenMarkers()) {
+      expect(hasTextMarker(productionSource, marker.value), marker.label).toBe(false)
+      expect(hasTextMarker(productionDist, marker.value), marker.label).toBe(false)
+      expect(hasTextMarker(JSON.stringify(readJson('packages/license/package.json')), marker.value), marker.label).toBe(false)
+    }
     expect(issueScript).toContain('JWORD_LICENSE_PRIVATE_KEY_PEM')
     expect(issueScript).toContain('JWORD_LICENSE_PRIVATE_KEY_PATH')
   })
@@ -159,8 +177,11 @@ describe('Gate 5 commercial readiness', () => {
 interface PackageJson {
   readonly name?: string
   readonly private?: boolean
-  readonly exports?: unknown
+  readonly exports?: Readonly<Record<string, unknown>>
   readonly dependencies?: Readonly<Record<string, string>>
+  readonly peerDependencies?: Readonly<Record<string, string>>
+  readonly peerDependenciesMeta?: Readonly<Record<string, { readonly optional?: boolean }>>
+  readonly devDependencies?: Readonly<Record<string, string>>
 }
 
 interface Gate5CommercialPackReport {
@@ -179,6 +200,7 @@ interface Gate5CommercialPackReport {
       readonly requiredFilesMissing: readonly string[]
       readonly forbiddenFiles: readonly string[]
       readonly sourceMapLeaks: readonly string[]
+      readonly forbiddenTextLeaks: readonly string[]
     }
   }[]
   readonly freeBundleForbiddenImports: readonly string[]
@@ -188,6 +210,14 @@ interface Gate5CommercialPackReport {
 /** 读取 workspace JSON 文件。 */
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'))
+}
+
+/** 约束商业消费包由宿主提供唯一 License runtime，并仅在仓库开发时直接链接。 */
+function assertLicensePeerDependency(packageJson: PackageJson): void {
+  expect(packageJson.dependencies).not.toHaveProperty('@4xian/jword-license')
+  expect(packageJson.peerDependencies?.['@4xian/jword-license']).toBe('workspace:*')
+  expect(packageJson.devDependencies?.['@4xian/jword-license']).toBe('workspace:*')
+  expect(packageJson.peerDependenciesMeta?.['@4xian/jword-license']).toBeUndefined()
 }
 
 /** 约束发布到 npm pack 的 ESM 运行时代码使用 Node 可解析的相对路径。 */
@@ -212,4 +242,64 @@ function assertRuntimeRelativeImportsUseJsSuffix(sourcePath: string): void {
 /** 汇总当前 SDK 文档内容。 */
 function readEvidenceFiles(paths: readonly string[]): string {
   return paths.map((path) => readFileSync(path, 'utf8')).join('\n')
+}
+
+/** 递归读取目录中的 TypeScript 源码，供生产表面禁用项扫描使用。 */
+function readTypeScriptFilesUnder(directory: string): string {
+  return readdirSync(directory, {
+    recursive: true,
+    withFileTypes: true
+  })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+    .map((entry) => readFileSync(`${entry.parentPath}/${entry.name}`, 'utf8'))
+    .join('\n')
+}
+
+/** 读取正式 License dist 中会进入发布包的文本产物。 */
+function readPublishedTextFilesUnder(directory: string): string {
+  return readdirSync(directory, {
+    recursive: true,
+    withFileTypes: true
+  })
+    .filter((entry) => entry.isFile() && /\.(?:js|d\.ts|json)$/u.test(entry.name))
+    .map((entry) => readFileSync(`${entry.parentPath}/${entry.name}`, 'utf8'))
+    .join('\n')
+}
+
+/** 读取 LIC-110 JWL2 fixture 的安全扫描标记，不在断言消息中回显实际值。 */
+function readTestOnlyJwl2ForbiddenMarkers(): readonly { label: string, value: string }[] {
+  const source = readFileSync('fixtures/license/test-only-jwl2-fixture.ts', 'utf8')
+  const markerNames = [
+    ['TEST_ONLY_JWL2_PRIVATE_KEY_SEED', 'test-only JWL2 private seed'],
+    ['TEST_ONLY_JWL2_PUBLIC_KEY', 'test-only JWL2 public key'],
+    ['TEST_ONLY_JWL2_TOKEN', 'test-only JWL2 token'],
+    ['TEST_ONLY_JWL2_KEY_ID', 'test-only JWL2 key id']
+  ] as const
+
+  return [
+    { label: 'test-only JWL2 private seed identifier', value: 'TEST_ONLY_JWL2_PRIVATE_KEY_SEED' },
+    { label: 'test-only JWL2 public key identifier', value: 'TEST_ONLY_JWL2_PUBLIC_KEY' },
+    { label: 'test-only JWL2 token signer', value: 'createInsecureTestOnlyJwl2Token' },
+    { label: 'test-only JWL2 key id literal', value: 'jword-test-lic110-k1' },
+    ...markerNames.map(([name, label]) => ({
+      label,
+      value: readFixtureConstant(source, name, label)
+    }))
+  ]
+}
+
+/** 从 fixture 源码读取常量，读取失败时只报告安全标签。 */
+function readFixtureConstant(source: string, name: string, label: string): string {
+  const value = source.match(new RegExp(`${name} = '([^']+)'`, 'u'))?.[1]
+
+  if (value === undefined) {
+    throw new Error(`无法读取 ${label}。`)
+  }
+
+  return value
+}
+
+/** 检查文本是否包含指定标记。 */
+function hasTextMarker(source: string, marker: string): boolean {
+  return source.includes(marker)
 }

@@ -41,9 +41,22 @@ export function createPdfProgressResponse(
 
 /** 创建 PDF worker 错误响应。 */
 export function createPdfErrorResponse(error: PdfError): PdfWorkerResponse {
+  const serializedError: PdfError = {
+    code: error.code,
+    message: error.message,
+    ...(error.requestId === undefined ? {} : { requestId: error.requestId }),
+    ...(error.cancelled === undefined ? {} : { cancelled: error.cancelled }),
+    ...(error.fontFamily === undefined ? {} : { fontFamily: error.fontFamily }),
+    ...(error.missingTextSample === undefined ? {} : { missingTextSample: error.missingTextSample }),
+    ...(error.widthTwips === undefined ? {} : { widthTwips: error.widthTwips }),
+    ...(error.heightTwips === undefined ? {} : { heightTwips: error.heightTwips }),
+    ...(error.recoverable === undefined ? {} : { recoverable: error.recoverable }),
+    ...(error.feature === undefined ? {} : { feature: error.feature })
+  }
+
   return {
     kind: 'error',
-    error
+    error: serializedError
   }
 }
 
@@ -106,8 +119,7 @@ function readPdfWorkerError(error: unknown, requestId: string | undefined): PdfE
       message: error.message,
       ...(resolvedRequestId === undefined ? {} : { requestId: resolvedRequestId }),
       ...(error.cancelled === undefined ? {} : { cancelled: error.cancelled }),
-      ...(error.feature === undefined ? {} : { feature: error.feature }),
-      ...(error.customerId === undefined ? {} : { customerId: error.customerId })
+      ...(error.feature === undefined ? {} : { feature: error.feature })
     }
   }
 

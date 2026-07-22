@@ -16,7 +16,7 @@ import {
   createPageConfig,
   layoutDocument
 } from '@4xian/jword-core'
-import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
+import type { JWordLicenseEntitlement } from '@4xian/jword-license'
 import {
   DOCX_ERROR_CODE_METADATA,
   DOCX_WARNING_CODE_METADATA,
@@ -36,7 +36,7 @@ import type {
   PdfWarning
 } from '../../packages/pdf/src/index'
 import { describe, expect, it } from 'vitest'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../fixtures/license/test-only-entitlement-fixture.mjs'
 
 const requireFromDocxPackage = createRequire(new URL('../../packages/docx/package.json', import.meta.url))
 const JSZip = requireFromDocxPackage('jszip') as JsZipConstructor
@@ -168,22 +168,11 @@ describe('Gate 5 diagnostics schema', () => {
   })
 })
 
-/** 创建 Gate 5 diagnostics 运行时测试使用的有效授权。 */
+/** 创建 Gate 5 diagnostics 业务测试使用的 test-only entitlement。 */
 function createGate5DiagnosticsLicense(features: readonly string[]): JWordLicenseEntitlement {
-  const entitlement: JWordLicenseSignaturePayload = {
-    customerId: 'customer-gate5-diagnostics',
-    licenseToken: 'token-gate5-diagnostics',
-    features,
-    issuer: 'jword-test-issuer',
-    issuedAt: '2026-05-01T00:00:00Z',
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid'
-  }
-
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
+  return createTestOnlyJWordLicenseEntitlement(features, {
+    customerId: 'customer-gate5-diagnostics'
+  })
 }
 
 interface Gate5DiagnosticCodeMetadata {

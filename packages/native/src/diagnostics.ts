@@ -16,6 +16,14 @@ import type {
   JWordPackageWarningCode
 } from './types.js'
 
+const publicDiagnosticEntries = new Set([
+  'manifest.json',
+  'document.json',
+  'metadata.json',
+  'checksums.json',
+  'resources/'
+])
+
 /** 抛出首个不可恢复诊断。 */
 export function throwFirstUnrecoverableDiagnostic(diagnostics: readonly JWordPackageDiagnostic[], requestId?: string): void {
   const diagnostic = diagnostics.find((item) => item.severity === 'error' && !item.recoverable)
@@ -28,7 +36,8 @@ export function throwFirstUnrecoverableDiagnostic(diagnostics: readonly JWordPac
     diagnostic.code as JWordPackageErrorCode,
     diagnostic.message,
     requestId ?? diagnostic.requestId,
-    diagnostic.entry
+    diagnostic.entry,
+    diagnostic.path
   )
 }
 
@@ -46,6 +55,7 @@ export function readErrorDiagnostic(
       recoverable: error.recoverable,
       message: error.message,
       entry: error.entry ?? entry,
+      ...(error.path === undefined ? {} : { path: error.path }),
       requestId: error.requestId ?? requestId
     })
   }
@@ -63,16 +73,18 @@ export function readErrorDiagnostic(
 /** 创建 warning。 */
 export function createWarning(
   code: JWordPackageWarningCode,
-  message: string,
+  _message: string,
   requestId?: string,
   entry?: string
 ): JWordPackageWarning {
+  const publicEntry = normalizePublicDiagnosticEntry(entry)
+
   return {
     code,
     severity: 'warning',
     recoverable: true,
-    message,
-    ...(entry === undefined ? {} : { entry }),
+    message: code,
+    ...(publicEntry === undefined ? {} : { entry: publicEntry }),
     ...(requestId === undefined ? {} : { requestId })
   }
 }
@@ -84,14 +96,18 @@ export function createDiagnostic(input: {
   readonly recoverable: boolean
   readonly message: string
   readonly entry?: string | undefined
+  readonly path?: string | undefined
   readonly requestId?: string | undefined
 }): JWordPackageDiagnostic {
+  const publicEntry = normalizePublicDiagnosticEntry(input.entry)
+
   return {
     code: input.code,
     severity: input.severity,
     recoverable: input.recoverable,
-    message: input.message,
-    ...(input.entry === undefined ? {} : { entry: input.entry }),
+    message: input.code,
+    ...(publicEntry === undefined ? {} : { entry: publicEntry }),
+    ...(input.path === undefined ? {} : { path: input.path }),
     ...(input.requestId === undefined ? {} : { requestId: input.requestId })
   }
 }
@@ -99,15 +115,28 @@ export function createDiagnostic(input: {
 /** 创建 package error。 */
 export function createPackageError(
   code: JWordPackageErrorCode,
-  message: string,
+  _message: string,
   requestId?: string,
-  entry?: string
+  entry?: string,
+  path?: string
 ): JWordNativePackageError {
+  const publicEntry = normalizePublicDiagnosticEntry(entry)
+
   return new JWordNativePackageError({
     code,
-    message,
+    message: code,
     recoverable: false,
-    ...(entry === undefined ? {} : { entry }),
+    ...(publicEntry === undefined ? {} : { entry: publicEntry }),
+    ...(path === undefined ? {} : { path }),
     ...(requestId === undefined ? {} : { requestId })
   })
+}
+
+/** 只保留固定 package 结构名，避免把资源 URL、ID 或任意 ZIP entry 暴露为公开字段。 */
+function normalizePublicDiagnosticEntry(entry: string | undefined): string | undefined {
+  if (entry === undefined || publicDiagnosticEntries.has(entry)) {
+    return entry
+  }
+
+  return 'document.json'
 }

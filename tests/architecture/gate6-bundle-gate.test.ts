@@ -34,7 +34,7 @@ describe('Gate 6 collab bundle gate', () => {
       'IndexedDB',
       'indexeddb',
       'y-indexeddb',
-      'COLLAB_LICENSE_MISSING',
+      'JWORD_LICENSE_MISSING',
       'loadHocuspocusDemoRuntime',
       'status: \'ok\''
     ]) {

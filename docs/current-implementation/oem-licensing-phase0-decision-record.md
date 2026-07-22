@@ -19,15 +19,15 @@
 
 - [类 Word 编辑器商业模式调研与 JWord OEM 方案审查](word-editor-commercial-model-research-2026-07-14.md)提供市场事实和候选方案，不是 binding 决策。
 - [一级 OEM 功能授权与开放文档访问实施方案](oem-licensing-open-access-implementation-plan.md)只能在本记录批准的输入范围内冻结技术实现。
-- `packages/*`、`docs/current-implementation/packages/*` 和 `docs/current-implementation/sdk/*` 继续描述当前真实实现，不得提前写成 JWL2 已完成。
+- `packages/*`、`docs/current-implementation/packages/*` 和 `docs/current-implementation/sdk/*` 继续描述当前真实实现，不得把 LIC-103 的内部 JWL2 验签写成公开激活或 opaque handle 已完成。
 
 ## 3. 当前已确认事实
 
 以下是仓库或文档可以直接核验的当前事实，不代表商业决策已经完成：
 
 - 12 个 workspace package 当前均为 `0.0.0`、`private: true`，并缺少 `license` metadata。
-- 当前正式授权入口仍是 JWL1 raw entitlement；JWL2、固定 `issuer + keyId` trust store 和 opaque handle 尚未实现。
-- 默认公钥对应仓库测试私钥，调用方仍可传入公钥，测试 signer 仍在正式入口导出。
+- 当前正式授权入口仍是 JWL1 raw entitlement，且 JWL1 Ed25519 token 已统一 fail closed；`LIC-101` 至 `LIC-103` 已完成内部职责拆分、严格 JWL2 parser、固定 `issuer + keyId` trust lookup 和 Ed25519 验签，但生产激活入口、时间关系和 opaque handle 尚未实现。
+- 默认测试公钥回退和调用方公钥注入已经移除，固定生产 trust store 已建立；测试 signer 与显式 `allowInsecureFixtureLicense` 兼容入口仍在正式根导出或公开 options 中。
 - DOCX、PDF 和协作仍直接消费 raw entitlement；协作 history 仍传递 `x-jword-entitlement`。
 - 生产协作数据面、统一 deployment admission、持久化、备份恢复和 HA 证据尚未闭环。
 - 产品尚未对外发售，没有真实 JWL1 客户；Base 的最终法律文本、正式价格和 OEM 合同仍未完成法律审核。

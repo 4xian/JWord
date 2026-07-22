@@ -9,7 +9,6 @@
 import { createPackageError, throwFirstUnrecoverableDiagnostic } from './diagnostics.js'
 import { readPackageParts } from './package-readers.js'
 import { assertNotAborted, emitProgress } from './progress.js'
-import { migrateDocument } from './schema-migrations.js'
 import type {
   JWordBinaryInput,
   LoadJWordDocumentOptions,
@@ -87,6 +86,7 @@ export async function loadJWordDocument(
   emitProgress('load', 0, options)
 
   const parts = await readPackageParts(input, 'load', options)
+  assertNotAborted(options.signal, options.requestId)
   const diagnostics = [...parts.diagnostics]
   const warnings = [...parts.warnings]
 
@@ -104,26 +104,29 @@ export async function loadJWordDocument(
   if (parts.checksums === undefined) {
     throw createPackageError('JWORD_NATIVE_CHECKSUMS_MISSING', 'checksums.json 缺失', options.requestId, 'checksums.json')
   }
+  if (parts.migrationReport === undefined) {
+    throw createPackageError('JWORD_NATIVE_PACKAGE_INVALID', 'JWORD_NATIVE_PACKAGE_INVALID', options.requestId)
+  }
 
-  const migrated = migrateDocument(parts.document, parts.manifest.schemaVersion, options.requestId)
-
-  for (const warning of [...warnings, ...migrated.report.warnings]) {
+  for (const warning of warnings) {
     options.onWarning?.(warning)
   }
 
+  assertNotAborted(options.signal, options.requestId)
   emitProgress('load', 1, {
     ...options,
     total: 1
   })
+  assertNotAborted(options.signal, options.requestId)
 
   return {
-    document: migrated.document,
+    document: parts.document,
     metadata: parts.metadata,
     manifest: parts.manifest,
     checksums: parts.checksums,
-    warnings: [...warnings, ...migrated.report.warnings],
-    diagnostics: [...diagnostics, ...migrated.report.warnings],
-    migrationReport: migrated.report,
+    warnings,
+    diagnostics,
+    migrationReport: parts.migrationReport,
     resources: parts.resources
   }
 }
@@ -137,12 +140,14 @@ export async function validateJWordPackage(
   emitProgress('validate', 0, options)
 
   const parts = await readPackageParts(input, 'validate', options)
+  assertNotAborted(options.signal, options.requestId)
   const hasError = parts.diagnostics.some((diagnostic) => diagnostic.severity === 'error' && !diagnostic.recoverable)
 
   emitProgress('validate', 1, {
     ...options,
     total: 1
   })
+  assertNotAborted(options.signal, options.requestId)
 
   return {
     valid: !hasError,

@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN } from '../../fixtures/license/insecure-test-only-jwl1-fixture.mjs'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const workspacePackages = [
@@ -128,7 +129,6 @@ import {
   layoutDocument
 } from '@4xian/jword-core'
 import {
-  createInsecureTestOnlyJWordLicenseSignature,
   GATE5_FORMAT_FEATURES
 } from '@4xian/jword-license'
 import {
@@ -139,7 +139,7 @@ import {
   exportPdfFromLayout
 } from '@4xian/jword-pdf'
 
-const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
+const INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN = ${JSON.stringify(INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN)}
 
 const projection = {
   document: {
@@ -222,7 +222,7 @@ function createGate5License(features) {
 
   return {
     ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+    signature: INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN
   }
 }
 

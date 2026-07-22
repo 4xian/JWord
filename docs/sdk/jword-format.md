@@ -77,11 +77,17 @@ if (!validation.valid) {
 
 `validateJWordPackage()` 只读取 package 结构和 checksum，不把内容加载进 editor。
 
+## 诊断结构与本地化边界
+
+Native package 的 `code` 是稳定契约；结构化 schema 错误可附带规范化 JSON Pointer `path`，例如 `/sections/0/blocks`。该 path 只由已知字段名和数字数组索引生成，不复制未知 key、输入值、资源 ID 或依赖异常。
+
+Worker/runtime/protocol 的跨层 `message` 使用稳定 code，不把本地化文案或 ZIP 依赖错误作为契约。UI、wrapper 或宿主负责按 `zh-CN` / `en-US` 将 code 和结构化字段转换为用户可见提示。
+
 ## warning / error 口径
 
 常见 warning：`JWORD_NATIVE_RESOURCE_UNPACKED`、`JWORD_NATIVE_RESOURCE_MISSING`、`JWORD_NATIVE_OLD_SCHEMA_MIGRATED`。
 
-常见 error：`JWORD_NATIVE_MANIFEST_MISSING`、`JWORD_NATIVE_DOCUMENT_MISSING`、`JWORD_NATIVE_METADATA_MISSING`、`JWORD_NATIVE_CHECKSUMS_MISSING`、`JWORD_NATIVE_HASH_MISMATCH`、`JWORD_NATIVE_WORKER_UNAVAILABLE`。
+常见 error：`JWORD_NATIVE_MANIFEST_MISSING`、`JWORD_NATIVE_DOCUMENT_MISSING`、`JWORD_NATIVE_METADATA_MISSING`、`JWORD_NATIVE_CHECKSUMS_MISSING`、`JWORD_NATIVE_HASH_MISMATCH`、`JWORD_NATIVE_PACKAGE_RESOURCE_LIMIT_EXCEEDED`、`JWORD_NATIVE_WORKER_UNAVAILABLE`。
 
 完整 code 清单见 [`diagnostic-codes.md`](./diagnostic-codes.md)。
 

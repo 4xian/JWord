@@ -10,11 +10,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DocumentProjection } from '@4xian/jword-core'
-import { createInsecureTestOnlyJWordLicenseSignature, type JWordLicenseEntitlement, type JWordLicenseSignaturePayload } from '@4xian/jword-license'
+import type { JWordLicenseEntitlement } from '@4xian/jword-license'
 
 import { createCancelDocxRequest, exportDocx, type DocxWorkerEvent } from '../src/index'
 import { dispatchDocxWorkerRequest } from '../src/worker'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../../fixtures/license/test-only-entitlement-fixture.mjs'
 
 describe('@4xian/jword-docx worker runtime', () => {
   it('fails import before reading invalid bytes when license is missing', async () => {
@@ -324,22 +324,11 @@ function readPostedProgressStages(events: readonly DocxWorkerEvent[]): readonly 
     .map((event) => event.stage)
 }
 
-/** 创建 DOCX worker 测试使用的有效授权。 */
+/** 创建 DOCX worker 业务测试使用的 test-only entitlement。 */
 function createWorkerLicense(features: readonly string[]): JWordLicenseEntitlement {
-  const entitlement: JWordLicenseSignaturePayload = {
-    customerId: 'customer-docx-worker',
-    licenseToken: 'token-docx-worker',
-    features,
-    issuer: 'jword-test-issuer',
-    issuedAt: '2026-05-01T00:00:00Z',
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid' as const
-  }
-
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
+  return createTestOnlyJWordLicenseEntitlement(features, {
+    customerId: 'customer-docx-worker'
+  })
 }
 
 /** 创建 DOCX worker 测试使用的最小 projection。 */

@@ -11,8 +11,8 @@ import { basename, dirname } from 'node:path'
 
 import { createEvidenceRequests, createEvidenceTemplates, createExportArtifactEvidence, createOpenXmlValidationSummary, writeEvidenceTemplateFiles } from './gate5-docx-compatibility-evidence.mjs'
 import { commandExists, expandCommandTemplateParts, formatCommandEvidence, isAvailableFixture, isOptionalNumberField, isOptionalStringField, isStringField, parseCommandTemplate, printJson, readCommandFailureMessage, readJson, readPositiveIntegerEnv, runCommand, summarizeFixtures } from './gate5-docx-compatibility-utils.mjs'
+import { INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN } from '../../fixtures/license/insecure-test-only-jwl1-fixture.mjs'
 
-const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
 const registryPath = 'fixtures/docx/registry.json'
 const matrixPath = 'fixtures/docx/compatibility-matrix.json'
 const manualResultsPath = process.env.GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS ??
@@ -50,10 +50,9 @@ if (dryRun) {
 
 /** 运行完整 DOCX 兼容矩阵并写入结果 artifact。 */
 async function runCompatibilityMatrix() {
-  const [{ createEditor }, docxRuntime, licenseRuntime] = await Promise.all([
+  const [{ createEditor }, docxRuntime] = await Promise.all([
     import('../../packages/core/dist/index.js'),
-    import('../../packages/docx/dist/index.js'),
-    import('../../packages/license/dist/index.js')
+    import('../../packages/docx/dist/index.js')
   ])
   const fixtureById = new Map(registry.fixtures.map((fixture) => [fixture.id, fixture]))
   const results = []
@@ -69,7 +68,6 @@ async function runCompatibilityMatrix() {
     results.push(await runAvailableFixtureCompatibility({
       createEditor,
       docxRuntime,
-      licenseRuntime,
       fixture,
       target
     }))
@@ -111,7 +109,7 @@ async function runAvailableFixtureCompatibility(input) {
   const sourceBytes = await readFile(input.fixture.input.path)
   const importResult = await input.docxRuntime.importDocx(sourceBytes, {
     requestId: `${input.fixture.id}-compat-import`,
-    license: createGate5CompatibilityLicense(input.licenseRuntime, ['docx.import'])
+    license: createGate5CompatibilityLicense(['docx.import'])
   })
   const document = input.docxRuntime.convertDocxImportDocumentToCoreDocument(importResult.document)
   const editor = input.createEditor()
@@ -122,7 +120,7 @@ async function runAvailableFixtureCompatibility(input) {
     })
     const exportResult = await input.docxRuntime.exportDocx(projection, {
       requestId: `${input.fixture.id}-compat-export`,
-      license: createGate5CompatibilityLicense(input.licenseRuntime, ['docx.export'])
+      license: createGate5CompatibilityLicense(['docx.export'])
     })
 
     const artifactBytes = Buffer.from(exportResult.bytes)
@@ -140,7 +138,7 @@ async function runAvailableFixtureCompatibility(input) {
       fixtureId: input.fixture.id,
       exportArtifact: input.target.exportArtifact,
       requestId: `${input.fixture.id}-compat-report`,
-      license: createGate5CompatibilityLicense(input.licenseRuntime, ['docx.import', 'docx.export']),
+      license: createGate5CompatibilityLicense(['docx.import', 'docx.export']),
       ...(externalOpenXmlValidation?.kind === 'validation'
         ? { openXmlValidation: externalOpenXmlValidation.validation }
         : {}),
@@ -167,7 +165,7 @@ async function runAvailableFixtureCompatibility(input) {
 }
 
 /** 创建兼容 runner 使用的本地商业授权。 */
-function createGate5CompatibilityLicense(licenseRuntime, features) {
+function createGate5CompatibilityLicense(features) {
   const entitlement = {
     customerId: 'customer-gate5-compatibility-runner',
     licenseToken: 'token-gate5-compatibility-runner',
@@ -180,7 +178,7 @@ function createGate5CompatibilityLicense(licenseRuntime, features) {
 
   return {
     ...entitlement,
-    signature: licenseRuntime.createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+    signature: INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN
   }
 }
 

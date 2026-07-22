@@ -12,6 +12,9 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+const testOnlyLicenseRegister = new URL('../../fixtures/license/test-only-license-register.mjs', import.meta.url).href
+
 export interface Gate5CompatibilityRunnerDryRunReport {
   readonly status: 'ok'
   readonly mode: 'dry-run'
@@ -164,6 +167,10 @@ export function createRunnerTestEnv(overrides: Record<string, string | undefined
 
   return {
     ...process.env,
+    NODE_OPTIONS: [
+      process.env.NODE_OPTIONS,
+      `--import=${testOnlyLicenseRegister}`
+    ].filter((value) => value !== undefined && value.length > 0).join(' '),
     GATE5_DOCX_MANUAL_COMPATIBILITY_RESULTS: join(tempDir, 'missing-manual-results.json'),
     GATE5_DOCX_OPENXML_VALIDATION_RESULTS: join(tempDir, 'missing-openxml-validation-results.json'),
     GATE5_DISABLE_DEFAULT_OPENXML_VALIDATOR: '1',

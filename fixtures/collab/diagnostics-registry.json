@@ -594,51 +594,6 @@
       ]
     },
     {
-      "code": "COLLAB_LICENSE_MISSING",
-      "owner": "license",
-      "severity": "error",
-      "recoverable": true,
-      "fallback": "show-license-install-prompt",
-      "description": "Collaboration feature requires a commercial license entitlement before reading or sending document updates.",
-      "domains": [
-        "authorization"
-      ]
-    },
-    {
-      "code": "COLLAB_LICENSE_EXPIRED",
-      "owner": "license",
-      "severity": "error",
-      "recoverable": true,
-      "fallback": "show-license-renewal-prompt",
-      "description": "Collaboration license entitlement expired and advanced collaboration must remain disabled.",
-      "domains": [
-        "authorization"
-      ]
-    },
-    {
-      "code": "COLLAB_FEATURE_NOT_ENTITLED",
-      "owner": "license",
-      "severity": "error",
-      "recoverable": true,
-      "fallback": "disable-unentitled-collab-feature",
-      "description": "Current license entitlement does not include the requested collaboration feature key.",
-      "domains": [
-        "authorization"
-      ]
-    },
-    {
-      "code": "COLLAB_LICENSE_SERVER_UNAVAILABLE",
-      "owner": "license",
-      "severity": "error",
-      "recoverable": true,
-      "fallback": "retry-license-status-check",
-      "description": "License status service is unavailable and paid collaboration cannot start without a confirmed entitlement.",
-      "domains": [
-        "authorization",
-        "server"
-      ]
-    },
-    {
       "code": "JWORD_COLLAB_LICENSE_HOOK_REQUIRED",
       "owner": "server",
       "severity": "error",
@@ -777,6 +732,18 @@
       "recoverable": false,
       "fallback": "keep-current-document",
       "description": "Version restore failed while building an isolated document and the current document was not written.",
+      "domains": [
+        "history",
+        "storage"
+      ]
+    },
+    {
+      "code": "PERSISTENCE_RESTORE_RECOVERY_REQUIRED",
+      "owner": "storage",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "retry-restore-recovery",
+      "description": "Version restore has a pending operation that must be retried to finalize or repair recovery.",
       "domains": [
         "history",
         "storage"
@@ -1898,7 +1865,19 @@
       "severity": "error",
       "recoverable": true,
       "fallback": "show-license-remediation",
-      "description": "商业授权已过期且不在离线宽限期内。",
+      "description": "商业授权已过期。",
+      "domains": [
+        "authorization",
+        "license"
+      ]
+    },
+    {
+      "code": "JWORD_LICENSE_HANDLE_INVALID",
+      "owner": "license",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "show-license-remediation",
+      "description": "授权 handle 无效或不属于当前 License runtime。",
       "domains": [
         "authorization",
         "license"
@@ -1917,6 +1896,30 @@
       ]
     },
     {
+      "code": "JWORD_LICENSE_ISSUER_INVALID",
+      "owner": "license",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "show-license-remediation",
+      "description": "JWL2 token issuer 不受当前 License runtime 信任。",
+      "domains": [
+        "authorization",
+        "license"
+      ]
+    },
+    {
+      "code": "JWORD_LICENSE_KEY_UNKNOWN",
+      "owner": "license",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "show-license-remediation",
+      "description": "JWL2 token keyId 未在当前生产 trust set 登记。",
+      "domains": [
+        "authorization",
+        "license"
+      ]
+    },
+    {
       "code": "JWORD_LICENSE_MISSING",
       "owner": "license",
       "severity": "error",
@@ -1929,12 +1932,12 @@
       ]
     },
     {
-      "code": "JWORD_LICENSE_SERVER_UNAVAILABLE",
+      "code": "JWORD_LICENSE_NOT_YET_VALID",
       "owner": "license",
       "severity": "error",
       "recoverable": true,
       "fallback": "show-license-remediation",
-      "description": "授权服务不可用，无法确认当前高级 feature。",
+      "description": "授权签发时间尚未生效。",
       "domains": [
         "authorization",
         "license"
@@ -1947,6 +1950,18 @@
       "recoverable": true,
       "fallback": "show-license-remediation",
       "description": "商业授权签名缺失或校验失败。",
+      "domains": [
+        "authorization",
+        "license"
+      ]
+    },
+    {
+      "code": "JWORD_LICENSE_TOKEN_INVALID",
+      "owner": "license",
+      "severity": "error",
+      "recoverable": true,
+      "fallback": "show-license-remediation",
+      "description": "JWL2 token 结构、编码、canonical claims 或期限关系无效。",
       "domains": [
         "authorization",
         "license"
@@ -2106,6 +2121,19 @@
       "domains": [
         "native",
         "package"
+      ]
+    },
+    {
+      "code": "JWORD_NATIVE_PACKAGE_RESOURCE_LIMIT_EXCEEDED",
+      "owner": "native",
+      "severity": "error",
+      "recoverable": false,
+      "fallback": "reject-native-package-operation",
+      "description": "Native package input exceeded a fixed resource or decompression budget and must be rejected.",
+      "domains": [
+        "native",
+        "package",
+        "payload-limit"
       ]
     },
     {

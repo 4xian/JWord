@@ -2,22 +2,43 @@
 
 > 范围：`packages/license`、`packages/collab-server`、`packages/native`、`packages/persistence`。本文件只记录当前仍开放的安全与数据完整性问题。
 
-## SEC-01（P0）默认授权信任根对应仓库公开测试私钥，商业 token 可伪造
+## SEC-01（P0）固定信任根和正式 signer 已收口，但 insecure fixture 仍在正式入口
 
-- 位置：`packages/license/src/index.ts:147`、`308`；`fixtures/license/insecure-test-only-keys.ts:10-13`。
+- 位置：`packages/license/src/trust-store.ts`、`packages/license/src/verify-jwl2.ts`、`packages/license/src/index.ts`、`packages/license/src/license.ts`、`packages/license/src/legacy-jwl1.ts`；`fixtures/license/insecure-test-only-keys.ts:10-13`。
 - 事实：
-  - `JWORD_LICENSE_DEFAULT_PUBLIC_KEY_BASE64URL = '11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo'`（index.ts:147）。
-  - 该值与 `INSECURE_TEST_ONLY_LICENSE_PUBLIC_KEY`（fixtures 第 13 行）逐字节相同，其对应私钥 seed `INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED`（fixtures 第 10 行）明文提交在仓库中。
-  - `readVerifiedEd25519LicensePayload` 在调用方未传 `publicKeyBase64Url` 时回退到该默认公钥（index.ts:308）。
-- 触发场景：任何人用仓库里的测试私钥 seed 对自定义 features 调用 `createInsecureTestOnlyJWordLicenseSignature`（该 helper 仍在正式入口导出，index.ts:234），即可签发能通过默认验签的 JWL1 token。
-- 后果：商业授权可被任意伪造，DOCX/PDF/协作等收费能力全部可绕过。这是收费模式的根本性漏洞。
-- 建议修复：删除生产默认测试信任根；改为内置固定 `issuer + keyId` trust store；不允许调用方注入公钥；测试 signer 与私钥 fixture 不进入正式 exports/tarball；补伪造拒绝回归。（对应路线图第三批 OEM Phase 1）
-- 当前结论：**确认**。默认公钥、公开测试私钥 seed、生产验签回退和正式入口 signer 导出四条证据均与当前源码一致。
+  - `LIC-100` 已删除默认测试公钥回退；`LIC-101` 和 `LIC-102` 已完成内部职责拆分、严格 JWL2 envelope/claims parser 和固定签名输入。
+  - `LIC-103` 已内置 `issuer=jword`、`keyId=jword-prod-2026-k1` 与批准的 32-byte 生产公钥，调用方不能再通过 `publicKeyBase64Url` 换根；完整 claims 仅在 Ed25519 验签成功后解析。
+  - `LIC-104` 已公开 JWL2 激活、模块私有 WeakMap handle、时间关系和集中 module feature 检查；伪造、复制、structured clone、parser 或 claims 均不能获得可信 handle identity。
+  - `LIC-105` 已公开 identity-checked worker transfer；只有可信 handle 能读取私有 token 创建单字段 DTO，clone 后必须通过同一激活路径重新验签并创建新 handle。
+  - JWL1 Ed25519 token 现在统一 fail closed，不再读取调用方公钥。
+  - `LIC-106` 已把测试 signer 和 Ed25519 签名能力移到仓库 fixture support；正式根入口、production src、dist 和 tarball 均不再包含 signer、测试 seed 或签名入口。
+  - `LIC-107A` 已用精确 `@noble/curves@2.2.0` 和 strict `{ zip215: false }` 替换自研 Ed25519 verifier；`LIC-107B1` 已通过 tarball/no-alias 的 Node、当前三浏览器和真实 module Dedicated Worker 自动 smoke。
+  - `LIC-107B2` 的 Node 20.19.0 已在固定 Docker 镜像中通过 tarball/no-alias/public-entry 验证；Chrome 100、Edge 100、Firefox 128 和 Safari 16.4 仍没有真实最低版本证据。该人工认证已按明确风险接受延期为发布前门禁，不阻断后续内部阶段，也不得描述为已实测通过。
+  - `LIC-108A` 已把 `tools/license/issue-license.mjs` 切换为严格 JWL2-only signer：固定生产 issuer/keyId 与 canonical bytes，拒绝重复顶层 key，路径私钥经 realpath 后必须位于仓库外，并由固定 production golden vector 交叉锁定 signer/runtime。
+  - `LIC-108B` 已按批准契约实现离线 `tools/license/verify-license.mjs`：固定生产 trust store，支持 stdin/file 与审计用 `--at`，成功只输出带 `checkedAt` 的裁剪 JSON，失败只输出稳定 code。
+  - `INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED` 与对应公钥继续只保存在不会进入 package tarball 的仓库 fixture 中。
+  - `allowInsecureFixtureLicense` 仍是公开 validation option；显式开启时旧 FNV fixture 可以进入遗留 entitlement 路径。DOCX/PDF/Collaboration 尚未迁移到新 JWL2 handle/transfer 入口。
+  - `LIC-111B1/B2` 已把 DOCX、PDF、Collaboration 和 Collab Server 切换为必需 License peer，并通过正常 pnpm/npm、Node 20.19.0、Vite ES2022 与当前 Chromium/Firefox/WebKit 验证单一 runtime；重复 runtime 不共享 WeakMap handle，必须通过 token transfer 在接收 runtime 重新激活。
+- 触发场景：调用方已不能替换 JWL2 信任根，正式包也不再暴露 signer，但仍可显式开启旧 insecure fixture 路径。
+- 后果：LIC-103/104/105/106 已关闭调用方公钥换根、建立可信 handle/transfer 并删除正式签名能力，但遗留 fixture 入口和商业调用方尚未迁移，仍使 DOCX/PDF/协作收费能力不能作为生产商业边界。
+- 建议修复：LIC-107B2 人工矩阵保留为发布前认证；DOCX/PDF/Collaboration 的 JWL2 handle 迁移进入 OEM License Phase 2（统一路线阶段 4A），JWL1 类型和兼容路径留到统一路线阶段 4C。LIC-110B1/B2 已建立 test-only trust/key 隔离，LIC-111B1/B2 已完成单一 runtime 与重复 runtime fail-closed 验证。（对应路线图阶段 1）
+- 当前结论：**Phase 1 内部实施已完成，SEC-01 仍为 Open**。`LIC-107B2` 最低浏览器人工认证已条件性接受并延期，不阻断内部阶段；主要剩余风险是公开 `allowInsecureFixtureLicense` 遗留入口及尚未迁移的旧调用方。
 - 详细修复步骤：
-  1. 先按已批准的 OEM License 决策固定生产 `issuer + keyId` 与受信公钥表，明确旧 JWL1 token 的兼容截止策略。
-  2. 删除生产验签对 `JWORD_LICENSE_DEFAULT_PUBLIC_KEY_BASE64URL` 和调用方 `publicKeyBase64Url` 的回退/注入路径；未知 issuer、keyId 或算法一律 fail closed。
-  3. 将测试 signer 和私钥 fixture 移到测试专用模块，确认 `packages/license/src/index.ts`、包 exports、构建产物和 `pnpm pack --dry-run` 清单均不再包含签发能力或测试私钥。
-  4. 增加最小回归：旧公开 seed 签出的 token 必须被生产入口拒绝；受信生产测试向量可通过；未知 keyId、篡改 payload 和篡改签名返回稳定诊断。
+  1. `LIC-100` 已完成：仓库公开 seed 签发的 token 在无可信生产 trust root 的公开入口被稳定拒绝。
+  2. `LIC-101` 已完成：License 内部职责已拆分，未改变根入口导出或激活行为。
+  3. `LIC-102` 已完成：内部 parser 已严格限定 JWL2 envelope、canonical claims、四种 class 和三个模块 feature；输出保持未验签状态，不得直接登记为可信 handle。
+  4. `LIC-103` 已完成：固定生产 `issuer + keyId` 与受信公钥表，删除调用方 `publicKeyBase64Url` 注入路径，并在完整 claims 解析前完成 Ed25519 验签；未知 issuer、keyId 或无效签名一律 fail closed。
+  5. `LIC-104` 已完成：仅在 LIC-103 验签成功且时间关系有效后，把 class、module features 和期限写入模块私有 WeakMap 并生成不可伪造 handle；parser 返回值、普通对象、类型断言、对象复制或 structured clone 均不能获得可信身份。
+  6. `LIC-105` 已完成：可信 handle 才能创建仅含 token 的 transfer；伪造、复制和 cloned handle 被拒绝，worker clone 后通过既有激活路径重新验签并创建新 handle。
+  7. `LIC-106` 已完成：测试 signer 与签名能力只存在于仓库 fixture support；`packages/license/src/index.ts`、包 exports、构建产物和实际 tarball 均不含签发能力、测试 seed 或测试私钥。
+  8. `LIC-107A/B1` 已完成：成熟 verifier、RFC 8032/严格拒绝回归、当前 Node/浏览器/Dedicated Worker 和第三方 tarball/no-alias 证据已落地；不宣称 noble 已经独立密码学审计。
+  9. `LIC-107B2` 为 `Conditionally Accepted / manual certification deferred`：Node 20.19.0 已通过；Chrome 100、Edge 100、Firefox 128 和 Safari 16.4 真实环境矩阵留作对外最低版本认证和商业 GA 前门禁，不用最新版 Playwright 替代或冒充实测。
+  10. `LIC-108A` 已完成：严格 JWL2 signer 拒绝重复顶层 key 和仓库内私钥路径，固定 production golden vector 锁定 canonical payload JSON、payload segment 和 `JWL2.<payloadSegment>` signing input；固定 production token 已由 runtime trust store 独立完成验签。
+  11. `LIC-108B` 已完成：离线验签/裁剪 CLI 复用构建后的 License 根入口和固定生产 trust store，不导入 signer、不读取私钥、不输出 token，也不进入 package exports、dist 或 tarball。
+  12. `LIC-109` 已完成：JWL2 诊断分类、语言无关 metadata、旧在线状态/offline grace/customerId、DOCX/PDF worker DTO、Collab License alias 和 registry/docs 已收口；旧 JWL1 类型仍保留到 Phase 4。
+  13. `LIC-110B1/B2` 已完成：test-only JWL2 trust/key 只存在于 focused test 与仓库 fixture support；Gate 5、dist 和 tarball 隔离扫描通过，不恢复生产默认测试 key 或 `allowInsecureFixtureLicense` 绕过。
+  14. `LIC-111B1/B2` 已完成：四个消费包使用必需 License peer 和仓库 devDependency；pnpm/npm、Node 20.19.0 与 Vite 当前三浏览器只解析一个 canonical runtime，重复 runtime、伪造、复制和 structured clone handle 全部 fail closed。当前浏览器结果不是 LIC-107B2 最低版本证据。
+  15. 保持最小回归：旧公开 seed 签出的 token 必须被生产入口拒绝；受信 production golden token 可通过；未知 keyId、篡改 payload 和篡改签名返回稳定诊断。
 
 ## SEC-02（P0）HTTP 认证 hook 读不到真实凭据，history 作者来自不可信客户端
 
@@ -50,6 +71,10 @@
   4. 让 `readManifest/readMetadata/readChecksums/readDocument/inspectChecksums` 共用同一预算上下文，避免校验阶段绕过前面的累计限制。
   5. 只补关键回归：高压缩比包、超多 entry、超大 JSON、重复 `document.json`、路径穿越和 checksum 声明不一致均稳定失败。
 
+### Phase 2A B1-B5 当前实施状态
+
+Native 读取预算、严格 manifest/checksum 解析、版本化 document schema、AbortSignal 语义和诊断契约已完成。后续复核发现的有限数字、非法 data URL、保存最终进度取消竞态及证据/规范问题均已修复，Standards/Spec 双轴复审无剩余 finding；SEC-03 与 Phase 2A 已重新 `Closed`。最低浏览器人工认证仍按 LIC-107B2 单独 deferred。
+
 ## SEC-04（P0）版本恢复非原子，中途失败导致文档已变但 API 报失败
 
 - 位置：`packages/persistence/src/index.ts:514-526`。
@@ -76,18 +101,14 @@
   1. 以 COLLAB-05 关闭默认 CORS，以 COLLAB-06 关闭可信代理与共享限流，以 PERS-02 关闭多实例写入竞态。
   2. 三项完成后做一次双实例部署验证：同一 actor 的请求跨实例累计限流，非 allowlist origin 无 CORS 授权，history 并发写不丢失。
 
-## SEC-06（P1）自研密码实现无独立审计
+## SEC-06（P1）成熟 verifier 已迁移，最低运行时证据待完成
 
-- 位置：`packages/license/src/crypto.ts`（约 556 行自研 SHA-512/Ed25519）。
-- 事实：授权验签依赖自研密码原语，仓库内没有第三方审计、完整 RFC 8032 签名向量或差分测试证据。
-- 后果：密码实现潜在缺陷难以自证；即便修复 SEC-01，验签正确性仍缺乏保证。
-- 建议修复：迁移成熟实现或完成独立密码学审计 + RFC 8032 标准向量 + 模糊测试。
-- 当前结论：**部分正确，属于保障缺口而非已证实的密码缺陷**。约 556 行 SHA-512/Ed25519 确为自研，仓库内未发现独立审计证据；但现有 fixture 已使用 RFC 8032 的 seed/public key，并有签发、验签和篡改拒绝测试。缺少的是包含预期 signature 的完整 RFC 8032 向量、差分测试和独立审计。
-- 详细修复步骤：
-  1. 优先评估浏览器与 Node 均可用、维护活跃且经过广泛审阅的 Ed25519 实现；若零依赖仍是硬约束，用 ADR 记录为什么不能迁移。
-  2. 在替换前先加入 RFC 8032 完整向量：固定 seed、public key、message 和 expected signature，同时覆盖空消息、长消息、错误长度、非规范 scalar/point 等拒绝路径。
-  3. 用成熟实现或 WebCrypto/Node crypto 对随机输入做差分签名/验签测试，再对 token decoder 和签名入口做模糊测试。
-  4. 迁移后删除自研原语；若决定保留，则必须安排独立密码学审查并把版本、范围和结论作为 release gate 证据。
+- 位置：`packages/license/src/crypto.ts`、`packages/license/package.json`、`packages/license/test/jwl2.test.ts`、`tools/release/check-license-runtime-smoke.mjs`、`tools/release/check-license-minimum-node.mjs`。
+- 事实：`LIC-107A` 已删除自研 SHA-512/Edwards verifier，改用精确 `@noble/curves@2.2.0` 的 `@noble/curves/ed25519.js`，保持同步 interface、长度预检、catch/fail-closed 和 `{ zip215: false }`。RFC 8032 官方向量、篡改、非法输入与 strict 拒绝向量已覆盖。
+- 当前证据：`LIC-107B1` 已证明本地 tarball 在当前 Node、Chromium、Firefox、WebKit 和真实 module Dedicated Worker 可用；`LIC-107B2` 的 Node 20.19.0 也已通过 tarball/no-alias/public-entry 验证。两条路径均确认只有一套 `@noble/curves@2.2.0` / `@noble/hashes@2.2.0`。
+- 剩余风险：当前证据不能证明 Chrome 100、Edge 100、Firefox 128 和 Safari 16.4。`@noble/curves` 是外部供应链依赖；本项目没有对该版本执行独立密码学审计，也不得作此宣称。
+- 当前结论：**实现风险已缓解，内部推进已接受；最低浏览器认证 Deferred**。`LIC-107A/B1` 已完成，`LIC-107B2` 按明确风险接受条件性收口，整体 `LIC-107` 对内部实施视为完成。
+- 剩余步骤：按 [最低浏览器人工验证手册](../../license-minimum-browser-manual-verification.md) 在 Chrome 100、Edge 100、Firefox 128 和 Safari 16.4 的真实环境复跑同一候选 tarball/public-entry/main-thread/Dedicated-Worker 矩阵，记录完整版本、OS、tarball hash 和日志；最终对外认证前对同一 tarball 复跑 Node 20.19.0。没有对应环境时保持 `Deferred/not-run`，不阻断内部阶段，但不得宣称已完成最低版本认证。
 
 ## 结论
 

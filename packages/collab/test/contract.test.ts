@@ -11,7 +11,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as Y from 'yjs'
 import {
-  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement,
   type JWordLicenseSignaturePayload
 } from '@4xian/jword-license'
@@ -38,6 +37,7 @@ import type {
   JWordCollabUpdateMetadata
 } from '../src/index'
 import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createInsecureTestOnlyJWordLicenseSignature } from '../../../fixtures/license/create-insecure-test-only-jwl1-token'
 
 describe('@4xian/jword-collab contract', () => {
   it('exposes provider adapter and diagnostic types', () => {
@@ -99,14 +99,15 @@ describe('@4xian/jword-collab contract', () => {
       ok: false,
       feature: GATE6_COLLAB_FEATURES.multiplayer,
       diagnostic: {
-        code: 'COLLAB_LICENSE_MISSING',
+        code: 'JWORD_LICENSE_MISSING',
         severity: 'error',
+        message: 'JWORD_LICENSE_MISSING',
         recoverable: true
       }
     })
-    expect(expired.diagnostic?.code).toBe('COLLAB_LICENSE_EXPIRED')
-    expect(mismatch.diagnostic?.code).toBe('COLLAB_FEATURE_NOT_ENTITLED')
-    expect(serverUnavailable.diagnostic?.code).toBe('COLLAB_LICENSE_SERVER_UNAVAILABLE')
+    expect(expired.diagnostic?.code).toBe('JWORD_LICENSE_SIGNATURE_INVALID')
+    expect(mismatch.diagnostic?.code).toBe('JWORD_LICENSE_SIGNATURE_INVALID')
+    expect(serverUnavailable.diagnostic?.code).toBe('JWORD_LICENSE_SIGNATURE_INVALID')
   })
 
   it('connects, emits updates, marks synced and disconnects through memory adapter', async () => {

@@ -14,7 +14,6 @@ import {
   layoutDocument
 } from '@4xian/jword-core'
 import {
-  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement
 } from '@4xian/jword-license'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
@@ -24,9 +23,9 @@ import { describe, expect, it } from 'vitest'
 
 import type { ExportPdfOptions } from '../src/index'
 import { exportPdfFromLayout as exportPdfFromLayoutPublic } from '../src/index'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../../fixtures/license/test-only-entitlement-fixture.mjs'
 
-/** 以有效授权调用 PDF export，保持视觉报告测试聚焦于渲染证据。 */
+/** 通过 test-only entitlement 调用 PDF export，使测试聚焦于渲染证据。 */
 function exportPdfFromLayout(
   layout: Parameters<typeof exportPdfFromLayoutPublic>[0],
   options: ExportPdfOptions = {}
@@ -37,22 +36,11 @@ function exportPdfFromLayout(
   })
 }
 
-/** 创建视觉报告测试使用的有效授权。 */
+/** 创建视觉报告业务测试使用的 test-only entitlement。 */
 function createVisualReportLicense(): JWordLicenseEntitlement {
-  const entitlement = {
-    customerId: 'customer-pdf-visual-test',
-    licenseToken: 'token-pdf-visual-test',
-    issuer: 'jword-pdf-visual-test',
-    issuedAt: '2026-05-01T00:00:00Z',
-    features: ['pdf.export'],
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid' as const
-  }
-
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
+  return createTestOnlyJWordLicenseEntitlement(['pdf.export'], {
+    customerId: 'customer-pdf-visual-test'
+  })
 }
 
 describe('PDF visual report', () => {

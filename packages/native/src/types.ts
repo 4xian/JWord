@@ -8,8 +8,8 @@
 import type { Document } from '@4xian/jword-core'
 
 /** 当前 `.jword` package manifest 的公开格式版本。 */
-export const JWORD_NATIVE_FORMAT_VERSION = 1
-export const JWORD_NATIVE_SCHEMA_VERSION = 1
+export const JWORD_NATIVE_FORMAT_VERSION = 2
+export const JWORD_NATIVE_SCHEMA_VERSION = 2
 export const JWORD_NATIVE_CREATED_BY = '@4xian/jword-native'
 
 export type JWordBinaryInput = ArrayBuffer | Uint8Array | Blob | File
@@ -40,6 +40,7 @@ export type JWordPackageErrorCode =
   | 'JWORD_NATIVE_SCHEMA_UNSUPPORTED'
   | 'JWORD_NATIVE_HASH_MISMATCH'
   | 'JWORD_NATIVE_PACKAGE_INVALID'
+  | 'JWORD_NATIVE_PACKAGE_RESOURCE_LIMIT_EXCEEDED'
   | 'JWORD_NATIVE_USER_CANCELLED'
   | 'JWORD_NATIVE_WORKER_CANCELLED'
   | 'JWORD_NATIVE_WORKER_UNAVAILABLE'
@@ -53,6 +54,7 @@ export interface JWordPackageDiagnostic {
   readonly recoverable: boolean
   readonly message: string
   readonly entry?: string
+  readonly path?: string
   readonly requestId?: string
 }
 
@@ -173,6 +175,7 @@ export interface JWordNativePackageErrorInput {
   readonly message: string
   readonly recoverable?: boolean
   readonly entry?: string | undefined
+  readonly path?: string | undefined
   readonly requestId?: string | undefined
 }
 
@@ -248,6 +251,7 @@ export interface JWordNativePackageErrorShape {
   readonly message: string
   readonly recoverable: boolean
   readonly entry?: string
+  readonly path?: string
   readonly requestId?: string
 }
 
@@ -256,6 +260,7 @@ export class JWordNativePackageError extends Error {
   readonly code: JWordPackageErrorCode
   readonly recoverable: boolean
   readonly entry?: string
+  readonly path?: string
   readonly requestId?: string
 
   /** 创建 native package 稳定错误对象。 */
@@ -265,6 +270,9 @@ export class JWordNativePackageError extends Error {
     this.recoverable = input.recoverable ?? false
     if (input.entry !== undefined) {
       this.entry = input.entry
+    }
+    if (input.path !== undefined) {
+      this.path = input.path
     }
     if (input.requestId !== undefined) {
       this.requestId = input.requestId

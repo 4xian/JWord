@@ -33,6 +33,8 @@
 - schema 未来版本返回 `JWORD_NATIVE_SCHEMA_FUTURE`。
 - 不支持 schema 返回 `JWORD_NATIVE_SCHEMA_UNSUPPORTED`。
 - checksum、manifest、document、metadata 缺失都有稳定 diagnostic。
+- Native 资源/解压预算超限返回 `JWORD_NATIVE_PACKAGE_RESOURCE_LIMIT_EXCEEDED`；schema diagnostic 的可选 `path` 是 parser 生成的安全 JSON Pointer，只包含已知字段和数字索引。
+- Worker/runtime/protocol 的跨层 `message` 使用稳定 code；`zh-CN` / `en-US` 文案由 UI、wrapper 或宿主展示层按 code 本地化。
 - worker 不可用返回 `JWORD_NATIVE_WORKER_UNAVAILABLE`，当前不提供同线程 fallback 承诺。
 
 ## 验证入口

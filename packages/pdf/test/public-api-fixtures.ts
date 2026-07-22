@@ -14,10 +14,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
-  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement
 } from '@4xian/jword-license'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createTestOnlyJWordLicenseEntitlement } from '../../../fixtures/license/test-only-entitlement-fixture.mjs'
 
 export const ONE_PIXEL_PNG_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lYgWtwAAAABJRU5ErkJggg=='
@@ -55,22 +54,11 @@ export interface PdfChineseFontFixture {
   }
 }
 
-/** 创建 PDF public API 测试使用的有效授权。 */
+/** 创建 PDF public API 业务测试使用的 test-only entitlement。 */
 export function createPdfPublicApiLicense(features: readonly string[]): JWordLicenseEntitlement {
-  const entitlement = {
-    customerId: 'customer-pdf-public-api',
-    licenseToken: 'token-pdf-public-api',
-    issuer: 'jword-pdf-public-api-test',
-    issuedAt: '2026-05-01T00:00:00Z',
-    features,
-    expiresAt: '2099-06-01T00:00:00Z',
-    status: 'valid' as const
-  }
-
-  return {
-    ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
-  }
+  return createTestOnlyJWordLicenseEntitlement(features, {
+    customerId: 'customer-pdf-public-api'
+  })
 }
 
 /** 读取随 pdfjs-dist 发布的 LiberationSans 字体，作为稳定的自定义字体 fixture。 */

@@ -83,7 +83,7 @@
 
 ## PERS-01（P0）版本恢复非原子，中途失败文档已改但 API 报失败
 
-- 位置：`packages/persistence/src/storage-history-adapter.ts:301-329`（storage 版）；`index.ts:514-527`（内存版）。
+- 位置（当前）：`packages/persistence/src/index.ts:523`（Memory 公开 seam）、`storage-history-adapter.ts:321`（Storage 公开 seam）、`restore-coordinator.ts:74-169`（共享完成与恢复编排）。
 - 问题：先 `replaceDocumentContent` 就地改写目标文档，再 append→save 持久化；持久化抛错时 catch 返回 `PERSISTENCE_RESTORE_FAILED`，但文档已被替换。
 - 后果：调用方收到"恢复失败"，实际 Y.Doc 已改且无对应版本记录，文档处于未记录中间态。
 - 建议修复：先完成持久化再切换文档内容，或失败时回滚 targetDoc（隔离准备 + 原子提交/CAS）。
@@ -92,6 +92,9 @@
   1. 提取共享 restore orchestration：隔离预览、生成 update、storage CAS commit、单事务应用 target。
   2. storage adapter 用原子 append/save，memory adapter 使用同一状态机，避免两份逻辑继续漂移。
   3. 为 append 失败、save 失败和 CAS 冲突注入故障，断言 targetDoc 与历史状态均未变化。
+- Phase 2B 实施状态：B2 复审曾复现 target `beforeTransaction` observer 抛错后 history/storage 已增加 restore version 的失败窗口，因此原 scoped 语义被否决。用户随后批准把 7.6 中仅针对 `restoreVersion()` 的 pending/finalize/recovery 前移：两个正式 adapter 先创建不进入普通列表的 `prepared` pending，在同一 target transaction 内应用内容与 operation marker，再持久化 `target-applied` phase，只有 finalize 后才追加普通 update/version 并返回成功版本。
+- 故障语义：target 应用前失败会取消 pending 并保持 target/history/storage 无已完成 restore；同一 operation 的 observer divergence 会从 pending update 修复；target 已应用但 phase/finalize 暂时失败时返回稳定、可恢复的 `PERSISTENCE_RESTORE_RECOVERY_REQUIRED`。finalize 与最近完成确认同次提交，Memory Map 或 Storage CAS 在写入后丢失确认时，后续相同 source version 返回既有成功版本且不会追加第二个 restore。`target-applied` pending 保存实际 target state update；同一 backing owner 上 restore 活动或 durable pending 存在时 append 被阻止，append 已在途时 restore 在 target/pending 前 fail closed。append 只在 pending 收敛后生成连续版本，finalize 后公开 `loadVersion()` 的顺序与内容保持稳定。历史顺序修复后的 B2 与 B4 最终 Standards/Spec 复审均为 `PASS`、0 finding；批准范围内 B4 门禁及根测试全部通过，本项已正式关单。
+- 关闭边界：本次只前移 restore 专用协议；通用 history append CAS、幂等 append、多实例竞争、外部 operation store 和完整 `PERS-02` 继续归入 Phase 6B。本项状态为 `Closed`。
 
 ## PERS-02（P1）history append 是 read-modify-write，多实例下丢更新/版本号重复
 
@@ -121,6 +124,7 @@
   2. 同时修改 memory 与 storage adapter 的 `replaceSharedType/createAndFillSharedType/cloneSharedValue`，最好提取一份共享 clone helper，避免实现继续漂移。
   3. 增加一条直接 Y.Text attributes 恢复测试，断言 delta 完整一致；再增加一条 canonical run.properties 测试，证明加粗属性和文本都不回归。
   4. 若 persistence 明确只服务 canonical JWord schema，可在公共契约中写清这一限制；否则按通用 Y.Doc 数据无损要求关闭本项。
+- Phase 2B 实施状态：两个正式 adapter 已共用 package-internal clone helper，Y.Text 使用 delta 重建；memory/storage 公开 `restoreVersion()` seam 均证明顶层及嵌套 attributes 保留，`run.properties.bold` 不回归。`examples/collab/src/runtime/hocuspocus-history.ts` 按批准范围继续留作独立后续任务；批准范围内 B4 门禁及根测试全部通过，本项已 `Closed`。
 
 ## 正向确认（非缺陷）
 

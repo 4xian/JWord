@@ -15,6 +15,43 @@ import { createSelectionState } from '../../src/model/selection'
 import { readParagraphRunProperties, readParagraphRunTexts } from './facade-test-helpers'
 
 describe('Editor facade history APIs', () => {
+  /** tracked local no-op 不得创建空历史项或污染下一次真实命令 metadata。 */
+  it('does not create a phantom undo for a tracked no-op', () => {
+    const editor = createEditor({ initialText: 'abc' })
+    const position = editor.resolveTextPosition(editor.createTextAnchor({
+      sectionId: 'section-1',
+      blockId: 'paragraph-1',
+      runId: 'run-1',
+      graphemeIndex: 3
+    }))
+    const noOpResult = editor.executeCommand(
+      {
+        name: 'emptyInsert',
+        operations: [{ kind: 'insertText', at: position, text: '' }]
+      },
+      { label: '空插入' }
+    )
+
+    expect.soft(noOpResult.dirty).toBe(false)
+    expect.soft(editor.canUndo()).toBe(false)
+
+    editor.executeCommand(
+      {
+        name: 'realInsert',
+        operations: [{ kind: 'insertText', at: position, text: 'X' }]
+      },
+      { label: '真实插入' }
+    )
+
+    const undoResult = editor.undo()
+
+    expect(undoResult.stackItem).not.toBeNull()
+    expect(undoResult.metadata?.commandName).toBe('realInsert')
+    expect(undoResult.metadata?.description).toBe('真实插入')
+
+    editor.destroy()
+  })
+
   it('restores selection around undo and redo through history metadata', () => {
     const editor = createEditor({ initialText: 'abc' })
     const insertionAnchor = editor.createTextAnchor({

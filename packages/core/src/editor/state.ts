@@ -144,34 +144,56 @@ export abstract class JWordEditorState {
     this.sharedTransactionDispatcher = dispatcher
   }
 
+  /** 将布局脏范围重置为当前缓存文档的全部页面。 */
+  private resetWholeDocumentDirtyRange(): void {
+    this.dirtyPageIndex = 0
+    this.dirtyPageEndIndex = Math.max(0, (this.cachedLayout?.pages.length ?? 1) - 1)
+    this.layoutDirtyRange = undefined
+  }
+
   /** 从同一个共享 Y.Doc 的其他 Editor 事务刷新本实例投影。 */
   refreshFromSharedTransaction(event: TransactionEvent): void {
     this.assertActive()
     const previousSelection = this.currentSelection
 
+    if (event.dirty) {
+      this.resetWholeDocumentDirtyRange()
+    }
+
     this.handleTransactionEvent({
       ...event,
-      projection: createDocumentProjection(this.store)
+      projection: event.dirty ? createDocumentProjection(this.store) : this.currentProjection
     })
-    this.refreshSelectionAfterSharedTransaction(previousSelection)
+    if (event.dirty) {
+      this.refreshSelectionAfterSharedTransaction(previousSelection)
+    }
   }
 
   /** 应用 transaction pipeline 事件到本实例状态和订阅者。 */
   protected handleTransactionEvent(event: TransactionEvent): void {
-    this.operationSummary = createJWordOperationSummary(this.operationSummary, event)
-    this.currentProjection = event.projection
-    this.layoutNeedsRefresh = true
-    this.mountedTextMirrorNeedsRefresh = true
-    this.cancelDeferredDocumentRender()
+    const normalizedEvent = event.dirty
+      ? event
+      : { ...event, projection: this.currentProjection }
 
-    if (this.shouldRenderMountedDocumentImmediately(event.commandName)) {
-      this.renderMountedLayout('document')
-    } else {
-      this.scheduleDeferredDocumentRender()
+    this.operationSummary = createJWordOperationSummary(this.operationSummary, normalizedEvent)
+    if (normalizedEvent.dirty) {
+      if (normalizedEvent.commandName === 'applySyncUpdate' && normalizedEvent.operationKinds.length === 0) {
+        this.resetWholeDocumentDirtyRange()
+      }
+      this.currentProjection = normalizedEvent.projection
+      this.layoutNeedsRefresh = true
+      this.mountedTextMirrorNeedsRefresh = true
+      this.cancelDeferredDocumentRender()
+
+      if (this.shouldRenderMountedDocumentImmediately(normalizedEvent.commandName)) {
+        this.renderMountedLayout('document')
+      } else {
+        this.scheduleDeferredDocumentRender()
+      }
     }
 
-    this.emit({ kind: 'transaction', transaction: event })
-    this.pluginHost.dispatchAfterTransaction(event)
+    this.emit({ kind: 'transaction', transaction: normalizedEvent })
+    this.pluginHost.dispatchAfterTransaction(normalizedEvent)
   }
 
   /** 将插件诊断转发为 editor error 事件。 */
@@ -201,9 +223,7 @@ export abstract class JWordEditorState {
 
     this.pageConfig = nextPageConfig
     this.layoutNeedsRefresh = true
-    this.dirtyPageIndex = 0
-    this.dirtyPageEndIndex = Math.max(0, (this.cachedLayout?.pages.length ?? 1) - 1)
-    this.layoutDirtyRange = undefined
+    this.resetWholeDocumentDirtyRange()
     this.pendingLayoutContinuation = undefined
     this.pageStartKeys = []
     this.selectionPageIndexes = []

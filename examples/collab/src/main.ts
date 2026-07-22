@@ -17,7 +17,6 @@ import {
 } from '@4xian/jword-core'
 import { createJWordUi } from '@4xian/jword-ui'
 import {
-  createInsecureTestOnlyJWordLicenseSignature,
   type JWordLicenseEntitlement,
   type JWordLicenseSignaturePayload
 } from '@4xian/jword-license'
@@ -29,7 +28,7 @@ import {
 import { createPresenceDisplayUsers } from './awareness-order'
 import '@4xian/jword-ui/styles.css'
 import './styles.css'
-import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN } from '../../../fixtures/license/insecure-test-only-jwl1-fixture.mjs'
 
 const editorHost = requireElement<HTMLElement>('#jword-collab-editor', 'Collab demo requires #jword-collab-editor.')
 const statusHost = requireElement<HTMLElement>('#jword-collab-status', 'Collab demo requires #jword-collab-status.')
@@ -511,7 +510,7 @@ function readThirdPartyIntegrationContext(): ThirdPartyIntegrationContext {
   }
 }
 
-/** 创建 demo 宿主已从授权服务拿到的签名 entitlement。 */
+/** 创建 demo 宿主携带固定 insecure-test-only token 的 entitlement。 */
 function createDemoLicenseEntitlement(input: {
   readonly customerId: string
   readonly licenseToken: string
@@ -531,7 +530,7 @@ function createDemoLicenseEntitlement(input: {
 
   return {
     ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+    signature: INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN
   }
 }
 

@@ -28,7 +28,7 @@ const packageManifests = [
       'createHocuspocusCollabProviderAdapter'
     ],
     dependencies: {
-      '@4xian/jword-license': 'workspace:*'
+      '@4xian/jword-core': 'workspace:*'
     }
   },
   {
@@ -45,7 +45,6 @@ const packageManifests = [
     ],
     experimentalTokens: [],
     dependencies: {
-      '@4xian/jword-license': 'workspace:*',
       '@4xian/jword-persistence': 'workspace:*'
     }
   },
@@ -102,6 +101,9 @@ describe('Gate 6 package export grading', () => {
       }
       expect(packageJson.files).toEqual(['dist', 'README.md'])
       expect(packageJson.dependencies ?? {}).toMatchObject(manifest.dependencies)
+      if (manifest.name === '@4xian/jword-collab' || manifest.name === '@4xian/jword-collab-server') {
+        assertLicensePeerDependency(packageJson)
+      }
     }
   })
 
@@ -187,7 +189,7 @@ describe('Gate 6 package export grading', () => {
     )
   })
 
-  it('ships a minimal self-host deployment path for the formal collab server package', () => {
+  it('keeps the collab server package as an internal Docker image assembly path', () => {
     const dockerfilePath = 'packages/collab-server/Dockerfile'
     const readmePath = 'packages/collab-server/README.md'
 
@@ -207,13 +209,16 @@ describe('Gate 6 package export grading', () => {
       '/history/versions',
       '/license/status',
       'requestId',
-      'WebSocket'
+      'WebSocket',
+      '版本化 Docker 镜像',
+      'LIC-309',
+      '镜像组装'
     ]) {
       expect(readme, token).toContain(token)
     }
   })
 
-  it('documents and scripts the third-party integration smoke path through public packages', () => {
+  it('documents the browser SDK customer path while retaining the internal no-alias smoke', () => {
     const clientReadmePath = 'packages/collab/README.md'
     const exampleReadmePath = 'examples/collab/README.md'
     const smokeScriptPath = 'tools/release/check-gate6-third-party-smoke.mjs'
@@ -228,15 +233,16 @@ describe('Gate 6 package export grading', () => {
 
     for (const token of [
       'connectJWordCollaboration',
-      'createJWordCollabServer',
       'startAutoInsertSession',
       'history.recordVersion',
       'JWORD_LICENSE_MISSING',
-      '空项目',
-      '公开 API'
+      '版本化 Docker 镜像',
+      'HTTP/WSS endpoint',
+      '不导入服务端 npm package'
     ]) {
       expect(`${clientReadme}\n${exampleReadme}`, token).toContain(token)
     }
+    expect(clientReadme).not.toContain("from '@4xian/jword-collab-server'")
     for (const token of [
       'gate6-third-party-smoke',
       'mkdtempSync',
@@ -336,12 +342,23 @@ function readCollabClientSdkSource(): string {
   ].map((path) => readFileSync(path, 'utf8')).join('\n')
 }
 
+/** 约束协作消费包由宿主提供唯一 License runtime，并仅在仓库开发时直接链接。 */
+function assertLicensePeerDependency(packageJson: PackageJson): void {
+  expect(packageJson.dependencies).not.toHaveProperty('@4xian/jword-license')
+  expect(packageJson.peerDependencies?.['@4xian/jword-license']).toBe('workspace:*')
+  expect(packageJson.devDependencies?.['@4xian/jword-license']).toBe('workspace:*')
+  expect(packageJson.peerDependenciesMeta?.['@4xian/jword-license']).toBeUndefined()
+}
+
 interface PackageJson {
   readonly name?: string
   readonly private?: boolean
   readonly exports?: unknown
   readonly files?: readonly string[]
   readonly dependencies?: Readonly<Record<string, string>>
+  readonly peerDependencies?: Readonly<Record<string, string>>
+  readonly peerDependenciesMeta?: Readonly<Record<string, { readonly optional?: boolean }>>
+  readonly devDependencies?: Readonly<Record<string, string>>
 }
 
 /** 读取 workspace package manifest。 */

@@ -4,7 +4,7 @@
  * 职责：锁定 Gate 7 对外浏览器支持矩阵、构建 target 和 E2E 浏览器族。
  * 边界：只检查公开文档与配置文本，不启动浏览器、不构建示例。
  * 协作模块：docs/sdk/browser-support.md、Vite 示例配置、Playwright 配置和 package scripts。
- * 约束：测试矩阵不是最低版本承诺；窄屏只保留分页滚动预览和工具栏样式适配。
+ * 约束：最新版回归不是最低版本认证；窄屏只保留分页滚动预览和工具栏样式适配。
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
@@ -39,15 +39,25 @@ const packageTsconfigPaths = [
 ]
 
 describe('Gate 7 browser support matrix', () => {
-  it('freezes the public minimum browser matrix and narrow viewport boundary', () => {
+  it('freezes the public minimum browser target, evidence boundary and API rules', () => {
     expect(existsSync(browserSupportPath)).toBe(true)
 
     const support = readFileSync(browserSupportPath, 'utf8')
     const publicApi = readFileSync(publicApiPath, 'utf8')
 
-    expect(support).toContain('Chrome / Edge ≥ 114')
-    expect(support).toContain('Firefox ≥ 115 ESR')
+    expect(support).toContain('Chrome / Edge ≥ 100')
+    expect(support).toContain('Firefox ≥ 128')
     expect(support).toContain('Safari ≥ 16.4')
+    expect(support).toContain('LIC-107B2')
+    expect(support).toContain('Deferred')
+    expect(support).toContain('不阻断内部阶段')
+    expect(support).toContain('仍阻断对应最低版本对外声明和商业 GA')
+    expect(support).toContain('不得对外描述为已完成最低版本实测')
+    expect(support).toContain('Chrome 92')
+    expect(support).toContain('feature detection')
+    expect(support).toContain('`target` 不提供运行时 API polyfill')
+    expect(support).toContain('Node ≥ 20.19.0')
+    expect(support).toContain('不是客户浏览器宿主要求')
     expect(support).toContain('窄屏适配边界')
     expect(support).toContain('分页 canvas 在窄屏视口下可滚动、可阅读、页面不空白')
     expect(support).toContain('不在 JWord 中建立单独的窄屏平台概念')

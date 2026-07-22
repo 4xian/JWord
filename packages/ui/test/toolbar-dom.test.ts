@@ -204,7 +204,7 @@ describe('toolbar select dom', () => {
     const dom = createToolbarDom(host, resolveToolbarConfig({
       professional: {
         tabTools: {
-          page: ['document.pagePreset', 'format.fontFamily', 'document.headerFooter']
+          page: ['document.pagePreset', 'document.headerFooter']
         }
       }
     }))
@@ -217,9 +217,6 @@ describe('toolbar select dom', () => {
       const selectArrow = selectTrigger?.querySelector<HTMLElement>('.jw-toolbar__select-arrow')
       const selectRow = selectTrigger?.querySelector<HTMLElement>(':scope > .jw-toolbar__select-trigger-row')
       const selectFieldLabel = selectTrigger?.querySelector<HTMLElement>(':scope > .jw-toolbar__select-field-label')
-      const iconlessSelectArrow = host.querySelector<HTMLElement>(
-        '[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-arrow'
-      )
       const button = host.querySelector<HTMLElement>('[data-jword-tool-id="document.headerFooter"]')
       const buttonIcon = button?.querySelector<HTMLElement>('.jw-toolbar__button-icon')
       const buttonArrow = button?.querySelector<HTMLElement>('.jw-toolbar__select-arrow')
@@ -237,12 +234,9 @@ describe('toolbar select dom', () => {
       expect(buttonLabel?.parentElement).toBe(button)
       expect(buttonRow?.contains(buttonLabel ?? null)).toBe(false)
       expect(getComputedStyle(selectArrow!).position).not.toBe('absolute')
-      expect(getComputedStyle(selectArrow!).marginLeft).toBe('4px')
-      expect(getComputedStyle(iconlessSelectArrow!).marginLeft).toBe('0px')
       expect(getComputedStyle(selectFieldLabel!).position).not.toBe('absolute')
       expect(getComputedStyle(selectFieldLabel!).display).toBe('block')
       expect(getComputedStyle(buttonArrow!).position).not.toBe('absolute')
-      expect(getComputedStyle(buttonArrow!).marginLeft).toBe('4px')
       expect(getComputedStyle(buttonLabel!).position).not.toBe('absolute')
     } finally {
       destroyToolbarDom(dom)

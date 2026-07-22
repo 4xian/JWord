@@ -343,15 +343,19 @@ const packageCatalogExpectations = [
       'GATE5_FORMAT_FEATURES',
       'GATE6_COLLAB_FEATURES',
       'assertJWordFeatureEntitled',
+      'createJWordLicenseTransfer',
       'JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA',
-      'JWordLicenseDiagnosticCode'
+      'JWordLicenseDiagnosticCode',
+      'JWordLicenseTransfer'
     ],
     sourceTokens: [
       'GATE5_FORMAT_FEATURES',
       'GATE6_COLLAB_FEATURES',
       'assertJWordFeatureEntitled',
+      'createJWordLicenseTransfer',
       'JWORD_LICENSE_DIAGNOSTIC_CODE_METADATA',
-      'JWordLicenseDiagnosticCode'
+      'JWordLicenseDiagnosticCode',
+      'JWordLicenseTransfer'
     ]
   }
 ] as const

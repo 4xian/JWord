@@ -416,7 +416,12 @@ function readResourceSource(resource: ResourceRecord): ResourceSource {
     throw createJWordError('PROJECTION_INVALID_DOCUMENT', 'resource source 结构非法')
   }
 
-  if (value.kind === 'dataUrl' || value.kind === 'blobUrl' || value.kind === 'externalUrl') {
+  if (
+    value.kind === 'dataUrl'
+    || value.kind === 'blobUrl'
+    || value.kind === 'externalUrl'
+    || value.kind === 'packedResource'
+  ) {
     return {
       kind: value.kind,
       url: value.url

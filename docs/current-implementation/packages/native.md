@@ -60,6 +60,12 @@
 - checksum 用于完整性校验；资源缺失或 unpacked 通过 warning/diagnostic 暴露。
 - worker runtime 绑定 message 分发和 AbortController；worker 不改变格式语义。
 
+## B5 诊断契约
+
+- Native package 读取和 schema parser 使用固定内部预算；超出资源或解压预算时返回 `JWORD_NATIVE_PACKAGE_RESOURCE_LIMIT_EXCEEDED`。
+- `JWordPackageDiagnostic`、`JWordNativePackageError` 和 Worker error shape 的可选 `path` 只接受 parser 生成的安全 JSON Pointer，不复制攻击者字段名、字段值、资源 ID 或依赖异常。
+- Worker/runtime/protocol 的跨层 `message` 使用稳定 `code`；用户可见的 `zh-CN` / `en-US` 文案由 UI、wrapper 或宿主负责，本包不把本地化文本写入跨层 DTO。
+
 ## 与其它包关系
 
 - 依赖 core 的 canonical `Document`、`Editor`、`DocumentProjection` 与资源类型。
@@ -109,4 +115,3 @@
 - `packages/native/src/worker.ts`
 - `packages/native/src/worker-capability.ts`
 - `packages/native/src/types.ts`
-

@@ -56,7 +56,7 @@ DOCX、PDF 和 native worker 都提供 capability detection：`detectDocxWorkerC
 
 ## 未授权失败
 
-未授权、过期、feature 不匹配或授权服务不可用时，必须以 `JWORD_LICENSE_MISSING`、`JWORD_LICENSE_EXPIRED`、`JWORD_FEATURE_NOT_ENTITLED`、`JWORD_LICENSE_SERVER_UNAVAILABLE` 或 `JWORD_LICENSE_SIGNATURE_INVALID` 结束，不读取或泄漏文档正文。
+未授权、过期、feature 不匹配或旧 JWL1 输入 fail closed 时，必须以 `JWORD_LICENSE_MISSING`、`JWORD_LICENSE_EXPIRED`、`JWORD_FEATURE_NOT_ENTITLED` 或 `JWORD_LICENSE_SIGNATURE_INVALID` 结束，不读取或泄漏文档正文。DOCX/PDF worker 的 License 错误只传递语言无关 code、`feature` 和 `requestId`，不传递 `customerId`。
 
 ## 验收证据
 

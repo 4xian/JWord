@@ -10,6 +10,7 @@ import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN } from '../../fixtures/license/insecure-test-only-jwl1-fixture.mjs'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const workspacePackages = [
@@ -154,11 +155,7 @@ import {
 import {
   createVolatileHistoryStorage
 } from '@4xian/jword-persistence'
-import {
-  createInsecureTestOnlyJWordLicenseSignature
-} from '@4xian/jword-license'
-
-const INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED = 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A'
+const INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN = ${JSON.stringify(INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN)}
 
 const server = createJWordCollabServer({
   address: '127.0.0.1',
@@ -167,7 +164,7 @@ const server = createJWordCollabServer({
   historyStorage: createVolatileHistoryStorage(),
   licenseHook: ({ feature }) => ({
     ok: feature === GATE6_COLLAB_FEATURES.server || feature === GATE6_COLLAB_FEATURES.history,
-    diagnosticCode: 'COLLAB_FEATURE_NOT_ENTITLED'
+    diagnosticCode: 'JWORD_FEATURE_NOT_ENTITLED'
   })
 })
 const state = await server.start()
@@ -235,7 +232,6 @@ try {
   assert(autoInsert.write('协作 smoke')?.ok === true, 'auto insert write should succeed.')
   assert(editor.appliedUpdates.some((update) => update.text === '协作 smoke'), 'auto insert should enter the host editor facade.')
 
-  const missingLicenseDiagnosticSourceCode = 'JWORD_LICENSE_MISSING'
   const denied = await connectJWordCollaboration(createExternalEditor(), {
     serverUrl: state.httpUrl,
     documentId: 'doc-third-party-smoke-denied',
@@ -256,8 +252,8 @@ try {
 
   assert(denied.status === 'error', 'missing license should fail before collaboration starts.')
   assert(
-    denied.diagnostics.some((diagnostic) => diagnostic.code === missingLicenseDiagnosticSourceCode.replace('JWORD_', 'COLLAB_')),
-    'missing license should be reported as COLLAB_LICENSE_MISSING.'
+    denied.diagnostics.some((diagnostic) => diagnostic.code === 'JWORD_LICENSE_MISSING'),
+    'missing license should be reported as JWORD_LICENSE_MISSING.'
   )
 
   await denied.destroy()
@@ -272,7 +268,7 @@ console.log(JSON.stringify({
   localUpdate: 'published',
   history: 'server-backed',
   autoInsert: 'written',
-  unauthorized: 'COLLAB_LICENSE_MISSING'
+  unauthorized: 'JWORD_LICENSE_MISSING'
 }))
 
 /** 创建第三方宿主最小 editor facade。 */
@@ -333,7 +329,7 @@ function createGate6License() {
 
   return {
     ...entitlement,
-    signature: createInsecureTestOnlyJWordLicenseSignature(entitlement, INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED)
+    signature: INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN
   }
 }
 

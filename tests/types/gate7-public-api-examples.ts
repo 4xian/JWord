@@ -52,11 +52,6 @@ import {
   type JWordCollaborationConnection
 } from '@4xian/jword-collab'
 import {
-  createJWordCollabRequestHandler,
-  createJWordCollabServer,
-  type JWordCollabServerState
-} from '@4xian/jword-collab-server'
-import {
   GATE5_FORMAT_FEATURES,
   assertJWordFeatureEntitled,
   type JWordLicenseEntitlement,
@@ -150,23 +145,15 @@ export async function paidFormatExample(): Promise<{
   }
 }
 
-/** 接入 Gate 6 协同 client 和 self-host server。 */
-export async function paidCollaborationExample(): Promise<{
-  readonly connection: JWordCollaborationConnection
-  readonly serverState: JWordCollabServerState
-}> {
+/** 通过已部署的 Docker endpoint 接入 Gate 6 浏览器协同 client。 */
+export async function paidCollaborationExample(): Promise<JWordCollaborationConnection> {
   const provider = createMemoryCollabProviderAdapter({
     documentId: 'doc-1',
     roomId: 'room-1',
     clientId: 'client-1'
   })
-  const server = createJWordCollabServer({
-    authHook: () => ({ ok: true, userId: 'user-1' }),
-    licenseHook: () => ({ ok: true })
-  })
-  const serverState = await server.start()
   const connection = await connectJWordCollaboration(collaborationEditor, {
-    serverUrl: serverState.httpUrl,
+    serverUrl: 'https://collab.example.test',
     documentId: 'doc-1',
     roomId: 'room-1',
     user: { id: 'user-1', name: 'User 1' },
@@ -176,17 +163,7 @@ export async function paidCollaborationExample(): Promise<{
     provider
   })
 
-  createJWordCollabRequestHandler({
-    authHook: () => ({ ok: true, userId: 'user-1' }),
-    licenseHook: () => ({ ok: true })
-  })
-
-  await server.stop()
-
-  return {
-    connection,
-    serverState
-  }
+  return connection
 }
 
 /** 读取公开诊断快照并只展示已裁剪的稳定字段。 */

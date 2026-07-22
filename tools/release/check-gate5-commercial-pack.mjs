@@ -18,7 +18,30 @@ const commercialPackages = [
   {
     name: '@4xian/jword-license',
     dir: join('packages', 'license'),
-    requiredExports: ['.']
+    requiredExports: ['.'],
+    forbiddenTextMarkers: [
+      {
+        label: 'test signer export',
+        value: 'createInsecureTestOnlyJWordLicenseSignature'
+      },
+      {
+        label: 'test seed identifier',
+        value: 'INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED'
+      },
+      {
+        label: 'repository test seed',
+        value: readInsecureTestOnlySeed()
+      },
+      {
+        label: 'production Ed25519 signer',
+        value: 'signEd25519'
+      },
+      {
+        label: 'production license signer',
+        value: 'createJWordLicenseSignature'
+      },
+      ...readTestOnlyJwl2ForbiddenMarkers()
+    ]
   },
   {
     name: '@4xian/jword-pdf',
@@ -79,7 +102,11 @@ function readCommercialPackageReport(config) {
   const missingExports = config.requiredExports.filter((key) => !exportKeys.includes(key))
   const files = packageJson.files ?? []
   const forbiddenFileEntries = files.filter((entry) => entry === 'src' || entry === 'test' || entry === 'tests')
-  const npmPackDryRun = readNpmPackDryRun(config.dir, config.requiredExports)
+  const npmPackDryRun = readNpmPackDryRun(
+    config.dir,
+    config.requiredExports,
+    config.forbiddenTextMarkers ?? []
+  )
 
   if (packageJson.name !== config.name) {
     failures.push(`${packageJsonPath}: name 应为 ${config.name}`)
@@ -107,6 +134,9 @@ function readCommercialPackageReport(config) {
   }
   if (npmPackDryRun.sourceMapLeaks.length > 0) {
     failures.push(`${packageJsonPath}: npm pack 不得包含源码映射内容 ${npmPackDryRun.sourceMapLeaks.join(', ')}`)
+  }
+  if (npmPackDryRun.forbiddenTextLeaks.length > 0) {
+    failures.push(`${packageJsonPath}: npm pack 不得包含签发或测试密钥材料 ${npmPackDryRun.forbiddenTextLeaks.join(', ')}`)
   }
 
   return {
@@ -148,7 +178,7 @@ function hasRequiredDistEntries(packageDir, requiredExports) {
 }
 
 /** 执行 npm pack dry-run 并读取实际将进入 tarball 的文件。 */
-function readNpmPackDryRun(packageDir, requiredExports) {
+function readNpmPackDryRun(packageDir, requiredExports, forbiddenTextMarkers) {
   const output = execFileSync('npm', [
     'pack',
     '--dry-run',
@@ -168,6 +198,9 @@ function readNpmPackDryRun(packageDir, requiredExports) {
   const sourceMapLeaks = files
     .filter(isTextPackFile)
     .flatMap((file) => readPackedTextLeaks(packageDir, file))
+  const forbiddenTextLeaks = files
+    .filter(isTextPackFile)
+    .flatMap((file) => readForbiddenPackedTextLeaks(packageDir, file, forbiddenTextMarkers))
 
   return {
     filename: packReport?.filename ?? '',
@@ -176,7 +209,8 @@ function readNpmPackDryRun(packageDir, requiredExports) {
     requiredFiles,
     requiredFilesMissing,
     forbiddenFiles,
-    sourceMapLeaks
+    sourceMapLeaks,
+    forbiddenTextLeaks
   }
 }
 
@@ -225,6 +259,80 @@ function readPackedTextLeaks(packageDir, filePath) {
   }
 
   return leaks
+}
+
+/** 扫描 dry-run 将打入包的文本文件，报告安全标签而不回显密钥材料。 */
+function readForbiddenPackedTextLeaks(packageDir, filePath, forbiddenTextMarkers) {
+  const absolutePath = join(packageDir, filePath)
+  if (!existsSync(absolutePath)) {
+    return []
+  }
+
+  const source = readFileSync(absolutePath, 'utf8')
+
+  return forbiddenTextMarkers
+    .filter((marker) => source.includes(marker.value))
+    .map((marker) => `${filePath}:${marker.label}`)
+}
+
+/** 从唯一 fixture 源读取仓库测试 seed，避免在发布检查中复制第二份值。 */
+function readInsecureTestOnlySeed() {
+  const source = readFileSync('fixtures/license/insecure-test-only-keys.ts', 'utf8')
+  const seed = readFixtureConstant(
+    source,
+    'INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED'
+  )
+
+  if (seed === undefined) {
+    throw new Error('无法读取仓库 insecure-test-only seed。')
+  }
+
+  return seed
+}
+
+/** 读取 LIC-110 JWL2 fixture 的安全扫描标记，不在失败输出中回显实际值。 */
+function readTestOnlyJwl2ForbiddenMarkers() {
+  const source = readFileSync('fixtures/license/test-only-jwl2-fixture.ts', 'utf8')
+  const constants = [
+    ['TEST_ONLY_JWL2_PRIVATE_KEY_SEED', 'test-only JWL2 private seed'],
+    ['TEST_ONLY_JWL2_PUBLIC_KEY', 'test-only JWL2 public key'],
+    ['TEST_ONLY_JWL2_TOKEN', 'test-only JWL2 token'],
+    ['TEST_ONLY_JWL2_KEY_ID', 'test-only JWL2 key id']
+  ]
+
+  const literalMarkers = constants.map(([name, label]) => ({
+    label,
+    value: readFixtureConstant(source, name)
+  }))
+
+  if (literalMarkers.some((marker) => marker.value === undefined)) {
+    throw new Error('无法读取 LIC-110 JWL2 fixture 常量。')
+  }
+
+  return [
+    {
+      label: 'test-only JWL2 private seed identifier',
+      value: 'TEST_ONLY_JWL2_PRIVATE_KEY_SEED'
+    },
+    {
+      label: 'test-only JWL2 public key identifier',
+      value: 'TEST_ONLY_JWL2_PUBLIC_KEY'
+    },
+    {
+      label: 'test-only JWL2 token signer',
+      value: 'createInsecureTestOnlyJwl2Token'
+    },
+    {
+      label: 'test-only JWL2 key id literal',
+      value: 'jword-test-lic110-k1'
+    },
+    ...literalMarkers
+  ]
+}
+
+/** 从 fixture 源码读取单个常量值，供发布扫描使用。 */
+function readFixtureConstant(source, name) {
+  return source.match(new RegExp(`${name} = '([^']+)'`, 'u'))?.[1]
 }
 
 /** 读取 JSON 文件。 */

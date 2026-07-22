@@ -48,28 +48,23 @@ const pdf = await exportPdfFromLayout(layout, { license: entitlement })
 console.log(imported.warnings.length, exported.bytes.byteLength, pdf.bytes.byteLength)
 ```
 
-## Gate 6 高级协同：client 和 self-host server
+## Gate 6 高级协同：浏览器 client 和 Docker endpoint
 
 ```ts
 import { connectJWordCollaboration, createMemoryCollabProviderAdapter, GATE6_COLLAB_FEATURES } from '@4xian/jword-collab'
-import { createJWordCollabRequestHandler, createJWordCollabServer } from '@4xian/jword-collab-server'
 import type { JWordLicenseEntitlement } from '@4xian/jword-license'
 
 declare const entitlement: JWordLicenseEntitlement
+declare const editor: Parameters<typeof connectJWordCollaboration>[0]
 
-const server = createJWordCollabServer({
-  authHook: () => ({ ok: true, userId: 'user-1' }),
-  licenseHook: () => ({ ok: true })
-})
-const state = await server.start()
 const provider = createMemoryCollabProviderAdapter({
   documentId: 'doc-1',
   roomId: 'room-1',
   clientId: 'client-1'
 })
 
-const connection = await connectJWordCollaboration({
-  serverUrl: state.httpUrl,
+const connection = await connectJWordCollaboration(editor, {
+  serverUrl: 'https://collab.example.test',
   documentId: 'doc-1',
   roomId: 'room-1',
   user: { id: 'user-1', name: 'User 1' },
@@ -78,14 +73,10 @@ const connection = await connectJWordCollaboration({
   features: [GATE6_COLLAB_FEATURES.multiplayer],
   provider
 })
-
-createJWordCollabRequestHandler({
-  authHook: () => ({ ok: true, userId: 'user-1' }),
-  licenseHook: () => ({ ok: true })
-})
 await connection.destroy()
-await server.stop()
 ```
+
+生产 endpoint 由客户运维侧部署 JWord 版本化 Docker 镜像后提供。客户应用不安装、导入或嵌入 `@4xian/jword-collab-server`；当前内存 provider 仅用于展示公开 client options，真实 provider 接入按 Collaboration 文档执行。
 
 ## Diagnostics payload contract
 
@@ -108,4 +99,4 @@ function readDiagnostics(snapshot: JWordDiagnosticsSnapshot): readonly string[] 
 }
 ```
 
-Feature key handoff：Gate 5 使用 `GATE5_FORMAT_FEATURES`，Gate 6 使用 `GATE6_COLLAB_FEATURES`。授权失败时只返回 feature key、customer id 和稳定诊断码，不携带用户文档内容。
+Feature key handoff：Gate 5 使用 `GATE5_FORMAT_FEATURES`，Gate 6 使用 `GATE6_COLLAB_FEATURES`。授权失败时只返回稳定 `code` 与必要的 `feature`、`requestId`、`recoverable` 等结构化字段，不返回 `customerId`、token、signature 或用户文档内容。

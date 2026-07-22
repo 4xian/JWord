@@ -21,6 +21,10 @@ export type ResourceSource =
       readonly kind: 'externalUrl'
       readonly url: string
     }
+  | {
+      readonly kind: 'packedResource'
+      readonly url: string
+    }
 
 export interface ResourceErrorState {
   readonly code: string

@@ -31,3 +31,7 @@ The repo uses Conventional Commits via commitlint, for example `fix: correct pas
 ## Agent-Specific Instructions
 
 Make surgical changes only. Do not introduce a separate mobile editor concept; use narrow viewport terminology for responsive behavior. For structural code questions, use CodeGraph before text search when the index is available.
+
+Browser runtime changes must support Chrome/Edge 100, Firefox 128, and Safari 16.4. Prefer syntax and Web APIs already supported by Chrome 92 for JWord-owned browser source when that does not add complexity, but do not describe Chrome 92 as the full SDK support floor. Before introducing a browser API, verify both JWord source and direct runtime dependencies against the public matrix; if an API is unavailable, add feature detection plus an explicit fallback/polyfill or obtain approval to raise the minimum. ES2022/Vite build targets are not runtime API polyfills.
+
+All production JWord server components are delivered only as versioned Docker images. Customer application code integrates browser SDK packages and connects to declared HTTP/WSS endpoints; Node and server npm packages remain inside the image. Repository Node entrypoints and local server examples are for development, testing, and image assembly, not customer production integration.

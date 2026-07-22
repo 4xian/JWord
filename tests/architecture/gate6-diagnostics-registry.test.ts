@@ -63,10 +63,6 @@ const expectedDiagnosticCodes = [
   'JWORD_COLLAB_AUTO_INSERT_RELAY_PAYLOAD_INVALID',
   'JWORD_COLLAB_AUTO_INSERT_RELAY_METADATA_MISMATCH',
   'COLLAB_RESTORE_CONFLICT_RESOLVED',
-  'COLLAB_LICENSE_MISSING',
-  'COLLAB_LICENSE_EXPIRED',
-  'COLLAB_FEATURE_NOT_ENTITLED',
-  'COLLAB_LICENSE_SERVER_UNAVAILABLE',
   'JWORD_COLLAB_LICENSE_HOOK_REQUIRED',
   'JWORD_COLLAB_LICENSE_METADATA_REQUIRED',
   'JWORD_COLLAB_LICENSE_STATUS_PAYLOAD_INVALID',
@@ -78,7 +74,8 @@ const expectedDiagnosticCodes = [
   'PERSISTENCE_VERSION_NOT_FOUND',
   'PERSISTENCE_SNAPSHOT_NOT_FOUND',
   'PERSISTENCE_VERSION_COMPACTED',
-  'PERSISTENCE_RESTORE_FAILED'
+  'PERSISTENCE_RESTORE_FAILED',
+  'PERSISTENCE_RESTORE_RECOVERY_REQUIRED'
 ] as const
 
 const requiredDiagnosticDomains = [
@@ -195,10 +192,6 @@ describe('Gate 6 diagnostics registry', () => {
       'auto-inserter',
       'auto-inserter',
       'restore',
-      'license',
-      'license',
-      'license',
-      'license',
       'server',
       'server',
       'server',
@@ -206,6 +199,7 @@ describe('Gate 6 diagnostics registry', () => {
       'server',
       'server',
       'server',
+      'storage',
       'storage',
       'storage',
       'storage',

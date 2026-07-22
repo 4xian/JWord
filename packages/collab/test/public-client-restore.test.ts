@@ -11,7 +11,6 @@
 import { createServer, type IncomingMessage } from 'node:http'
 
 import { createEditor } from '@4xian/jword-core'
-import { createInsecureTestOnlyJWordLicenseSignature } from '@4xian/jword-license'
 import {
   GATE6_COLLAB_FEATURES,
   JWORD_COLLAB_CLIENT_PROTOCOL_VERSION,
@@ -21,6 +20,7 @@ import {
 import { describe, expect, it } from 'vitest'
 
 import { INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED } from '../../../fixtures/license/insecure-test-only-keys'
+import { createInsecureTestOnlyJWordLicenseSignature } from '../../../fixtures/license/create-insecure-test-only-jwl1-token'
 
 interface TestHistoryRequest {
   readonly method: string

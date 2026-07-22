@@ -8,12 +8,17 @@
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, it } from 'vitest'
+import JSZip from 'jszip'
 
 import type { Document } from '@4xian/jword-core'
 
 import {
   createCancelJWordNativeRequest,
+  createLoadJWordNativeRequest,
   createSaveJWordNativeRequest,
+  createValidateJWordNativeRequest,
+  JWordNativePackageError,
+  serializeJWordNativePackageError,
   type JWordNativeWorkerEvent
 } from '../src/index'
 import { dispatchJWordNativeWorkerRequest } from '../src/worker'
@@ -50,6 +55,56 @@ describe('@4xian/jword-native worker runtime', () => {
     })
   })
 
+  /** 验证 Worker load-result 只返回已 materialize 的运行时 data URL。 */
+  it('materializes packed resources through the worker load-result contract', async () => {
+    /** 丢弃本测试不关心的中间 progress event。 */
+    const ignorePostedEvent = (): void => {}
+    const saveEvent = await dispatchJWordNativeWorkerRequest(
+      createSaveJWordNativeRequest('native-worker-resource-save', {
+        kind: 'document',
+        id: 'document-native-worker-resource',
+        resourceIds: ['native-worker-image'],
+        resources: [{
+          kind: 'resource',
+          id: 'native-worker-image',
+          mime: 'image/png',
+          source: {
+            kind: 'dataUrl',
+            url: 'data:image/png;base64,QUJDRA=='
+          },
+          status: 'success'
+        }],
+        sections: []
+      }),
+      ignorePostedEvent
+    )
+
+    expect(saveEvent.type).toBe('save-result')
+    if (saveEvent.type !== 'save-result') {
+      throw new Error('expected native worker save result')
+    }
+
+    const loadEvent = await dispatchJWordNativeWorkerRequest(
+      createLoadJWordNativeRequest('native-worker-resource-load', saveEvent.result.bytes),
+      ignorePostedEvent
+    )
+
+    expect(loadEvent).toMatchObject({
+      type: 'load-result',
+      requestId: 'native-worker-resource-load',
+      result: {
+        document: {
+          resources: [{
+            source: {
+              kind: 'dataUrl',
+              url: 'data:image/png;base64,QUJDRA=='
+            }
+          }]
+        }
+      }
+    })
+  })
+
   it('dispatches cancel requests with a stable response', async () => {
     const posted: JWordNativeWorkerEvent[] = []
     const event = await dispatchJWordNativeWorkerRequest(
@@ -65,12 +120,54 @@ describe('@4xian/jword-native worker runtime', () => {
       error: {
         name: 'JWordNativePackageError',
         code: 'JWORD_NATIVE_WORKER_CANCELLED',
-        message: '任务已取消',
+        message: 'JWORD_NATIVE_WORKER_CANCELLED',
         recoverable: false,
         requestId: 'native-worker-cancel-1'
       }
     })
     expect(posted).toEqual([event])
+  })
+
+  it('serializes the normalized schema path and stable message code', () => {
+    const shape = serializeJWordNativePackageError(new JWordNativePackageError({
+      code: 'JWORD_NATIVE_DOCUMENT_INVALID',
+      message: '不要跨层传播的本地化文本',
+      entry: 'document.json',
+      path: '/sections/0/blocks'
+    }), 'native-worker-path-1')
+
+    expect(shape).toMatchObject({
+      code: 'JWORD_NATIVE_DOCUMENT_INVALID',
+      message: 'JWORD_NATIVE_DOCUMENT_INVALID',
+      entry: 'document.json',
+      path: '/sections/0/blocks',
+      requestId: 'native-worker-path-1'
+    })
+  })
+
+  it('returns stable diagnostic codes in validate-result messages', async () => {
+    const zip = new JSZip()
+
+    zip.file('document.json', '{}')
+
+    const input = await zip.generateAsync({ type: 'uint8array' })
+    const event = await dispatchJWordNativeWorkerRequest(
+      createValidateJWordNativeRequest('native-worker-stable-message-1', input),
+      () => {}
+    )
+
+    expect(event).toMatchObject({
+      type: 'validate-result',
+      result: {
+        valid: false,
+        diagnostics: [
+          {
+            code: 'JWORD_NATIVE_MANIFEST_MISSING',
+            message: 'JWORD_NATIVE_MANIFEST_MISSING'
+          }
+        ]
+      }
+    })
   })
 
   it('keeps a cancel that arrives before the matching save is registered', async () => {

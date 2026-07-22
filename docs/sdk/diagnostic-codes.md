@@ -4,7 +4,7 @@
 
 Source: `fixtures/collab/diagnostics-registry.json`  
 Schema version: 1  
-Code count: 190
+Code count: 192
 
 | Code | Owner | Severity | Recoverable | Fallback | Domains | Description |
 |---|---|---|---|---|---|---|
@@ -58,10 +58,6 @@ Code count: 190
 | `JWORD_COLLAB_AUTO_INSERT_RELAY_PAYLOAD_INVALID` | auto-inserter | error | yes | reject-invalid-auto-insert-relay | auto-insert, payload-limit, server | Server auto-insert relay payload is invalid and must not accept the chunk. |
 | `JWORD_COLLAB_AUTO_INSERT_RELAY_METADATA_MISMATCH` | auto-inserter | error | yes | reject-auto-insert-body-metadata-mismatch | auto-insert, payload-limit, server | Auto-insert relay body metadata does not match URL or header metadata and must be rejected. |
 | `COLLAB_RESTORE_CONFLICT_RESOLVED` | restore | warning | yes | restore-local-snapshot-with-conflict-note | history | Version restore met newer collaborative edits and resolved them through restore policy. |
-| `COLLAB_LICENSE_MISSING` | license | error | yes | show-license-install-prompt | authorization | Collaboration feature requires a commercial license entitlement before reading or sending document updates. |
-| `COLLAB_LICENSE_EXPIRED` | license | error | yes | show-license-renewal-prompt | authorization | Collaboration license entitlement expired and advanced collaboration must remain disabled. |
-| `COLLAB_FEATURE_NOT_ENTITLED` | license | error | yes | disable-unentitled-collab-feature | authorization | Current license entitlement does not include the requested collaboration feature key. |
-| `COLLAB_LICENSE_SERVER_UNAVAILABLE` | license | error | yes | retry-license-status-check | authorization, server | License status service is unavailable and paid collaboration cannot start without a confirmed entitlement. |
 | `JWORD_COLLAB_LICENSE_HOOK_REQUIRED` | server | error | no | configure-server-license-hook | authorization, server | Self-host server refused a paid endpoint because no license hook was configured. |
 | `JWORD_COLLAB_LICENSE_METADATA_REQUIRED` | server | error | yes | resend-license-metadata-in-url-or-header | authorization, payload-limit, server | Paid endpoint metadata was missing from URL or headers and request body was not consumed. |
 | `JWORD_COLLAB_LICENSE_STATUS_PAYLOAD_INVALID` | server | error | yes | reject-invalid-license-status-request | authorization, payload-limit, server | License status HTTP payload is invalid and must not call the license hook. |
@@ -74,6 +70,7 @@ Code count: 190
 | `PERSISTENCE_SNAPSHOT_NOT_FOUND` | storage | warning | yes | rebuild-from-update-log | history, storage | Requested snapshot is missing or its storage index is damaged. |
 | `PERSISTENCE_VERSION_COMPACTED` | storage | error | no | keep-current-document | history, storage | Requested version is older than the compaction boundary and cannot be restored. |
 | `PERSISTENCE_RESTORE_FAILED` | storage | error | no | keep-current-document | history, storage | Version restore failed while building an isolated document and the current document was not written. |
+| `PERSISTENCE_RESTORE_RECOVERY_REQUIRED` | storage | error | yes | retry-restore-recovery | history, storage | Version restore has a pending operation that must be retried to finalize or repair recovery. |
 | `CANVAS_POOL_DISPOSED` | core | error | no | reject-canvas-pool-use | canvas, core | Canvas runtime rejects invalid canvas pool usage with CANVAS_POOL_DISPOSED. |
 | `DOCUMENT_STORE_ARRAY_CONTAINER_MISSING` | core | error | no | reject-invalid-store-access | core, document-store | Document store rejects invalid container access with DOCUMENT_STORE_ARRAY_CONTAINER_MISSING. |
 | `DOCUMENT_STORE_TEXT_CONTAINER_MISSING` | core | error | no | reject-invalid-store-access | core, document-store | Document store rejects invalid container access with DOCUMENT_STORE_TEXT_CONTAINER_MISSING. |
@@ -162,11 +159,15 @@ Code count: 190
 | `DOCX_WORKER_UNAVAILABLE` | docx | error | no | surface-diagnostic-and-stop | docx, format-interop, worker | 当前环境缺少 DOCX worker 运行所需基础能力。 |
 | `DOCX_WORKER_ERROR` | docx | error | no | surface-diagnostic-and-stop | docx, format-interop, worker | DOCX worker 捕获未知异常。 |
 | `JWORD_FEATURE_NOT_ENTITLED` | license | error | yes | show-license-remediation | authorization, license | 当前授权未包含请求的高级 feature。 |
-| `JWORD_LICENSE_EXPIRED` | license | error | yes | show-license-remediation | authorization, license | 商业授权已过期且不在离线宽限期内。 |
+| `JWORD_LICENSE_EXPIRED` | license | error | yes | show-license-remediation | authorization, license | 商业授权已过期。 |
+| `JWORD_LICENSE_HANDLE_INVALID` | license | error | yes | show-license-remediation | authorization, license | 授权 handle 无效或不属于当前 License runtime。 |
 | `JWORD_LICENSE_INSECURE_FIXTURE_ACCEPTED` | license | warning | yes | accept-test-only-license-with-warning | authorization, license | 旧 FNV fixture 授权仅在显式测试开关下被接受。 |
+| `JWORD_LICENSE_ISSUER_INVALID` | license | error | yes | show-license-remediation | authorization, license | JWL2 token issuer 不受当前 License runtime 信任。 |
+| `JWORD_LICENSE_KEY_UNKNOWN` | license | error | yes | show-license-remediation | authorization, license | JWL2 token keyId 未在当前生产 trust set 登记。 |
 | `JWORD_LICENSE_MISSING` | license | error | yes | show-license-remediation | authorization, license | 缺少商业授权 entitlement。 |
-| `JWORD_LICENSE_SERVER_UNAVAILABLE` | license | error | yes | show-license-remediation | authorization, license | 授权服务不可用，无法确认当前高级 feature。 |
+| `JWORD_LICENSE_NOT_YET_VALID` | license | error | yes | show-license-remediation | authorization, license | 授权签发时间尚未生效。 |
 | `JWORD_LICENSE_SIGNATURE_INVALID` | license | error | yes | show-license-remediation | authorization, license | 商业授权签名缺失或校验失败。 |
+| `JWORD_LICENSE_TOKEN_INVALID` | license | error | yes | show-license-remediation | authorization, license | JWL2 token 结构、编码、canonical claims 或期限关系无效。 |
 | `JWORD_NATIVE_CHECKSUMS_INVALID` | native | error | no | reject-native-package-operation | native, package | Native package operation emits JWORD_NATIVE_CHECKSUMS_INVALID for stable package diagnostics. |
 | `JWORD_NATIVE_CHECKSUMS_MISSING` | native | error | no | reject-native-package-operation | native, package | Native package operation emits JWORD_NATIVE_CHECKSUMS_MISSING for stable package diagnostics. |
 | `JWORD_NATIVE_DOCUMENT_INVALID` | native | error | no | reject-native-package-operation | native, package | Native package operation emits JWORD_NATIVE_DOCUMENT_INVALID for stable package diagnostics. |
@@ -180,6 +181,7 @@ Code count: 190
 | `JWORD_NATIVE_OLD_SCHEMA_MIGRATED` | native | warning | yes | load-migrated-document | native, package | Native package schema migration completed and reported a recoverable warning. |
 | `JWORD_NATIVE_PACKAGE_ENTRY_MISSING` | native | error | no | reject-native-package-operation | native, package | Native package operation emits JWORD_NATIVE_PACKAGE_ENTRY_MISSING for stable package diagnostics. |
 | `JWORD_NATIVE_PACKAGE_INVALID` | native | error | no | reject-native-package-operation | native, package | Native package operation emits JWORD_NATIVE_PACKAGE_INVALID for stable package diagnostics. |
+| `JWORD_NATIVE_PACKAGE_RESOURCE_LIMIT_EXCEEDED` | native | error | no | reject-native-package-operation | native, package, payload-limit | Native package input exceeded a fixed resource or decompression budget and must be rejected. |
 | `JWORD_NATIVE_READER_UNSUPPORTED` | native | error | no | reject-native-package-operation | native, package | Native package operation emits JWORD_NATIVE_READER_UNSUPPORTED for stable package diagnostics. |
 | `JWORD_NATIVE_RESOURCE_CHECKSUM_MISSING` | native | error | no | reject-native-package-operation | native, package | Native package operation emits JWORD_NATIVE_RESOURCE_CHECKSUM_MISSING for stable package diagnostics. |
 | `JWORD_NATIVE_RESOURCE_MIME_MISMATCH` | native | error | no | reject-native-package-operation | native, package | Native package operation emits JWORD_NATIVE_RESOURCE_MIME_MISMATCH for stable package diagnostics. |
