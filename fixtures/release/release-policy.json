@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "candidateVersion": "1.2.3",
+  "npmPackageVersions": [
+    { "name": "@4xian/jword-collab", "version": "1.2.3" },
+    { "name": "@4xian/jword-core", "version": "1.2.3" },
+    { "name": "@4xian/jword-devtools", "version": "1.2.3" },
+    { "name": "@4xian/jword-docx", "version": "1.2.3" },
+    { "name": "@4xian/jword-license", "version": "1.2.3" },
+    { "name": "@4xian/jword-native", "version": "1.2.3" },
+    { "name": "@4xian/jword-pdf", "version": "1.2.3" },
+    { "name": "@4xian/jword-persistence", "version": "1.2.3" },
+    { "name": "@4xian/jword-react", "version": "1.2.3" },
+    { "name": "@4xian/jword-ui", "version": "1.2.3" },
+    { "name": "@4xian/jword-vue", "version": "1.2.3" }
+  ],
+  "changeset": {
+    "status": "draft",
+    "packages": [
+      "@4xian/jword-collab",
+      "@4xian/jword-core",
+      "@4xian/jword-devtools",
+      "@4xian/jword-docx",
+      "@4xian/jword-license",
+      "@4xian/jword-native",
+      "@4xian/jword-pdf",
+      "@4xian/jword-persistence",
+      "@4xian/jword-react",
+      "@4xian/jword-ui",
+      "@4xian/jword-vue"
+    ]
+  },
+  "registryLayers": {
+    "public": [
+      "@4xian/jword-core",
+      "@4xian/jword-devtools",
+      "@4xian/jword-native",
+      "@4xian/jword-react",
+      "@4xian/jword-ui",
+      "@4xian/jword-vue"
+    ],
+    "restricted": [
+      "@4xian/jword-collab",
+      "@4xian/jword-docx",
+      "@4xian/jword-license",
+      "@4xian/jword-pdf",
+      "@4xian/jword-persistence"
+    ],
+    "dockerOnly": ["@4xian/jword-collab-server"]
+  },
+  "twoFactorRequired": true,
+  "distTags": { "candidate": "next", "stable": "latest" },
+  "signedProvenanceRequired": true,
+  "rollback": {
+    "actions": ["verify-prior", "promote-candidate", "health-check", "restore-prior", "clear-candidate"],
+    "healthStatus": "failed",
+    "priorChannel": "latest"
+  }
+}

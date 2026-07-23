@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 import { splitGate2FixtureParagraphs } from '../../fixtures/plain-text/gate2-fixture.mjs'
+import { readJsonFile, validateArtifactManifest } from '../release/phase3-artifact-utils.mjs'
 
 const roots = ['packages', 'examples']
 const visualBaselineRoot = join('fixtures', 'visual-baselines')
@@ -35,7 +36,16 @@ if (roots.some(hasVisualTests)) {
 
 console.log('Visual baselines checked against core layout/render; no Playwright visual tests yet.')
 
+/** 在 Phase 3 manifest 模式复用 canonical dist，否则保留既有独立 build 入口。 */
 async function loadBuiltCore() {
+  const manifestPath = process.env.JWORD_PHASE3_ARTIFACT_MANIFEST
+  if (manifestPath !== undefined) {
+    const absoluteManifestPath = resolve(manifestPath)
+    const manifest = readJsonFile(absoluteManifestPath, 'Phase 3 visual artifact manifest').value
+    validateArtifactManifest(manifest, readFileSync(join(dirname(absoluteManifestPath), 'SHA256SUMS')))
+    if (!existsSync(join('packages', 'core', 'dist', 'index.js'))) throw new Error('Phase 3 visual mode requires canonical core dist')
+    return import(new URL('../../packages/core/dist/index.js', import.meta.url))
+  }
   const build = runPackageManager(['build'])
 
   exitFromChild(build, 'core build')

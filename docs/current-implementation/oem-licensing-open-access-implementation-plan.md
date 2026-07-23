@@ -909,12 +909,13 @@ pnpm test
 pnpm build
 node tools/release/check-gate5-commercial-pack.mjs
 node tools/release/check-gate6-commercial-pack.mjs
-node tools/release/check-gate5-third-party-smoke.mjs
-node tools/release/check-gate6-third-party-smoke.mjs
-node tools/release/check-gate7-third-party-smoke.mjs
+: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"
+node tools/release/check-gate5-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
+node tools/release/check-gate6-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
+node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
 ```
 
-所有发布证据必须绑定同一干净 commit SHA 和同一 artifact hash。当前全项目审查中的 Quickstart、dist import、tarball 依赖、协作持久化等其它 P0 仍需独立关闭；仅完成本授权方案不等于整个产品达到企业 GA。
+`PHASE3_RUN_A_ROOT` 必须是 B4 canonical builder 下载的同一 run-a，三个兼容入口不自行 build 或 pack。所有发布证据必须绑定同一干净 commit SHA 和同一 artifact hash。当前全项目审查中的 Quickstart、dist import、tarball 依赖、协作持久化等其它 P0 仍需独立关闭；仅完成本授权方案不等于整个产品达到企业 GA。
 
 ## 15. 诊断与可观测性
 

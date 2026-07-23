@@ -38,7 +38,7 @@
 - `tests/architecture/gate7-public-api-catalog.test.ts` 对照 package entry 和文档稳定符号。
 - `tests/architecture/gate7-api-export-audit.test.ts` 锁定 export map 不暴露内部路径。
 - `pnpm test:types` 使用独立 TypeScript fixture 模拟第三方只从 package 入口导入。
-- `tools/release/check-gate7-third-party-smoke.mjs` 用本地 tarball 做 no-alias 验收。
+- B4 canonical run-a 准备完成后，先运行 `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"`，再用 `node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"` 做 inventory-only no-alias 验收。
 
 ## 当前限制
 

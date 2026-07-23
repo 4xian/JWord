@@ -104,11 +104,12 @@ Hocuspocus server 当前能力：
 - `examples/collab/tests/hocuspocus-service.test.ts`
 - `examples/collab/tests/hocuspocus-provider.test.ts`
 - `examples/collab/tests/collab-history-api.e2e.ts`
-- `tools/release/check-gate6-third-party-smoke.mjs`
+- `tools/release/check-gate6-third-party-smoke.mjs`（只读 B4 canonical run-a manifest/binding，server 仅走 image-node）
 - `packages/collab-server/Dockerfile`
 
 ## 运行/测试/验证命令
 
+- `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"` 后运行 `node tools/release/check-gate6-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"`；run-a 来自 B4 canonical builder，server 仅走 image-node。
 - `pnpm --filter @4xian/jword-collab-server typecheck`：校验服务端公开类型、HTTP/WS hooks 与 history service 类型。
 - `pnpm --filter @4xian/jword-collab-server test`：运行 collab-server 包内 HTTP、history、tenant/license、rate limit 单测。
 - `pnpm --filter @4xian/jword-collab-server build`：按 package `tsconfig.json` 输出 `dist`。

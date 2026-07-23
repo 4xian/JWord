@@ -1,56 +1,21 @@
 /**
- * 职责：执行 Gate 5 商业高级包的发布边界 dry-run 审计。
- * 边界：只审计 package manifest、export map、files、基础首屏静态依赖和 examples/docx 按需加载，不发布包。
- * 协作模块：packages/docx、packages/pdf、packages/license、examples/vanilla、examples/docx 和 Gate 7 文档计划。
- * 约束：商业高级包必须面向 restricted registry 形态；免费基础入口不能静态依赖 DOCX/PDF/license。
- * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
+ * 职责：执行 Gate 5 商业高级包的 Phase 3 发布边界检查。
+ * 边界：source 模式保留 restricted manifest 与 lazy-loading 检查，artifact 模式只读显式 inventory。
+ * 协作模块：DOCX、PDF、License package、统一 artifact scanner 和 examples/docx。
+ * 约束：不构建、不生成包、不执行打包演练或发布。
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, normalize } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const commercialPackages = [
-  {
-    name: '@4xian/jword-docx',
-    dir: join('packages', 'docx'),
-    requiredExports: ['.', './worker']
-  },
-  {
-    name: '@4xian/jword-license',
-    dir: join('packages', 'license'),
-    requiredExports: ['.'],
-    forbiddenTextMarkers: [
-      {
-        label: 'test signer export',
-        value: 'createInsecureTestOnlyJWordLicenseSignature'
-      },
-      {
-        label: 'test seed identifier',
-        value: 'INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED'
-      },
-      {
-        label: 'repository test seed',
-        value: readInsecureTestOnlySeed()
-      },
-      {
-        label: 'production Ed25519 signer',
-        value: 'signEd25519'
-      },
-      {
-        label: 'production license signer',
-        value: 'createJWordLicenseSignature'
-      },
-      ...readTestOnlyJwl2ForbiddenMarkers()
-    ]
-  },
-  {
-    name: '@4xian/jword-pdf',
-    dir: join('packages', 'pdf'),
-    requiredExports: ['.', './worker']
-  }
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
+const scannerPath = join(repoRoot, 'tools/release/check-package-artifacts.mjs')
+const commercialNames = [
+  '@4xian/jword-docx',
+  '@4xian/jword-license',
+  '@4xian/jword-pdf'
 ]
-const freeEntryPath = join('examples', 'vanilla', 'src', 'main.ts')
-const docxDemoEntryPath = join('examples', 'docx', 'src', 'main.ts')
 const advancedSpecifiers = [
   '@4xian/jword-docx',
   '@4xian/jword-pdf',
@@ -59,285 +24,102 @@ const advancedSpecifiers = [
 const runtimeImportFromPattern = /^\s*import(?!\s+type\b)[\s\S]*?\sfrom\s+["']([^"']+)["'];?/gmu
 const runtimeBareImportPattern = /^\s*import\s+["']([^"']+)["'];?/gmu
 const runtimeDynamicImportPattern = /import\(\s*["']([^"']+)["']\s*\)/gmu
-const failures = []
-
-assertDistRelativeImportsNormalized()
-
-const packageReports = commercialPackages.map(readCommercialPackageReport)
-const freeBundleForbiddenImports = readStaticPackageImports(freeEntryPath)
-  .filter((specifier) => advancedSpecifiers.includes(specifier))
-const exampleDocxLazyRuntimeImports = readDynamicPackageImports(docxDemoEntryPath)
-  .filter((specifier) => specifier === '@4xian/jword-docx' || specifier === '@4xian/jword-pdf')
-  .sort()
-
-if (freeBundleForbiddenImports.length > 0) {
-  failures.push(`免费基础入口静态引入了商业高级包: ${freeBundleForbiddenImports.join(', ')}`)
+const input = readScannerInput(process.argv.slice(2))
+const scannerReport = runScanner(input.arguments)
+const packageReports = scannerReport.packages.filter(isCommercialPackage)
+const sourceEvidence = input.mode === 'source' ? verifySourceGate5() : {
+  freeBundleForbiddenImports: [],
+  exampleDocxLazyRuntimeImports: []
 }
 
-if (exampleDocxLazyRuntimeImports.join(',') !== '@4xian/jword-docx,@4xian/jword-pdf') {
-  failures.push('examples/docx 必须按需加载 @4xian/jword-docx 和 @4xian/jword-pdf。')
-}
-
-if (failures.length > 0) {
-  console.error(failures.join('\n'))
-  process.exit(1)
+if (packageReports.length !== commercialNames.length && input.mode !== 'synthetic-tarball') {
+  throw new Error('Gate 5 scanner report is missing a commercial package')
 }
 
 console.log(JSON.stringify({
   status: 'ok',
+  kind: 'gate5-commercial-package-check',
+  mode: input.mode,
+  packCommands: 0,
   privateRegistry: {
     required: true,
     publishConfigAccess: 'restricted'
   },
   packages: packageReports,
-  freeBundleForbiddenImports,
-  exampleDocxLazyRuntimeImports
+  ...sourceEvidence
 }, null, 2))
 
-/** 读取单个商业包的 manifest 审计摘要。 */
-function readCommercialPackageReport(config) {
-  const packageJsonPath = join(config.dir, 'package.json')
-  const packageJson = readJson(packageJsonPath)
-  const exportKeys = Object.keys(packageJson.exports ?? {})
-  const missingExports = config.requiredExports.filter((key) => !exportKeys.includes(key))
-  const files = packageJson.files ?? []
-  const forbiddenFileEntries = files.filter((entry) => entry === 'src' || entry === 'test' || entry === 'tests')
-  const npmPackDryRun = readNpmPackDryRun(
-    config.dir,
-    config.requiredExports,
-    config.forbiddenTextMarkers ?? []
-  )
+/** 把兼容入口参数映射到统一 scanner 的显式模式。 */
+function readScannerInput(args) {
+  const environmentManifest = process.env.JWORD_PHASE3_ARTIFACT_MANIFEST
 
-  if (packageJson.name !== config.name) {
-    failures.push(`${packageJsonPath}: name 应为 ${config.name}`)
-  }
-  if (packageJson.private !== true) {
-    failures.push(`${packageJsonPath}: 商业包当前必须保持 private: true`)
-  }
-  if (packageJson.publishConfig?.access !== 'restricted') {
-    failures.push(`${packageJsonPath}: publishConfig.access 必须为 restricted`)
-  }
-  if (missingExports.length > 0) {
-    failures.push(`${packageJsonPath}: 缺少 export map ${missingExports.join(', ')}`)
-  }
-  if (files.length === 0 || !files.includes('dist')) {
-    failures.push(`${packageJsonPath}: files 必须只发布 dist 产物`)
-  }
-  if (forbiddenFileEntries.length > 0) {
-    failures.push(`${packageJsonPath}: files 不得发布源码或测试目录 ${forbiddenFileEntries.join(', ')}`)
-  }
-  if (npmPackDryRun.requiredFilesMissing.length > 0) {
-    failures.push(`${packageJsonPath}: npm pack 缺少 ${npmPackDryRun.requiredFilesMissing.join(', ')}`)
-  }
-  if (npmPackDryRun.forbiddenFiles.length > 0) {
-    failures.push(`${packageJsonPath}: npm pack 不得包含 ${npmPackDryRun.forbiddenFiles.join(', ')}`)
-  }
-  if (npmPackDryRun.sourceMapLeaks.length > 0) {
-    failures.push(`${packageJsonPath}: npm pack 不得包含源码映射内容 ${npmPackDryRun.sourceMapLeaks.join(', ')}`)
-  }
-  if (npmPackDryRun.forbiddenTextLeaks.length > 0) {
-    failures.push(`${packageJsonPath}: npm pack 不得包含签发或测试密钥材料 ${npmPackDryRun.forbiddenTextLeaks.join(', ')}`)
+  if (args.length === 0 && environmentManifest !== undefined) {
+    if (environmentManifest === '') {
+      throw new Error('JWORD_PHASE3_ARTIFACT_MANIFEST must not be empty')
+    }
+    return { mode: 'artifact', arguments: ['--artifact-manifest', environmentManifest] }
   }
 
   return {
-    name: config.name,
-    packageJson: packageJsonPath,
-    files,
-    exports: exportKeys.sort(),
-    distReady: hasRequiredDistEntries(config.dir, config.requiredExports),
-    npmPackDryRun
+    mode: args.length === 0 ? 'source' : args.includes('--artifact-manifest') ? 'artifact' : 'synthetic-tarball',
+    arguments: args.length === 0 ? ['--check-source-manifests'] : args
   }
 }
 
-/** 确认发布产物的相对 import/export specifier 已归一为 Node ESM 可解析形式。 */
-function assertDistRelativeImportsNormalized() {
-  execFileSync(process.execPath, [
-    'tools/release/normalize-dist-relative-imports.mjs',
-    '--check'
-  ], {
-    encoding: 'utf8',
-    stdio: 'pipe'
-  })
-}
-
-/** 判断 dist 是否已具备当前 export map 需要的产物。 */
-function hasRequiredDistEntries(packageDir, requiredExports) {
-  const distDir = join(packageDir, 'dist')
-
-  if (!existsSync(distDir)) {
-    return false
-  }
-
-  const distFiles = new Set(readdirSync(distDir))
-
-  return requiredExports.every((key) => {
-    const baseName = key === '.' ? 'index' : key.slice(2)
-
-    return distFiles.has(`${baseName}.js`) && distFiles.has(`${baseName}.d.ts`)
-  })
-}
-
-/** 执行 npm pack dry-run 并读取实际将进入 tarball 的文件。 */
-function readNpmPackDryRun(packageDir, requiredExports, forbiddenTextMarkers) {
-  const output = execFileSync('npm', [
-    'pack',
-    '--dry-run',
-    '--json',
-    `./${packageDir}`
-  ], {
+/** 运行统一 scanner 并解析结构化报告。 */
+function runScanner(args) {
+  return JSON.parse(execFileSync(process.execPath, [scannerPath, ...args], {
+    cwd: repoRoot,
     encoding: 'utf8'
-  })
-  const packReport = JSON.parse(output)?.[0]
-  const files = (packReport?.files ?? [])
-    .map((file) => file.path)
-    .filter(Boolean)
-    .sort()
-  const requiredFiles = readRequiredDistFiles(requiredExports)
-  const requiredFilesMissing = requiredFiles.filter((file) => !files.includes(file))
-  const forbiddenFiles = files.filter(isForbiddenPackFile)
-  const sourceMapLeaks = files
-    .filter(isTextPackFile)
-    .flatMap((file) => readPackedTextLeaks(packageDir, file))
-  const forbiddenTextLeaks = files
-    .filter(isTextPackFile)
-    .flatMap((file) => readForbiddenPackedTextLeaks(packageDir, file, forbiddenTextMarkers))
-
-  return {
-    filename: packReport?.filename ?? '',
-    entryCount: packReport?.entryCount ?? files.length,
-    files,
-    requiredFiles,
-    requiredFilesMissing,
-    forbiddenFiles,
-    sourceMapLeaks,
-    forbiddenTextLeaks
-  }
-}
-
-/** 读取 export map 必须进入 npm 包的 dist 文件。 */
-function readRequiredDistFiles(requiredExports) {
-  return requiredExports.flatMap((key) => {
-    const baseName = key === '.' ? 'index' : key.slice(2)
-
-    return [
-      `dist/${baseName}.d.ts`,
-      `dist/${baseName}.js`
-    ]
-  })
-}
-
-/** 判断 npm pack 文件是否泄漏源码、测试或内部 fixture。 */
-function isForbiddenPackFile(filePath) {
-  return filePath.startsWith('src/') ||
-    filePath.startsWith('test/') ||
-    filePath.startsWith('tests/') ||
-    filePath.startsWith('fixtures/') ||
-    filePath.endsWith('.map') ||
-    filePath.includes('/__snapshots__/')
-}
-
-/** 判断 npm pack 文本文件是否需要扫描源码映射泄漏。 */
-function isTextPackFile(filePath) {
-  return /\.(?:js|mjs|cjs|d\.ts|json|md|txt|css)$/u.test(filePath)
-}
-
-/** 读取 dry-run 将打入包的文本文件是否携带源码映射内容。 */
-function readPackedTextLeaks(packageDir, filePath) {
-  const absolutePath = join(packageDir, filePath)
-  if (!existsSync(absolutePath)) {
-    return []
-  }
-
-  const source = readFileSync(absolutePath, 'utf8')
-  const leaks = []
-
-  if (source.includes('sourcesContent')) {
-    leaks.push(`${filePath}:sourcesContent`)
-  }
-  if (source.includes('sourceMappingURL=')) {
-    leaks.push(`${filePath}:sourceMappingURL`)
-  }
-
-  return leaks
-}
-
-/** 扫描 dry-run 将打入包的文本文件，报告安全标签而不回显密钥材料。 */
-function readForbiddenPackedTextLeaks(packageDir, filePath, forbiddenTextMarkers) {
-  const absolutePath = join(packageDir, filePath)
-  if (!existsSync(absolutePath)) {
-    return []
-  }
-
-  const source = readFileSync(absolutePath, 'utf8')
-
-  return forbiddenTextMarkers
-    .filter((marker) => source.includes(marker.value))
-    .map((marker) => `${filePath}:${marker.label}`)
-}
-
-/** 从唯一 fixture 源读取仓库测试 seed，避免在发布检查中复制第二份值。 */
-function readInsecureTestOnlySeed() {
-  const source = readFileSync('fixtures/license/insecure-test-only-keys.ts', 'utf8')
-  const seed = readFixtureConstant(
-    source,
-    'INSECURE_TEST_ONLY_LICENSE_PRIVATE_KEY_SEED'
-  )
-
-  if (seed === undefined) {
-    throw new Error('无法读取仓库 insecure-test-only seed。')
-  }
-
-  return seed
-}
-
-/** 读取 LIC-110 JWL2 fixture 的安全扫描标记，不在失败输出中回显实际值。 */
-function readTestOnlyJwl2ForbiddenMarkers() {
-  const source = readFileSync('fixtures/license/test-only-jwl2-fixture.ts', 'utf8')
-  const constants = [
-    ['TEST_ONLY_JWL2_PRIVATE_KEY_SEED', 'test-only JWL2 private seed'],
-    ['TEST_ONLY_JWL2_PUBLIC_KEY', 'test-only JWL2 public key'],
-    ['TEST_ONLY_JWL2_TOKEN', 'test-only JWL2 token'],
-    ['TEST_ONLY_JWL2_KEY_ID', 'test-only JWL2 key id']
-  ]
-
-  const literalMarkers = constants.map(([name, label]) => ({
-    label,
-    value: readFixtureConstant(source, name)
   }))
+}
 
-  if (literalMarkers.some((marker) => marker.value === undefined)) {
-    throw new Error('无法读取 LIC-110 JWL2 fixture 常量。')
+/** 判断 scanner report 是否属于 Gate 5 package。 */
+function isCommercialPackage(report) {
+  return commercialNames.includes(report.name)
+}
+
+/** 校验 Gate 5 source manifest、免费入口和按需加载边界。 */
+function verifySourceGate5() {
+  for (const packageName of commercialNames) {
+    const manifest = readPackageManifest(packageName)
+
+    if (manifest.private !== true || manifest.publishConfig?.access !== 'restricted') {
+      throw new Error(`${packageName}: Gate 5 package must remain private and restricted`)
+    }
   }
 
-  return [
-    {
-      label: 'test-only JWL2 private seed identifier',
-      value: 'TEST_ONLY_JWL2_PRIVATE_KEY_SEED'
-    },
-    {
-      label: 'test-only JWL2 public key identifier',
-      value: 'TEST_ONLY_JWL2_PUBLIC_KEY'
-    },
-    {
-      label: 'test-only JWL2 token signer',
-      value: 'createInsecureTestOnlyJwl2Token'
-    },
-    {
-      label: 'test-only JWL2 key id literal',
-      value: 'jword-test-lic110-k1'
-    },
-    ...literalMarkers
-  ]
+  const freeBundleForbiddenImports = readStaticPackageImports(join(repoRoot, 'examples/vanilla/src/main.ts'))
+    .filter(isAdvancedSpecifier)
+  const exampleDocxLazyRuntimeImports = readDynamicPackageImports(join(repoRoot, 'examples/docx/src/main.ts'))
+    .filter(isDocxOrPdfSpecifier)
+    .sort()
+
+  if (freeBundleForbiddenImports.length > 0) {
+    throw new Error('free entry statically imports a Gate 5 package')
+  }
+  if (exampleDocxLazyRuntimeImports.join(',') !== '@4xian/jword-docx,@4xian/jword-pdf') {
+    throw new Error('examples/docx must lazy load DOCX and PDF packages')
+  }
+
+  return { freeBundleForbiddenImports, exampleDocxLazyRuntimeImports }
 }
 
-/** 从 fixture 源码读取单个常量值，供发布扫描使用。 */
-function readFixtureConstant(source, name) {
-  return source.match(new RegExp(`${name} = '([^']+)'`, 'u'))?.[1]
+/** 按 package name 读取 source manifest。 */
+function readPackageManifest(packageName) {
+  const directory = packageName.slice('@4xian/jword-'.length)
+
+  return JSON.parse(readFileSync(join(repoRoot, 'packages', directory, 'package.json'), 'utf8'))
 }
 
-/** 读取 JSON 文件。 */
-function readJson(path) {
-  return JSON.parse(readFileSync(path, 'utf8'))
+/** 判断 import 是否属于 Gate 5 高级 package。 */
+function isAdvancedSpecifier(specifier) {
+  return advancedSpecifiers.includes(specifier)
+}
+
+/** 判断动态 import 是否属于 DOCX/PDF。 */
+function isDocxOrPdfSpecifier(specifier) {
+  return specifier === '@4xian/jword-docx' || specifier === '@4xian/jword-pdf'
 }
 
 /** 读取入口静态 package import。 */
@@ -366,24 +148,17 @@ function readRuntimeSpecifiers(entryPath, dynamicOnly) {
     const source = readFileSync(current, 'utf8')
     const specifiers = dynamicOnly
       ? readSpecifiers(source, runtimeDynamicImportPattern)
-      : [
-          ...readSpecifiers(source, runtimeImportFromPattern),
-          ...readSpecifiers(source, runtimeBareImportPattern)
-        ]
+      : [...readSpecifiers(source, runtimeImportFromPattern), ...readSpecifiers(source, runtimeBareImportPattern)]
 
     for (const specifier of specifiers) {
       if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
         packageImports.add(specifier)
-        continue
-      }
+      } else if (!dynamicOnly) {
+        const resolved = resolveLocalImport(current, specifier)
 
-      if (dynamicOnly) {
-        continue
-      }
-
-      const resolved = resolveLocalImport(current, specifier)
-      if (resolved !== null) {
-        pending.push(resolved)
+        if (resolved !== null) {
+          pending.push(resolved)
+        }
       }
     }
   }
@@ -393,23 +168,19 @@ function readRuntimeSpecifiers(entryPath, dynamicOnly) {
 
 /** 读取正则匹配的 import specifier。 */
 function readSpecifiers(source, pattern) {
-  return [...source.matchAll(pattern)]
-    .map((match) => match[1])
-    .filter(Boolean)
+  return [...source.matchAll(pattern)].map(readSpecifier).filter(Boolean)
+}
+
+/** 读取单个正则 match 的 import specifier。 */
+function readSpecifier(match) {
+  return match[1]
 }
 
 /** 解析本地静态 import 文件路径。 */
 function resolveLocalImport(fromFile, specifier) {
   const basePath = join(dirname(fromFile), specifier)
 
-  for (const candidate of [
-    basePath,
-    `${basePath}.ts`,
-    `${basePath}.js`,
-    `${basePath}.mjs`,
-    `${basePath}.css`,
-    join(basePath, 'index.ts')
-  ]) {
+  for (const candidate of [basePath, `${basePath}.ts`, `${basePath}.js`, `${basePath}.mjs`, `${basePath}.css`, join(basePath, 'index.ts')]) {
     if (existsSync(candidate)) {
       return normalize(candidate)
     }

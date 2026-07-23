@@ -460,8 +460,9 @@ describe('Gate 7 public API catalog', () => {
 
     for (const token of [
       'node tools/release/check-gate7-third-party-smoke.mjs',
-      '本地 tarball',
-      'Chromium 浏览器 smoke',
+      '--artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json"',
+      '--binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"',
+      'B4 canonical run-a',
       'pdf.export'
     ]) {
       expect(catalog, token).toContain(token)

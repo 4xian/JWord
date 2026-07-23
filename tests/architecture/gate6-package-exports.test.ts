@@ -8,7 +8,10 @@
  * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -244,50 +247,48 @@ describe('Gate 6 package export grading', () => {
     }
     expect(clientReadme).not.toContain("from '@4xian/jword-collab-server'")
     for (const token of [
-      'gate6-third-party-smoke',
-      'mkdtempSync',
-      'npm pack',
-      'workspace:*',
-      'connectJWordCollaboration',
-      'createJWordCollabServer',
-      'startAutoInsertSession',
-      'recordVersion',
-      'JWORD_LICENSE_MISSING'
+      'check-gate6-third-party-smoke.mjs',
+      'runLegacyConsumerCli',
+      'check-phase3-third-party-consumers.mjs'
     ]) {
       expect(smokeScript, token).toContain(token)
     }
+    const consumerSource = readFileSync('tools/release/check-phase3-third-party-consumers.mjs', 'utf8')
+    expect(consumerSource).toContain('--artifact-manifest')
+    expect(consumerSource).toContain('--binding')
+    expect(consumerSource).toContain('legacy-non-gating')
+    expect(smokeScript).not.toMatch(/(?:npm|pnpm)\s+pack/u)
   })
 
-  it('provides a Gate 6 commercial pack audit for restricted registry packages', () => {
+  /** 校验 Gate 6 默认入口只读扫描受限 package。 */
+  function verifyGate6ArtifactScanner() {
     const scriptPath = 'tools/release/check-gate6-commercial-pack.mjs'
 
     expect(existsSync(scriptPath)).toBe(true)
 
-    const source = readFileSync(scriptPath, 'utf8')
+    const execution = runWithPackCommandTrap(scriptPath)
+    const report = JSON.parse(execution.output) as {
+      readonly status: string
+      readonly mode: string
+      readonly packCommands: number
+      readonly packages: readonly { readonly name: string, readonly status: string }[]
+    }
 
-    for (const token of [
+    const expectedMode = process.env.JWORD_PHASE3_ARTIFACT_MANIFEST === undefined ? 'source' : 'artifact'
+
+    expect(report).toMatchObject({ status: 'ok', mode: expectedMode, packCommands: 0 })
+    expect(report.packages.map(readPackageName)).toEqual([
       '@4xian/jword-collab',
       '@4xian/jword-collab-server',
       '@4xian/jword-license',
-      '@4xian/jword-persistence',
-      'publishConfig',
-      'restricted',
-      'npm pack',
-      'README.md',
-      "'dist/index.d.ts'",
-      "'dist/index.js'",
-      'forbiddenFiles',
-      'sourceMapLeaks',
-      '.map',
-      'sourcesContent',
-      'sourceMappingURL',
-      'normalize-dist-relative-imports.mjs',
-      'workspace:*',
-      'privateRegistry'
-    ]) {
-      expect(source, token).toContain(token)
-    }
-  })
+      '@4xian/jword-persistence'
+    ])
+    expect(report.packages.every(isSuccessfulPackageReport)).toBe(true)
+    expect(execution.commands).toEqual([])
+    expect(readFileSync(scriptPath, 'utf8')).toContain('check-package-artifacts.mjs')
+  }
+
+  it('provides a Gate 6 commercial pack audit for restricted registry packages', verifyGate6ArtifactScanner)
 
   it('uses Node ESM compatible .js suffixes for published runtime relative imports', () => {
     expect(existsSync('tools/release/normalize-dist-relative-imports.mjs')).toBe(true)
@@ -333,6 +334,51 @@ describe('Gate 6 package export grading', () => {
     expect(formalHttpUtils).toContain('/jword-history/preview')
   })
 })
+
+/** 读取 Gate 6 package report 的名称。 */
+function readPackageName(report: { readonly name: string }): string {
+  return report.name
+}
+
+/** 判断 Gate 6 package report 是否成功。 */
+function isSuccessfulPackageReport(report: { readonly status: string }): boolean {
+  return report.status === 'ok'
+}
+
+/** 在 npm/pnpm 命令 trap 下运行 release script 并读取可观测调用记录。 */
+function runWithPackCommandTrap(scriptPath: string): { readonly output: string, readonly commands: readonly string[] } {
+  const root = mkdtempSync(join(tmpdir(), 'jword-phase3-pack-trap-'))
+  const binDirectory = join(root, 'bin')
+  const logPath = join(root, 'commands.log')
+  const trap = '#!/bin/sh\nprintf \'%s\\n\' "$0 $*" >> "$JWORD_PHASE3_PACK_COMMAND_LOG"\nexit 97\n'
+
+  try {
+    execFileSync('mkdir', ['-p', binDirectory])
+    for (const command of ['npm', 'pnpm']) {
+      const commandPath = join(binDirectory, command)
+
+      writeFileSync(commandPath, trap)
+      chmodSync(commandPath, 0o755)
+    }
+
+    const scriptArguments = process.env.JWORD_PHASE3_ARTIFACT_MANIFEST === undefined
+      ? [scriptPath]
+      : [scriptPath, '--artifact-manifest', process.env.JWORD_PHASE3_ARTIFACT_MANIFEST]
+    const output = execFileSync(process.execPath, scriptArguments, {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${binDirectory}${delimiter}${process.env.PATH ?? ''}`,
+        JWORD_PHASE3_PACK_COMMAND_LOG: logPath
+      }
+    })
+    const commands = existsSync(logPath) ? readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean) : []
+
+    return { output, commands }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
 
 /** 读取协作 client SDK 稳定入口及其公开类型模块。 */
 function readCollabClientSdkSource(): string {

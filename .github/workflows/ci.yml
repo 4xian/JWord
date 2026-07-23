@@ -5,53 +5,348 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+env:
+  JWORD_NODE_VERSION: "20.19.0"
+  JWORD_PNPM_VERSION: "9.14.2"
+
 jobs:
-  verify:
+  source-gates:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout exact SHA
         uses: actions/checkout@v4
-
+        with:
+          ref: ${{ github.sha }}
+      - name: Record trigger identity
+        run: |
+          printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          case "$RUNNER_TEMP/" in "$GITHUB_WORKSPACE/"*) exit 1 ;; esac
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20.19.0"
-
+          node-version: ${{ env.JWORD_NODE_VERSION }}
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: "9.14.2"
+          version: ${{ env.JWORD_PNPM_VERSION }}
           run_install: false
-
-      - name: Install
+      - name: Install and record tools
         run: |
+          node --version
+          npm --version
+          pnpm --version
           pnpm install --frozen-lockfile
-          pnpm exec playwright install --with-deps
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Run source gates
+        env:
+          PHASE3_SOURCE_EXPORT: ${{ runner.temp }}/jword-phase3-source-report
+        run: |
+          node tools/release/build-phase3-artifacts.mjs --purpose source-report --out-dir "$PHASE3_SOURCE_EXPORT"
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Upload source-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-report
+          path: ${{ runner.temp }}/jword-phase3-source-report
+          if-no-files-found: error
 
-      - name: Lint
-        run: pnpm lint
+  artifact-build:
+    needs: source-gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Record trigger identity
+        run: |
+          printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          case "$RUNNER_TEMP/" in "$GITHUB_WORKSPACE/"*) exit 1 ;; esac
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.JWORD_NODE_VERSION }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.JWORD_PNPM_VERSION }}
+          run_install: false
+      - name: Frozen install and browsers
+        run: |
+          node --version
+          npm --version
+          pnpm --version
+          pnpm install --frozen-lockfile
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+          pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Download source-report
+        uses: actions/download-artifact@v4
+        with:
+          name: source-report
+          path: ${{ runner.temp }}/jword-phase3-source-report
+      - name: Build unique run-a
+        env:
+          PHASE3_SOURCE_DOWNLOAD: ${{ runner.temp }}/jword-phase3-source-report
+          PHASE3_RUN_A_EXPORT: ${{ runner.temp }}/jword-phase3-run-a
+        run: |
+          node tools/release/verify-phase3-final-evidence.mjs --check-environment --source-report "$PHASE3_SOURCE_DOWNLOAD/source-report.json"
+          node tools/release/build-phase3-artifacts.mjs --purpose canonical --source-report "$PHASE3_SOURCE_DOWNLOAD/source-report.json" --source-report-sha256 "$PHASE3_SOURCE_DOWNLOAD/source-report.json.sha256" --out-dir "$PHASE3_RUN_A_EXPORT"
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Upload run-a
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-a
+          path: ${{ runner.temp }}/jword-phase3-run-a
+          if-no-files-found: error
 
-      - name: Typecheck
-        run: pnpm typecheck
+  artifact-consumers:
+    needs: artifact-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Record trigger identity
+        run: |
+          printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          case "$RUNNER_TEMP/" in "$GITHUB_WORKSPACE/"*) exit 1 ;; esac
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.JWORD_NODE_VERSION }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.JWORD_PNPM_VERSION }}
+          run_install: false
+      - name: Frozen install and browsers
+        run: |
+          node --version
+          npm --version
+          pnpm --version
+          pnpm install --frozen-lockfile
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+          pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Download run-a
+        uses: actions/download-artifact@v4
+        with:
+          name: run-a
+          path: ${{ runner.temp }}/jword-phase3-run-a
+      - name: Run complete consumer matrix
+        env:
+          PHASE3_RUN_A_DOWNLOAD: ${{ runner.temp }}/jword-phase3-run-a
+          PHASE3_CONSUMER_EXPORT: ${{ runner.temp }}/jword-phase3-consumer-evidence
+        run: |
+          node tools/release/verify-phase3-final-evidence.mjs --check-environment --artifact-manifest "$PHASE3_RUN_A_DOWNLOAD/artifact-manifest.json"
+          node tools/release/check-phase3-third-party-consumers.mjs --artifact-manifest "$PHASE3_RUN_A_DOWNLOAD/artifact-manifest.json" --binding "$PHASE3_RUN_A_DOWNLOAD/artifact-binding.json" --evidence-dir "$PHASE3_CONSUMER_EXPORT"
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Upload consumer-evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: consumer-evidence
+          path: ${{ runner.temp }}/jword-phase3-consumer-evidence
+          include-hidden-files: true
+          if-no-files-found: error
 
-      - name: Unit tests
-        run: pnpm test
+  artifact-audit:
+    needs:
+      - artifact-build
+      - artifact-consumers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Record trigger identity
+        run: |
+          printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          case "$RUNNER_TEMP/" in "$GITHUB_WORKSPACE/"*) exit 1 ;; esac
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.JWORD_NODE_VERSION }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.JWORD_PNPM_VERSION }}
+          run_install: false
+      - name: Frozen install
+        run: |
+          node --version
+          npm --version
+          pnpm --version
+          pnpm install --frozen-lockfile
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Download run-a
+        uses: actions/download-artifact@v4
+        with:
+          name: run-a
+          path: ${{ runner.temp }}/jword-phase3-run-a
+      - name: Download consumer-evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: consumer-evidence
+          path: ${{ runner.temp }}/jword-phase3-consumer-evidence
+      - name: Run assembly and release gates
+        env:
+          PHASE3_RUN_A_DOWNLOAD: ${{ runner.temp }}/jword-phase3-run-a
+          PHASE3_CONSUMER_DOWNLOAD: ${{ runner.temp }}/jword-phase3-consumer-evidence
+          PHASE3_CUSTOMER_ASSEMBLY_OUT: ${{ runner.temp }}/jword-phase3-customer-assembly
+          PHASE3_SERVER_ASSEMBLY_OUT: ${{ runner.temp }}/jword-phase3-server-assembly
+          PHASE3_AUDIT_OUT: ${{ runner.temp }}/jword-phase3-audit-evidence
+        run: |
+          node tools/release/verify-phase3-final-evidence.mjs --check-environment --artifact-manifest "$PHASE3_RUN_A_DOWNLOAD/artifact-manifest.json"
+          node tools/release/check-phase3-release-gates.mjs --artifact-manifest "$PHASE3_RUN_A_DOWNLOAD/artifact-manifest.json" --binding "$PHASE3_RUN_A_DOWNLOAD/artifact-binding.json" --consumer-root "$PHASE3_CONSUMER_DOWNLOAD" --customer-assembly-dir "$PHASE3_CUSTOMER_ASSEMBLY_OUT" --server-assembly-dir "$PHASE3_SERVER_ASSEMBLY_OUT" --evidence-dir "$PHASE3_AUDIT_OUT"
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Upload audit-evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-evidence
+          path: ${{ runner.temp }}/jword-phase3-audit-evidence
+          include-hidden-files: true
+          if-no-files-found: error
 
-      - name: Build
-        run: pnpm build
+  artifact-reproducibility:
+    needs:
+      - source-gates
+      - artifact-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Record trigger identity
+        run: |
+          printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          case "$RUNNER_TEMP/" in "$GITHUB_WORKSPACE/"*) exit 1 ;; esac
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.JWORD_NODE_VERSION }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.JWORD_PNPM_VERSION }}
+          run_install: false
+      - name: Frozen install
+        run: |
+          node --version
+          npm --version
+          pnpm --version
+          pnpm install --frozen-lockfile
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Download source-report
+        uses: actions/download-artifact@v4
+        with:
+          name: source-report
+          path: ${{ runner.temp }}/jword-phase3-source-report
+      - name: Download run-a
+        uses: actions/download-artifact@v4
+        with:
+          name: run-a
+          path: ${{ runner.temp }}/jword-phase3-run-a
+      - name: Build isolated run-b and compare
+        env:
+          PHASE3_SOURCE_DOWNLOAD: ${{ runner.temp }}/jword-phase3-source-report
+          PHASE3_RUN_A_DOWNLOAD: ${{ runner.temp }}/jword-phase3-run-a
+          PHASE3_RUN_B_OUT: ${{ runner.temp }}/jword-phase3-run-b
+          PHASE3_REPRO_OUT: ${{ runner.temp }}/jword-phase3-reproducibility-evidence
+        run: |
+          node tools/release/verify-phase3-final-evidence.mjs --check-environment --source-report "$PHASE3_SOURCE_DOWNLOAD/source-report.json" --artifact-manifest "$PHASE3_RUN_A_DOWNLOAD/artifact-manifest.json"
+          node tools/release/build-phase3-artifacts.mjs --purpose reproducibility --source-report "$PHASE3_SOURCE_DOWNLOAD/source-report.json" --source-report-sha256 "$PHASE3_SOURCE_DOWNLOAD/source-report.json.sha256" --out-dir "$PHASE3_RUN_B_OUT"
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+          node tools/release/normalize-dist-relative-imports.mjs --check
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+          node tools/release/compare-phase3-artifacts.mjs --left "$PHASE3_RUN_A_DOWNLOAD/artifact-manifest.json" --left-binding "$PHASE3_RUN_A_DOWNLOAD/artifact-binding.json" --right "$PHASE3_RUN_B_OUT/artifact-manifest.json" --evidence-dir "$PHASE3_REPRO_OUT"
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Upload reproducibility-evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproducibility-evidence
+          path: ${{ runner.temp }}/jword-phase3-reproducibility-evidence
+          if-no-files-found: error
 
-      - name: E2E dry run
-        run: pnpm test:e2e
-
-      - name: Visual dry run
-        run: pnpm test:visual
-
-      - name: Bench dry run
-        run: pnpm bench
-
-      - name: Size dry run
-        run: pnpm size
+  artifact-final:
+    needs:
+      - source-gates
+      - artifact-build
+      - artifact-consumers
+      - artifact-audit
+      - artifact-reproducibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Record trigger identity
+        run: |
+          printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          case "$RUNNER_TEMP/" in "$GITHUB_WORKSPACE/"*) exit 1 ;; esac
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.JWORD_NODE_VERSION }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.JWORD_PNPM_VERSION }}
+          run_install: false
+      - name: Frozen install
+        run: |
+          node --version
+          npm --version
+          pnpm --version
+          pnpm install --frozen-lockfile
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Download source-report
+        uses: actions/download-artifact@v4
+        with:
+          name: source-report
+          path: ${{ runner.temp }}/jword-phase3-source-report
+      - name: Download run-a
+        uses: actions/download-artifact@v4
+        with:
+          name: run-a
+          path: ${{ runner.temp }}/jword-phase3-run-a
+      - name: Download consumer-evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: consumer-evidence
+          path: ${{ runner.temp }}/jword-phase3-consumer-evidence
+      - name: Download audit-evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: audit-evidence
+          path: ${{ runner.temp }}/jword-phase3-audit-evidence
+      - name: Download reproducibility-evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: reproducibility-evidence
+          path: ${{ runner.temp }}/jword-phase3-reproducibility-evidence
+      - name: Verify final evidence
+        env:
+          PHASE3_SOURCE_DOWNLOAD: ${{ runner.temp }}/jword-phase3-source-report
+          PHASE3_RUN_A_DOWNLOAD: ${{ runner.temp }}/jword-phase3-run-a
+          PHASE3_CONSUMER_DOWNLOAD: ${{ runner.temp }}/jword-phase3-consumer-evidence
+          PHASE3_AUDIT_DOWNLOAD: ${{ runner.temp }}/jword-phase3-audit-evidence
+          PHASE3_REPRO_DOWNLOAD: ${{ runner.temp }}/jword-phase3-reproducibility-evidence
+          PHASE3_FINAL_OUT: ${{ runner.temp }}/jword-phase3-final-evidence
+        run: |
+          node tools/release/verify-phase3-final-evidence.mjs --check-environment --source-report "$PHASE3_SOURCE_DOWNLOAD/source-report.json" --artifact-manifest "$PHASE3_RUN_A_DOWNLOAD/artifact-manifest.json"
+          node tools/release/verify-phase3-final-evidence.mjs --source-root "$PHASE3_SOURCE_DOWNLOAD" --run-a-root "$PHASE3_RUN_A_DOWNLOAD" --consumer-root "$PHASE3_CONSUMER_DOWNLOAD" --audit-root "$PHASE3_AUDIT_DOWNLOAD" --reproducibility-root "$PHASE3_REPRO_DOWNLOAD" --out-dir "$PHASE3_FINAL_OUT"
+          test "$(git status --porcelain=v1 -z --untracked-files=all | wc -c)" -eq 0
+      - name: Upload final-evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-evidence
+          path: ${{ runner.temp }}/jword-phase3-final-evidence
+          if-no-files-found: error

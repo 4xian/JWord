@@ -47,4 +47,4 @@
 - `examples/docx/tests/gate5-docx-demo.e2e.ts`
 - `tests/architecture/gate5-*.test.ts`
 - `tools/compat/run-gate5-docx-compatibility.mjs`
-- `tools/release/check-gate5-third-party-smoke.mjs`
+- B4 canonical run-a 验收：`: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"` 后运行 `node tools/release/check-gate5-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"`；入口不自行 build 或 pack。

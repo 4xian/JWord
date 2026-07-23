@@ -43,4 +43,4 @@
 - `packages/collab-server/test/metadata-mismatch.test.ts`
 - `packages/collab-server/test/rate-limit.test.ts`
 - `examples/collab/tests/hocuspocus-service.test.ts`
-- `tools/release/check-gate6-third-party-smoke.mjs`
+- B4 canonical run-a 验收：`: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"` 后运行 `node tools/release/check-gate6-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"`；server 仍只属于 image-internal Node journey。

@@ -38,9 +38,9 @@ Gate 7 Step 7.1 公开 API 清单。本文只记录当前仓库已经实现并�
 
 ## Release / no-alias 验收
 
-- Stable E2E 矩阵必须包含 `node tools/release/check-gate7-third-party-smoke.mjs`。
-- 该 smoke 使用本地 tarball 安装当前已实现包，不使用 examples 源码 alias，覆盖 `tsc --noEmit`、`vite build` 和 Chromium 浏览器 smoke。
-- 浏览器路径必须同时触达免费基础 layout 能力和至少一条付费授权能力；当前付费路径为 `pdf.export`。
+- Stable E2E 矩阵必须先运行 `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"`，再运行 `node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"`；必须使用 B4 canonical run-a。
+- 该 legacy smoke 只校验显式 artifact manifest/binding 并返回 `legacy-non-gating`；真实 tarball 安装、`tsc --noEmit`、Vite 与浏览器矩阵由 `tools/release/check-phase3-third-party-consumers.mjs` 执行。
+- 免费基础 layout 与付费 `pdf.export` 路径由 Phase 3 consumer matrix 绑定同一 run-a 验证；legacy CLI 本身不宣称执行这些运行时行为。
 - 真实 registry URL、移除 `private: true` 与任何 `publish` 动作仍需人工审批。
 
 ## Edition Matrix

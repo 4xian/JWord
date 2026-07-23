@@ -22,7 +22,12 @@
     "dev": "node tools/dev/run-dev.mjs",
     "bench": "node tools/bench/run-bench.mjs",
     "size": "pnpm build && pnpm --filter @4xian/jword-example-vanilla build && node tools/size/check-size.mjs",
-    "test:types": "tsc -p tests/types/tsconfig.gate7-public-api.json --noEmit"
+    "test:types": "tsc -p tests/types/tsconfig.gate7-public-api.json --noEmit",
+    "phase3:artifact": "node tools/release/build-phase3-artifacts.mjs",
+    "phase3:artifact:compare": "node tools/release/compare-phase3-artifacts.mjs",
+    "phase3:consumer": "node tools/release/check-phase3-third-party-consumers.mjs",
+    "phase3:release": "node tools/release/check-phase3-release-gates.mjs",
+    "phase3:verify": "node tools/release/verify-phase3-final-evidence.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "21.0.0",

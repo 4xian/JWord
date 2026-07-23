@@ -46,15 +46,16 @@
 
 ## dry-run 命令
 
+Phase 3 third-party 兼容入口必须先运行 `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"`；`PHASE3_RUN_A_ROOT` 来自 B4 canonical builder 下载的 run-a。
+
 | 命令 | 作用 | 是否 publish |
 | --- | --- | --- |
-| `node tools/release/gate7-release-dry-run.mjs` | 检查 dist 产物、manifest、export map、`npm pack --dry-run --json` 文件清单。 | 否 |
-| `node tools/release/gate7-release-dry-run.mjs --build` | 先执行 `pnpm build`，再执行上述 dry-run。 | 否 |
-| `node tools/release/check-gate7-third-party-smoke.mjs` | 打包本地 tarball，安装到临时第三方项目，跑 typecheck、Vite build、Chromium smoke。 | 否 |
+| `node tools/release/gate7-release-dry-run.mjs` | 只读 source manifest/contract 与显式 synthetic tarball；不 build、dry-run pack 或 pack。 | 否 |
+| `node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"` | 校验 B4 canonical run-a manifest/binding，并委托 Phase 3 inventory-only consumer；不重新 pack。 | 否 |
 
 ## 本轮 dry-run 结果
 
-执行命令：
+以下是 2026-07-07 的历史 source-mode 结果，不是当前 canonical run-a 验收指引。执行命令：
 
 ```bash
 node tools/release/gate7-release-dry-run.mjs

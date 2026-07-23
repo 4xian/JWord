@@ -34,8 +34,11 @@ pnpm typecheck
 pnpm build
 node tools/release/check-gate5-commercial-pack.mjs
 node tools/release/check-gate6-commercial-pack.mjs
-node tools/release/check-license-runtime-smoke.mjs
+: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"
+node tools/release/check-license-runtime-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
 ```
+
+上述 Phase 3 License 命令仅校验显式 inventory/binding 并报告 `legacy-non-gating` 委托状态；它本身不执行 Node、浏览器或 Worker runtime 语义。当前 runtime 证据由 Phase 3 consumer matrix 在最终 run-a 上生成，历史 `LIC-107B2` 最低版本证据继续按本节对应记录解释，不得由该兼容入口替代。
 
 必须额外证明：
 
@@ -343,11 +346,12 @@ pnpm build
 node tools/release/normalize-dist-relative-imports.mjs --check
 node --input-type=module -e "await import('./packages/core/dist/index.js')"
 node tools/release/gate7-release-dry-run.mjs
-node tools/release/check-gate7-third-party-smoke.mjs
+: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"
+node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
 pnpm audit --prod
 ```
 
-Vanilla、React、Vue、CSS、worker 和 EditorShell 必须从同一批 tarball 安装，不允许 workspace alias。
+`PHASE3_RUN_A_ROOT` 必须来自 B4 canonical builder 下载的 run-a。Vanilla、React、Vue、CSS、worker 和 EditorShell 必须从同一批 tarball 安装，不允许 workspace alias；兼容入口不自行 build 或 pack。
 
 ## 6. 阶段 4：商业模块和 Formats
 
@@ -357,7 +361,8 @@ pnpm --filter @4xian/jword-docx test
 pnpm --filter @4xian/jword-pdf typecheck
 pnpm --filter @4xian/jword-pdf test
 node tools/release/check-gate5-commercial-pack.mjs
-node tools/release/check-gate5-third-party-smoke.mjs
+: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"
+node tools/release/check-gate5-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
 pnpm test:types
 ```
 
@@ -428,9 +433,10 @@ pnpm test
 pnpm build
 node tools/release/check-gate5-commercial-pack.mjs
 node tools/release/check-gate6-commercial-pack.mjs
-node tools/release/check-gate5-third-party-smoke.mjs
-node tools/release/check-gate6-third-party-smoke.mjs
-node tools/release/check-gate7-third-party-smoke.mjs
+: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"
+node tools/release/check-gate5-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
+node tools/release/check-gate6-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
+node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
 pnpm audit --prod
 pnpm test:e2e
 pnpm test:visual

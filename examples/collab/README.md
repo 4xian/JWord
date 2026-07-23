@@ -24,8 +24,11 @@
 pnpm --filter @4xian/jword-example-collab dev
 pnpm --filter @4xian/jword-example-collab dev:server
 pnpm --filter @4xian/jword-example-collab typecheck
-node tools/release/check-gate6-third-party-smoke.mjs
+: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"
+node tools/release/check-gate6-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
 ```
+
+`PHASE3_RUN_A_ROOT` 由 B4 canonical builder 生成并下载；该命令不自行 build 或 pack。
 
 ## Local Hocuspocus Demo
 

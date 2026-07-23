@@ -389,10 +389,14 @@ console.log(JSON.stringify({
   }
 }
 
+/** 在 Phase 3 artifact 模式禁止测试内部 build fallback。 */
 function ensureBuiltCore(): Promise<void> {
   builtCorePromise ??= Promise.resolve().then(() => {
     if (existsSync(join(process.cwd(), 'packages', 'core', 'dist', 'index.js'))) {
       return
+    }
+    if (process.env.JWORD_PHASE3_ARTIFACT_MANIFEST !== undefined) {
+      throw new Error('Phase 3 artifact mode requires packages/core/dist/index.js')
     }
 
     const childEnv = {

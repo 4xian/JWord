@@ -9,7 +9,9 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('Gate 5 commercial readiness', () => {
@@ -33,17 +35,17 @@ describe('Gate 5 commercial readiness', () => {
     assertLicensePeerDependency(pdfPackage)
   })
 
-  it('provides a release check for private registry, pack contents, export maps and lazy loading', () => {
+  /** 校验 Gate 5 默认入口只读扫描商业 package。 */
+  function verifyGate5ArtifactScanner() {
     expect(existsSync('tools/release/check-gate5-commercial-pack.mjs')).toBe(true)
 
-    const output = execFileSync(process.execPath, [
-      'tools/release/check-gate5-commercial-pack.mjs'
-    ], {
-      encoding: 'utf8'
-    })
-    const report = JSON.parse(output) as Gate5CommercialPackReport
+    const execution = runWithPackCommandTrap('tools/release/check-gate5-commercial-pack.mjs')
+    const report = JSON.parse(execution.output) as Gate5CommercialPackReport
 
     expect(report.status).toBe('ok')
+    expect(report.mode).toBe(process.env.JWORD_PHASE3_ARTIFACT_MANIFEST === undefined ? 'source' : 'artifact')
+    expect(report.packCommands).toBe(0)
+    expect(execution.commands).toEqual([])
     expect(report.privateRegistry).toMatchObject({
       required: true,
       publishConfigAccess: 'restricted'
@@ -54,23 +56,20 @@ describe('Gate 5 commercial readiness', () => {
       '@4xian/jword-pdf'
     ])
     for (const packageReport of report.packages) {
-      expect(packageReport.npmPackDryRun.requiredFilesMissing).toEqual([])
-      expect(packageReport.npmPackDryRun.forbiddenFiles).toEqual([])
-      expect(packageReport.npmPackDryRun.sourceMapLeaks).toEqual([])
-      expect(packageReport.npmPackDryRun.forbiddenTextLeaks).toEqual([])
-      expect(packageReport.npmPackDryRun.files).toContain('package.json')
-      expect(packageReport.npmPackDryRun.files.some((file) => file.startsWith('src/'))).toBe(false)
-      expect(packageReport.npmPackDryRun.files.some((file) => file.startsWith('test/'))).toBe(false)
-      expect(packageReport.npmPackDryRun.files.some((file) => file.startsWith('tests/'))).toBe(false)
-      expect(packageReport.npmPackDryRun.files.some((file) => file.endsWith('.map'))).toBe(false)
+      expect(packageReport.status).toBe('ok')
+      if (report.mode === 'source') {
+        expect(packageReport.sourceManifest).toMatch(/^packages\/(?:docx|license|pdf)\/package\.json$/u)
+      }
     }
-    expect(readFileSync('tools/release/check-gate5-commercial-pack.mjs', 'utf8')).toContain('normalize-dist-relative-imports.mjs')
+    expect(readFileSync('tools/release/check-gate5-commercial-pack.mjs', 'utf8')).toContain('check-package-artifacts.mjs')
     expect(report.freeBundleForbiddenImports).toEqual([])
     expect(report.exampleDocxLazyRuntimeImports).toEqual([
       '@4xian/jword-docx',
       '@4xian/jword-pdf'
     ])
-  })
+  }
+
+  it('provides a release check for private registry, pack contents, export maps and lazy loading', verifyGate5ArtifactScanner)
 
   it('keeps legacy JWL1 fail closed without exposing production signing capability', () => {
     const publicSource = readEvidenceFiles([
@@ -107,30 +106,25 @@ describe('Gate 5 commercial readiness', () => {
     expect(issueScript).toContain('JWORD_LICENSE_PRIVATE_KEY_PATH')
   })
 
-  it('provides a Gate 5 third-party empty-project smoke script through public packages', () => {
+  it('provides an inventory-only Gate 5 third-party compatibility entry', () => {
     const scriptPath = 'tools/release/check-gate5-third-party-smoke.mjs'
 
     expect(existsSync(scriptPath)).toBe(true)
 
     const source = readFileSync(scriptPath, 'utf8')
+    const consumerSource = readFileSync('tools/release/check-phase3-third-party-consumers.mjs', 'utf8')
 
     for (const token of [
-      'gate5-third-party-smoke',
-      'empty-project',
-      'pnpm',
-      'pack',
-      'install',
-      'workspace:*',
-      '@4xian/jword-license',
-      '@4xian/jword-docx',
-      '@4xian/jword-pdf',
-      'importDocx',
-      'exportDocx',
-      'exportPdfFromLayout',
-      'publicApiOnly'
+      'check-gate5-third-party-smoke.mjs',
+      'runLegacyConsumerCli',
+      'check-phase3-third-party-consumers.mjs'
     ]) {
       expect(source, token).toContain(token)
     }
+    for (const token of ['--artifact-manifest', '--binding', 'legacy-non-gating', 'repacks: 0']) {
+      expect(consumerSource, token).toContain(token)
+    }
+    expect(source).not.toMatch(/(?:npm|pnpm)\s+pack/u)
   })
 
   it('uses Node ESM compatible .js suffixes for published runtime relative imports', () => {
@@ -186,25 +180,54 @@ interface PackageJson {
 
 interface Gate5CommercialPackReport {
   readonly status: string
+  readonly mode: string
+  readonly packCommands: number
   readonly privateRegistry: {
     readonly required: boolean
     readonly publishConfigAccess: string
   }
   readonly packages: readonly {
     readonly name: string
-    readonly npmPackDryRun: {
-      readonly filename: string
-      readonly entryCount: number
-      readonly files: readonly string[]
-      readonly requiredFiles: readonly string[]
-      readonly requiredFilesMissing: readonly string[]
-      readonly forbiddenFiles: readonly string[]
-      readonly sourceMapLeaks: readonly string[]
-      readonly forbiddenTextLeaks: readonly string[]
-    }
+    readonly status: string
+    readonly sourceManifest: string
   }[]
   readonly freeBundleForbiddenImports: readonly string[]
   readonly exampleDocxLazyRuntimeImports: readonly string[]
+}
+
+/** 在 npm/pnpm 命令 trap 下运行 release script 并读取可观测调用记录。 */
+function runWithPackCommandTrap(scriptPath: string): { readonly output: string, readonly commands: readonly string[] } {
+  const root = mkdtempSync(join(tmpdir(), 'jword-phase3-pack-trap-'))
+  const binDirectory = join(root, 'bin')
+  const logPath = join(root, 'commands.log')
+  const trap = '#!/bin/sh\nprintf \'%s\\n\' "$0 $*" >> "$JWORD_PHASE3_PACK_COMMAND_LOG"\nexit 97\n'
+
+  try {
+    execFileSync('mkdir', ['-p', binDirectory])
+    for (const command of ['npm', 'pnpm']) {
+      const commandPath = join(binDirectory, command)
+
+      writeFileSync(commandPath, trap)
+      chmodSync(commandPath, 0o755)
+    }
+
+    const scriptArguments = process.env.JWORD_PHASE3_ARTIFACT_MANIFEST === undefined
+      ? [scriptPath]
+      : [scriptPath, '--artifact-manifest', process.env.JWORD_PHASE3_ARTIFACT_MANIFEST]
+    const output = execFileSync(process.execPath, scriptArguments, {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${binDirectory}${delimiter}${process.env.PATH ?? ''}`,
+        JWORD_PHASE3_PACK_COMMAND_LOG: logPath
+      }
+    })
+    const commands = existsSync(logPath) ? readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean) : []
+
+    return { output, commands }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 }
 
 /** 读取 workspace JSON 文件。 */

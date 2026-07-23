@@ -28,4 +28,4 @@ license token schema 变更必须保留明确诊断：envelope、canonical claim
 
 - 类型兼容：`pnpm test:types`。
 - 公开面：`pnpm exec vitest run tests/architecture/gate7-public-api-catalog.test.ts tests/architecture/gate7-api-export-audit.test.ts --reporter=verbose`。
-- no-alias：`node tools/release/check-gate7-third-party-smoke.mjs`。
+- no-alias：先运行 `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"`，再运行 `node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"`；run-a 来自 B4 canonical builder。

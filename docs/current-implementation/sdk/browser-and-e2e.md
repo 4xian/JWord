@@ -46,8 +46,11 @@
 pnpm exec vitest run tests/architecture/gate7-browser-support.test.ts --reporter=verbose
 pnpm exec vitest run tests/architecture/gate7-sdk-docs.test.ts --reporter=verbose
 node tools/release/gate7-release-dry-run.mjs
-node tools/release/check-gate7-third-party-smoke.mjs
+: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"
+node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
 ```
+
+`PHASE3_RUN_A_ROOT` 必须来自 B4 canonical builder 下载的 run-a；兼容入口不自行 build 或 pack。
 
 UI focused 补充入口：
 

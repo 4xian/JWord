@@ -100,7 +100,7 @@ Experimental 子路径主要导出：
 - `tests/architecture/gate6-awareness-validation.test.ts`
 - `tests/architecture/gate6-docx-fixture-integration.test.ts`
 - `examples/collab/tests/`
-- `tools/release/check-gate6-third-party-smoke.mjs`
+- `tools/release/check-gate6-third-party-smoke.mjs`（只读 B4 canonical run-a manifest/binding）
 - `tools/size/check-gate6-collab-bundle.mjs`
 
 ## 运行/测试/验证命令
@@ -109,7 +109,7 @@ Experimental 子路径主要导出：
 - `pnpm --filter @4xian/jword-collab test`：运行 collab 包内 provider contract、client/history/restore 与 Hocuspocus adapter 测试。
 - `pnpm --filter @4xian/jword-collab build`：按 package `tsconfig.json` 输出 `dist`。
 - `pnpm test -- tests/architecture/gate6-package-exports.test.ts tests/architecture/gate6-diagnostics-registry.test.ts tests/architecture/gate6-awareness-validation.test.ts tests/architecture/gate6-docx-fixture-integration.test.ts tests/architecture/gate7-public-api-catalog.test.ts`：回归协同导出、诊断、awareness、DOCX fixture 集成和公开 API catalog。
-- `node tools/release/check-gate6-third-party-smoke.mjs`、`node tools/size/check-gate6-collab-bundle.mjs`：验证第三方消费与协同高级代码按需进入 bundle。
+- `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"` 后运行 `node tools/release/check-gate6-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"`；再运行 `node tools/size/check-gate6-collab-bundle.mjs`：验证 canonical run-a 第三方消费与协同高级代码按需进入 bundle。
 
 ## 当前限制/注意点
 
@@ -131,4 +131,3 @@ Experimental 子路径主要导出：
 - `packages/collab/src/experimental.ts`
 - `packages/core/src/editor/collaboration-runtime.ts`
 - `packages/core/src/plugins/adapter-types.ts`
-

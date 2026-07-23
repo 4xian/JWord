@@ -25,4 +25,4 @@
 - [Migration](./migration.md)：semver、deprecation、native schema、collab protocol 和 license contract 迁移。
 - [Stable E2E matrix](./stable-e2e-matrix.md)：Gate 7 收口矩阵。
 - Troubleshooting：优先从 [Diagnostic codes](./diagnostic-codes.md)、[Support bundle](./support-bundle.md)、[Collaboration](./collaboration.md) 和 [Licensing](./licensing.md) 定位。
-- FAQ：发布前必须先跑 `node tools/release/gate7-release-dry-run.mjs` 与 `node tools/release/check-gate7-third-party-smoke.mjs`；脚本不会自动 publish。
+- FAQ：发布前先准备 B4 canonical run-a，再运行 `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"`、`node tools/release/gate7-release-dry-run.mjs` 和 `node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"`；脚本不会自动 build、pack 或 publish。

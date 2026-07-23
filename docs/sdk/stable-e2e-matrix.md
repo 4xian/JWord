@@ -13,14 +13,14 @@
 | DOCX/PDF | `@4xian/jword-docx` / `@4xian/jword-pdf` | Gate 5 fixture diff、PDF visual report、worker capability test |
 | collab browser SDK / Docker server | `@4xian/jword-collab` / 镜像内部 `@4xian/jword-collab-server` | Gate 6 client/server focused tests；LIC-309 后增加正式镜像验收 |
 | plugin | `@4xian/jword-core` plugin host | `pnpm exec playwright test examples/vanilla/tests/gate7-plugin-error.e2e.ts --project=chromium` |
-| release/no-alias | local tarball external project | `node tools/release/check-gate7-third-party-smoke.mjs` |
+| release/no-alias | downloaded canonical run-a external project | `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}" && node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"` |
 
 
 ## 2026-07-07 fresh run 状态
 
 | 范围 | 命令 | 状态 | 摘要 |
 |---|---|---|---|
-| no-alias 第三方消费 | `node tools/release/check-gate7-third-party-smoke.mjs` | fresh pass | 12 个本地 tarball 在临时空项目安装，typecheck、Vite build、Chromium smoke 均通过。 |
+| no-alias 第三方消费 | `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}" && node tools/release/check-phase3-third-party-consumers.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json" --evidence-dir "$PHASE3_CONSUMER_EXPORT"` | B4 canonical run-a 前置 | 只消费下载的 run-a；npm/pnpm、Node、Vite/browser 和 Worker evidence 写入指定 consumer handoff。 |
 | 体积预算 | `pnpm size` | fresh pass | core entry `606650` bytes；vanilla 首屏 `699953` bytes，均低于当前预算。 |
 | 视觉快照 | `pnpm test:visual` | fresh pass | visual baseline 检查 `4` 个，Playwright `8 passed`。 |
 | 三浏览器 E2E | `pnpm test:e2e` | fresh pass | Chromium / Firefox / WebKit `329 passed`、`7 skipped`；perf-chromium `4 passed`。 |

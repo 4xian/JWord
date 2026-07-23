@@ -51,8 +51,9 @@ session.write('协作内容')
 
 ## Smoke
 
-仓库内现有 Gate 6 smoke 仍会打包 server package 做内部 no-alias 架构验证；该结果不代表客户应从 npm 集成服务端，也不等于 LIC-309 正式镜像验收。
+Gate 6 smoke 只读取 B4 canonical builder 产生并下载的 run-a manifest/binding，不重新打包 server package；该结果不代表客户应从 npm 集成服务端，也不等于 LIC-309 正式镜像验收。
 
 ```sh
-node tools/release/check-gate6-third-party-smoke.mjs
+: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"
+node tools/release/check-gate6-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"
 ```

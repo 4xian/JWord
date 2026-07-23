@@ -74,6 +74,6 @@ License runtime、Collaboration diagnostic 以及 DOCX/PDF worker 错误只传�
 
 ## 私有 registry
 
-1. 先运行 `pnpm build`、`node tools/release/gate7-release-dry-run.mjs` 和 `node tools/release/check-gate7-third-party-smoke.mjs`。
+1. 先准备 B4 canonical run-a，再运行 `: "${PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff}"`、`node tools/release/gate7-release-dry-run.mjs` 和 `node tools/release/check-gate7-third-party-smoke.mjs --artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json" --binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"`。
 2. 人工确认版本号、changeset、README/LICENSE、registry URL 和 access。
 3. 只允许人工执行 publish；脚本不会自动 publish、tag 或 push。

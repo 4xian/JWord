@@ -24,6 +24,25 @@ const docs = {
   stableMatrix: 'docs/sdk/stable-e2e-matrix.md'
 } as const
 
+const phase3CommandDocs = [
+  'docs/sdk/stable-e2e-matrix.md',
+  'docs/sdk/index.md',
+  'docs/sdk/licensing.md',
+  'docs/sdk/migration.md',
+  'docs/sdk/public-api.md',
+  'docs/current-implementation/sdk/browser-and-e2e.md',
+  'docs/current-implementation/sdk/advanced-formats.md',
+  'docs/current-implementation/sdk/public-api.md',
+  'docs/current-implementation/sdk/collab-server.md',
+  'docs/current-implementation/packages/collab.md',
+  'docs/current-implementation/packages/collab-server.md',
+  'docs/current-implementation/oem-licensing-open-access-implementation-plan.md',
+  'docs/current-implementation/reviews/current-full-review/10-verification-plan.md',
+  'docs/current-implementation/release-metadata-audit.md',
+  'packages/collab/README.md',
+  'examples/collab/README.md'
+] as const
+
 const requiredDocumentTokens: Readonly<Record<keyof typeof docs, readonly string[]>> = {
   index: [
     './quickstart.md',
@@ -141,6 +160,18 @@ describe('Gate 7 SDK documentation set', () => {
     }
 
     expect(failures).toEqual([])
+  })
+
+  /** 锁定全部当前 third-party 命令使用同一 run-a guard 和两个显式输入。 */
+  it('keeps current third-party commands on the canonical run-a contract', () => {
+    for (const path of phase3CommandDocs) {
+      const source = readFileSync(path, 'utf8')
+
+      expect(source, path).toContain('PHASE3_RUN_A_ROOT:?must point to downloaded run-a handoff')
+      expect(source, path).toContain('--artifact-manifest "$PHASE3_RUN_A_ROOT/artifact-manifest.json"')
+      expect(source, path).toContain('--binding "$PHASE3_RUN_A_ROOT/artifact-binding.json"')
+      expect(source.toLowerCase(), path).toContain('canonical')
+    }
   })
 
   it('keeps support bundle and diagnostics docs explicit about privacy redaction', () => {
