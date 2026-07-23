@@ -27,12 +27,49 @@ export interface GraphemeSegment {
  * @returns 带 UTF-16 边界的 grapheme 片段。
  */
 export function segmentGraphemes(text: string): readonly GraphemeSegment[] {
-  return [...segmenter.segment(text)].map((segment, index) => ({
-    graphemeIndex: index,
-    utf16StartIndex: segment.index,
-    utf16EndIndex: segment.index + segment.segment.length,
-    segment: segment.segment
-  }))
+  const segments: GraphemeSegment[] = []
+
+  if (hasSingleUnitGraphemesOnly(text)) {
+    for (let index = 0; index < text.length; index += 1) {
+      segments.push({
+        graphemeIndex: index,
+        utf16StartIndex: index,
+        utf16EndIndex: index + 1,
+        segment: text[index]!
+      })
+    }
+
+    return segments
+  }
+
+  for (const segment of segmenter.segment(text)) {
+    segments.push({
+      graphemeIndex: segments.length,
+      utf16StartIndex: segment.index,
+      utf16EndIndex: segment.index + segment.segment.length,
+      segment: segment.segment
+    })
+  }
+
+  return segments
+}
+
+/**
+ * 判断文本是否只包含可直接视为单 grapheme 的 UTF-16 单元。
+ */
+function hasSingleUnitGraphemesOnly(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const codeUnit = text.charCodeAt(index)
+    const isPrintableAscii = codeUnit >= 0x20 && codeUnit <= 0x7e
+    const isCjkExtensionA = codeUnit >= 0x3400 && codeUnit <= 0x4dbf
+    const isCjkUnifiedIdeograph = codeUnit >= 0x4e00 && codeUnit <= 0x9fff
+
+    if (!isPrintableAscii && !isCjkExtensionA && !isCjkUnifiedIdeograph) {
+      return false
+    }
+  }
+
+  return true
 }
 
 /**
