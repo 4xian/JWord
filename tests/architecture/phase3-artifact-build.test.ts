@@ -430,6 +430,7 @@ function verifySyntheticArtifactLifecycle(): void {
     expect(commands.filter(matchesCommandFragment('npm pack --dry-run --json --ignore-scripts'))).toHaveLength(2)
     expect(commands.filter(matchesRealPackCommand)).toHaveLength(2)
     expect(commands.some(matchesExactCommand('pnpm test'))).toBe(false)
+    expect(commands.filter(matchesExactCommand('direct-node-options --no-warnings --experimental-websocket'))).toHaveLength(1)
 
     assertCommandPassed(runBuilder(fixture, [
       '--purpose',
@@ -721,6 +722,7 @@ function createBuilderFixture(id: string): BuilderFixture {
       TMPDIR: temporaryDirectory,
       LANG: 'C',
       CI: '1',
+      NODE_OPTIONS: '--no-warnings',
       NPM_CONFIG_USERCONFIG: userConfig,
       NPM_CONFIG_CACHE: npmCacheDirectory,
       JWORD_PHASE3_COMMAND_LOG: commandLog,
@@ -858,6 +860,7 @@ function writeFixtureCommands(binDirectory: string): void {
   const pnpmScript = [
     '#!/bin/sh',
     'printf \'pnpm %s\\n\' "$*" >> "$JWORD_PHASE3_COMMAND_LOG"',
+    'if [ "$*" = "exec vitest run --passWithNoTests" ]; then printf \'direct-node-options %s\\n\' "$NODE_OPTIONS" >> "$JWORD_PHASE3_COMMAND_LOG"; fi',
     'if [ "$1" = "--version" ]; then printf \'9.14.2\\n\'; exit 0; fi',
     'checkpoint=""',
     'case "$*" in',

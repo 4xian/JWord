@@ -63,10 +63,9 @@ describe('Gate 5 commercial readiness', () => {
     }
     expect(readFileSync('tools/release/check-gate5-commercial-pack.mjs', 'utf8')).toContain('check-package-artifacts.mjs')
     expect(report.freeBundleForbiddenImports).toEqual([])
-    expect(report.exampleDocxLazyRuntimeImports).toEqual([
-      '@4xian/jword-docx',
-      '@4xian/jword-pdf'
-    ])
+    expect(report.exampleDocxLazyRuntimeImports).toEqual(report.mode === 'source'
+      ? ['@4xian/jword-docx', '@4xian/jword-pdf']
+      : [])
   }
 
   it('provides a release check for private registry, pack contents, export maps and lazy loading', verifyGate5ArtifactScanner)

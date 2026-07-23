@@ -431,7 +431,8 @@ function finishCanonicalRun(repoRoot, outputDirectory, sourceReport, manifest, m
   const commands = []
   const directEnvironment = {
     ...process.env,
-    JWORD_PHASE3_ARTIFACT_MANIFEST: join(outputDirectory, 'artifact-manifest.json')
+    JWORD_PHASE3_ARTIFACT_MANIFEST: join(outputDirectory, 'artifact-manifest.json'),
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, '--experimental-websocket'].filter(Boolean).join(' ')
   }
 
   for (const definition of testCommandDefinitions()) {
