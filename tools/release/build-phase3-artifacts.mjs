@@ -526,7 +526,14 @@ function runFixedCommand(repoRoot, definition, environment = process.env) {
 
   assertPhase3Clean(repoRoot)
   if (result.status !== 0) {
-    throw new Error(`${definition.id} command failed`)
+    process.stdout.write(result.stdout ?? '')
+    process.stderr.write(result.stderr ?? '')
+    throw new Error([
+      `${definition.id} command failed`,
+      `status: ${result.status ?? 'null'}`,
+      `signal: ${result.signal ?? 'none'}`,
+      `spawn error code: ${result.error?.code ?? 'none'}`
+    ].join(', '))
   }
 
   return { id: definition.id, command: definition.command, exitCode: 0, status: 'passed' }

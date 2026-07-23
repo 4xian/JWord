@@ -280,16 +280,7 @@ function verifyDirtyRepositoryInputs(): void {
           runGit(fixture.root, ['add', 'tracked.txt'])
         }
       }
-      const result = runBuilder(fixture, [
-        '--purpose',
-        'canonical',
-        '--source-report',
-        join(fixture.sourceDirectory, 'source-report.json'),
-        '--source-report-sha256',
-        join(fixture.sourceDirectory, 'source-report.json.sha256'),
-        '--out-dir',
-        fixture.runDirectory
-      ])
+      const result = runBuilder(fixture, canonicalBuilderArguments(fixture))
 
       expect(result.status, dirtyKind).not.toBe(0)
       expect(listTarballs(fixture.runDirectory), dirtyKind).toEqual([])
@@ -321,7 +312,7 @@ function verifyDirtyRepositoryInputs(): void {
 
 /** 校验每条 source/build/pack/direct 命令后的 clean checkpoint。 */
 function verifyDirtyCommandCheckpoints(): void {
-  for (const checkpoint of ['lint', 'build', 'pack', 'e2e'] as const) {
+  for (const checkpoint of ['lint', 'build', 'pack', 'e2e', 'direct-vitest'] as const) {
     const fixture = createBuilderFixture(`checkpoint-${checkpoint}`)
 
     try {
@@ -340,22 +331,18 @@ function verifyDirtyCommandCheckpoints(): void {
         '--out-dir',
         fixture.sourceDirectory
       ]), 'source report')
-      const artifactResult = runBuilder(fixture, [
-        '--purpose',
-        'canonical',
-        '--source-report',
-        join(fixture.sourceDirectory, 'source-report.json'),
-        '--source-report-sha256',
-        join(fixture.sourceDirectory, 'source-report.json.sha256'),
-        '--out-dir',
-        fixture.runDirectory
-      ], checkpoint)
+      const artifactResult = runBuilder(fixture, canonicalBuilderArguments(fixture), checkpoint)
 
       expect(artifactResult.status, checkpoint).not.toBe(0)
       expect(existsSync(join(fixture.runDirectory, 'test-report.json')), checkpoint).toBe(false)
       expect(existsSync(join(fixture.runDirectory, 'artifact-binding.json')), checkpoint).toBe(false)
       if (checkpoint === 'build') {
         expect(listTarballs(fixture.runDirectory)).toEqual([])
+      }
+      if (checkpoint === 'direct-vitest') {
+        expect(artifactResult.stderr).toContain('repository is not clean')
+        expect(artifactResult.stdout).not.toContain('direct-stdout-sentinel')
+        expect(artifactResult.stderr).not.toContain('direct-stderr-sentinel')
       }
     } finally {
       rmSync(fixture.workspaceRoot, { recursive: true, force: true })
@@ -376,16 +363,7 @@ function verifySyntheticArtifactLifecycle(): void {
       '--out-dir',
       fixture.sourceDirectory
     ]), 'source report')
-    assertCommandPassed(runBuilder(fixture, [
-      '--purpose',
-      'canonical',
-      '--source-report',
-      join(fixture.sourceDirectory, 'source-report.json'),
-      '--source-report-sha256',
-      join(fixture.sourceDirectory, 'source-report.json.sha256'),
-      '--out-dir',
-      fixture.runDirectory
-    ]), 'canonical artifact build')
+    assertCommandPassed(runBuilder(fixture, canonicalBuilderArguments(fixture)), 'canonical artifact build')
 
     const manifestPath = join(fixture.runDirectory, 'artifact-manifest.json')
     const manifestBytes = readFileSync(manifestPath)
@@ -547,6 +525,16 @@ function verifySyntheticArtifactLifecycle(): void {
 
     writeFileSync(runBManifestPath, originalRunBManifestBytes)
     writeFileSync(runBChecksumPath, originalRunBChecksumBytes)
+    const failedRunDirectory = join(fixture.workspaceRoot, 'failed-run')
+
+    fixture.environment.JWORD_PHASE3_DIRECT_FAILURE = '1'
+    const directFailure = runBuilder(fixture, canonicalBuilderArguments(fixture, failedRunDirectory))
+
+    expect(directFailure.status).toBe(1)
+    expect(directFailure.stdout).toBe('direct-stdout-sentinel\n')
+    expect(directFailure.stderr).toBe('direct-stderr-sentinel\n{"status":"failed","error":"direct-vitest command failed, status: 23, signal: none, spawn error code: none"}\n')
+    expect(existsSync(join(failedRunDirectory, 'test-report.json'))).toBe(false)
+    expect(existsSync(join(failedRunDirectory, 'artifact-binding.json'))).toBe(false)
   } finally {
     rmSync(fixture.workspaceRoot, { recursive: true, force: true })
   }
@@ -867,9 +855,15 @@ function writeFixtureCommands(binDirectory: string): void {
     '  lint) checkpoint="lint" ;;',
     '  build) checkpoint="build" ;;',
     '  test:e2e) checkpoint="e2e" ;;',
+    '  "exec vitest run --passWithNoTests") checkpoint="direct-vitest" ;;',
     'esac',
     'if [ "${JWORD_PHASE3_DIRTY_AFTER:-}" = "$checkpoint" ] && [ -n "$checkpoint" ]; then',
     '  printf \'dirty-%s\\n\' "$checkpoint" > "$JWORD_PHASE3_TRACKED_FILE"',
+    'fi',
+    'if [ "$*" = "exec vitest run --passWithNoTests" ] && [ "${JWORD_PHASE3_DIRECT_FAILURE:-}" = "1" ]; then',
+    '  printf \'direct-stdout-sentinel\\n\'',
+    '  printf \'direct-stderr-sentinel\\n\' >&2',
+    '  exit 23',
     'fi',
     'exit 0',
     ''
@@ -895,16 +889,27 @@ function writeFixtureCommands(binDirectory: string): void {
   chmodSync(join(binDirectory, 'npm'), 0o755)
 }
 
+/** 生成 synthetic canonical builder 的固定 CLI 参数。 */
+function canonicalBuilderArguments(fixture: BuilderFixture, outputDirectory = fixture.runDirectory): readonly string[] {
+  return [
+    '--purpose', 'canonical',
+    '--source-report', join(fixture.sourceDirectory, 'source-report.json'),
+    '--source-report-sha256', join(fixture.sourceDirectory, 'source-report.json.sha256'),
+    '--out-dir', outputDirectory
+  ]
+}
+
 /** 在 fixture repo 内运行 builder，可选在固定 checkpoint 注入 tracked pollution。 */
 function runBuilder(
   fixture: BuilderFixture,
   args: readonly string[],
-  dirtyCheckpoint?: 'lint' | 'build' | 'pack' | 'e2e'
+  dirtyCheckpoint?: 'lint' | 'build' | 'pack' | 'e2e' | 'direct-vitest'
 ): SpawnSyncReturns<string> {
   const environment = { ...fixture.environment }
 
   if (dirtyCheckpoint !== undefined) {
     environment.JWORD_PHASE3_DIRTY_AFTER = dirtyCheckpoint
+    environment.JWORD_PHASE3_DIRECT_FAILURE = dirtyCheckpoint === 'direct-vitest' ? '1' : '0'
   }
 
   return spawnSync(process.execPath, [BUILDER_PATH, ...args], {
