@@ -345,8 +345,8 @@ export function readJsonFile(path, label) {
   }
 }
 
-/** 执行冻结 Git status 命令并要求 stdout 为零 bytes。 */
-export function assertPhase3Clean(repoRoot) {
+/** 执行冻结 Git status 命令，并用有限条目指出污染 checkpoint 与路径。 */
+export function assertPhase3Clean(repoRoot, checkpoint) {
   const result = spawnSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
     cwd: repoRoot,
     encoding: null
@@ -356,7 +356,15 @@ export function assertPhase3Clean(repoRoot) {
     throw new Error('cannot read Phase 3 Git status')
   }
   if (result.stdout.byteLength !== 0) {
-    throw new Error('Phase 3 repository is not clean')
+    const entries = result.stdout.toString('utf8').split('\0').filter(Boolean)
+    const visibleEntries = entries.slice(0, 10).map(function quoteDirtyEntry(entry) {
+      return JSON.stringify(entry)
+    }).join(', ')
+    const hiddenEntryCount = entries.length - 10
+    const hiddenEntrySuffix = hiddenEntryCount > 0 ? `, ... (${hiddenEntryCount} more)` : ''
+    const checkpointPrefix = checkpoint === undefined ? '' : `${checkpoint}: `
+
+    throw new Error(`${checkpointPrefix}Phase 3 repository is not clean: ${visibleEntries}${hiddenEntrySuffix}`)
   }
 }
 

@@ -333,6 +333,7 @@ function verifyDirtyCommandCheckpoints(): void {
         const sourceResult = runBuilder(fixture, ['--purpose', 'source-report', '--out-dir', fixture.sourceDirectory], checkpoint)
 
         expect(sourceResult.status).not.toBe(0)
+        expect(sourceResult.stderr).toContain('lint: Phase 3 repository is not clean: \\" M tracked.txt\\"')
         expect(existsSync(join(fixture.sourceDirectory, 'source-report.json'))).toBe(false)
         expect(existsSync(join(fixture.sourceDirectory, 'source-report.json.sha256'))).toBe(false)
         continue
@@ -347,6 +348,7 @@ function verifyDirtyCommandCheckpoints(): void {
       const artifactResult = runBuilder(fixture, canonicalBuilderArguments(fixture), checkpoint)
 
       expect(artifactResult.status, checkpoint).not.toBe(0)
+      expect(artifactResult.stderr, checkpoint).toContain(`${checkpoint}: Phase 3 repository is not clean: \\" M tracked.txt\\"`)
       expect(existsSync(join(fixture.runDirectory, 'test-report.json')), checkpoint).toBe(false)
       expect(existsSync(join(fixture.runDirectory, 'artifact-binding.json')), checkpoint).toBe(false)
       if (checkpoint === 'build') {

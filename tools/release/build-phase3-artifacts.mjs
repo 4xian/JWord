@@ -161,14 +161,14 @@ function buildArtifactSet(repoRoot, outputDirectory, options) {
 
   validateRootBuildCommand(repoRoot)
   runRequiredCommand(repoRoot, 'pnpm', ['build'], 'pnpm build')
-  assertPhase3Clean(repoRoot)
+  assertPhase3Clean(repoRoot, 'build')
 
   const stagingRoot = mkdtempSync(join(dirname(outputDirectory), '.phase3-staging-'))
 
   try {
     const packages = buildPackages(repoRoot, outputDirectory, stagingRoot, contract)
 
-    assertPhase3Clean(repoRoot)
+    assertPhase3Clean(repoRoot, 'pack')
     const checksumBytes = createSha256Sums(packages)
     const checksumPath = join(outputDirectory, 'SHA256SUMS')
 
@@ -524,7 +524,7 @@ function runFixedCommand(repoRoot, definition, environment = process.env) {
     env: environment
   })
 
-  assertPhase3Clean(repoRoot)
+  assertPhase3Clean(repoRoot, definition.id)
   if (result.status !== 0) {
     process.stdout.write(result.stdout ?? '')
     process.stderr.write(result.stderr ?? '')
