@@ -119,6 +119,8 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
   let themeName = options.themeName
   let locale = options.locale
   let destroyed = false
+  let statsProjection: ReturnType<Editor['getProjection']> | undefined
+  let cachedDocumentStats: ReturnType<typeof createStatusBarDocumentStats> | undefined
   const dom = createStatusBarDom({
     host: options.host,
     items,
@@ -310,9 +312,15 @@ export function createStatusBarController(options: CreateStatusBarControllerOpti
       return
     }
 
-    const stats = createStatusBarDocumentStats(options.editor.getProjection())
+    const projection = options.editor.getProjection()
+    const stats = projection === statsProjection && cachedDocumentStats !== undefined
+      ? cachedDocumentStats
+      : createStatusBarDocumentStats(projection)
     const pageCount = readPageCount(options.editorHost, options.editor)
     const zoomPercent = viewController.readZoomPercent()
+
+    statsProjection = projection
+    cachedDocumentStats = stats
 
     renderStatusBarDomState(dom, {
       ...stats,

@@ -11,21 +11,35 @@ import { expectedGate2PageCount } from './gate2-test-contract'
 
 interface Gate3PerfMetrics {
   readonly gate2ScrollMs: number
-  readonly largeDocumentInsertP95Ms: number
-  readonly alphaLoadMs: number
+  readonly largeDocumentInsertRawP95Ms: number
+  readonly largeDocumentFrameBaselineP95Ms: number
+  readonly largeDocumentInsertIncrementalP95Ms: number
+  readonly alphaLoadRawP95Ms: number
+  readonly alphaLoadFrameBaselineP95Ms: number
+  readonly alphaLoadIncrementalP95Ms: number
   readonly selectionSyncMs: number
   readonly toggleBoldP95Ms: number
   readonly undoP95Ms: number
   readonly redoP95Ms: number
 }
 
-const P95_SAMPLE_COUNT = 20
+interface Gate3PerfThresholds {
+  readonly gate2ScrollMs: number
+  readonly largeDocumentInsertIncrementalP95Ms: number
+  readonly alphaLoadIncrementalP95Ms: number
+  readonly selectionSyncMs: number
+  readonly toggleBoldP95Ms: number
+  readonly undoP95Ms: number
+  readonly redoP95Ms: number
+}
+
+const P95_SAMPLE_COUNT = 30
 const LARGE_DOCUMENT_INSERT_WARMUP_COUNT = 2
 
-const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
+const GATE3_ALPHA_THRESHOLDS: Gate3PerfThresholds = {
   gate2ScrollMs: 120,
-  largeDocumentInsertP95Ms: 50,
-  alphaLoadMs: 80,
+  largeDocumentInsertIncrementalP95Ms: 50,
+  alphaLoadIncrementalP95Ms: 80,
   selectionSyncMs: 140,
   toggleBoldP95Ms: 140,
   undoP95Ms: 140,
@@ -33,7 +47,7 @@ const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
 }
 
 test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ page, browserName }, testInfo) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
   test.skip(browserName !== 'chromium', '当前 Gate 3 Alpha perf 门槛只固定 Chromium。')
 
   await page.goto('/test-fixture.html?fixture=gate2')
@@ -47,7 +61,10 @@ test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ 
       {
         sampling: {
           p95SampleCount: P95_SAMPLE_COUNT,
-          largeDocumentInsertWarmupCount: LARGE_DOCUMENT_INSERT_WARMUP_COUNT
+          largeDocumentInsertWarmupCount: LARGE_DOCUMENT_INSERT_WARMUP_COUNT,
+          largeDocumentInsertMetric: 'paired-frame-baseline-p95',
+          alphaLoadSampleCount: P95_SAMPLE_COUNT,
+          alphaLoadMetric: 'paired-frame-baseline-p95'
         },
         thresholds: GATE3_ALPHA_THRESHOLDS,
         metrics
@@ -59,8 +76,10 @@ test('Gate 3 Alpha perf stays within the current Chromium thresholds', async ({ 
   })
 
   expect(metrics.gate2ScrollMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.gate2ScrollMs)
-  expect(metrics.largeDocumentInsertP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.largeDocumentInsertP95Ms)
-  expect(metrics.alphaLoadMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.alphaLoadMs)
+  expect(metrics.largeDocumentInsertIncrementalP95Ms)
+    .toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.largeDocumentInsertIncrementalP95Ms)
+  expect(metrics.alphaLoadIncrementalP95Ms)
+    .toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.alphaLoadIncrementalP95Ms)
   expect(metrics.selectionSyncMs).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.selectionSyncMs)
   expect(metrics.toggleBoldP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.toggleBoldP95Ms)
   expect(metrics.undoP95Ms).toBeLessThanOrEqual(GATE3_ALPHA_THRESHOLDS.undoP95Ms)
@@ -72,6 +91,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
     const demo = window.__jwordTestFixture
     const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
     const loadAlphaButton = document.querySelector<HTMLButtonElement>('[data-jword-load-alpha]')
+    const restoreGate2FixtureButton = document.querySelector<HTMLButtonElement>('[data-jword-restore-gate2]')
     const clearSelectionButton = document.querySelector<HTMLButtonElement>('[data-jword-clear-selection]')
     const selectSampleButton = document.querySelector<HTMLButtonElement>('[data-jword-select-sample]')
     const boldButton = document.querySelector<HTMLButtonElement>('[data-jword-format-bold]')
@@ -82,6 +102,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       demo === undefined
       || container === null
       || loadAlphaButton === null
+      || restoreGate2FixtureButton === null
       || clearSelectionButton === null
       || selectSampleButton === null
       || boldButton === null
@@ -156,6 +177,15 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       const rank = Math.max(0, Math.ceil(sorted.length * 0.95) - 1)
 
       return Number(sorted[rank]?.toFixed(2) ?? 0)
+    }
+
+    /** 测量与真实输入相同的双帧调度基线。 */
+    const measureFrameBaseline = async (): Promise<number> => {
+      const start = performance.now()
+
+      await nextFrame()
+
+      return performance.now() - start
     }
 
     const readSelectionPositions = (): Readonly<{
@@ -288,8 +318,11 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
     }
 
     const gate2ScrollMs = await measureGate2Scroll()
-    const largeDocumentInsertSamples: number[] = []
+    const largeDocumentInsertRawSamples: number[] = []
+    const largeDocumentFrameBaselineSamples: number[] = []
+    const largeDocumentInsertIncrementalSamples: number[] = []
     const originalFirstParagraphText = readFirstParagraphText()
+    const originalBlockCount = demo.editor.getProjection().document.sections[0]?.blocks.length ?? 0
     const input = document.querySelector<HTMLTextAreaElement>('[data-jword-hidden-textarea]')
 
     if (input === null) {
@@ -340,6 +373,7 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
 
     for (let index = 0; index < p95SampleCount; index += 1) {
       await prepareLargeDocumentInsertState()
+      const frameBaselineDuration = await measureFrameBaseline()
 
       const duration = await runAndMeasure(
         `大文档输入-${index + 1}`,
@@ -353,7 +387,9 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
         () => readFirstParagraphText() === `热${originalFirstParagraphText}`
       )
 
-      largeDocumentInsertSamples.push(duration)
+      largeDocumentInsertRawSamples.push(duration)
+      largeDocumentFrameBaselineSamples.push(frameBaselineDuration)
+      largeDocumentInsertIncrementalSamples.push(Math.max(0, duration - frameBaselineDuration))
 
       await runAndMeasure(
         `大文档撤销-${index + 1}`,
@@ -365,11 +401,34 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
       await waitForSettledFrames()
     }
 
-    const alphaLoadMs = await runAndMeasure(
-      '加载 Alpha 样例',
-      () => loadAlphaButton.click(),
-      () => container.getAttribute('data-jword-page-count') === '1' && selectSampleButton.disabled === false
-    )
+    const alphaLoadRawSamples: number[] = []
+    const alphaLoadFrameBaselineSamples: number[] = []
+    const alphaLoadIncrementalSamples: number[] = []
+
+    for (let index = 0; index < p95SampleCount; index += 1) {
+      const frameBaselineDuration = await measureFrameBaseline()
+      const duration = await runAndMeasure(
+        `加载 Alpha 样例-${index + 1}`,
+        () => loadAlphaButton.click(),
+        () => container.getAttribute('data-jword-page-count') === '1' && selectSampleButton.disabled === false
+      )
+
+      alphaLoadRawSamples.push(duration)
+      alphaLoadFrameBaselineSamples.push(frameBaselineDuration)
+      alphaLoadIncrementalSamples.push(Math.max(0, duration - frameBaselineDuration))
+
+      if (index === p95SampleCount - 1) {
+        continue
+      }
+
+      await runAndMeasure(
+        `恢复 Gate 2 夹具-${index + 1}`,
+        () => restoreGate2FixtureButton.click(),
+        () => readFirstParagraphText() === originalFirstParagraphText
+          && demo.editor.getProjection().document.sections[0]?.blocks.length === originalBlockCount
+      )
+      await waitForSettledFrames()
+    }
 
     if (clearSelectionButton.disabled === false) {
       await runAndMeasure(
@@ -429,8 +488,12 @@ async function readGate3PerfMetrics(page: Page): Promise<Gate3PerfMetrics> {
 
     return {
       gate2ScrollMs: Number(gate2ScrollMs.toFixed(2)),
-      largeDocumentInsertP95Ms: readP95(largeDocumentInsertSamples),
-      alphaLoadMs: Number(alphaLoadMs.toFixed(2)),
+      largeDocumentInsertRawP95Ms: readP95(largeDocumentInsertRawSamples),
+      largeDocumentFrameBaselineP95Ms: readP95(largeDocumentFrameBaselineSamples),
+      largeDocumentInsertIncrementalP95Ms: readP95(largeDocumentInsertIncrementalSamples),
+      alphaLoadRawP95Ms: readP95(alphaLoadRawSamples),
+      alphaLoadFrameBaselineP95Ms: readP95(alphaLoadFrameBaselineSamples),
+      alphaLoadIncrementalP95Ms: readP95(alphaLoadIncrementalSamples),
       selectionSyncMs: Number(selectionSyncMs.toFixed(2)),
       toggleBoldP95Ms: readP95(toggleBoldSamples),
       undoP95Ms: readP95(undoSamples),

@@ -54,26 +54,31 @@ export interface StatusBarTextStats {
   readonly characters: number
 }
 
+interface StatusBarBlockStats extends StatusBarTextStats {
+  readonly paragraphs: number
+}
+
+const STATUS_BAR_BLOCK_STATS_CACHE = new WeakMap<Block, StatusBarBlockStats>()
+
 /** 读取文档投影的状态栏统计。 */
 export function createStatusBarDocumentStats(projection: DocumentProjection): JWordStatusBarDocumentStats {
-  const textParts: string[] = []
+  let words = 0
+  let characters = 0
   let paragraphs = 0
 
   for (const section of projection.document.sections) {
     for (const block of section.blocks) {
       const result = readBlockStatsInput(block)
 
+      words += result.words
+      characters += result.characters
       paragraphs += result.paragraphs
-      textParts.push(...result.textParts)
     }
   }
 
-  const text = textParts.join('\n')
-  const textStats = createStatusBarTextStats(text)
-
   return {
-    words: textStats.words,
-    characters: textStats.characters,
+    words,
+    characters,
     paragraphs
   }
 }
@@ -147,38 +152,48 @@ export function resolveStatusBarLocaleOptions(
   return resolved
 }
 
-interface BlockStatsInput {
-  readonly textParts: readonly string[]
-  readonly paragraphs: number
-}
-
 /** 读取 block 内可参与统计的文本与段落数。 */
-function readBlockStatsInput(block: Block): BlockStatsInput {
+function readBlockStatsInput(block: Block): StatusBarBlockStats {
+  const cached = STATUS_BAR_BLOCK_STATS_CACHE.get(block)
+
+  if (cached !== undefined) {
+    return cached
+  }
+
+  let result: StatusBarBlockStats
+
   if (block.kind === 'paragraph') {
-    return {
-      textParts: [readParagraphText(block)],
+    result = {
+      ...createStatusBarTextStats(readParagraphText(block)),
       paragraphs: 1
     }
-  }
+  } else {
+    let words = 0
+    let characters = 0
+    let paragraphs = 0
 
-  const textParts: string[] = []
-  let paragraphs = 0
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        for (const childBlock of cell.blocks) {
+          const child = readBlockStatsInput(childBlock)
 
-  for (const row of block.rows) {
-    for (const cell of row.cells) {
-      for (const childBlock of cell.blocks) {
-        const child = readBlockStatsInput(childBlock)
-
-        paragraphs += child.paragraphs
-        textParts.push(...child.textParts)
+          words += child.words
+          characters += child.characters
+          paragraphs += child.paragraphs
+        }
       }
+    }
+
+    result = {
+      words,
+      characters,
+      paragraphs
     }
   }
 
-  return {
-    textParts,
-    paragraphs
-  }
+  STATUS_BAR_BLOCK_STATS_CACHE.set(block, result)
+
+  return result
 }
 
 /** 读取段落内的纯文本。 */

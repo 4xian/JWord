@@ -36,6 +36,49 @@ describe('status bar phase A state', () => {
     })
   })
 
+  test('projection 复用未变段落时只重算替换后的 block', () => {
+    const firstProjection = createMixedProjection()
+    const firstSection = firstProjection.document.sections[0]
+    const retainedBlock = firstSection?.blocks[0]
+
+    if (firstSection === undefined || retainedBlock?.kind !== 'paragraph') {
+      throw new Error('缺少状态栏增量统计 fixture')
+    }
+
+    const retainedRuns = retainedBlock.runs
+    let retainedRunsReadCount = 0
+
+    Object.defineProperty(retainedBlock, 'runs', {
+      get: () => {
+        retainedRunsReadCount += 1
+
+        return retainedRuns
+      }
+    })
+
+    createStatusBarDocumentStats(firstProjection)
+
+    const nextProjection: DocumentProjection = {
+      document: {
+        ...firstProjection.document,
+        sections: [{
+          ...firstSection,
+          blocks: [
+            retainedBlock,
+            createParagraph('p-next', 'r-next', '新 text')
+          ]
+        }]
+      }
+    }
+
+    expect(createStatusBarDocumentStats(nextProjection)).toEqual({
+      words: 5,
+      characters: 13,
+      paragraphs: 2
+    })
+    expect(retainedRunsReadCount).toBe(1)
+  })
+
   test('visibleItems 保持顺序去重后再应用 hiddenItems', () => {
     expect(resolveStatusBarItems({
       visibleItems: [

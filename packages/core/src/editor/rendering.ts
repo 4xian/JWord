@@ -129,8 +129,17 @@ export function syncPageWrappers(
     if (currentChild !== wrapper) {
       mountedDom.canvasContainer.insertBefore(wrapper, currentChild)
     }
+  }
 
-    alignPageWrapperToDevicePixels(mountedDom, wrapper, layoutPage, scale)
+  const containerWidth = mountedDom.canvasContainer.clientWidth
+  const containerLeft = containerWidth > 0
+    ? mountedDom.canvasContainer.getBoundingClientRect().left
+    : 0
+
+  for (const layoutPage of pages) {
+    const wrapper = mountedDom.pageWrappers.get(layoutPage.pageIndex)!
+
+    alignPageWrapperToDevicePixels(wrapper, layoutPage, scale, containerWidth, containerLeft)
   }
 }
 
@@ -169,13 +178,14 @@ export function updatePageElement(
   }
 }
 
+/** 使用同一次容器几何读取把页面左边缘对齐到设备像素。 */
 function alignPageWrapperToDevicePixels(
-  mountedDom: MountedEditorDom,
   page: EditorPageElement,
   layoutPage: LayoutBox,
-  scale: number
+  scale: number,
+  containerWidth: number,
+  containerLeft: number
 ): void {
-  const containerWidth = mountedDom.canvasContainer.clientWidth
   const pageWidth = twipsToCssPx(layoutPage.width, scale)
 
   if (containerWidth <= 0 || pageWidth <= 0) {
@@ -183,9 +193,8 @@ function alignPageWrapperToDevicePixels(
     return
   }
 
-  const containerRect = mountedDom.canvasContainer.getBoundingClientRect()
   const centeredLeft = Math.max(0, (containerWidth - pageWidth) / 2)
-  const alignedLeft = Math.max(0, Math.round(containerRect.left + centeredLeft) - containerRect.left)
+  const alignedLeft = Math.max(0, Math.round(containerLeft + centeredLeft) - containerLeft)
 
   page.style.margin = `0 0 48px ${alignedLeft}px`
 }

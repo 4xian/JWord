@@ -10,6 +10,7 @@ import {
   buildReplaceMatchCommand,
   createSelectionState,
   findTextMatches,
+  getSelectionRects as getLayoutSelectionRects,
   replaceAllMatches,
   twipsToCssPx,
   type Editor,
@@ -403,11 +404,7 @@ function renderFindReplaceOverlay(
       continue
     }
 
-    const selection = createSelectionState(
-      createAnchorFromPosition(editor, range.anchor),
-      createAnchorFromPosition(editor, range.focus)
-    )
-    const rects = editor.getSelectionRects(selection.range)
+    const rects = getLayoutSelectionRects(layout, range)
 
     for (const rect of rects) {
       const page = layout.pages[rect.pageIndex]
