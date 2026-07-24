@@ -1,6 +1,6 @@
 # 统一整改路线 Phase 3：发布 artifact 与第三方消费基线计划
 
-> 文档状态：`Implementation Ready / final evidence pending`（B4 Phase 3专属E2E/benchmark入口与Vanilla closure已按`packages/*`当前生产实现完成本地验证：功能矩阵203 passed / 7 skipped，`perf-chromium`单worker矩阵4 passed；当前差异尚未形成并推送新的clean SHA，远端final pipeline、`artifactSetId`与`finalVerificationSha256`仍pending/not-generated。未修改Phase 4的JWL1调用方，远端final pipeline成功前不得进入B5）
+> 文档状态：`Implementation Ready / final evidence pending`（B4 Phase 3专属E2E/benchmark入口与Vanilla closure已按`packages/*`当前生产实现完成本地验证，并以clean SHA `b40855d6f7912b3d0d820c9422866ae806be533b`触发远端run `30064167651`。`source-gates`通过，`artifact-build`在WebKit功能矩阵因2-worker资源争用出现6个30秒超时；当前最小修复只把Phase 3 WebKit子命令拆为单worker，本地功能矩阵203 passed / 7 skipped、`perf-chromium`单worker矩阵4 passed，包含该修复的新clean SHA远端复跑仍pending。远端final pipeline、`artifactSetId`与`finalVerificationSha256`仍pending/not-generated；未修改Phase 4的JWL1调用方，远端final pipeline成功前不得进入B5）
 >
 > 调查日期：2026-07-21
 >
@@ -1137,6 +1137,13 @@ package contract、clean worktree、build/pack、inventory/hash、tarball/source
 - 首轮最终review指出`playwright.config.ts`项目级`workers: 1`会影响根`pnpm test:e2e`及后续Phase，并指出53页值分散。修复后Playwright配置恢复为HEAD原值，只有`test:e2e:phase3`的`perf-chromium`子命令使用`--workers=1`；architecture seam同时锁定Phase 3脚本精确值、根脚本不变和配置内无项目级worker覆盖，共享页数契约消除五处同步修改。
 - 当前完整验证：`pnpm test:e2e:phase3`功能矩阵203 passed / 7 skipped / 0 failed，随后`perf-chromium`单worker矩阵4 passed / 0 failed；Gate 3 `largeDocumentInsertP95Ms`为35.2ms，原50ms阈值未放宽。`pnpm --filter @4xian/jword-ui test`为42 files / 183 tests通过，`phase3-artifact-build.test.ts`为7/7通过，`pnpm typecheck`、`pnpm lint`、`pnpm bench:phase3`和两类diff check均exit `0`，三段benchmark均为`status: ok`。
 - 当前tracked差异没有`playwright.config.ts`、JWL1、DOCX、PDF、Collaboration、License trust/token或B5文件；`artifactSetId`与`finalVerificationSha256`仍为`not-generated`。本地closure不能替代新clean SHA的远端six-handoff final pipeline，未经用户授权不得commit、push、创建PR或进入B5。
+
+#### P3-B4 remote WebKit worker争用修复（2026-07-24）
+
+- clean SHA `b40855d6f7912b3d0d820c9422866ae806be533b`已推送到PR #1并触发run `30064167651`。`source-gates`在job `89391720878`通过；`artifact-build` job `89391884277`的环境校验通过，随后`pnpm test:e2e:phase3`在`Running 210 tests using 2 workers`下得到197 passed / 7 skipped / 6 failed，六项均为WebKit 30秒超时，下游consumer、reproducibility、audit与final按依赖跳过。失败没有涉及JWL1、artifact schema、direct Vitest或生产包断言。
+- 六个失败用例分别位于Gate 2两项50页分页回归、Gate 3 clipboard、keyboard两项和selection。Linux日志显示重试仍卡在`locator.evaluate`、`page.evaluate`或“加载 Alpha 样例”按钮稳定性；本机同一六项2 workers为6/6通过，说明测试逻辑并非跨环境稳定错误。改为单worker后同一六项6/6通过，完整WebKit段中对应重型用例单项耗时约13.3至17.6秒，与2-worker下跨过30秒总timeout的资源争用机制一致。
+- 最小红灯先只修改`phase3-artifact-build.test.ts`的公开CLI contract，要求Phase 3把Chromium/Firefox与WebKit拆成两个子命令并仅对WebKit使用`--workers=1`；targeted test精确以旧script红。最小实现只同步`package.json`的`test:e2e:phase3`，根`test:e2e`、`playwright.config.ts`、测试timeout、retries和生产代码均不修改；同一targeted architecture seam转为1 passed / 6 skipped，完整architecture为7/7通过。
+- 修复后完整`pnpm test:e2e:phase3`为Chromium/Firefox 136 passed / 4 skipped、WebKit单worker 67 passed / 3 skipped、`perf-chromium`单worker 4 passed；Gate 3 `largeDocumentInsertP95Ms`为34.5ms，原50ms阈值未放宽。该本地证据只解除本轮remediation的提交前门禁；必须形成并推送新的clean SHA、重跑同一six-handoff pipeline并取得有效final record/sidecar后，才可进入B5。
 
 ### 13.2 B5文档链
 

@@ -17,7 +17,7 @@
     "pretest": "pnpm build",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test --project=perf-chromium --pass-with-no-tests",
-    "test:e2e:phase3": "playwright test examples/vanilla/tests --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test examples/vanilla/tests --project=perf-chromium --workers=1 --pass-with-no-tests",
+    "test:e2e:phase3": "playwright test examples/vanilla/tests --project=chromium --project=firefox --pass-with-no-tests && playwright test examples/vanilla/tests --project=webkit --workers=1 --pass-with-no-tests && playwright test examples/vanilla/tests --project=perf-chromium --workers=1 --pass-with-no-tests",
     "test:visual": "node tools/visual/run-visual.mjs",
     "build": "rollup -c && node tools/release/normalize-dist-relative-imports.mjs",
     "dev": "node tools/dev/run-dev.mjs",
