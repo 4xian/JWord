@@ -180,7 +180,8 @@ for (const workerCase of workerCases) {
     workerCase.worker.postMessage(workerCase.request)
   })
   workerCase.worker.terminate()
-  if (response.requestId !== workerCase.request.requestId) throw new Error('format worker response mismatch')
+  const responseRequestId = response.requestId ?? response.error?.requestId
+  if (responseRequestId !== workerCase.request.requestId) throw new Error('format worker response mismatch')
 }
 document.documentElement.dataset.jwordReady = 'worker'
 `

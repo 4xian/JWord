@@ -245,6 +245,7 @@ function verifyGeneratedRuntimeProbes(): void {
   expect(workerSource).toContain('@4xian/jword-docx/worker')
   expect(workerSource).toContain('@4xian/jword-pdf/worker')
   expect(workerSource).toContain('./native-worker.js')
+  expect(workerSource).toContain('response.error?.requestId')
   const moduleWorkerInventory = createConsumerSourceInventory({
     journeys: [{
       id: 'module-workers',
