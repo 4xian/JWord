@@ -119,7 +119,7 @@ function verifyArtifactEntrypoints(): void {
   ])
   expect(scripts).toMatchObject({
     'test:e2e': 'playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test --project=perf-chromium --pass-with-no-tests',
-    'test:e2e:phase3': 'playwright test examples/vanilla/tests --project=chromium --project=firefox --pass-with-no-tests && playwright test examples/vanilla/tests --project=webkit --workers=1 --pass-with-no-tests && playwright test examples/vanilla/tests --project=perf-chromium --workers=1 --pass-with-no-tests',
+    'test:e2e:phase3': 'playwright test examples/vanilla/tests --project=chromium --project=firefox --pass-with-no-tests && playwright test examples/vanilla/tests --project=webkit --workers=1 --timeout=60000 --pass-with-no-tests && playwright test examples/vanilla/tests --project=perf-chromium --workers=1 --pass-with-no-tests',
     bench: 'node tools/bench/run-bench.mjs',
     'bench:phase3': 'node benchmarks/gate45-native-benchmark.mjs && node benchmarks/gate2-render-benchmark.mjs && node benchmarks/phase4-input-hotpath-benchmark.mjs'
   })
