@@ -6,7 +6,7 @@
  * 实现说明：所有 JSON 都使用同一 canonical serialization，所有校验都 fail closed。
  */
 import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 
@@ -343,6 +343,31 @@ export function readJsonFile(path, label) {
   } catch {
     throw new Error(`${label}: invalid JSON`)
   }
+}
+
+/** 从已绑定 hash 的 tarball 读取实际发布 manifest。 */
+export function readPackedManifest(tarballPath, packageEntry) {
+  let bytes
+  try {
+    bytes = execFileSync('tar', ['-xOf', tarballPath, 'package/package.json'], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+  } catch {
+    throw new Error(`packed manifest is unreadable: ${packageEntry.name}`)
+  }
+  if (sha256(bytes) !== packageEntry.packedManifestSha256) {
+    throw new Error(`packed manifest hash mismatch: ${packageEntry.name}`)
+  }
+  const manifest = JSON.parse(bytes.toString('utf8'))
+  if (manifest.name !== packageEntry.name || manifest.version !== packageEntry.version) {
+    throw new Error(`packed manifest identity mismatch: ${packageEntry.name}`)
+  }
+  return manifest
+}
+
+/** 读取命令输出的单行工具版本。 */
+export function readToolVersion(command) {
+  return execFileSync(command, ['--version'], { encoding: 'utf8' }).trim()
 }
 
 /** 执行冻结 Git status 命令，并用有限条目指出污染 checkpoint 与路径。 */

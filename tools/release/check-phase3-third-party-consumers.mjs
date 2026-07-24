@@ -14,12 +14,11 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
-  realpathSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
 import { createServer } from 'node:http'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
@@ -27,7 +26,9 @@ import {
   assertPhase3PathOutside,
   assertPhase3Clean,
   canonicalBytes,
+  readPackedManifest,
   readJsonFile,
+  readToolVersion,
   sha256,
   validateArtifactBinding,
   validateArtifactManifest,
@@ -38,9 +39,12 @@ import {
   createConsumerBundleEvidence,
   createConsumerProjectManifest,
   createConsumerSourceInventory,
+  isPathInside,
   prepareLicenseRuntimeEntries,
+  readInstallProjectRoot,
   readProductionGoldenToken,
   readConsumerSource,
+  readResolvedPackages,
   stripJourneyArtifactSetId
 } from './phase3-consumer-projects.mjs'
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
@@ -217,7 +221,8 @@ function readArtifactPackages(manifest, artifactDirectory) {
     if (sha256(bytes) !== packageEntry.tarballSha256 || bytes.byteLength !== packageEntry.tarballBytes) {
       throw new Error(`artifact tarball hash mismatch: ${packageEntry.name}`)
     }
-    packageMap.set(packageEntry.name, { ...packageEntry, bytes })
+    const packedManifest = readPackedManifest(tarballPath, packageEntry)
+    packageMap.set(packageEntry.name, { ...packageEntry, bytes, packedManifest })
   }
   return packageMap
 }
@@ -300,11 +305,11 @@ async function runInstallJourney(
     id: installId,
     journey: journey.id,
     packageManager,
-    packageManagerVersion: readVersion(packageManager),
+    packageManagerVersion: readToolVersion(packageManager),
     artifactSetId,
     requestedPackages,
     firstPartyClosure,
-    resolvedPackages: readResolvedPackages(projectDirectory, servedPackages),
+    resolvedPackages: readResolvedPackages(projectDirectory, servedPackages, requestedPackages, repoRoot),
     rawFiles,
     registry: registry.evidence,
     runtimeEvidence,
@@ -532,6 +537,8 @@ function createPackageMetadata(packageEntry, origin) {
         name: packageEntry.name,
         version: packageEntry.version,
         type: 'module',
+        dependencies: packageEntry.packedManifest.dependencies ?? {},
+        peerDependencies: packageEntry.packedManifest.peerDependencies ?? {},
         dist: {
           tarball: `${origin}/tarballs/${packageEntry.tarballFile}`,
           shasum: createHash('sha1').update(packageEntry.bytes).digest('hex'),
@@ -600,19 +607,6 @@ function compareServedPackages(left, right) {
     `${right.name}\0${right.version}\0${right.tarballFile}`
   )
 }
-/** 读取已安装 first-party package 的唯一仓库外 realpath。 */
-function readResolvedPackages(projectDirectory, packages) {
-  return [...packages].sort(compareServedPackages).map(function readResolvedPackage(packageEntry) {
-    const packagePath = realpathSync(join(projectDirectory, 'node_modules', ...packageEntry.name.split('/')))
-    const relativeToRepo = relative(repoRoot, packagePath)
-    if (relativeToRepo === '' || (!relativeToRepo.startsWith('..') && !relativeToRepo.startsWith('/'))) {
-      throw new Error(`consumer resolved into repository: ${packageEntry.name}`)
-    }
-    return { name: packageEntry.name, version: packageEntry.version, realpath: packagePath }
-  })
-}
-/** 读取 package manager 的单行版本。 */
-function readVersion(command) { return execFileSync(command, ['--version'], { encoding: 'utf8' }).trim() }
 /** 写入 contract 派生的 consumer source 并返回 runtime/path 映射。 */
 export function writeConsumerSources(contract, evidenceDirectory, artifactSetId) {
   const productionToken = contract.journeys.some(function isLicenseJourney(journey) {
@@ -821,7 +815,7 @@ export function validateConsumerInstallEvidence(install, evidenceDirectory) {
   const manifestPackages = Object.keys(manifest.dependencies ?? {}).filter(function isFirstParty(name) {
     return name.startsWith('@4xian/')
   }).sort()
-  if (JSON.stringify(manifestPackages) !== JSON.stringify(packageNames)) throw new Error('install package set mismatch')
+  if (JSON.stringify(manifestPackages) !== JSON.stringify(requestedPackages)) throw new Error('install package set mismatch')
   for (const [name, version] of Object.entries(manifest.dependencies ?? {})) {
     if (typeof version !== 'string' || /^(?:file|link|npm|workspace):/u.test(version) || name === '') {
       throw new Error('install dependency is invalid')
@@ -885,14 +879,22 @@ export function validateConsumerInstallEvidence(install, evidenceDirectory) {
       throw new Error('pnpm lockfile integrity is invalid')
     }
   }
-  const resolvedNames = install.resolvedPackages.map(function readResolvedName(packageEntry) {
+  const resolvedProjectRoots = new Set()
+  const resolvedNames = []
+  for (const packageEntry of install.resolvedPackages) {
     assertExactKeys(packageEntry, ['name', 'realpath', 'version'], 'resolved package')
+    const projectRoot = typeof packageEntry.realpath === 'string'
+      ? readInstallProjectRoot(packageEntry.realpath, install.id)
+      : undefined
     if (typeof packageEntry.name !== 'string' || typeof packageEntry.version !== 'string' ||
-        typeof packageEntry.realpath !== 'string' || !isAbsolute(packageEntry.realpath) || isPathInside(repoRoot, packageEntry.realpath)) {
+        typeof packageEntry.realpath !== 'string' || !isAbsolute(packageEntry.realpath) || projectRoot === undefined ||
+        isPathInside(repoRoot, packageEntry.realpath)) {
       throw new Error('resolved package realpath is invalid')
     }
-    return packageEntry.name
-  })
+    resolvedProjectRoots.add(projectRoot)
+    resolvedNames.push(packageEntry.name)
+  }
+  if (resolvedProjectRoots.size !== 1) throw new Error('resolved package project roots mismatch')
   if (JSON.stringify(resolvedNames) !== JSON.stringify(packageNames)) throw new Error('resolved package set mismatch')
   return install
 }
@@ -972,8 +974,6 @@ function assertExactKeys(value, expected, label) {
     throw new Error(`${label} fields are invalid`)
   }
 }
-/** 判断 realpath 是否位于当前仓库内。 */
-function isPathInside(root, path) { return !relative(root, path).startsWith('..') && !relative(root, path).startsWith('/') }
 /** 递归枚举 evidence root 的 regular file POSIX 相对路径。 */
 function listEvidenceFiles(directory, prefix = '') {
   const paths = []

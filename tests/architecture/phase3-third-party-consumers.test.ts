@@ -15,6 +15,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -43,7 +44,9 @@ import {
   createFormatWorkerProjectSource,
   createConsumerSourceInventory,
   createVanillaProjectSource,
-  createVueProjectSource
+  createVueProjectSource,
+  prepareLicenseRuntimeEntries,
+  readResolvedPackages
 // @ts-expect-error -- 生产 .mjs source helper 未提供 TypeScript 声明文件。
 } from '../../tools/release/phase3-consumer-projects.mjs'
 
@@ -63,11 +66,80 @@ function runPhase3ConsumerSuite(): void {
   it('defines the inventory-only consumer matrix and fail-closed legacy CLIs', verifyConsumerPublicSeam)
   it('generates real public wrapper, editor shell, and worker probes', verifyGeneratedRuntimeProbes)
   it('does not expose the License token when a Node probe fails', verifyNodeProbeFailureRedaction)
+  it('keeps duplicate License runtimes in the installed dependency resolver', verifyLicenseRuntimeCopyResolution)
+  it('rejects resolved packages outside the consumer project', verifyResolvedPackageContainment)
   it('installs a synthetic closure through npm and pnpm without packing', verifySyntheticConsumerMatrix, 120_000)
   it('rejects a repository-local temporary consumer root', verifyRepositoryLocalTemporaryRoot, 120_000)
 }
 
 describe('Phase 3 third-party consumer matrix', runPhase3ConsumerSuite)
+
+/** 证明 resolver 拒绝 consumer project 外部的已安装包路径。 */
+function verifyResolvedPackageContainment(): void {
+  const root = mkdtempSync(join(tmpdir(), 'jword-phase3-resolved-path-'))
+  const projectDirectory = join(root, 'project')
+  const packageName = '@4xian/jword-phase3-leaf'
+  const linkDirectory = join(projectDirectory, 'node_modules/@4xian')
+  const outsidePackage = join(root, 'outside/@4xian/jword-phase3-leaf')
+  try {
+    mkdirSync(linkDirectory, { recursive: true })
+    mkdirSync(outsidePackage, { recursive: true })
+    symlinkSync(outsidePackage, join(linkDirectory, 'jword-phase3-leaf'), 'dir')
+    const packages = [{
+      name: packageName,
+      version: '0.0.0',
+      tarballFile: 'jword-phase3-leaf.tgz',
+      packedManifest: { dependencies: {}, peerDependencies: {} }
+    }]
+
+    /** 调用 resolver 形成可观测异常 seam。 */
+    function resolveOutsidePackage(): void {
+      readResolvedPackages(projectDirectory, packages, [packageName], REPO_ROOT)
+    }
+    expect(resolveOutsidePackage).toThrow('consumer package resolved outside project')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+/** 证明 pnpm 隔离布局中的第二个 License runtime 仍可解析传递依赖。 */
+async function verifyLicenseRuntimeCopyResolution(): Promise<void> {
+  const root = mkdtempSync(join(tmpdir(), 'jword-phase3-license-runtime-'))
+  const packageRoot = join(root, 'node_modules/.pnpm/license/node_modules')
+  const licenseDirectory = join(packageRoot, '@4xian/jword-license')
+  const dependencyDirectory = join(packageRoot, 'jword-phase3-external-runtime')
+  try {
+    mkdirSync(licenseDirectory, { recursive: true })
+    mkdirSync(dependencyDirectory)
+    writeFileSync(join(licenseDirectory, 'package.json'), JSON.stringify({
+      name: '@4xian/jword-license',
+      version: '0.0.0',
+      type: 'module',
+      exports: { '.': { import: './index.js' } }
+    }))
+    writeFileSync(
+      join(licenseDirectory, 'index.js'),
+      "export { externalRuntimeReady } from 'jword-phase3-external-runtime'\n"
+    )
+    writeFileSync(join(dependencyDirectory, 'package.json'), JSON.stringify({
+      name: 'jword-phase3-external-runtime',
+      version: '1.0.0',
+      type: 'module',
+      exports: './index.js'
+    }))
+    writeFileSync(join(dependencyDirectory, 'index.js'), 'export const externalRuntimeReady = true\n')
+    const scopeDirectory = join(root, 'node_modules/@4xian')
+    mkdirSync(scopeDirectory, { recursive: true })
+    symlinkSync(licenseDirectory, join(scopeDirectory, 'jword-license'), 'dir')
+
+    const [runtimeA, runtimeB] = prepareLicenseRuntimeEntries(root)
+    expect(runtimeA).not.toBe(runtimeB)
+    expect((await import(runtimeA)).externalRuntimeReady).toBe(true)
+    expect((await import(runtimeB)).externalRuntimeReady).toBe(true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
 
 /** 证明 Node probe 失败诊断不包含只经环境注入的 License token。 */
 async function verifyNodeProbeFailureRedaction(): Promise<void> {
@@ -364,7 +436,7 @@ function verifyInstallEvidenceMutations(
   pnpmInstall: SyntheticInstallEvidence
 ): void {
   expectInvalidInstall(fixture, { ...install, requestedPackages: [1] })
-  expectInvalidInstall(fixture, { ...install, requestedPackages: [...install.requestedPackages].reverse() })
+  expectInvalidInstall(fixture, { ...install, requestedPackages: ['@4xian/z', '@4xian/a'] })
   expectInvalidInstall(fixture, { ...install, requestedPackages: [...install.requestedPackages, install.requestedPackages[0]!] })
   expectInvalidInstall(fixture, { ...install, firstPartyClosure: [install.requestedPackages[0]!] })
   expectInvalidInstall(fixture, { ...install, requestedPackages: install.requestedPackages.slice(1) })
@@ -562,6 +634,9 @@ function verifySyntheticInstallEvidence(
   fixture: SyntheticConsumerFixture,
   install: SyntheticInstallEvidence
 ): void {
+  const manifest = readJson<{ readonly dependencies?: Readonly<Record<string, string>> }>(
+    join(fixture.evidenceDirectory, install.manifestPath)
+  )
   const registry = readJson<{
     readonly host: string
     readonly allowedMethods: readonly string[]
@@ -578,6 +653,8 @@ function verifySyntheticInstallEvidence(
   expect(install.firstPartyClosure).toEqual([...install.firstPartyClosure].sort())
   expect(new Set([...install.requestedPackages, ...install.firstPartyClosure]).size)
     .toBe(install.requestedPackages.length + install.firstPartyClosure.length)
+  expect(Object.keys(manifest.dependencies ?? {}).filter(isFirstPartyPackage).sort())
+    .toEqual(install.requestedPackages)
   expect(registry.host).toBe('127.0.0.1')
   expect(registry.allowedMethods).toEqual(['GET', 'HEAD'])
   expect(registry.unexpectedRequests).toBe(0)
@@ -590,6 +667,11 @@ function verifySyntheticInstallEvidence(
   expect(transcript.requests.every(isReadOnlyRequest)).toBe(true)
   expect(lockfile).toContain('sha512-')
   if (install.packageManager === 'npm') expect(lockfile).toContain('http://127.0.0.1:')
+}
+
+/** 判断依赖名是否属于 JWord first-party scope。 */
+function isFirstPartyPackage(name: string): boolean {
+  return name.startsWith('@4xian/')
 }
 
 /** 读取 transcript 的真实 order。 */
@@ -751,12 +833,10 @@ function createSyntheticContract(): object {
       {
         id: 'node-exports-types',
         runtimes: ['node', 'types'],
-        requestedPackages: ['@4xian/jword-phase3-base', '@4xian/jword-phase3-leaf'],
-        firstPartyClosure: [],
+        requestedPackages: ['@4xian/jword-phase3-leaf'],
+        firstPartyClosure: ['@4xian/jword-phase3-base'],
         targets: [
-          { package: '@4xian/jword-phase3-base', subpath: '.', environment: 'node', runtime: 'node' },
           { package: '@4xian/jword-phase3-leaf', subpath: '.', environment: 'node', runtime: 'node' },
-          { package: '@4xian/jword-phase3-base', subpath: '.', environment: 'types', runtime: 'types' },
           { package: '@4xian/jword-phase3-leaf', subpath: '.', environment: 'types', runtime: 'types' }
         ]
       },

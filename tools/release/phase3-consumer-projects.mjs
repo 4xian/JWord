@@ -6,7 +6,7 @@
  */
 
 import { cpSync, readFileSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /** 把 package/subpath 组合为公开 export specifier。 */
@@ -289,14 +289,15 @@ export function createConsumerSourceInventory(contract, productionToken = '') {
   return sources
 }
 
-/** 创建只列出 first-party 闭包与精确外部 peer 的空项目 manifest。 */
+/** 创建只列出请求包与精确外部 peer 的空项目 manifest。 */
 export function createConsumerProjectManifest(journey, packages, contract) {
-  const dependencies = Object.fromEntries(packages.map(function toDependency(packageEntry) {
-    return [packageEntry.name, packageEntry.version]
-  }))
-  const packageContracts = new Map(contract.packages.map(function indexPackage(packageEntry) {
-    return [packageEntry.name, packageEntry]
-  }))
+  const requestedPackages = new Set(journey.requestedPackages)
+  const dependencies = {}
+  for (const packageEntry of packages) {
+    if (requestedPackages.has(packageEntry.name)) dependencies[packageEntry.name] = packageEntry.version
+  }
+  const packageContracts = new Map()
+  for (const packageEntry of contract.packages) packageContracts.set(packageEntry.name, packageEntry)
 
   for (const packageName of [...journey.requestedPackages, ...journey.firstPartyClosure]) {
     const externalPeers = packageContracts.get(packageName)?.dependencyPolicy?.externalPeers ?? {}
@@ -315,6 +316,71 @@ export function createConsumerProjectManifest(journey, packages, contract) {
     type: 'module',
     dependencies
   }
+}
+
+/** 从请求包开始沿实际依赖解析层读取完整 first-party 闭包。 */
+export function readResolvedPackages(projectDirectory, packages, requestedPackageNames, repoRoot) {
+  const physicalProjectDirectory = realpathSync(projectDirectory)
+  const physicalRepoRoot = realpathSync(repoRoot)
+  const packagesByName = new Map()
+  for (const packageEntry of packages) packagesByName.set(packageEntry.name, packageEntry)
+  const pending = []
+  for (const name of requestedPackageNames) {
+    pending.push({ name, resolutionRoot: join(projectDirectory, 'node_modules') })
+  }
+  const resolvedPaths = new Map()
+
+  while (pending.length > 0) {
+    const current = pending.shift()
+    if (resolvedPaths.has(current.name)) continue
+    const packageEntry = packagesByName.get(current.name)
+    if (packageEntry === undefined) throw new Error(`consumer package is not served: ${current.name}`)
+    const packagePath = realpathSync(join(current.resolutionRoot, ...current.name.split('/')))
+    if (!isPathInside(physicalProjectDirectory, packagePath)) {
+      throw new Error(`consumer package resolved outside project: ${current.name}`)
+    }
+    if (isPathInside(physicalRepoRoot, packagePath)) {
+      throw new Error(`consumer resolved into repository: ${current.name}`)
+    }
+    resolvedPaths.set(current.name, packagePath)
+    const dependencyRoot = current.name.startsWith('@') ? dirname(dirname(packagePath)) : dirname(packagePath)
+    const firstPartyDependencies = {
+      ...packageEntry.packedManifest.dependencies,
+      ...packageEntry.packedManifest.peerDependencies
+    }
+    for (const name of Object.keys(firstPartyDependencies)) {
+      if (packagesByName.has(name)) pending.push({ name, resolutionRoot: dependencyRoot })
+    }
+  }
+
+  const resolvedPackages = []
+  for (const packageEntry of [...packages].sort(comparePackageEntries)) {
+    const packagePath = resolvedPaths.get(packageEntry.name)
+    if (packagePath === undefined) throw new Error(`consumer dependency is unresolved: ${packageEntry.name}`)
+    resolvedPackages.push({ name: packageEntry.name, version: packageEntry.version, realpath: packagePath })
+  }
+  return resolvedPackages
+}
+
+/** 按 name/version/tarballFile 冻结 package 顺序。 */
+function comparePackageEntries(left, right) {
+  const leftKey = `${left.name}\0${left.version}\0${left.tarballFile}`
+  const rightKey = `${right.name}\0${right.version}\0${right.tarballFile}`
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
+}
+
+/** 判断目标是否严格位于给定根目录内。 */
+export function isPathInside(root, path) {
+  const relativePath = relative(root, path)
+  return relativePath !== '' && relativePath !== '..' &&
+    !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath)
+}
+
+/** 从 realpath 读取其统一 consumer install 项目根。 */
+export function readInstallProjectRoot(packagePath, installId) {
+  const marker = `${sep}${installId}${sep}node_modules${sep}`
+  const markerIndex = packagePath.lastIndexOf(marker)
+  return markerIndex <= 0 ? undefined : packagePath.slice(0, markerIndex + sep.length + installId.length)
 }
 
 /** 选择 browser journey 的真实 wrapper/worker mount source。 */
@@ -369,7 +435,7 @@ export function readConsumerSource(sources, journeyId, runtime) {
 /** 复制第二个物理 License package 并返回两个公开入口 URL。 */
 export function prepareLicenseRuntimeEntries(projectDirectory) {
   const packageDirectory = realpathSync(join(projectDirectory, 'node_modules/@4xian/jword-license'))
-  const duplicateDirectory = join(projectDirectory, '.jword-license-runtime-copy')
+  const duplicateDirectory = join(dirname(packageDirectory), '.jword-license-runtime-copy')
   cpSync(packageDirectory, duplicateDirectory, { recursive: true })
   const manifest = JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8'))
   const entry = manifest.exports?.['.']?.import
