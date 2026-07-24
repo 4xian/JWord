@@ -9,7 +9,7 @@
  */
 
 import { createEditor, createSelectionState, twipsToCssPx, type Editor } from '@4xian/jword-core'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 
 import { createJWordUi } from '../src/create-ui'
 
@@ -100,6 +100,25 @@ describe('createJWordUi heading outline integration', () => {
       expect(outlineButton?.getAttribute('aria-pressed')).toBe('true')
     } finally {
       harness.destroy()
+    }
+  })
+
+  test('测试环境销毁时会清理状态栏完整性定时器', () => {
+    vi.useFakeTimers()
+    const harness = createHarness()
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle')
+
+    try {
+      harness.destroy()
+      const callCountAfterDestroy = getComputedStyleSpy.mock.calls.length
+
+      vi.advanceTimersByTime(500)
+
+      expect(getComputedStyleSpy).toHaveBeenCalledTimes(callCountAfterDestroy)
+    } finally {
+      getComputedStyleSpy.mockRestore()
+      harness.destroy()
+      vi.useRealTimers()
     }
   })
 
@@ -304,6 +323,7 @@ function createHarness(options: { readonly useDefaultHeadingHost?: boolean, read
     outlineHost,
     ui,
     destroy(): void {
+      ui.destroy()
       editor.destroy()
       editorHost.remove()
       toolbarHost.remove()

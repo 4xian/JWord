@@ -1,6 +1,6 @@
 # 统一整改路线 Phase 3：发布 artifact 与第三方消费基线计划
 
-> 文档状态：`Implementation Ready / final evidence pending`（B4 Phase 3专属E2E/benchmark入口与Vanilla closure已按`packages/*`当前生产实现完成本地验证，并以clean SHA `b40855d6f7912b3d0d820c9422866ae806be533b`触发远端run `30064167651`。`source-gates`通过，`artifact-build`在WebKit功能矩阵因2-worker资源争用出现6个30秒超时；当前最小修复只把Phase 3 WebKit子命令拆为单worker，本地功能矩阵203 passed / 7 skipped、`perf-chromium`单worker矩阵4 passed，包含该修复的新clean SHA远端复跑仍pending。远端final pipeline、`artifactSetId`与`finalVerificationSha256`仍pending/not-generated；未修改Phase 4的JWL1调用方，远端final pipeline成功前不得进入B5）
+> 文档状态：`Implementation Ready / final evidence pending`（B4 Phase 3专属E2E/benchmark入口、Vanilla closure与WebKit单worker修复已按`packages/*`当前生产实现完成本地验证，并以clean SHA `485ae9edd7f49c8c09233e15e5fd2ad2eaadbae7`触发远端run `30066059710`。`source-gates`通过，`artifact-build`的direct Vitest完成241 files / 1275 tests断言后，因`create-ui-heading-outline.test.ts`未销毁其创建的UI而遗留状态栏完整性定时器，在jsdom teardown后产生1个异步`getComputedStyle`错误并返回非零；当前最小修复只补齐测试harness的`ui.destroy()`与同一公开销毁路径回归，本地目标文件8/8、UI包42 files / 184 tests通过。远端final pipeline、`artifactSetId`与`finalVerificationSha256`仍pending/not-generated；未修改生产controller或Phase 4的JWL1调用方，新clean SHA远端复跑成功前不得进入B5）
 >
 > 调查日期：2026-07-21
 >
@@ -1135,7 +1135,7 @@ package contract、clean worktree、build/pack、inventory/hash、tarball/source
 - Gate 2的53页基线来自当前`packages/core`分页结果与权威benchmark，现集中到`gate2-test-contract.ts`供五个同夹具浏览器回归共同消费；Gate 3 pointer probe在计算client point前先把目标页滚入editor viewport，keyboard whitespace用例改用足以验证同一公开输入行为的Alpha小样例，避免把WebKit大夹具约27秒耗时当成功能语义。
 - 两个真实public seam暴露生产缺陷并做最小修复：`packages/ui/src/selection-actions/controller.ts`冻结浮动选区工具栏位置时与正常渲染统一使用`overlayHost`，关闭94px跳动；`packages/ui/src/link/controller.ts`把链接anchor overlay视为内部交互，避免`pointerdown`关闭后同一`click`重新打开。两项均由既有Vanilla真实浏览器用例覆盖，没有新增私有测试入口。
 - 首轮最终review指出`playwright.config.ts`项目级`workers: 1`会影响根`pnpm test:e2e`及后续Phase，并指出53页值分散。修复后Playwright配置恢复为HEAD原值；结合后续远端worker争用证据，只有`test:e2e:phase3`的WebKit与`perf-chromium`子命令使用`--workers=1`。architecture seam同时锁定Phase 3三段式脚本精确值、根脚本不变和配置内无项目级worker覆盖，共享页数契约消除五处同步修改。
-- 当前完整验证：`pnpm test:e2e:phase3`功能矩阵203 passed / 7 skipped / 0 failed，随后`perf-chromium`单worker矩阵4 passed / 0 failed；Gate 3 `largeDocumentInsertP95Ms`为35.2ms，原50ms阈值未放宽。`pnpm --filter @4xian/jword-ui test`为42 files / 183 tests通过，`phase3-artifact-build.test.ts`为7/7通过，`pnpm typecheck`、`pnpm lint`、`pnpm bench:phase3`和两类diff check均exit `0`，三段benchmark均为`status: ok`。
+- 当前完整验证：`pnpm test:e2e:phase3`功能矩阵203 passed / 7 skipped / 0 failed，随后`perf-chromium`单worker矩阵4 passed / 0 failed；Gate 3 `largeDocumentInsertP95Ms`为35.2ms，原50ms阈值未放宽。`pnpm --filter @4xian/jword-ui test`为42 files / 184 tests通过，`phase3-artifact-build.test.ts`为7/7通过，`pnpm typecheck`、`pnpm lint`、`pnpm bench:phase3`和两类diff check均exit `0`，三段benchmark均为`status: ok`。
 - 当前tracked差异没有`playwright.config.ts`、JWL1、DOCX、PDF、Collaboration、License trust/token或B5文件；`artifactSetId`与`finalVerificationSha256`仍为`not-generated`。本地closure不能替代新clean SHA的远端six-handoff final pipeline，未经用户授权不得commit、push、创建PR或进入B5。
 
 #### P3-B4 remote WebKit worker争用修复（2026-07-24）
@@ -1144,6 +1144,12 @@ package contract、clean worktree、build/pack、inventory/hash、tarball/source
 - 六个失败用例分别位于Gate 2两项50页分页回归、Gate 3 clipboard、keyboard两项和selection。Linux日志显示重试仍卡在`locator.evaluate`、`page.evaluate`或“加载 Alpha 样例”按钮稳定性；本机同一六项2 workers为6/6通过，说明测试逻辑并非跨环境稳定错误。改为单worker后同一六项6/6通过，完整WebKit段中对应重型用例单项耗时约13.3至17.6秒，与2-worker下跨过30秒总timeout的资源争用机制一致。
 - 最小红灯先只修改`phase3-artifact-build.test.ts`的公开CLI contract，要求Phase 3把Chromium/Firefox与WebKit拆成两个子命令并仅对WebKit使用`--workers=1`；targeted test精确以旧script红。最小实现只同步`package.json`的`test:e2e:phase3`，根`test:e2e`、`playwright.config.ts`、测试timeout、retries和生产代码均不修改；同一targeted architecture seam转为1 passed / 6 skipped，完整architecture为7/7通过。
 - 修复后完整`pnpm test:e2e:phase3`为Chromium/Firefox 136 passed / 4 skipped、WebKit单worker 67 passed / 3 skipped、`perf-chromium`单worker 4 passed；Gate 3 `largeDocumentInsertP95Ms`为34.5ms，原50ms阈值未放宽。该本地证据只解除本轮remediation的提交前门禁；必须形成并推送新的clean SHA、重跑同一six-handoff pipeline并取得有效final record/sidecar后，才可进入B5。
+
+#### P3-B4 remote UI测试生命周期修复（2026-07-24）
+
+- clean SHA `485ae9edd7f49c8c09233e15e5fd2ad2eaadbae7`触发run `30066059710`。`source-gates` job `89397163860`通过；`artifact-build` job `89397323991`完成环境校验，direct Vitest的241个文件与1275项测试断言全部通过，但最终报告1个异步错误：`create-ui-heading-outline.test.ts`结束后，遗留的状态栏完整性定时器在jsdom teardown期间调用已不可用的`getComputedStyle`。下游consumer、reproducibility、audit与final按依赖跳过，没有生成可用于B4 closure的handoff或最终ID。
+- 真实`packages/ui`实现已经在`ui.destroy()`路径清理该定时器；失败测试的`createHarness()`同时创建editor与UI，却只销毁editor和DOM。最小回归通过公开harness销毁路径等待550ms，修复前稳定报告销毁后仍有3次`getComputedStyle`调用；最小实现只在同一测试文件的harness中补齐`ui.destroy()`，不修改生产controller、浏览器兼容矩阵、JWL1、DOCX、PDF、Collaboration或B5文件。
+- 同一目标文件由1 failed / 7 passed转为8/8通过，`pnpm --filter @4xian/jword-ui test`为42 files / 184 tests通过；`pnpm typecheck`、`pnpm lint`、`git diff --check`与`git diff --cached --check`均exit `0`。子代理接口不可用后由主进程按同一Standards/Spec清单完成只读fallback review，两节均为`PASS / 0 finding`；按用户决定，简单状态回写不重复双轴确认。该证据只关闭本次测试生命周期泄漏，仍须形成并推送新clean SHA后重跑完整six-handoff pipeline。
 
 ### 13.2 B5文档链
 
