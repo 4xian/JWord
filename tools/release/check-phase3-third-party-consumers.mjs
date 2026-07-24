@@ -396,7 +396,7 @@ async function runBrowserMatrix(journey, projectDirectory, installId, evidenceDi
           await page.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: 'networkidle' })
           await page.waitForFunction(function readReadyState() {
             return globalThis.document.documentElement.dataset.jwordReady !== undefined
-          })
+          }).catch(error => { throw new Error(`browser ready timeout: ${journey.id}/${packageManager}/${runtime}/${browserName}: ${readErrorMessage(error)}`) })
         } finally {
           await browser.close()
         }
