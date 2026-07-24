@@ -239,7 +239,7 @@ export function validateConsumerRoot(root, runA, contract) {
     for (const request of transcript.requests) expectedFiles.add(`${prefix}${request.responsePath}`)
     return entry.id
   })
-  assertSameUniqueStrings(installIds, expectedInstallIds, 'consumer install set')
+  assertSameUniqueStrings([...installIds].sort(), expectedInstallIds, 'consumer install set')
   const installVersions = new Map(installEvidence.installs.map(function indexInstall(entry) { return [entry.id, entry.packageManagerVersion] }))
   validateJourneyEntries(journeyEvidence.journeys, contract, installVersions)
   const sources = createConsumerSourceInventory(contract, readProductionGoldenToken(repoRoot))

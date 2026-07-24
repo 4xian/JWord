@@ -49,6 +49,10 @@ import {
   readResolvedPackages
 // @ts-expect-error -- 生产 .mjs source helper 未提供 TypeScript 声明文件。
 } from '../../tools/release/phase3-consumer-projects.mjs'
+import {
+  validateConsumerRoot
+// @ts-expect-error -- 生产 .mjs verifier 未提供 TypeScript 声明文件。
+} from '../../tools/release/verify-phase3-final-evidence.mjs'
 
 const REPO_ROOT = resolve(new URL('../..', import.meta.url).pathname)
 const CONSUMER_PATH = resolve(REPO_ROOT, 'tools/release/check-phase3-third-party-consumers.mjs')
@@ -410,6 +414,10 @@ function verifySyntheticConsumerMatrix(): void {
       verifySyntheticInstallEvidence(fixture, install)
       expect(validateConsumerInstallEvidence(install, fixture.evidenceDirectory)).toBe(install)
     }
+    expect(() => validateConsumerRoot(fixture.evidenceDirectory, {
+      manifest: readJson(fixture.manifestPath),
+      bindingBytes: readFileSync(fixture.bindingPath)
+    }, readJson(fixture.contractPath))).not.toThrow()
     verifyInstallEvidenceMutations(fixture, installEvidence.installs[0]!, installEvidence.installs[1]!)
     for (const file of evidenceManifest.files) {
       expect(file.sha256, file.path).toBe(sha256(readFileSync(join(fixture.evidenceDirectory, file.path))))
@@ -846,6 +854,7 @@ function createSyntheticContract(): object {
       {
         id: 'synthetic-browser',
         runtimes: ['vite-browser', 'dedicated-worker'],
+        browserMatrix: ['chromium'],
         requestedPackages: ['@4xian/jword-phase3-base'],
         firstPartyClosure: [],
         targets: [

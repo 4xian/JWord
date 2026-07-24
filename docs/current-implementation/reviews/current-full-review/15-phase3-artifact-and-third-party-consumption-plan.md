@@ -1,6 +1,6 @@
 # 统一整改路线 Phase 3：发布 artifact 与第三方消费基线计划
 
-> 文档状态：`Implementation Ready / final evidence pending`（clean SHA `5a4fb55cac7fe238ef4bb2e6df04bfda079e4f53`对应run `30098181395`的source、run-a与reproducibility已通过，React/Firefox原断点已关闭；`artifact-consumers`随后在`module-workers/npm/vite-browser/chromium`因probe错误假定三种worker都在顶层返回`requestId`而失败，audit/final因此跳过。当前已按`packages/*`真实contract兼容PDF的`error.requestId`，完成红绿、真实run-a Linux Chromium验证与静态门禁；仍需形成新clean SHA并让consumer、audit、final全绿，尚未形成可关单的`artifactSetId`/`finalVerificationSha256`，不得进入B5、JWL1或后续Phase）
+> 文档状态：`Implementation Ready / final evidence pending`（clean SHA `197540caf6ab5ea19cd5e1f418258d8185078072`对应run `30100164222`的source、run-a、consumer与reproducibility已通过，其中`artifact-consumers`首次完整通过；`artifact-audit`随后因final verifier把按journey生成的14个唯一install ID与全局排序的expected数组直接比较而误报`consumer install set mismatch`，final因此跳过。已用该run真实evidence确认两侧排序后集合完全相同，并完成不放宽重复检测和其他顺序门禁的最小红绿修复；仍需形成新clean SHA并让audit、final全绿，尚未形成可关单的`artifactSetId`/`finalVerificationSha256`，不得进入B5、JWL1或后续Phase）
 >
 > 调查日期：2026-07-21
 >
@@ -1189,6 +1189,13 @@ package contract、clean worktree、build/pack、inventory/hash、tarball/source
 - 从run `30095501904`下载真实run-a后，以其中`@4xian/jword-react`、`@4xian/jword-ui`、`@4xian/jword-core` tarball和正式React peer版本建立相同Vite/Firefox public probe：本机Firefox通过，Playwright `1.59.1` Noble Linux在第1次稳定抛`React wrapper did not mount`，排除安装闭包和通用bundle错误。回归先要求production source使用`react-dom`公开`flushSync`并拒绝单帧等待，focused 1/1稳定转红；最小实现同步提交真实`JWordReactEditor`后，同一测试转绿，原Linux真实tarball反馈环连续5/5通过。完整consumer focused 7/7、`pnpm lint`、`pnpm typecheck`、`pnpm test:types`及两类diff check均exit `0`；没有增加timeout、修改`packages/*`或进入JWL1/B5，临时harness已移入系统废纸篓。
 - React probe remediation clean SHA `5a4fb55cac7fe238ef4bb2e6df04bfda079e4f53`对应run `30098181395`继续通过source、run-a与reproducibility，并越过上一轮`react-wrapper/npm/vite-browser/firefox`断点；consumer随后在`module-workers/npm/vite-browser/chromium`超时，新增上下文将页面错误收敛为`format worker response mismatch`。本run的audit/final仍按依赖跳过，没有可关单的最终ID。
 - 从run `30098181395`下载真实run-a的native/docx/pdf/core/license tarball并运行相同Vite/Playwright `1.59.1` Noble Chromium probe，稳定捕获native与DOCX响应顶层`requestId`，PDF则按`packages/pdf/src`及其测试的真实公开schema返回`{ kind: 'error', error: { requestId } }`。生成源码回归先要求读取`response.error?.requestId`并稳定1/1转红；最小实现只把响应ID读取改为顶层值或`error.requestId`，继续严格比对原请求，未修改任何`packages/*`行为或放宽10/30秒预算。同一回归转绿，原Linux真实tarball probe为ready=`worker`且无pageerror；完整consumer focused 7/7、`pnpm lint`、`pnpm typecheck`、`pnpm test:types`及两类diff check均exit `0`，临时harness已移入系统废纸篓。
+
+#### P3-B4 artifact audit install-set verifier修复（2026-07-24）
+
+- worker响应修复后clean SHA `197540caf6ab5ea19cd5e1f418258d8185078072`触发run `30100164222`；`source-gates`、`artifact-build`、`artifact-consumers`与`artifact-reproducibility`全部通过，这是首次完整通过第三方consumer matrix。`artifact-audit`在`Run assembly and release gates`以`consumer install set mismatch`失败，`artifact-final`按依赖跳过；该run只有run-a内部artifact ID，不得写为可关单的authoritative `artifactSetId`/`finalVerificationSha256`对。
+- 下载该run的真实`consumer-evidence`后，Linux x64、Node `20.19.0`、npm `10.8.2`、pnpm `9.14.2`容器内的原release-gates CLI连续两次稳定复现同一错误。`install-evidence.json`含14个唯一ID，与contract派生的14个expected ID排序后零差异；实际数组按journey执行顺序为`npm, pnpm`成对输出，verifier却只对expected做全局排序，根因是集合内容正确但比较顺序口径不一致。
+- 现有synthetic consumer公开CLI seam增加完整`validateConsumerRoot()`重读，修复前稳定以同一`consumer install set mismatch`转红；synthetic contract同步明示其实际只运行的Chromium matrix。最小生产修复只在install-set调用处对`installIds`副本排序，保留唯一性检查，不修改通用helper，因此registry、assembly和bundle path的原顺序门禁不变。同一focused seam转绿，consumer与release-gates两个architecture文件共20/20、`pnpm lint`、`pnpm typecheck`、`pnpm test:types`及两类diff check全部exit `0`；真实run evidence已越过原install-set错误并进入后续assembly步骤。按用户决定，该简单修改不重复双轴确认。
+- 当前仍为`Implementation Ready / final evidence pending`；必须把上述两个实现/测试文件与本ledger形成新clean SHA，重跑同six-handoff pipeline，只有audit/final全绿且本地final verifier重读六份handoff通过后才能进入B5；JWL1及后续Phase继续hard stop。
 
 ### 13.2 B5文档链
 
