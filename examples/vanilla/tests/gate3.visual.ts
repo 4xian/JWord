@@ -60,9 +60,9 @@ async function selectSampleAndReadVisualProbe(page: Page): Promise<Gate3VisualPr
   return readCurrentVisualProbe(page)
 }
 
-/** 点击页尾光标位置，并读取真实 canvas 视觉探针。 */
+/** 通过公开 selection facade 折叠到首段页尾，并读取真实 canvas 视觉探针。 */
 async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3VisualProbe> {
-  const point = await page.evaluate(() => {
+  const target = await page.evaluate(() => {
     const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
@@ -71,42 +71,36 @@ async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3Vis
 
     const firstBlock = demo.editor.getProjection().document.sections[0]?.blocks[0]
     const firstRun = firstBlock?.kind === 'paragraph' ? firstBlock.runs[0] : undefined
+
+    if (firstBlock?.kind !== 'paragraph' || firstRun === undefined) {
+      throw new Error('缺少 Gate 3 Alpha 首段文本')
+    }
+
     const runText = firstRun?.inlines.map((inline) => inline.kind === 'text' ? inline.text : '').join('') ?? ''
     const graphemeIndex = Array.from(runText).length
 
-    const anchor = demo.editor.createTextAnchor({
-      sectionId: 'section-1',
-      blockId: 'paragraph-1',
-      runId: 'run-1',
-      graphemeIndex
+    demo.selectTextRange({
+      sectionId: demo.editor.getProjection().document.sections[0]!.id,
+      blockId: firstBlock.id,
+      runId: firstRun.id,
+      anchorGraphemeIndex: graphemeIndex,
+      focusGraphemeIndex: graphemeIndex
     })
-
-    const caretRect = demo.editor.getCaretRect(anchor)
-    const pageBox = demo.editor.getLayout().pages[caretRect?.pageIndex ?? 0]
-    const canvas = document.querySelector<HTMLCanvasElement>(`[data-jword-page="${caretRect?.pageIndex ?? 0}"] .jw-editor__page-canvas`)
-    const canvasRect = canvas?.getBoundingClientRect()
-
-    if (caretRect === undefined || pageBox === undefined || canvasRect === undefined) {
-      throw new Error('无法读取 Gate 3 visual caret 点击坐标')
-    }
+    demo.editor.focus()
 
     return {
-      clientX: canvasRect.left + ((caretRect.x - pageBox.x + 1) * canvasRect.width) / pageBox.width,
-      clientY: canvasRect.top + ((caretRect.y - pageBox.y + caretRect.height / 2) * canvasRect.height) / pageBox.height,
-      sectionId: 'section-1',
-      blockId: 'paragraph-1',
-      runId: 'run-1',
+      sectionId: demo.editor.getProjection().document.sections[0]!.id,
+      blockId: firstBlock.id,
+      runId: firstRun.id,
       graphemeIndex
     }
   })
 
-  await page.mouse.click(point.clientX, point.clientY)
-
   await expect.poll(() => hasCollapsedSelectionAt(page, {
-    sectionId: point.sectionId,
-    blockId: point.blockId,
-    runId: point.runId,
-    graphemeIndex: point.graphemeIndex
+    sectionId: target.sectionId,
+    blockId: target.blockId,
+    runId: target.runId,
+    graphemeIndex: target.graphemeIndex
   })).toBe(true)
 
   await expect.poll(async () => {

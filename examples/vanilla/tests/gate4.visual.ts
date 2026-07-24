@@ -8,6 +8,8 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { activateToolbarTab } from './gate3-toolbar-helpers'
+
 interface Gate4VisualProbe {
   readonly canvasCount: number
   readonly nonWhitePixels: number
@@ -236,6 +238,7 @@ async function selectFirstRunRange(page: Page, anchorGraphemeIndex: number, focu
 
 /** 通过 editor facade 创建一个可由官方目录面板读取的标题。 */
 async function createFixtureHeading(page: Page): Promise<void> {
+  await activateToolbarTab(page, 'home')
   await selectFirstRunRange(page, 0, 0)
   await page.evaluate(() => {
     const demo = window.__jwordTestFixture
@@ -251,6 +254,7 @@ async function createFixtureHeading(page: Page): Promise<void> {
 
 /** 通过官方图片入口插入 fixture 图片。 */
 async function insertFixtureImage(page: Page): Promise<void> {
+  await activateToolbarTab(page, 'insert')
   await selectFirstRunRange(page, 0, 0)
   await page.locator('[data-jword-media-trigger="true"]').click()
   await page.locator('[data-jword-media-file-input="true"]').setInputFiles('fixtures/gate4/media-inline.svg')
@@ -259,6 +263,7 @@ async function insertFixtureImage(page: Page): Promise<void> {
 
 /** 通过官方表格入口插入 2 x 2 表格并写入首格文本。 */
 async function insertFixtureTable(page: Page): Promise<void> {
+  await activateToolbarTab(page, 'table')
   await page.locator('[data-jword-table-insert-trigger="true"]').click()
   await page.locator('[data-jword-table-preview-cell="true"][data-jword-rows="2"][data-jword-columns="2"]').click()
   await expect.poll(() => page.evaluate(() => window.__jwordTestFixture?.table.setCellText(0, 0, '视觉表格') ?? false)).toBe(true)
@@ -266,6 +271,7 @@ async function insertFixtureTable(page: Page): Promise<void> {
 
 /** 通过官方自定义行列入口插入长表格，并写入首列可见文本。 */
 async function insertLongFixtureTable(page: Page): Promise<void> {
+  await activateToolbarTab(page, 'table')
   await page.locator('[data-jword-table-insert-trigger="true"]').click()
   await page.locator('[data-jword-table-custom-size="true"]').click()
   await page.locator('[data-jword-table-insert-rows="true"]').fill('8')
@@ -291,6 +297,7 @@ async function openRetryFailureDialog(page: Page): Promise<void> {
   const retryOnceUrl = await page.evaluate(() => window.__jwordTestFixture?.media.buildScenarioUrl('retry-once') ?? '')
 
   expect(retryOnceUrl).not.toBe('')
+  await activateToolbarTab(page, 'insert')
   await page.locator('[data-jword-media-trigger="true"]').click()
   await page.locator('[data-jword-media-action-url="true"]').click()
   await page.locator('[data-jword-media-url-dialog-input="true"]').fill(retryOnceUrl)
@@ -301,6 +308,7 @@ async function openRetryFailureDialog(page: Page): Promise<void> {
 
 /** 通过官方批注入口创建一条页内批注卡片。 */
 async function createFixtureComment(page: Page): Promise<void> {
+  await activateToolbarTab(page, 'insert')
   await selectFirstRunRange(page, 1, 4)
   await page.locator('[data-jword-insert-comment]').click()
   await page.locator('[data-jword-comment-input="draft"]').first().fill('视觉批注')
@@ -323,6 +331,7 @@ async function createFixtureRevision(page: Page): Promise<void> {
 
 /** 通过官方页眉页脚入口写入最小 section 字段。 */
 async function applyHeaderFooter(page: Page): Promise<void> {
+  await activateToolbarTab(page, 'page')
   await page.locator('[data-jword-toggle-header-footer]').click()
   await page.locator('[data-jword-header-id-input]').fill('visual-header')
   await page.locator('[data-jword-toggle-footer]').click()
@@ -336,6 +345,7 @@ async function applyHeaderFooter(page: Page): Promise<void> {
 
 /** 通过官方查找面板创建一个可见查找状态。 */
 async function applyFindVisualState(page: Page): Promise<void> {
+  await activateToolbarTab(page, 'tools')
   await page.locator('[data-jword-open-find-replace]').click()
   await page.locator('[data-jword-find-query-input]').fill('视觉表格')
   await page.locator('[data-jword-find-button]').click()
