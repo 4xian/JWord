@@ -228,6 +228,8 @@ function verifyGeneratedRuntimeProbes(): void {
   ])
 
   expect(reactSource).toContain("import { JWordReactEditor } from '@4xian/jword-react'")
+  expect(reactSource).toContain("import { flushSync } from 'react-dom'")
+  expect(reactSource).not.toContain('requestAnimationFrame')
   expect(reactSource).not.toContain('JWordEditor }')
   expect(vueSource).toContain("import { JWordVueEditor } from '@4xian/jword-vue'")
   expect(vueSource).not.toContain('JWordEditor }')

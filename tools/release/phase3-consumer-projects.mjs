@@ -76,13 +76,13 @@ document.documentElement.dataset.jwordReady = host.textContent
 export function createReactProjectSource() {
   return `
 import React from 'react'
+import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { JWordReactEditor } from '@4xian/jword-react'
 
 const root = createRoot(document.querySelector('#app'))
-root.render(React.createElement(JWordReactEditor))
-/** 等待 React 提交真实 DOM mount。 */
-await new Promise((resolve) => requestAnimationFrame(resolve))
+/** 同步提交真实 React wrapper。 */
+flushSync(() => root.render(React.createElement(JWordReactEditor)))
 if (document.querySelector('[data-jword-react-host]') === null) throw new Error('React wrapper did not mount')
 document.documentElement.dataset.jwordReady = 'react'
 root.unmount()
