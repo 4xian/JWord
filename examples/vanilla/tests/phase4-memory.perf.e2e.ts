@@ -7,6 +7,7 @@
  */
 import { expect, test } from '@playwright/test'
 import type { CDPSession, Page } from '@playwright/test'
+import { expectedGate2PageCount } from './gate2-test-contract'
 
 interface Phase4MemoryMetrics {
   readonly mountDestroyCycleCount: number
@@ -20,7 +21,6 @@ interface Phase4MemoryMetrics {
   readonly finalMountedCanvasCount: number
 }
 
-const expectedGate2PageCount = 67
 const mountDestroyCycleCount = 5
 const longScrollSampleCount = 36
 

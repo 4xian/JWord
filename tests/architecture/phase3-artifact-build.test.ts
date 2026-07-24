@@ -107,12 +107,25 @@ function verifyArtifactEntrypoints(): void {
   expect(existsSync('tools/release/phase3-artifact-utils.mjs')).toBe(true)
   expect(existsSync('tools/release/build-phase3-artifacts.mjs')).toBe(true)
   expect(existsSync('tools/release/compare-phase3-artifacts.mjs')).toBe(true)
-  const commandDefinitions = [
-    ...sourceCommandDefinitions(),
-    ...testCommandDefinitions()
-  ]
+  const scripts = (JSON.parse(readFileSync('package.json', 'utf8')) as { readonly scripts: Readonly<Record<string, string>> }).scripts
+  const playwrightConfig = readFileSync('playwright.config.ts', 'utf8')
+  const perfProject = playwrightConfig.match(/\{\s*name: 'perf-chromium',[\s\S]*?\n\s*\},\s*(?=\{\s*name: 'ime-chromium')/)?.[0]
 
-  for (const definition of commandDefinitions) {
+  expect(testCommandDefinitions()).toEqual([
+    { id: 'direct-vitest', command: 'pnpm exec vitest run --passWithNoTests' },
+    { id: 'e2e', command: 'pnpm test:e2e:phase3' },
+    { id: 'visual', command: 'pnpm test:visual' },
+    { id: 'bench', command: 'pnpm bench:phase3' }
+  ])
+  expect(scripts).toMatchObject({
+    'test:e2e': 'playwright test --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test --project=perf-chromium --pass-with-no-tests',
+    'test:e2e:phase3': 'playwright test examples/vanilla/tests --project=chromium --project=firefox --project=webkit --pass-with-no-tests && playwright test examples/vanilla/tests --project=perf-chromium --workers=1 --pass-with-no-tests',
+    bench: 'node tools/bench/run-bench.mjs',
+    'bench:phase3': 'node benchmarks/gate45-native-benchmark.mjs && node benchmarks/gate2-render-benchmark.mjs && node benchmarks/phase4-input-hotpath-benchmark.mjs'
+  })
+  expect(perfProject).toBeDefined()
+  expect(perfProject).not.toMatch(/\[?\s*['"]?workers['"]?\s*\]?\s*:/)
+  for (const definition of [...sourceCommandDefinitions(), ...testCommandDefinitions()]) {
     expect(definition.command).not.toBe('pnpm test')
   }
 }
@@ -854,7 +867,7 @@ function writeFixtureCommands(binDirectory: string): void {
     'case "$*" in',
     '  lint) checkpoint="lint" ;;',
     '  build) checkpoint="build" ;;',
-    '  test:e2e) checkpoint="e2e" ;;',
+    '  test:e2e:phase3) checkpoint="e2e" ;;',
     '  "exec vitest run --passWithNoTests") checkpoint="direct-vitest" ;;',
     'esac',
     'if [ "${JWORD_PHASE3_DIRTY_AFTER:-}" = "$checkpoint" ] && [ -n "$checkpoint" ]; then',

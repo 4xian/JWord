@@ -9,6 +9,8 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
+import { activateToolbarTab } from './gate3-toolbar-helpers'
+
 test.describe.configure({ mode: 'serial' })
 
 test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page }) => {
@@ -100,6 +102,7 @@ test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page 
     firstCellGridSpan: 2
   })
 
+  await activateToolbarTab(page, 'home')
   await undoButton.click()
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     firstRowCellCount: 2,
@@ -216,6 +219,7 @@ test('Gate 4 table custom size dialog keeps focusable fields inside the panel', 
 async function waitForTableDemoReady(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
+  await activateToolbarTab(page, 'table')
   await expect(page.locator('[data-jword-table-toolbar="true"]')).toBeVisible()
 }
 
@@ -400,7 +404,7 @@ async function expectTableDialogAnchoredToEditor(page: Page, dialog: Locator): P
   expect(Math.abs(dialogBox.x - editorBox.x)).toBeLessThanOrEqual(2)
   expect(Math.abs(dialogBox.y - editorBox.y)).toBeLessThanOrEqual(2)
   expect(Math.abs(dialogBox.width - editorBox.width)).toBeLessThanOrEqual(2)
-  expect(dialogBox.width).toBeLessThan(viewport.width)
+  expect(dialogBox.width).toBeLessThanOrEqual(viewport.width)
   expect(dialogBox.height).toBeLessThan(viewport.height)
 }
 

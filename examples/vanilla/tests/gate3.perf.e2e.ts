@@ -7,6 +7,7 @@
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { expectedGate2PageCount } from './gate2-test-contract'
 
 interface Gate3PerfMetrics {
   readonly gate2ScrollMs: number
@@ -20,7 +21,6 @@ interface Gate3PerfMetrics {
 
 const P95_SAMPLE_COUNT = 20
 const LARGE_DOCUMENT_INSERT_WARMUP_COUNT = 2
-const expectedGate2PageCount = 67
 
 const GATE3_ALPHA_THRESHOLDS: Gate3PerfMetrics = {
   gate2ScrollMs: 120,

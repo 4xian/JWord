@@ -9,8 +9,8 @@
 import { expect, test } from '@playwright/test'
 
 import {
-  readOfficialToolbar,
   readPagePresetProbe,
+  selectPagePreset,
   waitForDemoReady
 } from './gate3-toolbar-helpers'
 
@@ -36,7 +36,7 @@ test('Gate 7 plugin command error is isolated in real browser runtime', async ({
     recoverable: true
   })
 
-  await chooseA5PagePreset(page)
+  await selectPagePreset(page, 'a5')
   await expect.poll(() => readPagePresetProbe(page)).toMatchObject({
     preset: 'a5'
   })
@@ -64,19 +64,8 @@ test('Gate 7 plugin adapter error is isolated in real browser runtime', async ({
     recoverable: true
   })
 
-  await chooseA5PagePreset(page)
+  await selectPagePreset(page, 'a5')
   await expect.poll(() => readPagePresetProbe(page)).toMatchObject({
     preset: 'a5'
   })
 })
-
-/** 通过官方插件菜单切换 A5 页面尺寸，证明错误后 UI 仍可操作。 */
-async function chooseA5PagePreset(page: Parameters<typeof readOfficialToolbar>[0]): Promise<void> {
-  const toolbar = readOfficialToolbar(page)
-  const pluginMenu = toolbar.locator('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"]')
-  const trigger = pluginMenu.locator('.jw-toolbar__select-trigger')
-  const a5 = pluginMenu.locator('[data-jword-plugin-menu-item-key="plugin:jword.ui:pagePreset:a5"]')
-
-  await trigger.click()
-  await a5.click()
-}

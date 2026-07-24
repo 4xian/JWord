@@ -236,7 +236,7 @@ export function createSelectionActionsController(
     }
 
     state.stickyFloatingSelectionKey = readSelectionKey(editor, selection)
-    state.stickyFloatingPosition = readFloatingToolbarPosition(editor, editorHost, selection)
+    state.stickyFloatingPosition = readFloatingToolbarPosition(editor, overlayHost, selection)
   }
 
   /** 在工具栏交互后继续保持当前选区的工具栏可见。 */

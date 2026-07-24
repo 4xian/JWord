@@ -8,6 +8,8 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { activateToolbarTab } from './gate3-toolbar-helpers'
+
 interface HeaderFooterProbe {
   readonly sectionBreakType: string | null
   readonly sectionHeaderIds: readonly string[]
@@ -105,6 +107,7 @@ async function waitForHeaderFooterDemoReady(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
   await expect(page.locator('[data-jword-header-footer]')).toBeAttached()
+  await activateToolbarTab(page, 'page')
 }
 
 /** 读取真实浏览器 canvas 文本绘制记录。 */

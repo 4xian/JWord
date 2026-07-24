@@ -8,6 +8,8 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { activateToolbarTab } from './gate3-toolbar-helpers'
+
 interface CommentAnchorProbe {
   readonly threadCount: number
   readonly resolved: boolean | null
@@ -151,6 +153,7 @@ async function waitForGate4ContentDemoReady(page: Page): Promise<void> {
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
   await expect(page.locator('[data-jword-comments-sidebar]')).toHaveCount(1)
   await expect(page.locator('[data-jword-link-panel]')).toHaveCount(1)
+  await activateToolbarTab(page, 'insert')
 }
 
 /** 通过公开 demo hook 选择第一段首个 run 的文本范围。 */

@@ -8,6 +8,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { expectNoSeriousAxeViolations } from '../../../tests/e2e/a11y-axe'
+import { activateToolbarTab } from './gate3-toolbar-helpers'
 
 test('Gate 4 表格、批注和查找替换没有 serious/critical axe violation', async ({ page }) => {
   await page.goto('/test-fixture.html')
@@ -18,6 +19,7 @@ test('Gate 4 表格、批注和查找替换没有 serious/critical axe violation
     context: '.jw-demo'
   })
 
+  await activateToolbarTab(page, 'table')
   await openTableCustomSizeDialog(page)
   await expectNoSeriousAxeViolations(page, {
     label: 'Gate 4 表格自定义尺寸 dialog',
@@ -25,6 +27,7 @@ test('Gate 4 表格、批注和查找替换没有 serious/critical axe violation
   })
   await page.locator('[data-jword-table-custom-size-cancel="true"]').click()
 
+  await activateToolbarTab(page, 'insert')
   await openCommentDraft(page)
   await expectNoSeriousAxeViolations(page, {
     label: 'Gate 4 批注草稿输入',
@@ -33,6 +36,7 @@ test('Gate 4 表格、批注和查找替换没有 serious/critical axe violation
   await page.locator('[data-jword-comment-input="draft"]').first().fill('a11y 批注验收')
   await page.locator('[data-jword-comment-action="confirm-draft"]').first().click()
 
+  await activateToolbarTab(page, 'tools')
   await page.locator('[data-jword-open-find-replace]').click()
   await expect(page.locator('[data-jword-find-replace]')).toBeVisible()
   await expectNoSeriousAxeViolations(page, {
@@ -44,6 +48,7 @@ test('Gate 4 表格、批注和查找替换没有 serious/critical axe violation
 test('Gate 4 键盘 smoke 可到达表格、批注和查找替换关键控件', async ({ page, browserName }) => {
   await page.goto('/test-fixture.html')
   await waitForA11yDemoReady(page)
+  await activateToolbarTab(page, 'table')
 
   const tableTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
   const tableMenu = page.locator('[data-jword-table-insert-menu="true"]')
@@ -75,6 +80,7 @@ test('Gate 4 键盘 smoke 可到达表格、批注和查找替换关键控件', 
   await expect(tableTrigger).toBeFocused()
 
   await selectTextForCommentKeyboardSmoke(page)
+  await activateToolbarTab(page, 'insert')
   await page.locator('[data-jword-insert-comment]').focus()
   await page.keyboard.press('Enter')
   await expect(page.locator('[data-jword-comment-input="draft"]').first()).toBeFocused()
@@ -96,7 +102,7 @@ async function waitForA11yDemoReady(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('.jw-demo')).toBeVisible()
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
-  await expect(page.locator('[data-jword-table-toolbar="true"]')).toBeVisible()
+  await expect(page.locator('[data-jword-table-toolbar="true"]')).toHaveCount(1)
   await expect(page.locator('[data-jword-comments-sidebar]')).toHaveCount(1)
   await expect(page.locator('[data-jword-find-replace]')).toHaveCount(1)
 }

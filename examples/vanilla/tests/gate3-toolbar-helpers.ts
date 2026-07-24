@@ -44,6 +44,8 @@ export interface SelectOptionMatcher {
   readonly labelAllOf?: readonly string[]
 }
 
+export type JWordTestToolbarTab = 'home' | 'insert' | 'table' | 'page' | 'tools' | 'view' | 'export'
+
 /** 读取首段第一个 run 的格式。 */
 export async function readFirstRunStyle(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
@@ -649,6 +651,32 @@ export async function finalizeColorValue(page: Page, selector: string, value: st
 /** 定位官方工具栏，避免误命中浮动选区工具栏的同名按钮。 */
 export function readOfficialToolbar(page: Page): Locator {
   return page.locator('[data-jword-toolbar]')
+}
+
+/** 切换官方工具栏到指定专业模式选项卡。 */
+export async function activateToolbarTab(page: Page, tab: JWordTestToolbarTab): Promise<void> {
+  const toolbar = readOfficialToolbar(page)
+  const tabButton = toolbar.locator(`[data-jword-toolbar-tab="${tab}"]`)
+
+  await tabButton.click()
+  await expect(tabButton).toHaveAttribute('aria-selected', 'true')
+  await expect(toolbar.locator(`[data-jword-toolbar-tab-panel="${tab}"]`)).toBeVisible()
+}
+
+/** 通过当前内建页面大小菜单选择纸张预设。 */
+export async function selectPagePreset(page: Page, preset: 'a3' | 'a5'): Promise<void> {
+  await activateToolbarTab(page, 'page')
+
+  const toolbar = readOfficialToolbar(page)
+  const pagePreset = toolbar.locator('[data-jword-tool-id="document.pagePreset"]')
+  const trigger = pagePreset.locator('.jw-toolbar__select-trigger')
+  const option = pagePreset.locator(`.jw-toolbar__select-option[data-jword-option-value="${preset}"]`)
+
+  await expect(pagePreset).toBeVisible()
+  await trigger.click()
+  await expect(option).toBeVisible()
+  await option.click()
+  await expect.poll(() => readPagePresetProbe(page)).toMatchObject({ preset })
 }
 
 /** 等待 vanilla demo 测试钩子和隐藏输入框就绪。 */

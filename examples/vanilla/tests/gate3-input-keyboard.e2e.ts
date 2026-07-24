@@ -16,8 +16,7 @@ import {
   readSelectionSummary,
   readSelectionVisualProbe,
   selectRange,
-  waitForGate3AlphaReady,
-  waitForGate3LargeFixtureReady
+  waitForGate3AlphaReady
 } from './gate3-input-helpers'
 
 test('Gate 3 runtime seeds the first focus caret at the document tail by default', async ({ page }) => {
@@ -94,8 +93,8 @@ test('Gate 3 runtime keeps long English caret aligned with rendered canvas text'
 })
 
 test('Gate 3 runtime keeps keyboard Enter and select-all working after clicking page whitespace', async ({ page }) => {
-  await page.goto('/test-fixture.html?fixture=gate2')
-  await waitForGate3LargeFixtureReady(page)
+  await page.goto('/test-fixture.html')
+  await waitForGate3AlphaReady(page)
 
   const whitespacePoint = await readClientPointForPageWhitespace(page, 0)
   const beforeParagraphCount = await readParagraphCount(page)

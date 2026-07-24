@@ -8,6 +8,8 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { activateToolbarTab } from './gate3-toolbar-helpers'
+
 test.describe.configure({ mode: 'serial' })
 
 const FIXTURE_WIDTH_TWIPS = 3600
@@ -275,6 +277,7 @@ test('Gate 4 image flow keeps editor host scroll stable when refocusing hidden i
   await expect.poll(() => {
     return page.evaluate(() => document.querySelector<HTMLElement>('#jword-editor')?.scrollTop ?? -1)
   }).toBe(0)
+  const geometryBeforeFocus = await readEditorHostGeometry(page)
 
   const editorBox = await page.locator('#jword-editor').boundingBox()
 
@@ -285,22 +288,7 @@ test('Gate 4 image flow keeps editor host scroll stable when refocusing hidden i
 
   await page.mouse.click(editorBox.x + 320, editorBox.y + 180)
 
-  await expect.poll(() => {
-    return page.evaluate(() => {
-      const host = document.querySelector<HTMLElement>('#jword-editor')
-      const shell = document.querySelector<HTMLElement>('[data-jword-editor]')
-
-      return {
-        hostScrollTop: host?.scrollTop ?? -1,
-        shellTop: Math.round(shell?.getBoundingClientRect().top ?? -9999),
-        hostTop: Math.round(host?.getBoundingClientRect().top ?? -9999)
-      }
-    })
-  }).toEqual({
-    hostScrollTop: 0,
-    shellTop: Math.round(editorBox.y) + 1,
-    hostTop: Math.round(editorBox.y)
-  })
+  await expect.poll(() => readEditorHostGeometry(page)).toEqual(geometryBeforeFocus)
 })
 
 test('Gate 4 image overlay exposes eight resize handles and supports rotate reset delete plus drag move', async ({ page }) => {
@@ -599,8 +587,27 @@ test('Gate 4 image overlay exposes eight resize handles and supports rotate rese
 /** 等待 toolbar 图片入口和 demo 测试钩子都挂载完成。 */
 async function waitForMediaDemoReady(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__jwordTestFixture?.media !== undefined)
+  await activateToolbarTab(page, 'insert')
   await expect(page.locator('[data-jword-media-toolbar="true"]')).toBeVisible()
   await expect(page.locator('[data-jword-media-panel="true"]')).toHaveCount(0)
+}
+
+/** 读取 editor host 与当前 EditorShell 的视口几何，用于比较聚焦前后的稳定性。 */
+async function readEditorHostGeometry(page: Page): Promise<{
+  readonly hostScrollTop: number
+  readonly shellTop: number
+  readonly hostTop: number
+}> {
+  return page.evaluate(() => {
+    const host = document.querySelector<HTMLElement>('#jword-editor')
+    const shell = document.querySelector<HTMLElement>('[data-jword-editor]')
+
+    return {
+      hostScrollTop: host?.scrollTop ?? -1,
+      shellTop: Math.round(shell?.getBoundingClientRect().top ?? -9999),
+      hostTop: Math.round(host?.getBoundingClientRect().top ?? -9999)
+    }
+  })
 }
 
 /** 通过 demo 的 Alpha 样例和公开选区钩子，准备图片插入所需的折叠选区。 */

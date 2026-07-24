@@ -8,6 +8,8 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { activateToolbarTab } from './gate3-toolbar-helpers'
+
 interface StructureFindProbe {
   readonly selectionBlockId: string | null
   readonly selectionOffsets: readonly [number, number] | null
@@ -19,6 +21,7 @@ test('Gate 4 heading outline clicks stable anchor and find replace UI writes thr
   await page.goto('/test-fixture.html')
   await waitForStructureFindDemoReady(page)
   await prepareStructureFindDocument(page)
+  await activateToolbarTab(page, 'tools')
 
   await page.locator('[data-jword-toggle-heading-outline]').click()
 
@@ -30,6 +33,7 @@ test('Gate 4 heading outline clicks stable anchor and find replace UI writes thr
     selectionBlockId: 'paragraph-3',
     selectionOffsets: [0, 0]
   })
+  await page.getByRole('button', { name: '关闭目录大纲' }).click()
 
   await page.locator('[data-jword-hidden-textarea]').focus()
   await page.keyboard.press('Control+F')
@@ -95,6 +99,7 @@ test('Gate 4 heading outline collapse hides child rows', async ({ page }) => {
   await page.goto('/test-fixture.html')
   await waitForStructureFindDemoReady(page)
   await prepareNestedHeadingDocument(page)
+  await activateToolbarTab(page, 'tools')
 
   await page.locator('[data-jword-toggle-heading-outline]').click()
 
@@ -111,7 +116,7 @@ test('Gate 4 heading outline collapse hides child rows', async ({ page }) => {
 /** 等待 demo、目录面板与查找替换面板完成挂载。 */
 async function waitForStructureFindDemoReady(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
-  await expect(page.locator('[data-jword-heading-outline]')).toHaveCount(1)
+  await expect(page.locator('[data-jword-heading-outline-sidebar]')).toHaveCount(1)
   await expect(page.locator('[data-jword-find-replace]')).toHaveCount(1)
 }
 

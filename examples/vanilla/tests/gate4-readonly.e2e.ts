@@ -8,6 +8,8 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+import { activateToolbarTab } from './gate3-toolbar-helpers'
+
 interface CanvasScrollProbe {
   readonly scrollTop: number
   readonly scrollHeight: number
@@ -24,13 +26,16 @@ test('Gate 4 demo exposes a readonly example entry', async ({ page }) => {
   await expect(readonlyExampleButton).toContainText('只读示例')
 
   await readonlyExampleButton.click()
-  await page.waitForURL('**/?readonly=true')
+  await page.waitForURL('**/test-fixture.html?readonly=true')
   await waitForReadonlyDemoReady(page)
 
   expect(await page.evaluate(() => window.__jwordTestFixture?.readonly)).toBe(true)
   await expect(page.locator('#jword-editor')).toHaveAttribute('data-jword-readonly', 'true')
-  await expect(page.locator('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
+  await activateToolbarTab(page, 'page')
+  await expect(page.locator('[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
+  await activateToolbarTab(page, 'tools')
   await expect(page.locator('[data-jword-open-find-replace]')).toBeEnabled()
+  await activateToolbarTab(page, 'insert')
   await expect(page.locator('[data-jword-media-trigger="true"]')).toBeDisabled()
   await expect(page.locator('[data-jword-hidden-textarea]')).not.toBeFocused()
 })
@@ -44,15 +49,18 @@ test('Gate 4 global readonly blocks editing while keeping scroll and link open a
   await waitForReadonlyDemoReady(page)
 
   expect(await page.evaluate(() => window.__jwordTestFixture?.readonly)).toBe(true)
-  await expect(page.locator('#jword-toolbar')).toBeVisible()
+  await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveJSProperty('readOnly', true)
   await expect(page.locator('#jword-editor')).toHaveAttribute('data-jword-readonly', 'true')
-  await expect(page.locator('[data-jword-plugin-menu-key="plugin:jword.ui:pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
   await expect(page.locator('[data-jword-format-bold]')).toBeDisabled()
+  await activateToolbarTab(page, 'insert')
   await expect(page.locator('[data-jword-insert-comment]')).toBeDisabled()
   await expect(page.locator('[data-jword-insert-link]')).toBeDisabled()
-  await expect(page.locator('[data-jword-open-find-replace]')).toBeEnabled()
   await expect(page.locator('[data-jword-media-trigger="true"]')).toBeDisabled()
+  await activateToolbarTab(page, 'page')
+  await expect(page.locator('[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-trigger')).toBeDisabled()
+  await activateToolbarTab(page, 'tools')
+  await expect(page.locator('[data-jword-open-find-replace]')).toBeEnabled()
   await expect(page.locator('[data-jword-hidden-textarea]')).not.toBeFocused()
 
   const initialProjection = await readSerializedProjection(page)

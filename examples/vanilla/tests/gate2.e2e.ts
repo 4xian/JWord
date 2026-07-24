@@ -7,6 +7,7 @@
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { expectedGate2PageCount } from './gate2-test-contract'
 
 interface TextPositionProbe {
   readonly sectionId: string
@@ -55,8 +56,6 @@ interface MountedViewportProbe {
   readonly afterMountedPageIndex: number | null
   readonly afterMountedHasCanvas: boolean | null
 }
-
-const expectedGate2PageCount = 67
 
 test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', async ({ page }) => {
   await page.goto('/test-fixture.html?fixture=gate2')

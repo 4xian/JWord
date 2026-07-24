@@ -263,8 +263,10 @@ export function createLinkController(options: CreateLinkControllerOptions): Link
     }, { signal: signalController.signal })
     const closeOnOutsideEvent = (event: Event) => {
       const target = event.target
+      const linkOverlayTarget = target instanceof Element
+        && target.closest('[data-jword-link-anchor-overlay]') !== null
 
-      if (!(target instanceof Node) || dom.host.contains(target)) {
+      if (!(target instanceof Node) || dom.host.contains(target) || linkOverlayTarget) {
         return
       }
 

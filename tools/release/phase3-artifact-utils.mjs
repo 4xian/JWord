@@ -20,9 +20,9 @@ const SOURCE_COMMANDS = [
 ]
 const TEST_COMMANDS = [
   { id: 'direct-vitest', command: 'pnpm exec vitest run --passWithNoTests' },
-  { id: 'e2e', command: 'pnpm test:e2e' },
+  { id: 'e2e', command: 'pnpm test:e2e:phase3' },
   { id: 'visual', command: 'pnpm test:visual' },
-  { id: 'bench', command: 'pnpm bench' }
+  { id: 'bench', command: 'pnpm bench:phase3' }
 ]
 
 /** 把 JSON value 编码为冻结的 canonical UTF-8 bytes。 */

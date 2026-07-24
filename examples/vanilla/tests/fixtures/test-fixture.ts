@@ -28,6 +28,10 @@ const demoControlsHost = requireElement<HTMLElement>(
   'JWord vanilla demo requires #jword-demo-controls.'
 )
 const statusHost = requireElement<HTMLElement>('#jword-status', 'JWord vanilla demo requires #jword-status.')
+const assistiveMirrorHost = requireElement<HTMLElement>(
+  '#jword-assistive-mirror',
+  'JWord vanilla demo requires #jword-assistive-mirror.'
+)
 const demoParams = new URLSearchParams(window.location.search)
 const readonlyMode = demoParams.get('readonly') === 'true'
 const devtoolsEnabled = demoParams.get('devtools') === 'true'
@@ -57,6 +61,8 @@ editor.mount(editorHost)
 const jwordUi = createJWordUi({
   editor,
   editorHost,
+  liveRegionHost: statusHost,
+  assistiveMirrorHost,
   ...readDemoThemeOptions(),
   ...readDemoI18nOptions(),
   // toolbar: false,
@@ -94,9 +100,9 @@ const jwordUi = createJWordUi({
     }
   },
   headerFooter: {},
-  findReplace: {}
-  // revisions: {
-  // }
+  findReplace: {},
+  headingOutline: {},
+  revisions: {}
 })
 const devtoolsHandle = devtoolsEnabled
   ? await attachDemoDevtools(editor)

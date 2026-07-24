@@ -8,8 +8,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type { RangeRef } from '@4xian/jword-core'
-
-const expectedGate2PageCount = 67
+import { expectedGate2PageCount } from './gate2-test-contract'
 
 export interface ResolvedSelectionSnapshot {
   readonly summary: string
@@ -236,11 +235,19 @@ export async function readClientPointForGrapheme(
     const layout = demo?.editor.getLayout()
     const pageBox = layout?.pages[targetPageIndex]
     const wrapper = document.querySelector<HTMLElement>(`[data-jword-page="${targetPageIndex}"]`)
+    const canvasContainer = wrapper?.closest<HTMLElement>('[data-jword-canvas-container]')
 
-    if (demo === undefined || pageBox === undefined || wrapper === null) {
+    if (
+      demo === undefined
+      || pageBox === undefined
+      || wrapper === null
+      || canvasContainer === undefined
+      || canvasContainer === null
+    ) {
       throw new Error('缺少 Gate 3 pointer probe 所需的布局或 DOM')
     }
 
+    canvasContainer.scrollTop = wrapper.offsetTop
     const rect = wrapper.getBoundingClientRect()
     const scaleX = rect.width / pageBox.width
     const scaleY = rect.height / pageBox.height
@@ -347,11 +354,20 @@ export async function readClientPointForPageWhitespace(
     const pageBox = demo?.editor.getLayout().pages[targetPageIndex]
     const firstLine = pageBox?.lines[0]
     const pageElement = document.querySelector<HTMLElement>(`[data-jword-page="${targetPageIndex}"]`)
+    const canvasContainer = pageElement?.closest<HTMLElement>('[data-jword-canvas-container]')
 
-    if (demo === undefined || pageBox === undefined || firstLine === undefined || pageElement === null) {
+    if (
+      demo === undefined
+      || pageBox === undefined
+      || firstLine === undefined
+      || pageElement === null
+      || canvasContainer === undefined
+      || canvasContainer === null
+    ) {
       throw new Error('缺少 Gate 3 page whitespace probe 所需的布局或 DOM')
     }
 
+    canvasContainer.scrollTop = pageElement.offsetTop
     const rect = pageElement.getBoundingClientRect()
     const scaleX = rect.width / pageBox.width
     const scaleY = rect.height / pageBox.height
