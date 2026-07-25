@@ -5,7 +5,7 @@
  * 性能/安全约束：customer/server 完全隔离，无凭据、无 first-party 外网 fallback、无真实 registry 写操作。
  */
 import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
 import {
   cpSync,
@@ -14,18 +14,19 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
-  realpathSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import { createPhase3SizeEvidence } from './check-phase3-artifact-size.mjs'
 import { generatePhase3Provenance } from './generate-phase3-provenance.mjs'
 import { generatePhase3Sbom } from './generate-phase3-sbom.mjs'
+import { readResolvedAssemblyDependencies } from './phase3-assembly-dependencies.mjs'
 import { createCleanConsumerEnvironment } from './phase3-consumer-projects.mjs'
 import { rehearsePhase3Rollback } from './rehearse-phase3-rollback.mjs'
 import {
@@ -44,6 +45,7 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const contractPath = join(repoRoot, 'tools/release/package-artifact-contract.json')
 const rollbackFixturePath = join(repoRoot, 'fixtures/release/rollback-state.json')
 const releasePolicyFixturePath = join(repoRoot, 'fixtures/release/release-policy.json')
+const execFileAsync = promisify(execFile)
 
 /** 执行两个隔离 assembly 并生成完整 audit evidence root。 */
 export async function runPhase3ReleaseGates(options) {
@@ -123,7 +125,7 @@ function readArtifactPackages(artifact) {
 }
 
 /** 建立一套独立 assembly、运行 audit/list 并保存全部原始证据。 */
-async function buildAssembly(key, kind, directory, evidenceDirectory, packageContracts, packageMap, artifactSetId) {
+export async function buildAssembly(key, kind, directory, evidenceDirectory, packageContracts, packageMap, artifactSetId) {
   const packages = packageContracts.map(function attachArtifact(entry) {
     const artifact = packageMap.get(entry.name)
     if (artifact === undefined) throw new Error(`${kind} artifact missing: ${entry.name}`)
@@ -148,7 +150,7 @@ async function buildAssembly(key, kind, directory, evidenceDirectory, packageCon
     CI: '1'
   }
   try {
-    runCommand('pnpm', ['install', '--ignore-scripts', '--no-frozen-lockfile', '--store-dir', join(directory, 'store')], directory, environment, 'assembly install')
+    await runCommand('pnpm', ['install', '--ignore-scripts', '--no-frozen-lockfile', '--store-dir', join(directory, 'store')], directory, environment, 'assembly install')
   } finally {
     await registry.close()
   }
@@ -161,7 +163,7 @@ async function buildAssembly(key, kind, directory, evidenceDirectory, packageCon
   const auditCounts = readAuditCounts(auditResult, kind)
   if (auditCounts.high !== 0 || auditCounts.critical !== 0) throw new Error(`${kind} high/critical audit failed`)
   const dependencyList = parseJsonBytes(listResult.stdout, `${kind} dependency list`)
-  const dependenciesEvidence = readResolvedDependencies(directory, dependencyList)
+  const dependencyEvidence = readResolvedAssemblyDependencies(directory, dependencyList, repoRoot)
   const rawDirectory = join(evidenceDirectory, 'raw', key)
   const assemblyEvidenceDirectory = join(evidenceDirectory, 'assemblies', key)
   mkdirSync(rawDirectory, { recursive: true })
@@ -183,7 +185,8 @@ async function buildAssembly(key, kind, directory, evidenceDirectory, packageCon
     registryTranscriptSha256: sha256(readFileSync(join(assemblyEvidenceDirectory, 'registry-transcript.json'))),
     auditSha256: sha256(auditResult.stdout),
     dependencyListSha256: sha256(listResult.stdout),
-    dependencies: dependenciesEvidence
+    dependencies: dependencyEvidence.dependencies,
+    unmaterializedOptionalDependencies: dependencyEvidence.unmaterializedOptionalDependencies
   }
   writeCanonicalJson(join(evidenceDirectory, `${key}-assembly-evidence.json`), evidence)
   return { evidence, dependencyList, auditCounts }
@@ -293,38 +296,18 @@ function countGets(requests, kind, entry) {
   }).length
 }
 
-/** 读取 assembly 中安装后的 first-party realpath。 */
-function readResolvedDependencies(directory, dependencyList) {
-  const dependencies = new Map()
-  /** 递归读取 pnpm list 的 dependency 节点。 */
-  function visit(node) {
-    if (Array.isArray(node)) { for (const child of node) visit(child); return }
-    if (node === null || typeof node !== 'object') return
-    for (const [name, child] of Object.entries(node.dependencies ?? {})) {
-      if (child === null || typeof child !== 'object' || typeof child.version !== 'string') throw new Error('assembly dependency list is invalid')
-      const path = typeof child.path === 'string'
-        ? realpathSync(child.path)
-        : realpathSync(join(directory, 'node_modules', ...name.split('/')))
-      const relativePath = relative(repoRoot, path)
-      if (relativePath === '' || (!relativePath.startsWith('..') && !relativePath.startsWith('/'))) throw new Error('assembly dependency resolved into repository')
-      dependencies.set(`${name}\0${child.version}\0${path}`, { name, version: child.version, realpath: path })
-      visit(child)
-    }
-  }
-  visit(dependencyList)
-  return [...dependencies.values()].sort(function compareDependency(left, right) {
-    const leftKey = `${left.name}\0${left.version}\0${left.realpath}`
-    const rightKey = `${right.name}\0${right.version}\0${right.realpath}`
-    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
-  })
-}
-
 /** 解析 audit JSON 并区分 advisory 与外部服务失败。 */
 function readAuditCounts(result, kind) {
   const report = parseJsonBytes(result.stdout, `${kind} audit`)
   validateAssemblyAuditPayload(report, kind)
+  if (result.stderr.byteLength !== 0) throw new Error(`${kind} audit is blocked`)
   const counts = { high: report.metadata.vulnerabilities.high, critical: report.metadata.vulnerabilities.critical }
-  if (result.status !== 0 && counts.high === 0 && counts.critical === 0) throw new Error(`${kind} audit is blocked`)
+  const nonBlockingCount = ['info', 'low', 'moderate'].reduce(function sum(total, severity) {
+    return total + (report.metadata.vulnerabilities[severity] ?? 0)
+  }, 0)
+  if (result.status !== 0 && (result.status !== 1 || (counts.high === 0 && counts.critical === 0 && nonBlockingCount === 0))) {
+    throw new Error(`${kind} audit is blocked`)
+  }
   return counts
 }
 
@@ -492,16 +475,18 @@ function prepareEmptyDirectory(path, label) {
 }
 
 /** 执行必须成功的子进程。 */
-function runCommand(command, args, cwd, env, label) {
-  const result = spawnSync(command, args, { cwd, env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
-  if (result.status !== 0) throw new Error(`${label} failed`)
-  return result
+async function runCommand(command, args, cwd, env, label) {
+  try {
+    return await execFileAsync(command, args, { cwd, env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+  } catch {
+    throw new Error(`${label} failed`)
+  }
 }
 
 /** 执行需要保留原始 stdout 的子进程。 */
 function runCaptured(command, args, cwd, env) {
   const result = spawnSync(command, args, { cwd, env, encoding: null, maxBuffer: 32 * 1024 * 1024 })
-  return { status: result.status, stdout: result.stdout ?? Buffer.alloc(0) }
+  return { status: result.status, stderr: result.stderr ?? Buffer.alloc(0), stdout: result.stdout ?? Buffer.alloc(0) }
 }
 
 /** 解析原始 JSON bytes 并收敛错误。 */

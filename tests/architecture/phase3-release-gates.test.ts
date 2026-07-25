@@ -70,6 +70,7 @@ const REPO_ROOT = resolve(new URL('../..', import.meta.url).pathname)
 const B4_FILES = [
   'tools/release/check-phase3-release-gates.mjs',
   'tools/release/verify-phase3-final-evidence.mjs',
+  'tools/release/phase3-assembly-dependencies.mjs',
   'tools/release/phase3-release-policy-utils.mjs',
   'tools/release/check-phase3-artifact-size.mjs',
   'tools/release/generate-phase3-sbom.mjs',
@@ -305,12 +306,15 @@ function verifyPolicyEvidenceMutations(): void {
     expect(() => validateAssemblyEvidence(mutation, 'customer', 'customer-production', hash)).toThrow()
   }
   const requiredDependencies = { '@4xian/jword-core': '0.0.0', typescript: '5.9.3' }
+  const typescriptPath = join(tmpdir(), 'jword-phase3-synthetic', 'node_modules', '.pnpm', 'typescript@5.9.3', 'node_modules', 'typescript')
+  const assemblyLockfile = "snapshots:\n  '@4xian/jword-core@0.0.0': {}\n  'typescript@5.9.3': {}\n"
+  const repositoryLockfile = "snapshots:\n  'typescript@5.9.3': {}\n"
   const dependencyList = [{ dependencies: {
     '@4xian/jword-core': { version: '0.0.0', path: realpathSync(tmpdir()) },
-    typescript: { version: '5.9.3', path: realpathSync(tmpdir()) }
+    typescript: { version: '5.9.3', path: typescriptPath }
   } }]
-  expect(() => validateAssemblyDependencyEvidence(dependencyList, assembly.dependencies, requiredDependencies, 'customer')).not.toThrow()
-  expect(() => validateAssemblyDependencyEvidence([], [], requiredDependencies, 'customer')).toThrow('customer required dependency is missing')
+  expect(() => validateAssemblyDependencyEvidence(dependencyList, assembly.dependencies, [], requiredDependencies, 'customer', assemblyLockfile, undefined, repositoryLockfile)).not.toThrow()
+  expect(() => validateAssemblyDependencyEvidence([], [], [], requiredDependencies, 'customer', assemblyLockfile, undefined, repositoryLockfile)).toThrow('customer required dependency is missing')
   expect(() => validateAssemblyAuditPayload({ metadata: { vulnerabilities: { high: 0, critical: 0 } } }, 'customer')).not.toThrow()
   expect(() => validateAssemblyAuditPayload({}, 'customer')).toThrow('customer audit payload is invalid')
 
@@ -320,8 +324,8 @@ function verifyPolicyEvidenceMutations(): void {
     symlinkSync(REPO_ROOT, repoLink)
     expect(() => validateAssemblyDependencyEvidence([{ dependencies: {
       '@4xian/jword-core': { version: '0.0.0', path: repoLink },
-      typescript: { version: '5.9.3', path: realpathSync(tmpdir()) }
-    } }], assembly.dependencies, requiredDependencies, 'customer')).toThrow('customer dependency list path is invalid')
+      typescript: { version: '5.9.3', path: typescriptPath }
+    } }], assembly.dependencies, [], requiredDependencies, 'customer', assemblyLockfile, undefined, repositoryLockfile)).toThrow('customer dependency list path is invalid')
   } finally {
     rmSync(linkRoot, { recursive: true, force: true })
   }
@@ -728,9 +732,10 @@ function createSyntheticAssemblyEvidence(hash: string) {
     registryTranscriptSha256: hash,
     auditSha256: hash,
     dependencyListSha256: hash,
+    unmaterializedOptionalDependencies: [],
     dependencies: [
       { name: '@4xian/jword-core', version: '0.0.0', realpath: realpathSync(tmpdir()) },
-      { name: 'typescript', version: '5.9.3', realpath: realpathSync(tmpdir()) }
+      { name: 'typescript', version: '5.9.3', realpath: join(tmpdir(), 'jword-phase3-synthetic', 'node_modules', '.pnpm', 'typescript@5.9.3', 'node_modules', 'typescript') }
     ]
   }
 }

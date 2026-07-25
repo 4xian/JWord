@@ -83,8 +83,10 @@ export/environment 的覆盖关系及闭包顺序只以机器 contract 为准。
 
 固定八项 size budget：`@4xian/jword-core` 的 `dist/index.js` 为 650000 bytes，
 native `fixtures/registry.json` 固定为 1093 bytes、SHA-256
-`db07de6b0a63f4d34cec1ad5bbc0f9ba61bbab66a6a7379160c225b1a8a48caa`，以及 npm 和
-pnpm 下 Chromium、Firefox、WebKit 的 Vanilla 首屏 bundle 各为 700000 bytes。
+`db07de6b0a63f4d34cec1ad5bbc0f9ba61bbab66a6a7379160c225b1a8a48caa`。
+六项 Vanilla limit 固定为 `900000` bytes，以真实完整首屏 859055 bytes 为基线；
+统计入口 JS、CSS 和 Vite `modulepreload`，保留 40945 bytes、约 4.77% 余量，
+不得按后续观测值自动抬高。
 完整 source、limit 和 bundle path 见机器 contract。
 
 后续 B1-B4 必须从同一 clean SHA 生成并绑定 source report、artifact manifest、

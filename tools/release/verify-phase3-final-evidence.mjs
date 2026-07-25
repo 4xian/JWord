@@ -12,15 +12,24 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  realpathSync,
   writeFileSync
 } from 'node:fs'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createPhase3SizeEvidence } from './check-phase3-artifact-size.mjs'
 import { validateConsumerInstallEvidence } from './check-phase3-third-party-consumers.mjs'
 import { generatePhase3Provenance } from './generate-phase3-provenance.mjs'
 import { generatePhase3Sbom } from './generate-phase3-sbom.mjs'
+import {
+  collectAssemblyDependencyEvidence,
+  collectAssemblyDependencyPairs,
+  compareDependencyEvidence,
+  lockfileExcludesAssemblyEnvironment,
+  lockfileMarksDependencyOptional,
+  lockfileParentMarksDependencyOptional,
+  normalizeExternalDependencyPath,
+  validateAssemblyDependencyGraph
+} from './phase3-assembly-dependencies.mjs'
 import { validateReleaseReadiness, validateRollbackEvidence } from './phase3-release-policy-utils.mjs'
 import {
   createConsumerProjectManifest,
@@ -400,10 +409,19 @@ function validateAssembly(root, key, kind, runA, packageContracts) {
   const dependencies = createAssemblyDependencyVersions(packageContracts, runA)
   validateAssemblyPackageManifest(readJsonFile(paths.packageManifestSha256, `${key} package manifest`).value, kind, dependencies)
   const dependencyList = JSON.parse(readFileSync(paths.dependencyListSha256, 'utf8'))
-  const expectedPairs = collectDependencyPairs(dependencyList)
-  const actualPairs = [...new Set(evidence.dependencies.map(function createPair(entry) { return `${entry.name}\0${entry.version}` }))].sort()
+  const expectedPairs = collectAssemblyDependencyPairs(dependencyList)
+  const actualPairs = [...new Set([...evidence.dependencies, ...evidence.unmaterializedOptionalDependencies].map(function createPair(entry) { return `${entry.name}\0${entry.version}` }))].sort()
   assertSameUniqueStrings(actualPairs, expectedPairs, `${key} assembly dependency set`)
-  validateAssemblyDependencyEvidence(dependencyList, evidence.dependencies, dependencies, key)
+  validateAssemblyDependencyEvidence(
+    dependencyList,
+    evidence.dependencies,
+    evidence.unmaterializedOptionalDependencies,
+    dependencies,
+    key,
+    readFileSync(paths.lockfileSha256, 'utf8'),
+    runA.manifest.artifactIdentity.environment,
+    readFileSync(join(repoRoot, 'pnpm-lock.yaml'), 'utf8')
+  )
   const responseFiles = validateAssemblyRegistry(base, Object.keys(dependencies).filter(function isFirstParty(name) {
     return name.startsWith('@4xian/')
   }), runA)
@@ -445,7 +463,7 @@ export function validateAssemblyPackageManifest(manifest, kind, dependencies) {
 }
 /** 校验一份 assembly evidence 的固定结构、身份和依赖顺序。 */
 export function validateAssemblyEvidence(evidence, key, kind, artifactSetId) {
-  assertExactKeys(evidence, ['artifactSetId', 'assemblyKind', 'auditSha256', 'dependencies', 'dependencyListSha256', 'lockfileSha256', 'packageManifestSha256', 'registryConfigSha256', 'registryEvidenceSha256', 'registryTranscriptSha256', 'schemaVersion'], `${key} assembly evidence`)
+  assertExactKeys(evidence, ['artifactSetId', 'assemblyKind', 'auditSha256', 'dependencies', 'dependencyListSha256', 'lockfileSha256', 'packageManifestSha256', 'registryConfigSha256', 'registryEvidenceSha256', 'registryTranscriptSha256', 'schemaVersion', 'unmaterializedOptionalDependencies'], `${key} assembly evidence`)
   if (evidence.schemaVersion !== 1 || evidence.artifactSetId !== artifactSetId || evidence.assemblyKind !== kind) {
     throw new Error(`${key} assembly identity mismatch`)
   }
@@ -455,22 +473,65 @@ export function validateAssemblyEvidence(evidence, key, kind, artifactSetId) {
   if (!Array.isArray(evidence.dependencies) || evidence.dependencies.length === 0 || evidence.dependencies.some(function invalid(entry) {
     assertExactKeys(entry, ['name', 'realpath', 'version'], `${key} assembly dependency`)
     return typeof entry.name !== 'string' || entry.name === '' || typeof entry.version !== 'string' || entry.version === '' ||
-      typeof entry.realpath !== 'string' || entry.realpath !== readExternalRealpath(entry.realpath, `${key} assembly dependency`)
+      typeof entry.realpath !== 'string' || entry.realpath !== normalizeExternalDependencyPath(entry.realpath, repoRoot, `${key} assembly dependency`)
   })) throw new Error(`${key} assembly dependencies are invalid`)
   const keys = evidence.dependencies.map(function createKey(entry) { return `${entry.name}\0${entry.version}\0${entry.realpath}` })
   if (new Set(keys).size !== keys.length || JSON.stringify(keys) !== JSON.stringify([...keys].sort())) {
     throw new Error(`${key} assembly dependency order is invalid`)
   }
+  if (!Array.isArray(evidence.unmaterializedOptionalDependencies) || evidence.unmaterializedOptionalDependencies.some(function invalid(entry) {
+    assertExactKeys(entry, ['name', 'path', 'version'], `${key} assembly optional dependency`)
+    return typeof entry.name !== 'string' || entry.name === '' || typeof entry.version !== 'string' || entry.version === '' ||
+      typeof entry.path !== 'string' || entry.path !== normalizeExternalDependencyPath(entry.path, repoRoot, `${key} assembly optional dependency`)
+  })) throw new Error(`${key} assembly optional dependencies are invalid`)
+  const optionalKeys = evidence.unmaterializedOptionalDependencies.map(function createKey(entry) { return `${entry.name}\0${entry.version}\0${entry.path}` })
+  if (new Set(optionalKeys).size !== optionalKeys.length || JSON.stringify(optionalKeys) !== JSON.stringify([...optionalKeys].sort())) {
+    throw new Error(`${key} assembly optional dependency order is invalid`)
+  }
 }
 /** 把 raw pnpm list 的 direct/闭包 path 与 assembly evidence 逐项绑定。 */
-export function validateAssemblyDependencyEvidence(dependencyList, evidenceDependencies, requiredDependencies, key) {
-  const raw = collectDependencyEvidence(dependencyList, key)
-  if (!Array.isArray(evidenceDependencies) || requiredDependencies === null || typeof requiredDependencies !== 'object' || Array.isArray(requiredDependencies)) throw new Error(`${key} dependency evidence is invalid`)
+export function validateAssemblyDependencyEvidence(dependencyList, evidenceDependencies, unmaterializedOptionalDependencies, requiredDependencies, key, lockfile, environment, repositoryLockfile) {
+  if (!Array.isArray(evidenceDependencies) || !Array.isArray(unmaterializedOptionalDependencies) || requiredDependencies === null || typeof requiredDependencies !== 'object' || Array.isArray(requiredDependencies)) throw new Error(`${key} dependency evidence is invalid`)
   const actual = evidenceDependencies.map(function readEntry(entry) {
     assertExactKeys(entry, ['name', 'realpath', 'version'], `${key} assembly dependency`)
-    return { name: entry.name, version: entry.version, realpath: readExternalRealpath(entry.realpath, `${key} dependency evidence`) }
+    return { name: entry.name, version: entry.version, realpath: normalizeExternalDependencyPath(entry.realpath, repoRoot, `${key} dependency evidence`) }
   }).sort(compareDependencyEvidence)
+  const omitted = unmaterializedOptionalDependencies.map(function readEntry(entry) {
+    assertExactKeys(entry, ['name', 'path', 'version'], `${key} assembly optional dependency`)
+    return { name: entry.name, version: entry.version, path: normalizeExternalDependencyPath(entry.path, repoRoot, `${key} optional dependency evidence`) }
+  }).sort(compareDependencyEvidence)
+  const actualKeys = new Set(actual.map(function createKey(entry) { return `${entry.name}\0${entry.version}\0${entry.realpath}` }))
+  const omittedKeys = new Set(omitted.map(function createKey(entry) { return `${entry.name}\0${entry.version}\0${entry.path}` }))
+  if (actualKeys.size !== actual.length || omittedKeys.size !== omitted.length || [...omittedKeys].some(function overlaps(entry) { return actualKeys.has(entry) })) {
+    throw new Error(`${key} dependency evidence is invalid`)
+  }
+  const firstPartyDirectKeys = new Set(Object.entries(requiredDependencies).filter(function isFirstParty([name]) {
+    return name.startsWith('@4xian/')
+  }).map(function createKey([name, version]) { return `${name}\0${version}` }))
+  const raw = collectAssemblyDependencyEvidence(dependencyList, key, repoRoot, omittedKeys, firstPartyDirectKeys)
+  for (const entry of omitted) {
+    if (!lockfileMarksDependencyOptional(lockfile, entry.name, entry.version, entry.path)) throw new Error(`${key} assembly optional dependency is invalid`)
+  }
   if (!canonicalBytes(actual).equals(canonicalBytes(raw.records))) throw new Error(`${key} dependency evidence mismatch`)
+  if (!canonicalBytes(omitted).equals(canonicalBytes(raw.omitted))) throw new Error(`${key} optional dependency evidence mismatch`)
+  validateAssemblyDependencyGraph(dependencyList, lockfile, key, omittedKeys)
+  for (const entry of actual) {
+    if (lockfileExcludesAssemblyEnvironment(lockfile, entry.name, entry.version, environment)) {
+      throw new Error(`${key} assembly dependency is excluded from the environment`)
+    }
+  }
+  for (const entry of omitted) {
+    if (!lockfileExcludesAssemblyEnvironment(lockfile, entry.name, entry.version, environment) ||
+        !lockfileExcludesAssemblyEnvironment(repositoryLockfile, entry.name, entry.version, environment)) {
+      throw new Error(`${key} assembly optional dependency is invalid`)
+    }
+  }
+  for (const entry of raw.omittedParents) {
+    if (!lockfileParentMarksDependencyOptional(lockfile, entry.parentName, entry.parentVersion, entry.name, entry.version) ||
+        !lockfileParentMarksDependencyOptional(repositoryLockfile, entry.parentName, entry.parentVersion, entry.name, entry.version)) {
+      throw new Error(`${key} assembly optional dependency is invalid`)
+    }
+  }
   for (const [name, version] of Object.entries(requiredDependencies)) {
     const direct = raw.direct.find(function find(entry) { return entry.name === name })
     const resolved = actual.find(function find(entry) { return entry.name === name && entry.version === version })
@@ -478,11 +539,15 @@ export function validateAssemblyDependencyEvidence(dependencyList, evidenceDepen
       throw new Error(`${key} required dependency is missing: ${name}`)
     }
   }
+  const direct = raw.direct.map(function read(entry) { return { name: entry.name, version: entry.version } })
+  const required = Object.entries(requiredDependencies).map(function read([name, version]) { return { name, version } }).sort(compareDependencyEvidence)
+  if (!canonicalBytes(direct).equals(canonicalBytes(required))) throw new Error(`${key} direct dependency list is invalid`)
 }
 /** 校验 pnpm audit payload 的完整 envelope 和 high/critical 整数计数。 */
 export function validateAssemblyAuditPayload(payload, key) {
   const vulnerabilities = payload?.metadata?.vulnerabilities
   if (payload === null || typeof payload !== 'object' || vulnerabilities === null || typeof vulnerabilities !== 'object' ||
+      Object.prototype.hasOwnProperty.call(payload, 'error') || Object.prototype.hasOwnProperty.call(payload, 'errors') ||
       !Number.isSafeInteger(vulnerabilities.high) || vulnerabilities.high < 0 ||
       !Number.isSafeInteger(vulnerabilities.critical) || vulnerabilities.critical < 0) {
     throw new Error(`${key} audit payload is invalid`)
@@ -605,69 +670,6 @@ function createRegistryMetadataBytes(entry, registryOrigin, tarballBytes) {
     'dist-tags': { latest: entry.version }
   })
 }
-/** 判断绝对路径是否落在当前仓库内。 */
-function isRepositoryPath(path) {
-  const relativePath = relative(repoRoot, path)
-  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-}
-/** 从 pnpm list 递归收集唯一 name/version。 */
-function collectDependencyPairs(value) {
-  const pairs = new Set()
-  /** 遍历 dependency 节点。 */
-  function visit(node) {
-    if (Array.isArray(node)) { for (const child of node) visit(child); return }
-    if (node === null || typeof node !== 'object') return
-    for (const [name, child] of Object.entries(node.dependencies ?? {})) {
-      if (child === null || typeof child !== 'object' || typeof child.version !== 'string') throw new Error('assembly dependency list is invalid')
-      pairs.add(`${name}\0${child.version}`)
-      visit(child)
-    }
-  }
-  visit(value)
-  return [...pairs].sort()
-}
-/** 收集 raw dependency list 的直接依赖和完整 path 证据。 */
-function collectDependencyEvidence(value, key) {
-  const records = new Map()
-  const direct = []
-  const roots = Array.isArray(value) ? value : [value]
-  for (const root of roots) {
-    for (const [name, child] of Object.entries(root?.dependencies ?? {})) {
-      direct.push(readDependencyEvidence(name, child, key))
-    }
-  }
-  /** 递归读取每个依赖节点的 name/version/path。 */
-  function visit(node) {
-    if (Array.isArray(node)) { for (const child of node) visit(child); return }
-    if (node === null || typeof node !== 'object') return
-    for (const [name, child] of Object.entries(node.dependencies ?? {})) {
-      const entry = readDependencyEvidence(name, child, key)
-      records.set(`${entry.name}\0${entry.version}\0${entry.realpath}`, entry)
-      visit(child)
-    }
-  }
-  visit(value)
-  const sortedDirect = direct.sort(compareDependencyEvidence)
-  const sortedRecords = [...records.values()].sort(compareDependencyEvidence)
-  if (new Set(sortedDirect.map(function keyOf(entry) { return `${entry.name}\0${entry.version}` })).size !== sortedDirect.length) {
-    throw new Error(`${key} direct dependency list is invalid`)
-  }
-  return { direct: sortedDirect, records: sortedRecords }
-}
-/** 读取并规范一个 raw dependency path。 */
-function readDependencyEvidence(name, child, key) {
-  if (child === null || typeof child !== 'object' || typeof child.version !== 'string' ||
-      (child.name !== undefined && child.name !== name) || typeof child.path !== 'string') {
-    throw new Error(`${key} dependency list path is invalid`)
-  }
-  return { name, version: child.version, realpath: readExternalRealpath(child.path, `${key} dependency list path`) }
-}
-/** 按 name/version/realpath 稳定排序 dependency evidence。 */
-function compareDependencyEvidence(left, right) {
-  const leftKey = `${left.name}\0${left.version}\0${left.realpath}`
-  const rightKey = `${right.name}\0${right.version}\0${right.realpath}`
-  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
-}
 /** 解析 pnpm package block 并绑定对应 name/version 的 resolution.integrity。 */
 function lockfileContainsIntegrity(lockfile, name, version, integrity) {
   const escaped = `${name}@${version}`.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
@@ -680,14 +682,6 @@ function lockfileContainsIntegrity(lockfile, name, version, integrity) {
   const inline = new RegExp(String.raw`^[\t ]+resolution:[\t ]*\{[\t ]*integrity:[\t ]*${integrity.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}[\t ]*\}[\t ]*$`, 'mu')
   const multiline = new RegExp(String.raw`^[\t ]+integrity:[\t ]*${integrity.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}[\t ]*$`, 'mu')
   return inline.test(block) || multiline.test(block)
-}
-/** 解析物理 realpath 并拒绝仓库内路径或 symlink 伪装。 */
-function readExternalRealpath(value, label) {
-  if (typeof value !== 'string' || !isAbsolute(value)) throw new Error(`${label} is invalid`)
-  let physical
-  try { physical = realpathSync(value) } catch { throw new Error(`${label} is invalid`) }
-  if (physical !== resolve(value) || isRepositoryPath(physical)) throw new Error(`${label} is invalid`)
-  return physical
 }
 /** 从 run-a identity 精确重算并校验 provenance。 */
 export function validatePhase3Provenance(value, manifest, manifestSha256, checksumSha256) {

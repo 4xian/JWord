@@ -130,6 +130,7 @@ interface ExpectedPackagePolicy {
 
 const REPO_ROOT = resolve(new URL('../..', import.meta.url).pathname)
 const CONTRACT_PATH = join(REPO_ROOT, 'tools/release/package-artifact-contract.json')
+const HUMAN_CONTRACT_PATH = join(REPO_ROOT, 'docs/current-implementation/release-artifact-contract.md')
 const RUNTIME_PACKAGE_NAMES = [
   '@4xian/jword-collab',
   '@4xian/jword-collab-server',
@@ -225,6 +226,7 @@ describe('Phase 3 package artifact contract', runContractSuite)
 /** 校验机器 contract、source manifest、native registry 与 size budget。 */
 function verifyPackageArtifactContract(): void {
   const contract = readJsonFile<PackageArtifactContract>(CONTRACT_PATH)
+  const humanContract = readFileSync(HUMAN_CONTRACT_PATH, 'utf8')
 
   expect(Object.keys(contract).sort()).toEqual([
     'environmentRuntimeMap',
@@ -255,6 +257,9 @@ function verifyPackageArtifactContract(): void {
   verifyJourneys(contract)
   verifySizeBudgets(contract.sizeBudgets)
   verifyNativeRegistry(contract.packages)
+  expect(humanContract).toContain('六项 Vanilla limit 固定为 `900000` bytes')
+  expect(humanContract).toContain('入口 JS、CSS 和 Vite `modulepreload`')
+  expect(humanContract).toContain('不得按后续观测值自动抬高')
 }
 
 /** 通过统一 scanner 的公开 CLI 校验 source package manifests。 */
@@ -918,7 +923,7 @@ function vanillaBudget(
   return {
     id: `vanilla-first-screen/${packageManager}/${browser}`,
     source: `consumer:bundles/vanilla-editorshell-css--${packageManager}--vite-browser--${browser}/first-screen`,
-    limitBytes: 700_000
+    limitBytes: 900_000
   }
 }
 

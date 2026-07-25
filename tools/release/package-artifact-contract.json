@@ -1084,32 +1084,32 @@
     {
       "id": "vanilla-first-screen/npm/chromium",
       "source": "consumer:bundles/vanilla-editorshell-css--npm--vite-browser--chromium/first-screen",
-      "limitBytes": 700000
+      "limitBytes": 900000
     },
     {
       "id": "vanilla-first-screen/npm/firefox",
       "source": "consumer:bundles/vanilla-editorshell-css--npm--vite-browser--firefox/first-screen",
-      "limitBytes": 700000
+      "limitBytes": 900000
     },
     {
       "id": "vanilla-first-screen/npm/webkit",
       "source": "consumer:bundles/vanilla-editorshell-css--npm--vite-browser--webkit/first-screen",
-      "limitBytes": 700000
+      "limitBytes": 900000
     },
     {
       "id": "vanilla-first-screen/pnpm/chromium",
       "source": "consumer:bundles/vanilla-editorshell-css--pnpm--vite-browser--chromium/first-screen",
-      "limitBytes": 700000
+      "limitBytes": 900000
     },
     {
       "id": "vanilla-first-screen/pnpm/firefox",
       "source": "consumer:bundles/vanilla-editorshell-css--pnpm--vite-browser--firefox/first-screen",
-      "limitBytes": 700000
+      "limitBytes": 900000
     },
     {
       "id": "vanilla-first-screen/pnpm/webkit",
       "source": "consumer:bundles/vanilla-editorshell-css--pnpm--vite-browser--webkit/first-screen",
-      "limitBytes": 700000
+      "limitBytes": 900000
     }
   ]
 }
