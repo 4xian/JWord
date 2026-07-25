@@ -589,6 +589,22 @@ function verifyAssemblyRegistryMutations(): void {
   try {
     expect(() => validateAssemblyRegistry(fixture.root, fixture.expectedNames, fixture.runA)).not.toThrow()
 
+    const originalLockfile = readFileSync(join(fixture.root, 'pnpm-lock.yaml'), 'utf8')
+    const duplicateIntegrityLockfile = originalLockfile.replace(', tarball:', ', integrity: sha512-forged, tarball:')
+    writeFileSync(join(fixture.root, 'pnpm-lock.yaml'), duplicateIntegrityLockfile)
+    expect(() => validateAssemblyRegistry(fixture.root, fixture.expectedNames, fixture.runA)).toThrow('assembly registry package bytes are invalid')
+    writeFileSync(join(fixture.root, 'pnpm-lock.yaml'), originalLockfile)
+
+    const multilineDuplicateIntegrityLockfile = originalLockfile.replace(/resolution: \{integrity: ([^,}]+), tarball: [^}]+\}/u, 'resolution:\n      integrity: $1\n      integrity: sha512-forged')
+    writeFileSync(join(fixture.root, 'pnpm-lock.yaml'), multilineDuplicateIntegrityLockfile)
+    expect(() => validateAssemblyRegistry(fixture.root, fixture.expectedNames, fixture.runA)).toThrow('assembly registry package bytes are invalid')
+    writeFileSync(join(fixture.root, 'pnpm-lock.yaml'), originalLockfile)
+
+    const nestedIntegrityLockfile = originalLockfile.replace(/resolution: \{integrity: ([^,}]+), tarball: [^}]+\}/u, 'resolution:\n      tarball:\n        integrity: $1')
+    writeFileSync(join(fixture.root, 'pnpm-lock.yaml'), nestedIntegrityLockfile)
+    expect(() => validateAssemblyRegistry(fixture.root, fixture.expectedNames, fixture.runA)).toThrow('assembly registry package bytes are invalid')
+    writeFileSync(join(fixture.root, 'pnpm-lock.yaml'), originalLockfile)
+
     const reversedRegistry = structuredClone(fixture.registry)
     reversedRegistry.servedPackages.reverse()
     fixture.writeRegistry(reversedRegistry)
@@ -801,7 +817,7 @@ function createSyntheticAssemblyRegistryFixture() {
   writeFileSync(join(root, '.npmrc'), `registry=https://registry.npmjs.org/\n@4xian:registry=${origin}/\n`)
   writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: Object.fromEntries(packages.map(function readDependency(entry) { return [entry.name, entry.version] })) }))
   const lockfilePackages = servedPackages.map(function createLockfileEntry(entry) {
-    return `  '${entry.name}@${entry.version}':\n    resolution: {integrity: ${entry.tarballIntegrity}}`
+    return `  '${entry.name}@${entry.version}':\n    resolution: {integrity: ${entry.tarballIntegrity}, tarball: ${origin}/tarballs/${entry.tarballFile}}`
   }).join('\n')
   writeFileSync(join(root, 'pnpm-lock.yaml'), `lockfileVersion: '9.0'\n\npackages:\n${lockfilePackages}\n`)
   const writeRegistry = function writeRegistry(value: typeof registry): void { writeFileSync(join(root, 'registry-evidence.json'), canonicalBytes(value)) }

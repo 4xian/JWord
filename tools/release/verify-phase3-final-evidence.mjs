@@ -679,9 +679,8 @@ function lockfileContainsIntegrity(lockfile, name, version, integrity) {
   const remainder = lockfile.slice(blockStart)
   const next = remainder.search(/^[\x20]{2}\S/mu)
   const block = next === -1 ? remainder : remainder.slice(0, next)
-  const inline = new RegExp(String.raw`^[\t ]+resolution:[\t ]*\{[\t ]*integrity:[\t ]*${integrity.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}[\t ]*\}[\t ]*$`, 'mu')
-  const multiline = new RegExp(String.raw`^[\t ]+integrity:[\t ]*${integrity.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}[\t ]*$`, 'mu')
-  return inline.test(block) || multiline.test(block)
+  const inline = new RegExp(String.raw`^[\t ]+resolution:[\t ]*\{[\t ]*integrity:[\t ]*${integrity.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?:,[\t ]*tarball:[\t ]*[^\t ,{}\r\n]+)?[\t ]*\}[\t ]*$`, 'mu')
+  return inline.test(block)
 }
 /** 从 run-a identity 精确重算并校验 provenance。 */
 export function validatePhase3Provenance(value, manifest, manifestSha256, checksumSha256) {
