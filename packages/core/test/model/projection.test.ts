@@ -5,7 +5,7 @@
  * 边界：只测试 document、section、block、run、text 的只读快照，不覆盖编辑 adapter、布局或渲染。
  * 协作模块：后续 layout、render、docx 和 pdf 只能消费这里的只读投影。
  * 性能/安全约束：测试只使用内存中的 Y.Doc，不触发 DOM、网络或磁盘写入。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#32-状态真源。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

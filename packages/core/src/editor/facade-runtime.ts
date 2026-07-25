@@ -3,39 +3,17 @@
  * 边界：不处理 DOM 事件细节，不直接绘制 canvas。
  * 协作模块：状态层、文档辅助函数、格式命令、历史记录、选择区和布局/渲染子类。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
-import {
-  buildSetBackgroundColorCommand,
-  buildSetBoldCommand,
-  buildSetFontFamilyCommand,
-  buildSetFontSizeCommand,
-  buildSetItalicCommand,
-  buildSetParagraphAlignmentCommand,
-  buildSetParagraphIndentCommand,
-  buildSetParagraphFirstLineIndentCommand,
-  buildSetParagraphHangingIndentCommand,
-  buildSetParagraphLineHeightCommand,
-  buildSetParagraphListCommand,
-  buildSetParagraphSpacingAfterCommand,
-  buildSetParagraphSpacingBeforeCommand,
-  buildSetParagraphStyleCommand,
-  buildSetSubscriptCommand,
-  buildSetSuperscriptCommand,
-  buildSetStrikeCommand,
-  buildSetTextColorCommand,
-  buildSetUnderlineCommand
-} from '../operations/command-builders'
-import { createCanvasPool } from '../canvas/pool'
+import * as Y from 'yjs'
 import { createDocumentProjection } from '../model/projection'
-import { createMountedCanvasImageResourceResolver } from '../resources/canvas-image-resolver'
-import { countGraphemes } from '../shared/grapheme'
+import { countGraphemes, utf16IndexToGraphemeIndex } from '../shared/grapheme'
 import { createJWordError } from '../shared/errors'
 import { createSelectionFormattingState } from '../model/formatting-state'
-import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
-import type { Block, ParagraphList, Run } from '../model/types'
-import { DEFAULT_HISTORY_ORIGIN } from '../operations/history'
-import type { HistoryOperationResult } from '../operations/history'
+import type { SelectionFormattingState } from '../model/formatting-types'
+import type { Block, Run } from '../model/types'
+import { DEFAULT_HISTORY_ORIGIN, readHistoryScopeTransactionOrigin } from '../operations/history'
+import type { HistoryOperationResult, HistoryScope } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
 import { getCaretRect as getLayoutCaretRect, getSelectionRects as getLayoutSelectionRects, hitTestDocumentLayout, layoutDocument } from '../layout/runtime'
 import type { DocumentLayout, LayoutDirtyRange, LayoutRect } from '../layout/runtime'
@@ -43,18 +21,18 @@ import { createAnchorRef, createGraphemeIndex, createTextAnchorRef, createTextRa
 import type { AnchorRef, BlockId, RangeRef, RunId, SectionId, TextRangeRecord } from '../model/position'
 import type { DocumentProjection } from '../model/projection'
 import { createSelectionRestoreSnapshot, createSelectionState, isSelectionCollapsed, restoreSelection } from '../model/selection'
-import type { SelectionState } from '../model/selection'
-import { collectSelectionTargets } from '../model/selection-targets'
+import type { SelectionRestoreSnapshot, SelectionState } from '../model/selection'
 import type { Command, TextPosition, TransactionMetadata, TransactionResult } from '../operations/transaction'
-import { DOCUMENT_CREATE_ORIGIN, FIXTURE_LOAD_ORIGIN } from './constants'
-import { createCanvasElement } from './rendering'
-import { createHiddenTextareaElement, createLiveRegionElement, createTextMirrorElement, focusHiddenTextarea } from './dom'
-import { findRunText, locateCommentThreadRange, readCurrentDocumentId, replaceStoreDocument, restoreTextRangeRecord } from './document'
-import { JWordEditorState } from './state'
+import { DOCUMENT_CREATE_ORIGIN, DOCUMENT_MODEL_LOAD_ORIGIN, FIXTURE_LOAD_ORIGIN } from './constants'
+import { findRunText, locateCommentThreadRange, readCurrentDocumentId, replaceStoreDocument, replaceStoreDocumentModel, restoreTextRangeRecord } from './document'
+import { JWordEditorFormattingFacadeRuntime } from './formatting-facade-runtime'
 import { resolveCommandDirtyRange } from './rendering'
-import type { Editor, EditorCommandOptions, EditorDocumentInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
+import type { EditorCommandOptions, EditorDocumentInput, EditorDocumentModelInput, EditorEventListener, EditorFixture, EditorHitTestPoint, EditorRichTextFragment, EditorTextAnchorInput, SelectionUpdateSource } from './types'
+import type { PluginDiagnostic } from '../plugins/types'
+import { createJWordDiagnosticsSnapshot, createJWordLayoutMetricsSummary, createJWordSelectionSummary } from './observability'
+import type { JWordDiagnosticsSnapshot } from './observability'
 
-export abstract class JWordEditorFacadeRuntime extends JWordEditorState implements Editor {
+export abstract class JWordEditorFacadeRuntime extends JWordEditorFormattingFacadeRuntime {
   /** 粘贴已清洗的富文本片段，具体 command 生成由输入运行时实现。 */
   abstract pasteRichTextFragment(fragment: EditorRichTextFragment): boolean
 
@@ -74,6 +52,12 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     this.assertActive()
 
     return this.replaceDocument(fixture, 'loadFixture', FIXTURE_LOAD_ORIGIN)
+  }
+
+  loadDocumentModel(input: EditorDocumentModelInput): DocumentProjection {
+    this.assertActive()
+
+    return this.replaceDocumentModel(input, 'loadDocumentModel', DOCUMENT_MODEL_LOAD_ORIGIN)
   }
 
   createTextAnchor(input: EditorTextAnchorInput): AnchorRef {
@@ -240,263 +224,24 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     })
   }
 
-  toggleBold(): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetBoldCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.bold.value !== true
-    ))
-  }
-
-  toggleItalic(): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetItalicCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.italic.value !== true
-    ))
-  }
-
-  toggleUnderline(): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetUnderlineCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.underline.value !== true
-    ))
-  }
-
-  toggleStrike(): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetStrikeCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.strike.value !== true
-    ))
-  }
-
-  /**
-   * 切换当前选择区的上标状态。
-   */
-  toggleSuperscript(): void {
-    this.assertActive()
-    if (this.currentSelection !== null && isSelectionCollapsed(this.currentSelection)) {
-      this.toggleCollapsedScriptFormatting('superscript')
-      return
-    }
-
-    this.executeFacadeFormattingCommand(buildSetSuperscriptCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.superscript.value !== true
-    ))
-  }
-
-  /**
-   * 切换当前选择区的下标状态。
-   */
-  toggleSubscript(): void {
-    this.assertActive()
-    if (this.currentSelection !== null && isSelectionCollapsed(this.currentSelection)) {
-      this.toggleCollapsedScriptFormatting('subscript')
-      return
-    }
-
-    this.executeFacadeFormattingCommand(buildSetSubscriptCommand(
-      this.currentProjection,
-      this.currentSelection,
-      this.getSelectionFormattingState().run?.subscript.value !== true
-    ))
-  }
-
-  setFontFamily(value: string): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetFontFamilyCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  setFontSize(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetFontSizeCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  setTextColor(value: string): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetTextColorCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  setBackgroundColor(value: string): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetBackgroundColorCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  setParagraphAlignment(value: ParagraphAlignment): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphAlignmentCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的左缩进。
-   */
-  setParagraphIndent(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphIndentCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的行距。
-   */
-  setParagraphLineHeight(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphLineHeightCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的段前距。
-   */
-  setParagraphSpacingBefore(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphSpacingBeforeCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的段后距。
-   */
-  setParagraphSpacingAfter(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphSpacingAfterCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的首行缩进。
-   */
-  setParagraphFirstLineIndent(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphFirstLineIndentCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的悬挂缩进。
-   */
-  setParagraphHangingIndent(value: number): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphHangingIndentCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的稳定样式语义。
-   */
-  setParagraphStyle(value: string): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphStyleCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  /**
-   * 设置当前选择区段落的稳定列表语义。
-   */
-  setParagraphList(value: ParagraphList | null): void {
-    this.assertActive()
-    this.executeFacadeFormattingCommand(buildSetParagraphListCommand(
-      this.currentProjection,
-      this.currentSelection,
-      value
-    ))
-  }
-
-  adjustParagraphIndent(deltaTwips: number): void {
-    this.assertActive()
-
-    if (deltaTwips === 0) {
-      return
-    }
-
-    const targets = collectSelectionTargets(this.currentProjection, this.currentSelection)
-
-    if (targets.paragraphs.length === 0) {
-      return
-    }
-
-    const command = {
-      name: 'adjustParagraphIndent',
-      operations: targets.paragraphs.flatMap((target) => {
-        const currentIndent = typeof target.paragraph.properties?.indentLeftTwips === 'number'
-          ? target.paragraph.properties.indentLeftTwips
-          : 0
-        const nextIndent = currentIndent + deltaTwips
-
-        return currentIndent === nextIndent
-          ? []
-          : [{
-              kind: 'setParagraphProperties' as const,
-              paragraphId: target.paragraph.id,
-              properties: { indentLeftTwips: nextIndent }
-            }]
-      })
-    }
-
-    if (command.operations.length === 0) {
-      return
-    }
-
-    this.executeCommand(command, {
-      selectionAfter: this.currentSelection
-    })
-  }
 
   executeCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
     this.assertActive()
 
+    return this.pluginHost.runCommandMiddleware({ command, options }, (nextCommand, nextOptions) =>
+      this.executePipelineCommand(nextCommand, nextOptions)
+    )
+  }
+
+  /** 执行已经通过插件中间件的命令。 */
+  protected executePipelineCommand(command: Command, options: EditorCommandOptions = {}): TransactionResult {
+    this.assertActive()
+
     const origin = options.origin ?? DEFAULT_HISTORY_ORIGIN
-    const metadata = createTransactionMetadata(origin, options.label)
-    const shouldTrackHistory = this.history.trackedOrigins.has(origin) && command.operations.length > 0
+    const metadata = createTransactionMetadata(origin, options)
+    const historyScope = options.historyScope
+    const shouldTrackHistory = (historyScope !== undefined || this.history.trackedOrigins.has(origin)) &&
+      command.operations.length > 0
     const selectionBefore = this.currentSelection
     const hasSelectionAfter = 'selectionAfter' in options
     const selectionAfter = hasSelectionAfter ? options.selectionAfter ?? null : this.currentSelection
@@ -515,7 +260,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
         ...(options.label === undefined ? {} : { description: options.label }),
         selectionBefore: createSelectionRestoreSnapshot(selectionBefore),
         selectionAfter: createSelectionRestoreSnapshot(selectionAfter)
-      })
+      }, historyScope)
     }
 
     try {
@@ -529,7 +274,11 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
 
       const result = this.pipeline.run(command, metadata)
 
-      if (!hasSelectionAfter) {
+      if (shouldTrackHistory && result.dirty === false) {
+        this.history.discardNextTransactionMetadata(historyScope)
+      }
+
+      if (!hasSelectionAfter || result.dirty === false) {
         this.refreshMountedSelectionRuntime(selectionBefore)
       }
       this.emitSelectionChange()
@@ -545,17 +294,42 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
       }
 
       if (shouldTrackHistory) {
-        this.history.discardNextTransactionMetadata()
+        this.history.discardNextTransactionMetadata(historyScope)
       }
 
       throw error
     }
   }
 
-  undo(): HistoryOperationResult {
+  /** 执行已注册插件命令。 */
+  executePluginCommand(commandName: string, input?: unknown): TransactionResult | undefined {
     this.assertActive()
 
-    const result = this.history.undo()
+    return this.pluginHost.executePluginCommand(commandName, input)
+  }
+
+  /** 读取插件诊断快照。 */
+  getPluginDiagnostics(): readonly PluginDiagnostic[] {
+    this.assertActive()
+
+    return this.pluginHost.getDiagnostics()
+  }
+
+  /** 导出隐私裁剪后的 diagnostics 快照。 */
+  exportDiagnostics(): JWordDiagnosticsSnapshot {
+    this.assertActive()
+
+    return createJWordDiagnosticsSnapshot(this.pluginHost.getDiagnostics(), {
+      operations: this.operationSummary,
+      layout: createJWordLayoutMetricsSummary(this.getLayout()),
+      selection: createJWordSelectionSummary(this.currentSelection)
+    })
+  }
+
+  undo(scope?: HistoryScope): HistoryOperationResult {
+    this.assertActive()
+
+    const result = this.history.undo(scope)
 
     if (result.stackItem !== null) {
       this.currentProjection = createDocumentProjection(this.store)
@@ -567,7 +341,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     }
 
     if (result.metadata?.selectionBefore !== undefined) {
-      this.commitSelection(restoreSelection(result.metadata.selectionBefore), {
+      this.commitSelection(this.restoreHistorySelection(result.metadata.selectionBefore), {
         source: 'history',
         render: false,
         emit: false
@@ -575,17 +349,22 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     }
 
     if (result.stackItem !== null) {
-      this.renderMountedLayout('document')
+      this.cancelDeferredDocumentRender()
+      if (this.shouldRenderMountedDocumentImmediately('undo')) {
+        this.renderMountedLayout('document')
+      } else {
+        this.scheduleDeferredDocumentRender()
+      }
     }
     this.emitSelectionChange()
 
     return result
   }
 
-  redo(): HistoryOperationResult {
+  redo(scope?: HistoryScope): HistoryOperationResult {
     this.assertActive()
 
-    const result = this.history.redo()
+    const result = this.history.redo(scope)
 
     if (result.stackItem !== null) {
       this.currentProjection = createDocumentProjection(this.store)
@@ -597,7 +376,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     }
 
     if (result.metadata?.selectionAfter !== undefined) {
-      this.commitSelection(restoreSelection(result.metadata.selectionAfter), {
+      this.commitSelection(this.restoreHistorySelection(result.metadata.selectionAfter), {
         source: 'history',
         render: false,
         emit: false
@@ -605,23 +384,28 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     }
 
     if (result.stackItem !== null) {
-      this.renderMountedLayout('document')
+      this.cancelDeferredDocumentRender()
+      if (this.shouldRenderMountedDocumentImmediately('redo')) {
+        this.renderMountedLayout('document')
+      } else {
+        this.scheduleDeferredDocumentRender()
+      }
     }
     this.emitSelectionChange()
 
     return result
   }
 
-  canUndo(): boolean {
+  canUndo(scope?: HistoryScope): boolean {
     this.assertActive()
 
-    return this.history.canUndo()
+    return this.history.canUndo(scope)
   }
 
-  canRedo(): boolean {
+  canRedo(scope?: HistoryScope): boolean {
     this.assertActive()
 
-    return this.history.canRedo()
+    return this.history.canRedo(scope)
   }
 
   subscribe(listener: EditorEventListener): () => void {
@@ -631,239 +415,6 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     return () => {
       this.listeners.delete(listener)
     }
-  }
-
-  focus(): void {
-    this.assertActive()
-
-    const mountedDom = this.mountedDom
-
-    if (mountedDom === undefined) {
-      return
-    }
-
-    focusHiddenTextarea(mountedDom)
-    this.updateInputFocusState(true)
-
-    if (this.currentSelection !== null) {
-      return
-    }
-
-    const anchor = this.initialFocusPosition === 'start'
-      ? this.resolveInitialStartFocusAnchor()
-      : this.resolveInitialEndFocusAnchor()
-
-    if (anchor === undefined) {
-      return
-    }
-
-    this.commitSelection(createSelectionState(anchor, anchor), {
-      source: 'api'
-    })
-  }
-
-  blur(): void {
-    this.assertActive()
-
-    const mountedDom = this.mountedDom
-
-    if (mountedDom === undefined) {
-      return
-    }
-
-    mountedDom.hiddenTextarea.blur()
-    this.updateInputFocusState(false)
-  }
-
-  mount(host: HTMLElement): void {
-    this.assertActive()
-
-    if (this.mountedDom !== undefined) {
-      throw createJWordError('EDITOR_ALREADY_MOUNTED', 'JWord editor is already mounted.')
-    }
-
-    const ownerDocument = host.ownerDocument
-    const shell = ownerDocument.createElement('div')
-    shell.className = 'jw-editor'
-    shell.setAttribute('data-jword-editor', '')
-    shell.setAttribute('role', 'application')
-    shell.setAttribute('aria-label', this.label)
-
-    const canvasContainer = ownerDocument.createElement('div')
-    canvasContainer.className = 'jw-editor__canvas-container'
-    canvasContainer.setAttribute('data-jword-canvas-container', '')
-    const hiddenTextarea = createHiddenTextareaElement(ownerDocument)
-    const liveRegion = createLiveRegionElement(ownerDocument)
-    const textMirror = createTextMirrorElement(ownerDocument)
-    shell.style.width = '100%'
-    shell.style.height = '100%'
-    shell.style.position = 'relative'
-    canvasContainer.style.width = '100%'
-    canvasContainer.style.height = '100%'
-    canvasContainer.style.overflow = 'auto'
-    canvasContainer.style.position = 'relative'
-    canvasContainer.style.cursor = 'text'
-
-    const handleScroll = () => {
-      this.renderMountedLayout('viewport')
-    }
-    const handleInput = (event: Event) => {
-      this.handleRuntimeInput(event)
-    }
-    const handleBeforeInput = (event: Event) => {
-      this.handleRuntimeBeforeInput(event)
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      this.handleRuntimeKeyDown(event)
-    }
-    const handleCopy = (event: Event) => {
-      this.handleRuntimeCopy(event)
-    }
-    const handleCut = (event: Event) => {
-      this.handleRuntimeCut(event)
-    }
-    const handlePaste = (event: Event) => {
-      this.handleRuntimePaste(event)
-    }
-    const handlePointerDown = (event: MouseEvent) => {
-      this.handleRuntimePointerDown(event)
-    }
-    const handlePointerMove = (event: MouseEvent) => {
-      this.handleRuntimePointerMove(event)
-    }
-    const handlePointerUp = (event: MouseEvent) => {
-      this.handleRuntimePointerUp(event)
-    }
-    const handleDoubleClick = (event: MouseEvent) => {
-      this.handleRuntimeDoubleClick(event)
-    }
-    const handleCompositionStart = (event: Event) => {
-      this.handleRuntimeCompositionStart(event)
-    }
-    const handleCompositionUpdate = (event: Event) => {
-      this.handleRuntimeCompositionUpdate(event)
-    }
-    const handleCompositionEnd = (event: Event) => {
-      this.handleRuntimeCompositionEnd(event)
-    }
-    const handleFocus = () => {
-      this.updateInputFocusState(true)
-    }
-    const handleBlur = () => {
-      this.updateInputFocusState(false)
-    }
-
-    canvasContainer.addEventListener('scroll', handleScroll)
-    canvasContainer.addEventListener('mousedown', handlePointerDown)
-    canvasContainer.addEventListener('mousemove', handlePointerMove)
-    canvasContainer.addEventListener('mouseup', handlePointerUp)
-    canvasContainer.addEventListener('dblclick', handleDoubleClick)
-    hiddenTextarea.addEventListener('beforeinput', handleBeforeInput)
-    hiddenTextarea.addEventListener('input', handleInput)
-    hiddenTextarea.addEventListener('keydown', handleKeyDown)
-    hiddenTextarea.addEventListener('copy', handleCopy)
-    hiddenTextarea.addEventListener('cut', handleCut)
-    hiddenTextarea.addEventListener('paste', handlePaste)
-    hiddenTextarea.addEventListener('compositionstart', handleCompositionStart)
-    hiddenTextarea.addEventListener('compositionupdate', handleCompositionUpdate)
-    hiddenTextarea.addEventListener('compositionend', handleCompositionEnd)
-    hiddenTextarea.addEventListener('focus', handleFocus)
-    hiddenTextarea.addEventListener('blur', handleBlur)
-    shell.append(canvasContainer, hiddenTextarea, liveRegion, textMirror)
-    host.append(shell)
-
-    this.mountedDom = {
-      shell,
-      canvasContainer,
-      hiddenTextarea,
-      liveRegion,
-      textMirror,
-      handleScroll,
-      handleInput,
-      handleBeforeInput,
-      handleKeyDown,
-      handleCopy,
-      handleCut,
-      handlePaste,
-      handlePointerDown,
-      handlePointerMove,
-      handlePointerUp,
-      handleDoubleClick,
-      handleCompositionStart,
-      handleCompositionUpdate,
-      handleCompositionEnd,
-      pool: createCanvasPool({
-        createCanvas: () => createCanvasElement(ownerDocument)
-      }),
-      pageWrappers: new Map(),
-      baseCanvases: new Map(),
-      imageResourceResolver: createMountedCanvasImageResourceResolver({
-        ownerDocument,
-        onInvalidate: () => {
-          if (this.isDestroyed || this.mountedDom === undefined) {
-            return
-          }
-
-          this.renderMountedLayout('resource')
-        }
-      }),
-      inputState: {
-        isComposing: false,
-        compositionText: '',
-        pendingPlainInputText: ''
-      },
-      pointerState: {
-        anchor: null,
-        pageMetrics: null,
-        paintedPageIndexes: []
-      },
-      canvases: new Map(),
-      deferredRender: undefined,
-      deferredTextMirrorSyncId: undefined
-    }
-    this.renderMountedLayout('mount')
-  }
-
-  destroy(): void {
-    if (this.isDestroyed) {
-      return
-    }
-
-    if (this.mountedDom !== undefined) {
-      this.cancelDeferredDocumentRender()
-      this.cancelDeferredRender()
-      this.cancelDeferredPointerSelectionWork()
-      this.cancelDeferredTextMirrorSync()
-      this.stopCaretBlink()
-      this.mountedDom.canvasContainer.removeEventListener('scroll', this.mountedDom.handleScroll)
-      this.mountedDom.canvasContainer.removeEventListener('mousedown', this.mountedDom.handlePointerDown)
-      this.mountedDom.canvasContainer.removeEventListener('mousemove', this.mountedDom.handlePointerMove)
-      this.mountedDom.canvasContainer.removeEventListener('mouseup', this.mountedDom.handlePointerUp)
-      this.mountedDom.canvasContainer.removeEventListener('dblclick', this.mountedDom.handleDoubleClick)
-      this.mountedDom.hiddenTextarea.removeEventListener('beforeinput', this.mountedDom.handleBeforeInput)
-      this.mountedDom.hiddenTextarea.removeEventListener('input', this.mountedDom.handleInput)
-      this.mountedDom.hiddenTextarea.removeEventListener('keydown', this.mountedDom.handleKeyDown)
-      this.mountedDom.hiddenTextarea.removeEventListener('copy', this.mountedDom.handleCopy)
-      this.mountedDom.hiddenTextarea.removeEventListener('cut', this.mountedDom.handleCut)
-      this.mountedDom.hiddenTextarea.removeEventListener('paste', this.mountedDom.handlePaste)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionstart', this.mountedDom.handleCompositionStart)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionupdate', this.mountedDom.handleCompositionUpdate)
-      this.mountedDom.hiddenTextarea.removeEventListener('compositionend', this.mountedDom.handleCompositionEnd)
-      this.mountedDom.imageResourceResolver?.dispose()
-
-      for (const canvas of this.mountedDom.canvases.values()) {
-        this.mountedDom.pool.release(canvas)
-      }
-
-      this.mountedDom.shell.remove()
-    }
-
-    this.mountedDom = undefined
-    this.history.clear()
-    this.unsubscribePipeline()
-    this.emit({ kind: 'destroyed' })
-    this.listeners.clear()
-    this.isDestroyed = true
   }
 
   protected replaceDocument(
@@ -896,6 +447,36 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     return result.projection
   }
 
+  protected replaceDocumentModel(
+    input: EditorDocumentModelInput,
+    commandName: string,
+    origin: string
+  ): DocumentProjection {
+    const previousSelection = this.currentSelection
+
+    this.commitSelection(null, {
+      source: 'document',
+      render: false,
+      emit: false
+    })
+
+    this.dirtyPageIndex = 0
+    this.dirtyPageEndIndex = 0
+    this.layoutDirtyRange = undefined
+    const result = this.pipeline.runMutation(commandName, { origin }, () => {
+      replaceStoreDocumentModel(this.store, input.document)
+    })
+
+    this.currentProjection = result.projection
+    this.commitSelection(null, {
+      source: 'document',
+      previousSelection,
+      render: true
+    })
+
+    return result.projection
+  }
+
   protected executeFacadeFormattingCommand(command: Command | null): void {
     if (command === null) {
       return
@@ -906,6 +487,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     })
   }
 
+  /** 同步输入焦点状态，并仅在获得焦点时恢复折叠光标可见性。 */
   protected updateInputFocusState(nextFocused: boolean): void {
     if (this.isInputFocused === nextFocused) {
       return
@@ -915,7 +497,7 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     this.syncCaretBlinkState()
 
     if (this.currentSelection !== null) {
-      this.renderMountedLayout('selection')
+      this.renderMountedLayout('selection', nextFocused)
     }
   }
 
@@ -1036,6 +618,200 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
     return run.inlines.some((inline) => inline.kind === 'text')
   }
 
+  /** 恢复历史选择区，并在锚点已失效时回退到当前文档开头。 */
+  protected restoreHistorySelection(snapshot: SelectionRestoreSnapshot): SelectionState | null {
+    const restoredSelection = restoreSelection(snapshot)
+
+    if (restoredSelection === null) {
+      return null
+    }
+
+    if (restoredSelection === this.currentSelection) {
+      return restoredSelection
+    }
+
+    if (this.isSelectionValidInCurrentProjection(restoredSelection)) {
+      return restoredSelection
+    }
+
+    const anchor = this.restoreHistoryAnchor(restoredSelection.anchor)
+    const focus = this.restoreHistoryAnchor(restoredSelection.focus)
+
+    if (anchor !== undefined && focus !== undefined) {
+      if (anchor === restoredSelection.anchor && focus === restoredSelection.focus) {
+        return restoredSelection
+      }
+
+      return createSelectionState(anchor, focus, {
+        direction: restoredSelection.direction,
+        affinity: restoredSelection.affinity
+      })
+    }
+
+    const fallbackAnchor = this.resolveInitialStartFocusAnchor()
+
+    return fallbackAnchor === undefined ? null : createSelectionState(fallbackAnchor, fallbackAnchor)
+  }
+
+  /** 恢复单个历史锚点，优先用 Y.RelativePosition 找回当前 run。 */
+  protected restoreHistoryAnchor(anchor: AnchorRef): AnchorRef | undefined {
+    const snapshot = readAnchorRefSnapshot(anchor)
+    const relativePosition = snapshot.relativePosition
+
+    if (relativePosition !== undefined) {
+      const absolute = Y.createAbsolutePositionFromRelativePosition(relativePosition, this.store.doc)
+
+      if (absolute === null || !(absolute.type instanceof Y.Text)) {
+        return undefined
+      }
+
+      const graphemeIndex = utf16IndexToGraphemeIndex(absolute.type.toString(), absolute.index)
+      const locatedAnchor = this.locateHistoryAnchorByText(absolute.type, graphemeIndex, snapshot.assoc)
+
+      if (locatedAnchor === undefined) {
+        return undefined
+      }
+
+      return this.areHistoryAnchorsAtSameResolvedPosition(anchor, locatedAnchor) ? anchor : locatedAnchor
+    }
+
+    return this.hasTextPositionInCurrentProjection({
+      sectionId: String(snapshot.sectionId),
+      blockId: String(snapshot.blockId),
+      runId: String(snapshot.runId),
+      graphemeIndex: Number(snapshot.graphemeIndex),
+      ...(snapshot.assoc === undefined ? {} : { assoc: snapshot.assoc })
+    }) ? anchor : undefined
+  }
+
+  /** 判断两个历史锚点解析后是否仍指向同一文本位置。 */
+  protected areHistoryAnchorsAtSameResolvedPosition(left: AnchorRef, right: AnchorRef): boolean {
+    const leftPosition = this.tryResolveHistorySelectionPosition(left)
+    const rightPosition = this.tryResolveHistorySelectionPosition(right)
+
+    return leftPosition !== undefined &&
+      rightPosition !== undefined &&
+      leftPosition.sectionId === rightPosition.sectionId &&
+      leftPosition.blockId === rightPosition.blockId &&
+      leftPosition.runId === rightPosition.runId &&
+      leftPosition.graphemeIndex === rightPosition.graphemeIndex
+  }
+
+  /** 根据解析出的 Y.Text 句柄在当前投影中找回可用锚点。 */
+  protected locateHistoryAnchorByText(
+    text: Y.Text,
+    graphemeIndex: number,
+    assoc: number | undefined
+  ): AnchorRef | undefined {
+    for (const section of this.currentProjection.document.sections) {
+      const anchor = this.locateHistoryAnchorByTextInBlocks(section.id, section.blocks, text, graphemeIndex, assoc)
+
+      if (anchor !== undefined) {
+        return anchor
+      }
+    }
+
+    return undefined
+  }
+
+  /** 在 block 树中根据 Y.Text 句柄找回历史锚点。 */
+  protected locateHistoryAnchorByTextInBlocks(
+    sectionId: string,
+    blocks: readonly Block[],
+    text: Y.Text,
+    graphemeIndex: number,
+    assoc: number | undefined
+  ): AnchorRef | undefined {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        for (const run of block.runs) {
+          const runText = findRunText(this.store, {
+            sectionId,
+            blockId: block.id,
+            runId: run.id,
+            graphemeIndex: 0
+          })
+
+          if (runText === text) {
+            return this.createTextAnchor({
+              sectionId,
+              blockId: block.id,
+              runId: run.id,
+              graphemeIndex,
+              ...(assoc === undefined ? {} : { assoc })
+            })
+          }
+        }
+
+        continue
+      }
+
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          const anchor = this.locateHistoryAnchorByTextInBlocks(sectionId, cell.blocks, text, graphemeIndex, assoc)
+
+          if (anchor !== undefined) {
+            return anchor
+          }
+        }
+      }
+    }
+
+    return undefined
+  }
+
+  /** 判断选择区两端是否仍能解析到当前投影里的文本位置。 */
+  protected isSelectionValidInCurrentProjection(selection: SelectionState): boolean {
+    const anchor = this.tryResolveHistorySelectionPosition(selection.anchor)
+    const focus = this.tryResolveHistorySelectionPosition(selection.focus)
+
+    return anchor !== undefined &&
+      focus !== undefined &&
+      this.hasTextPositionInCurrentProjection(anchor) &&
+      this.hasTextPositionInCurrentProjection(focus)
+  }
+
+  /** 尝试解析历史选择锚点，失败时返回 undefined 供回退逻辑处理。 */
+  protected tryResolveHistorySelectionPosition(anchor: AnchorRef): TextPosition | undefined {
+    try {
+      return this.resolveTextPosition(anchor)
+    } catch {
+      return undefined
+    }
+  }
+
+  /** 判断文本位置是否仍存在于当前文档投影中。 */
+  protected hasTextPositionInCurrentProjection(position: TextPosition): boolean {
+    const section = this.currentProjection.document.sections.find((candidate) => candidate.id === position.sectionId)
+
+    return section === undefined ? false : this.hasTextPositionInBlocks(section.blocks, position)
+  }
+
+  /** 在 block 树中递归查找文本位置。 */
+  protected hasTextPositionInBlocks(blocks: readonly Block[], position: TextPosition): boolean {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        const run = block.id === position.blockId
+          ? block.runs.find((candidate) => candidate.id === position.runId)
+          : undefined
+
+        if (run !== undefined) {
+          return position.graphemeIndex >= 0 && position.graphemeIndex <= countGraphemes(this.readRunText(run))
+        }
+
+        continue
+      }
+
+      if (block.rows.some((row) =>
+        row.cells.some((cell) => this.hasTextPositionInBlocks(cell.blocks, position))
+      )) {
+        return true
+      }
+    }
+
+    return false
+  }
+
   /** 读取 run 中所有文本 inline 的纯文本。 */
   protected readRunText(run: Run): string {
     return run.inlines
@@ -1147,24 +923,21 @@ export abstract class JWordEditorFacadeRuntime extends JWordEditorState implemen
   protected abstract readTransientLayoutThroughPage(pageIndex: number): DocumentLayout
   protected abstract readTransientLayoutForPosition(position: TextPosition): DocumentLayout
   protected abstract readTransientLayoutForRange(range: Readonly<{ anchor: TextPosition, focus: TextPosition }>): DocumentLayout
-  protected abstract handleRuntimeInput(event: Event): void
-  protected abstract handleRuntimeBeforeInput(event: Event): void
-  protected abstract handleRuntimeCompositionStart(event: Event): void
-  protected abstract handleRuntimeCompositionUpdate(event: Event): void
-  protected abstract handleRuntimeCompositionEnd(event: Event): void
-  protected abstract handleRuntimeKeyDown(event: KeyboardEvent): void
-  protected abstract handleRuntimeCopy(event: Event): void
-  protected abstract handleRuntimeCut(event: Event): void
-  protected abstract handleRuntimePaste(event: Event): void
-  protected abstract handleRuntimePointerDown(event: MouseEvent): void
-  protected abstract handleRuntimePointerMove(event: MouseEvent): void
-  protected abstract handleRuntimePointerUp(event: MouseEvent): void
-  protected abstract handleRuntimeDoubleClick(event: MouseEvent): void
-  protected abstract cancelDeferredRender(): void
-  protected abstract cancelDeferredTextMirrorSync(): void
-  protected abstract stopCaretBlink(): void
 }
 
-function createTransactionMetadata(origin: string, label: string | undefined): TransactionMetadata {
-  return label === undefined ? { origin } : { origin, label }
+function createTransactionMetadata(origin: string, options: EditorCommandOptions): TransactionMetadata {
+  return {
+    origin,
+    ...(options.historyScope === undefined ? {} : {
+      historyOrigin: readHistoryScopeTransactionOrigin(options.historyScope)
+    }),
+    ...(options.label === undefined ? {} : { label: options.label }),
+    ...(options.requestId === undefined ? {} : { requestId: options.requestId }),
+    ...(options.roomId === undefined ? {} : { roomId: options.roomId }),
+    ...(options.clientId === undefined ? {} : { clientId: options.clientId }),
+    ...(options.authorId === undefined ? {} : { authorId: options.authorId }),
+    ...(options.snapshotId === undefined ? {} : { snapshotId: options.snapshotId }),
+    ...(options.versionId === undefined ? {} : { versionId: options.versionId }),
+    ...(options.recoverable === undefined ? {} : { recoverable: options.recoverable })
+  }
 }

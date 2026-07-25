@@ -1,3 +1,10 @@
+/**
+ * 职责：提供 vanilla 最小示例所需的页面尺寸和编辑区背景。
+ * 边界：只设置宿主页面外观，不定义 EditorShell 内部结构。
+ * 协作模块：examples/vanilla/index.html 与 @4xian/jword-ui/styles.css。
+ * 性能/安全约束：使用 flex 兼容的尺寸约束，不使用 grid 或 gap。
+ * 实现说明：窄屏沿用同一 EditorShell，仅允许画布横向滚动。
+ */
 :root {
   color: #17202a;
   background: #f4f6f8;
@@ -9,137 +16,31 @@
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  min-width: 320px;
-}
-
-button,
-select,
-input {
-  font: inherit;
-}
-
-.jw-demo {
-  min-height: 100vh;
-  padding: 28px 24px;
-}
-
-.jw-demo__workspace {
-  display: flex;
-  flex-direction: column;
-  max-width: 100%;
-  height: calc(100vh - 56px);
-  min-height: calc(100vh - 56px);
-  margin: 0 auto;
-}
-
-.jw-demo__toolbar-zone {
-  margin-bottom: 12px;
-}
-
-.jw-demo__demo-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  padding: 12px;
-  border: 1px solid #d8e0ea;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fdfefe 0%, #f6f8fb 100%);
-  box-shadow: 0 10px 26px rgb(28 47 74 / 6%);
-  margin-bottom: 12px;
-}
-
-.jw-demo__demo-controls > * {
-  flex: 0 0 auto;
-  margin-top: 8px;
-}
-
-.jw-demo__demo-controls > * + * {
-  margin-left: 8px;
-}
-
-.jw-demo__demo-button {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid #d0d8e2;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #243140;
-  cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease,
-    box-shadow 120ms ease;
-}
-
-.jw-demo__demo-button:hover:enabled {
-  border-color: #9fb0c6;
-  background: #f6f9fc;
-  box-shadow: 0 4px 10px rgb(35 58 84 / 10%);
-}
-
-.jw-demo__demo-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.48;
-  box-shadow: none;
-}
-
-.jw-demo__demo-button--primary {
-  border-color: #2f6fcc;
-  background: #2f6fcc;
-  color: #f8fbff;
-}
-
-.jw-demo__demo-button--primary:hover:enabled {
-  border-color: #275daa;
-  background: #275daa;
-  color: #f8fbff;
-}
-
-.jw-demo__demo-button--accent {
-  border-color: #d8c494;
-  background: #fff8e6;
-  color: #7a5a18;
-}
-
-.jw-demo__demo-button--accent:hover:enabled {
-  border-color: #c0a86a;
-  background: #ffefc9;
-  color: #69480c;
-}
-
-.jw-demo__editor-shell {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 0;
-  min-height: 420px;
-  padding: 16px;
-  border: 1px solid #d6dee7;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #eef3f8 0%, #e8eef5 100%);
-  overflow: hidden;
-  box-shadow: 0 16px 30px rgb(28 47 74 / 8%);
-}
-
-.jw-demo__editor-host {
+html,
+body,
+#jword {
   width: 100%;
   height: 100%;
-  min-height: 0;
-  position: relative;
-  border: 1px solid #d3dce6;
-  border-radius: 12px;
-  background: #ffffff;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+}
+
+#jword {
   overflow: hidden;
 }
 
 .jw-editor {
   height: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
 .jw-editor__canvas-container {
+  min-width: 0;
+  overflow: auto;
   padding: 20px 0 24px;
   background: linear-gradient(180deg, #e9eff6 0%, #e2e9f1 100%);
 }
@@ -150,49 +51,4 @@ input {
 
 .jw-editor__page-canvas {
   display: block;
-}
-
-.jw-demo__assistive-zone {
-  padding: 12px 14px;
-  border: 1px solid #d9e2ec;
-  border-radius: 12px;
-  background: #fbfcfe;
-  color: #425163;
-  margin-top: 12px;
-}
-
-.jw-demo__assistive-zone > * + * {
-  margin-top: 8px;
-}
-
-.jw-demo__status {
-  min-height: 24px;
-  margin: 0;
-  font-size: 13px;
-}
-
-@media (max-width: 640px) {
-  .jw-demo {
-    padding: 12px;
-  }
-
-  .jw-demo__workspace {
-    height: calc(100vh - 24px);
-    min-height: calc(100vh - 24px);
-  }
-
-  .jw-demo__demo-controls,
-  .jw-demo__editor-shell,
-  .jw-demo__assistive-zone {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .jw-demo__editor-shell {
-    min-height: 320px;
-  }
-
-  .jw-demo__demo-controls > * + * {
-    margin-left: 6px;
-  }
 }

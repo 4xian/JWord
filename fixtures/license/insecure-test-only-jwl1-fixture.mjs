@@ -1,0 +1,9 @@
+/**
+ * 职责：提供浏览器示例、benchmark、compat 和 release smoke 共用的固定 JWL1 fixture token。
+ * 边界：只保存公开测试 token，不包含 seed、私钥或签名实现，不进入可发布 package。
+ * 协作模块：仍等待 JWL2 商业调用方迁移的仓库示例和验证脚本引用此常量。
+ * 性能/安全约束：该 token 必须被生产入口拒绝，只能用于 insecure-test-only 迁移验证。
+ */
+
+export const INSECURE_TEST_ONLY_JWL1_FIXTURE_TOKEN =
+  'JWL1.eyJsaWNlbnNlSWQiOiJsaWMtMTA2LXZlY3Rvci10b2tlbiIsImN1c3RvbWVySWQiOiJsaWMtMTA2LXZlY3Rvci1jdXN0b21lciIsImlzc3VlciI6Imp3b3JkLWluc2VjdXJlLXRlc3Qtb25seSIsImZlYXR1cmVzIjpbImRvY3guaW1wb3J0IiwicGRmLmV4cG9ydCJdLCJpc3N1ZWRBdCI6IjIwMjYtMDEtMDJUMDM6MDQ6MDVaIiwiZXhwaXJlc0F0IjoiMjAyNy0wMS0wMlQwMzowNDowNVoiLCJvZmZsaW5lR3JhY2VEYXlzIjoxNSwic2NoZW1hVmVyc2lvbiI6MX0.UvOczxXoNNMHNASz4Ra3v_vpStKaDS_ebrei00IFMBPDDTdT2B46HyiyY83h7e-tqhoWGFjxtD5ZmKuU16tQCA'

@@ -3,7 +3,7 @@
  * 边界：只把 JSON 形状的 fixture 转换为 Editor command，不读取磁盘、不写入外部状态、不实现 docx/collab/auto-inserter。
  * 协作模块：Editor facade、transaction pipeline、后续 docx/collab/auto-inserter 集成测试复用这里的 fixture 形状。
  * 性能/安全约束：仅处理小型 JSON 兼容数据，fixture 只保存 Operation/TextPosition/TextRange，不保存 AnchorRef 或 Yjs 相对位置。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import type { Editor, EditorDocumentInput } from '../editor/runtime'

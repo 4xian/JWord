@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vite/client"],
+    "baseUrl": "../..",
+    "paths": {
+      "@4xian/jword-core": ["packages/core/src/index.ts"],
+      "@4xian/jword-ui": ["packages/ui/src/index.ts"],
+      "@4xian/jword-native": ["packages/native/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "vite.config.ts"]
+}

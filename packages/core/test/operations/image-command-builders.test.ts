@@ -5,7 +5,7 @@
  * 边界：只覆盖公开 builder、selected image helper 和 editor 事务闭环，不测试 UI 上传面板或浏览器交互。
  * 协作模块：resources、projection、operation adapter、layout/query 和 root index 共同提供这组最小公开接口。
  * 性能/安全约束：测试只使用内存 projection / editor，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

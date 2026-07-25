@@ -5,7 +5,7 @@
  * 边界：只覆盖单 section、单段落、短文本、split/merge 和 undo/redo，不做协同或大规模 fuzz。
  * 协作模块：Editor facade、transaction pipeline、projection 和 history 提供被测路径。
  * 性能/安全约束：测试规模固定且可复现，不访问 DOM、网络或外部随机源。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md#63-测试矩阵。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

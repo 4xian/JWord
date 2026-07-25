@@ -3,9 +3,14 @@
  * 边界：只负责节点结构、最小 inline 布局和展示状态，不访问 core 或宿主业务逻辑。
  * 协作模块：comments/state 负责视图投影，comments/controller 负责事件绑定与 adapter 调度。
  * 性能/安全约束：节点结构保持稳定，列表和消息按需重绘，不写入全局 CSS。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.8-4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import type {
   JWordCommentAnchorState,
   JWordCommentReplyView,
@@ -17,6 +22,7 @@ import type {
 
 /** 创建 comments sidebar DOM。 */
 export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSidebarDom {
+  const i18n = resolveJWordUiI18n()
   const root = document.createElement('aside')
   const header = document.createElement('div')
   const title = document.createElement('h2')
@@ -67,7 +73,7 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
   header.style.justifyContent = 'space-between'
 
   title.className = 'jw-comments-sidebar__title'
-  title.textContent = '批注'
+  title.textContent = readCommentsText(i18n, 'title')
   title.style.margin = '0'
   title.style.fontSize = '14px'
   title.style.fontWeight = '600'
@@ -75,7 +81,7 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
 
   createButton.type = 'button'
   createButton.className = 'jw-comments-sidebar__create'
-  createButton.textContent = '新建批注'
+  createButton.textContent = readCommentsText(i18n, 'create')
   createButton.hidden = true
   createButton.style.minHeight = '28px'
   createButton.style.padding = '0 10px'
@@ -99,7 +105,7 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
   composerAnchor.style.fontSize = '12px'
   composerAnchor.style.lineHeight = '1.45'
 
-  applyTextarea(composerInput, '输入批注内容')
+  applyTextarea(composerInput, readCommentsText(i18n, 'composerPlaceholder'))
   composerInput.setAttribute('data-jword-comment-input', 'draft')
 
   applyErrorText(composerError)
@@ -107,8 +113,8 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
   applyRowLayout(composerActions)
   composerActions.style.justifyContent = 'flex-end'
 
-  applySecondaryButton(composerCancelButton, '取消', 'cancel-draft')
-  applyPrimaryButton(composerConfirmButton, '确定', 'confirm-draft')
+  applySecondaryButton(composerCancelButton, readCommentsText(i18n, 'cancel'), 'cancel-draft')
+  applyPrimaryButton(composerConfirmButton, readCommentsText(i18n, 'confirm'), 'confirm-draft')
 
   composerActions.append(composerCancelButton, composerConfirmButton)
   composer.append(composerAnchor, composerInput, composerError, composerActions)
@@ -119,7 +125,7 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
   threadList.style.flex = '0 0 auto'
 
   threadEmpty.className = 'jw-comments-sidebar__empty'
-  threadEmpty.textContent = '还没有批注。'
+  threadEmpty.textContent = readCommentsText(i18n, 'empty')
   threadEmpty.style.margin = '0'
   threadEmpty.style.fontSize = '12px'
   threadEmpty.style.lineHeight = '1.5'
@@ -132,7 +138,7 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
   detail.style.marginTop = '10px'
 
   detailEmpty.className = 'jw-comments-sidebar__detail-empty'
-  detailEmpty.textContent = '选择一个批注后可查看详情。'
+  detailEmpty.textContent = readCommentsText(i18n, 'detailEmpty')
   detailEmpty.style.margin = '0'
   detailEmpty.style.fontSize = '12px'
   detailEmpty.style.lineHeight = '1.5'
@@ -183,9 +189,9 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
   detailActions.style.flexWrap = 'wrap'
   detailActions.style.marginTop = '8px'
 
-  applySecondaryButton(detailReplyButton, '回复', 'open-reply')
-  applySecondaryButton(detailResolveButton, '解决批注', 'toggle-resolved')
-  applySecondaryButton(detailDeleteButton, '删除线程', 'delete-thread')
+  applySecondaryButton(detailReplyButton, readCommentsText(i18n, 'reply'), 'open-reply')
+  applySecondaryButton(detailResolveButton, readCommentsText(i18n, 'resolve'), 'toggle-resolved')
+  applySecondaryButton(detailDeleteButton, readCommentsText(i18n, 'deleteThread'), 'delete-thread')
 
   detailActions.append(detailReplyButton, detailResolveButton, detailDeleteButton)
 
@@ -197,13 +203,13 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
   replyComposer.className = 'jw-comments-sidebar__reply'
   replyComposer.hidden = true
 
-  applyTextarea(replyInput, '输入回复内容')
+  applyTextarea(replyInput, readCommentsText(i18n, 'replyPlaceholder'))
   replyInput.setAttribute('data-jword-comment-input', 'reply')
   applyErrorText(replyError)
   applyRowLayout(replyActions)
   replyActions.style.justifyContent = 'flex-end'
-  applySecondaryButton(replyCancelButton, '取消', 'cancel-reply')
-  applyPrimaryButton(replyConfirmButton, '发送回复', 'confirm-reply')
+  applySecondaryButton(replyCancelButton, readCommentsText(i18n, 'cancel'), 'cancel-reply')
+  applyPrimaryButton(replyConfirmButton, readCommentsText(i18n, 'confirmReply'), 'confirm-reply')
   replyActions.append(replyCancelButton, replyConfirmButton)
   replyComposer.append(replyInput, replyError, replyActions)
 
@@ -211,13 +217,13 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
   editComposer.className = 'jw-comments-sidebar__edit'
   editComposer.hidden = true
 
-  applyTextarea(editInput, '修改批注内容')
+  applyTextarea(editInput, readCommentsText(i18n, 'editPlaceholder'))
   editInput.setAttribute('data-jword-comment-input', 'edit')
   applyErrorText(editError)
   applyRowLayout(editActions)
   editActions.style.justifyContent = 'flex-end'
-  applySecondaryButton(editCancelButton, '取消', 'cancel-edit')
-  applyPrimaryButton(editConfirmButton, '保存修改', 'confirm-edit')
+  applySecondaryButton(editCancelButton, readCommentsText(i18n, 'cancel'), 'cancel-edit')
+  applyPrimaryButton(editConfirmButton, readCommentsText(i18n, 'confirmEdit'), 'confirm-edit')
   editActions.append(editCancelButton, editConfirmButton)
   editComposer.append(editInput, editError, editActions)
 
@@ -275,7 +281,8 @@ export function createCommentsSidebarDom(host: HTMLElement): JWordCommentsSideba
 /** 渲染 comments sidebar。 */
 export function renderCommentsSidebar(
   dom: JWordCommentsSidebarDom,
-  view: JWordCommentsViewState
+  view: JWordCommentsViewState,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
 ): void {
   dom.threadEmpty.hidden = view.threads.length > 0
   dom.composer.hidden = view.draft === null
@@ -287,15 +294,36 @@ export function renderCommentsSidebar(
     dom.composerError.textContent = ''
     dom.composerConfirmButton.disabled = true
   } else {
-    dom.composerAnchor.textContent = `锚点：${view.draft.anchor.quote}`
+    dom.composerAnchor.textContent = readCommentsText(i18n, 'anchorPrefix')
+      .replace('{quote}', view.draft.anchor.quote)
     dom.composerInput.value = view.draft.body
     dom.composerError.textContent = view.draft.error
     dom.composerError.hidden = view.draft.error.length === 0
     dom.composerConfirmButton.disabled = view.draft.body.trim().length === 0
   }
 
-  renderCommentThreadList(dom.threadList, view.threads, view.selectedThread?.id ?? null)
-  renderSelectedThread(dom, view)
+  renderCommentThreadList(dom.threadList, view.threads, view.selectedThread?.id ?? null, i18n)
+  renderSelectedThread(dom, view, i18n)
+}
+
+/** 动态刷新 comments sidebar 静态文案。 */
+export function localizeCommentsSidebarDom(dom: JWordCommentsSidebarDom, i18n: ResolvedJWordUiI18n): void {
+  dom.title.textContent = readCommentsText(i18n, 'title')
+  setButtonText(dom.createButton, readCommentsText(i18n, 'create'))
+  dom.threadEmpty.textContent = readCommentsText(i18n, 'empty')
+  dom.detailEmpty.textContent = readCommentsText(i18n, 'detailEmpty')
+  dom.composerInput.placeholder = readCommentsText(i18n, 'composerPlaceholder')
+  dom.replyInput.placeholder = readCommentsText(i18n, 'replyPlaceholder')
+  dom.editInput.placeholder = readCommentsText(i18n, 'editPlaceholder')
+  setButtonText(dom.composerCancelButton, readCommentsText(i18n, 'cancel'))
+  setButtonText(dom.composerConfirmButton, readCommentsText(i18n, 'confirm'))
+  setButtonText(dom.detailReplyButton, readCommentsText(i18n, 'reply'))
+  setButtonText(dom.detailResolveButton, readCommentsText(i18n, 'resolve'))
+  setButtonText(dom.detailDeleteButton, readCommentsText(i18n, 'deleteThread'))
+  setButtonText(dom.replyCancelButton, readCommentsText(i18n, 'cancel'))
+  setButtonText(dom.replyConfirmButton, readCommentsText(i18n, 'confirmReply'))
+  setButtonText(dom.editCancelButton, readCommentsText(i18n, 'cancel'))
+  setButtonText(dom.editConfirmButton, readCommentsText(i18n, 'confirmEdit'))
 }
 
 /** 销毁 comments sidebar。 */
@@ -452,13 +480,14 @@ function applySecondaryButton(
 function renderCommentThreadList(
   host: HTMLElement,
   threads: readonly JWordCommentThreadView[],
-  selectedThreadId: string | null
+  selectedThreadId: string | null,
+  i18n: ResolvedJWordUiI18n
 ): void {
   const empty = host.querySelector<HTMLElement>('.jw-comments-sidebar__empty') ?? document.createElement('div')
   const children: HTMLElement[] = threads.length === 0 ? [empty] : []
 
   for (const thread of threads) {
-    children.push(createThreadListItem(thread, selectedThreadId === thread.id))
+    children.push(createThreadListItem(thread, selectedThreadId === thread.id, i18n))
   }
 
   host.replaceChildren(...children)
@@ -467,7 +496,8 @@ function renderCommentThreadList(
 /** 创建单个 thread 列表项。 */
 function createThreadListItem(
   thread: JWordCommentThreadView,
-  selected: boolean
+  selected: boolean,
+  i18n: ResolvedJWordUiI18n
 ): HTMLElement {
   const item = document.createElement('article')
   const header = document.createElement('div')
@@ -478,10 +508,16 @@ function createThreadListItem(
   const status = document.createElement('span')
   const messages = document.createElement('div')
   const actions = document.createElement('div')
-  const focusButton = createThreadActionButton('定位正文', 'focus-anchor', thread.id)
-  const replyButton = createThreadActionButton('回复', 'open-reply', thread.id)
-  const resolveButton = createThreadActionButton(thread.resolved ? '重新打开' : '解决', 'toggle-resolved', thread.id)
-  const deleteButton = createThreadActionButton('删除', 'delete-thread', thread.id)
+  const focusButton = createThreadActionButton(readCommentsText(i18n, 'focusAnchor'), 'focus-anchor', thread.id)
+  const replyButton = createThreadActionButton(readCommentsText(i18n, 'reply'), 'open-reply', thread.id)
+  const resolveButton = createThreadActionButton(
+    thread.resolved
+      ? readCommentsText(i18n, 'reopen')
+      : readCommentsText(i18n, 'resolveShort'),
+    'toggle-resolved',
+    thread.id
+  )
+  const deleteButton = createThreadActionButton(readCommentsText(i18n, 'delete'), 'delete-thread', thread.id)
 
   item.className = 'jw-comments-thread'
   item.style.display = 'flex'
@@ -510,7 +546,9 @@ function createThreadListItem(
   time.style.lineHeight = '1.35'
   time.style.color = '#677489'
 
-  status.textContent = thread.resolved ? '已解决' : '进行中'
+  status.textContent = thread.resolved
+    ? readCommentsText(i18n, 'statusResolved')
+    : readCommentsText(i18n, 'statusOpen')
   status.style.marginLeft = 'auto'
   status.style.fontSize = '12px'
   status.style.color = thread.resolved ? '#0f766e' : '#2563eb'
@@ -522,7 +560,7 @@ function createThreadListItem(
   messages.style.display = 'flex'
   messages.style.flexDirection = 'column'
   messages.style.marginTop = '8px'
-  messages.append(...thread.messages.map((message, index) => createThreadMessageItem(message, index > 0)))
+  messages.append(...thread.messages.map((message, index) => createThreadMessageItem(message, index > 0, i18n)))
 
   applyRowLayout(actions)
   actions.className = 'jw-comments-thread__actions'
@@ -546,7 +584,8 @@ function createThreadListItem(
 /** 渲染当前选中 thread 的详情。 */
 function renderSelectedThread(
   dom: JWordCommentsSidebarDom,
-  view: JWordCommentsViewState
+  view: JWordCommentsViewState,
+  i18n: ResolvedJWordUiI18n
 ): void {
   const selectedThread = view.selectedThread
 
@@ -567,13 +606,17 @@ function renderSelectedThread(
   }
 
   dom.detailReplyButton.disabled = !selectedThread.permissions.canReply
-  dom.detailResolveButton.textContent = selectedThread.resolved ? '重新打开' : '解决批注'
+  setButtonText(dom.detailResolveButton, selectedThread.resolved
+    ? readCommentsText(i18n, 'reopen')
+    : readCommentsText(i18n, 'resolve'))
   dom.detailResolveButton.disabled = selectedThread.resolved
     ? !selectedThread.permissions.canReopen
     : !selectedThread.permissions.canResolve
   dom.detailDeleteButton.disabled = !selectedThread.permissions.canDelete
   dom.detailDeleteButton.hidden = !selectedThread.permissions.canDelete
-  dom.detailStatus.textContent = selectedThread.resolved ? '已解决' : '进行中'
+  dom.detailStatus.textContent = selectedThread.resolved
+    ? readCommentsText(i18n, 'statusResolved')
+    : readCommentsText(i18n, 'statusOpen')
   dom.detailStatus.style.color = selectedThread.resolved ? '#0f766e' : '#2563eb'
   dom.detailAuthor.textContent = selectedThread.author.name
   dom.detailTime.textContent = selectedThread.createdAtLabel
@@ -644,7 +687,7 @@ function renderEditComposer(
 }
 
 /** 创建单条消息节点。 */
-function createMessageItem(message: JWordCommentReplyView): HTMLElement {
+function createMessageItem(message: JWordCommentReplyView, i18n: ResolvedJWordUiI18n): HTMLElement {
   const item = document.createElement('article')
   const header = document.createElement('div')
   const user = createUserBadge(message.author)
@@ -675,13 +718,15 @@ function createMessageItem(message: JWordCommentReplyView): HTMLElement {
   author.textContent = message.author.name
   author.style.fontSize = '13px'
   author.style.lineHeight = '1.35'
-  role.textContent = message.root ? '批注' : '回复'
+  role.textContent = message.root
+    ? readCommentsText(i18n, 'roleComment')
+    : readCommentsText(i18n, 'roleReply')
   role.style.fontSize = '12px'
   role.style.lineHeight = '1.35'
   role.style.color = '#677489'
   time.textContent = message.editedAt === undefined
     ? message.createdAtLabel
-    : `${message.createdAtLabel} · 已编辑`
+    : `${message.createdAtLabel} · ${readCommentsText(i18n, 'edited')}`
   time.style.fontSize = '12px'
   time.style.color = '#677489'
   meta.append(author, role)
@@ -707,11 +752,11 @@ function createMessageItem(message: JWordCommentReplyView): HTMLElement {
   right.style.flexDirection = 'row'
 
   if (message.permissions.canEdit) {
-    right.append(createMessageActionButton('编辑', 'edit-message', message.id))
+    right.append(createMessageActionButton(readCommentsText(i18n, 'edit'), 'edit-message', message.id))
   }
 
   if (message.permissions.canDelete && !message.root) {
-    right.append(createMessageActionButton('删除', 'delete-message', message.id))
+    right.append(createMessageActionButton(readCommentsText(i18n, 'delete'), 'delete-message', message.id))
   }
 
   header.append(user, meta)
@@ -722,7 +767,11 @@ function createMessageItem(message: JWordCommentReplyView): HTMLElement {
 }
 
 /** 创建 thread 卡片中的紧凑消息。 */
-function createThreadMessageItem(message: JWordCommentReplyView, nested: boolean): HTMLElement {
+function createThreadMessageItem(
+  message: JWordCommentReplyView,
+  nested: boolean,
+  i18n: ResolvedJWordUiI18n
+): HTMLElement {
   const item = document.createElement('div')
   const body = document.createElement('p')
   const footer = document.createElement('div')
@@ -751,7 +800,7 @@ function createThreadMessageItem(message: JWordCommentReplyView, nested: boolean
 
   time.textContent = message.editedAt === undefined
     ? message.createdAtLabel
-    : `${message.createdAtLabel} · 已编辑`
+    : `${message.createdAtLabel} · ${readCommentsText(i18n, 'edited')}`
   time.style.marginRight = '8px'
   time.style.fontSize = '12px'
   time.style.color = '#6b7280'
@@ -761,11 +810,11 @@ function createThreadMessageItem(message: JWordCommentReplyView, nested: boolean
   actions.style.marginLeft = 'auto'
 
   if (message.permissions.canEdit) {
-    actions.append(createMessageActionButton('编辑', 'edit-message', message.id))
+    actions.append(createMessageActionButton(readCommentsText(i18n, 'edit'), 'edit-message', message.id))
   }
 
   if (message.permissions.canDelete && !message.root) {
-    actions.append(createMessageActionButton('删除', 'delete-message', message.id))
+    actions.append(createMessageActionButton(readCommentsText(i18n, 'delete'), 'delete-message', message.id))
   }
 
   footer.append(time, actions)
@@ -839,4 +888,16 @@ function createUserBadge(user: JWordResolvedCommentUser): HTMLElement {
   badge.title = user.name
 
   return badge
+}
+
+/** 更新按钮文案、title 与 aria-label。 */
+function setButtonText(button: HTMLButtonElement, text: string): void {
+  button.textContent = text
+  button.title = text
+  button.setAttribute('aria-label', text)
+}
+
+/** 读取批注模块内建文案。 */
+function readCommentsText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.comments.${key}`)
 }

@@ -3,10 +3,11 @@
  * 边界: 只覆盖分页 layout/render 行为，不测试 Gate 3 输入系统或手势选择语义。
  * 协作: examples/vanilla 测试钩子、@4xian/jword-core Editor facade 和 Playwright 项目矩阵。
  * 约束: 不依赖截图人工判断，断言必须来自 DOM 属性、canvas 数量和公开 facade 返回值。
- * Specs: docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { expectedGate2PageCount } from './gate2-test-contract'
 
 interface TextPositionProbe {
   readonly sectionId: string
@@ -56,10 +57,8 @@ interface MountedViewportProbe {
   readonly afterMountedHasCanvas: boolean | null
 }
 
-const expectedGate2PageCount = 53
-
 test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
 
   const container = page.locator('[data-jword-canvas-container]')
 
@@ -88,7 +87,7 @@ test('Gate 2 demo scrolls a 50-page fixture without retaining every canvas', asy
 })
 
 test('Gate 2 demo keeps mounted page geometry and debug overlay aligned on the 50-page fixture', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
 
   const container = page.locator('[data-jword-canvas-container]')
 
@@ -132,7 +131,7 @@ test('Gate 2 demo keeps mounted page geometry and debug overlay aligned on the 5
 
 async function readDemoProbe(page: Page): Promise<DemoProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 2 demo 测试钩子')
@@ -182,7 +181,7 @@ async function scrollToRatio(page: Page, ratio: number): Promise<void> {
 
   await expect.poll(async () => {
     return page.evaluate((targetRatio) => {
-      const pageCount = window.__jwordDemo?.editor.getLayout().pages.length ?? 0
+      const pageCount = window.__jwordTestFixture?.editor.getLayout().pages.length ?? 0
       const mountedPageIndexes = [...document.querySelectorAll<HTMLElement>('[data-jword-page]')]
         .filter((element) => element.querySelector('canvas') !== null)
         .map((element) => Number(element.getAttribute('data-jword-page')))
@@ -210,7 +209,7 @@ async function scrollToRatio(page: Page, ratio: number): Promise<void> {
 
 async function readMountedViewportProbe(page: Page): Promise<MountedViewportProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 2 demo 测试钩子')
@@ -286,10 +285,12 @@ async function readMountedViewportProbe(page: Page): Promise<MountedViewportProb
     const lastMountedPageIndex = viewportPageIndexes[viewportPageIndexes.length - 1] ?? null
     const targetPageIndexes = [
       visibleMountedPageIndexes[0] ?? firstMountedPageIndex,
-      visibleMountedPageIndexes[visibleMountedPageIndexes.length - 1] ?? lastMountedPageIndex
+      visibleMountedPageIndexes[visibleMountedPageIndexes.length - 1] ?? lastMountedPageIndex,
+      lastMountedPageIndex,
+      firstMountedPageIndex
     ].filter((pageIndex, index, values): pageIndex is number => {
       return pageIndex !== null && pageIndex !== undefined && values.indexOf(pageIndex) === index
-    })
+    }).slice(0, 2)
 
     return {
       pageCount: layout.pages.length,

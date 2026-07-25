@@ -3,7 +3,7 @@
  * 边界：不处理键盘输入和剪贴板输入，不创建文档模型。
  * 协作模块：外观运行时、布局引擎、视口虚拟化器和渲染辅助函数。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { getCaretRect as getLayoutCaretRect, getSelectionRects as getLayoutSelectionRects, layoutDocumentIncrementally } from '../layout/runtime'
 import type { DocumentLayout, LayoutRect } from '../layout/runtime'
@@ -12,12 +12,16 @@ import { twipsToCssPx } from '../layout/page-config'
 import { isSelectionCollapsed } from '../model/selection'
 import type { Command, TextPosition } from '../operations/transaction'
 import { computeViewportPages } from '../canvas/viewport-virtualizer'
-import { JWordEditorFacadeRuntime } from './facade-runtime'
+import { JWordEditorMountFacadeRuntime } from './mount-facade-runtime'
 import { createPageStartKeys, isSameTextPosition, mergePageIndexes, renderPageBatch, resolveCanvasPixelRatio, resolveOperationDirtyPageIndexes } from './rendering'
+import { cancelDeferredVisualTask, scheduleDeferredVisualTask } from './visual-task-scheduler'
 import type { RenderReason, TransientLayoutQuerySnapshot } from './types'
 
-export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime {
-  protected renderMountedLayout(reason: RenderReason): void {
+const CARET_SCROLL_MARGIN_PX = 24
+
+export abstract class JWordEditorLayoutRuntime extends JWordEditorMountFacadeRuntime {
+  /** 渲染挂载后的布局，并在输入或选择变化时保持折叠光标可见。 */
+  protected renderMountedLayout(reason: RenderReason, revealCaret = reason === 'document'): void {
     const mountedDom = this.mountedDom
 
     if (mountedDom === undefined) {
@@ -64,6 +68,12 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
     }
 
     const nextPageStartKeys = createPageStartKeys(layout)
+    const selectionRender = this.createSelectionRenderState(layout)
+
+    if (revealCaret && this.isInputFocused && selectionRender.caretRect !== undefined) {
+      this.revealCaretInViewport(selectionRender.caretRect)
+    }
+
     const viewport = computeViewportPages({
       pages: layout.pages.map((page) => ({
         pageIndex: page.pageIndex,
@@ -74,20 +84,29 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
       viewportHeight: mountedDom.canvasContainer.clientHeight || this.pageConfig.heightCssPx,
       bufferPages: 1
     })
-    const selectionRender = this.createSelectionRenderState(layout)
+    const experimentalDecorations = this.pluginHost.readDecorations({
+      projection: this.currentProjection,
+      layout,
+      selection: this.currentSelection,
+      reason
+    })
+    const decorationPageIndexes = mergePageIndexes(experimentalDecorations.map((decoration) => decoration.pageIndex))
     const shouldUseSchedule = reason === 'document'
     const scheduledImmediatePageIndexes = shouldUseSchedule ? schedule.immediatePageIndexes : []
     const retainedPageIndexes = mergePageIndexes(
       viewport.retainedPageIndexes,
       scheduledImmediatePageIndexes,
       selectionRender.pageIndexes,
+      mountedDom.commentPageIndexes,
       this.selectionPageIndexes
     )
     const rerenderPageIndexes = mergePageIndexes(
       reason === 'mount' || reason === 'resource' ? viewport.retainedPageIndexes : [],
       scheduledImmediatePageIndexes,
       selectionRender.pageIndexes,
-      this.selectionPageIndexes
+      mountedDom.commentPageIndexes,
+      this.selectionPageIndexes,
+      decorationPageIndexes
     )
 
     mountedDom.canvases = renderPageBatch({
@@ -96,9 +115,15 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
       retainedPageIndexes,
       rerenderPageIndexes,
       selectionRender,
+      experimentalDecorations,
       scale: this.pageConfig.scale,
       pixelRatio: resolveCanvasPixelRatio(mountedDom)
     })
+
+    if (revealCaret && this.isInputFocused && selectionRender.caretRect !== undefined) {
+      this.revealCaretInViewport(selectionRender.caretRect)
+    }
+
     mountedDom.canvasContainer.setAttribute('data-jword-page-count', String(layout.pages.length))
     mountedDom.canvasContainer.setAttribute('data-jword-layout-immediate-pages', schedule.immediatePageIndexes.join(','))
     mountedDom.canvasContainer.setAttribute(
@@ -113,6 +138,9 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
     }
 
     mountedDom.canvasContainer.setAttribute('data-jword-layout-rerender-pages', rerenderPageIndexes.join(','))
+    mountedDom.commentPageIndexes = selectionRender.commentRects === undefined
+      ? []
+      : mergePageIndexes(selectionRender.commentRects.map((rect) => rect.pageIndex))
     this.pageStartKeys = nextPageStartKeys
     this.selectionPageIndexes = selectionRender.pageIndexes
     if (reason === 'document') {
@@ -126,6 +154,31 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
     if (reason === 'document' && this.pendingLayoutContinuation !== undefined) {
       this.scheduleDeferredRender(this.pendingLayoutContinuation, 4)
     }
+  }
+
+  /** 仅在折叠光标越过视口安全边界时调整纵向滚动位置。 */
+  private revealCaretInViewport(caretRect: LayoutRect): void {
+    const canvasContainer = this.mountedDom?.canvasContainer
+
+    if (canvasContainer === undefined) {
+      return
+    }
+
+    const viewportHeight = canvasContainer.clientHeight || this.pageConfig.heightCssPx
+    const caretTop = twipsToCssPx(caretRect.y, this.pageConfig.scale)
+    const caretBottom = caretTop + Math.max(1, twipsToCssPx(caretRect.height, this.pageConfig.scale))
+    const viewportTop = canvasContainer.scrollTop
+    const viewportBottom = viewportTop + viewportHeight
+    let nextScrollTop = viewportTop
+
+    if (caretTop < viewportTop + CARET_SCROLL_MARGIN_PX) {
+      nextScrollTop = caretTop - CARET_SCROLL_MARGIN_PX
+    } else if (caretBottom > viewportBottom - CARET_SCROLL_MARGIN_PX) {
+      nextScrollTop = caretBottom - viewportHeight + CARET_SCROLL_MARGIN_PX
+    }
+
+    const maxScrollTop = Math.max(0, canvasContainer.scrollHeight - viewportHeight)
+    canvasContainer.scrollTop = Math.max(0, Math.min(nextScrollTop, maxScrollTop))
   }
 
   protected ensureCurrentLayout(): DocumentLayout {
@@ -375,7 +428,7 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
       return
     }
 
-    clearTimeout(deferredRender.timeoutId)
+    cancelDeferredVisualTask(deferredRender.taskHandle)
 
     if (this.pendingLayoutContinuation === undefined) {
       mountedDom.deferredRender = undefined
@@ -383,9 +436,9 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
     }
 
     mountedDom.deferredRender = {
-      timeoutId: setTimeout(() => {
+      taskHandle: scheduleDeferredVisualTask(mountedDom, () => {
         this.flushDeferredRenderChunk()
-      }, 0),
+      }),
       chunkSize: deferredRender.chunkSize,
       continuation: this.pendingLayoutContinuation
     }
@@ -486,12 +539,17 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
 
   protected createSelectionRenderState(layout: DocumentLayout): Readonly<{
     selectionRects?: readonly LayoutRect[]
+    commentRects?: readonly LayoutRect[]
     caretRect?: LayoutRect
     pageIndexes: readonly number[]
   }> {
+    const commentRects = this.collectCommentRects(layout)
+    const commentPageIndexes = commentRects.map((rect) => rect.pageIndex)
+
     if (this.currentSelection === null) {
       return {
-        pageIndexes: []
+        ...(commentRects.length === 0 ? {} : { commentRects }),
+        pageIndexes: mergePageIndexes(commentPageIndexes)
       }
     }
 
@@ -506,19 +564,50 @@ export abstract class JWordEditorLayoutRuntime extends JWordEditorFacadeRuntime 
         : undefined
       const pageIndexes = mergePageIndexes(
         selectionRects.map((rect) => rect.pageIndex),
+        commentPageIndexes,
         caretRect === undefined ? [] : [caretRect.pageIndex]
       )
 
       return {
         ...(selectionRects.length === 0 ? {} : { selectionRects }),
+        ...(commentRects.length === 0 ? {} : { commentRects }),
         ...(caretRect === undefined ? {} : { caretRect }),
         pageIndexes
       }
     } catch {
       return {
-        pageIndexes: []
+        ...(commentRects.length === 0 ? {} : { commentRects }),
+        pageIndexes: mergePageIndexes(commentPageIndexes)
       }
     }
+  }
+
+  /** 汇总未解决批注范围的 canvas 高亮矩形。 */
+  protected collectCommentRects(layout: DocumentLayout): readonly LayoutRect[] {
+    const rects: LayoutRect[] = []
+
+    for (const thread of this.currentProjection.document.comments ?? []) {
+      if (thread.resolved) {
+        continue
+      }
+
+      try {
+        const range = this.locateCommentThread(thread.id)
+
+        if (range === null) {
+          continue
+        }
+
+        rects.push(...getLayoutSelectionRects(layout, {
+          anchor: this.resolveTextPosition(range.anchor),
+          focus: this.resolveTextPosition(range.focus)
+        }))
+      } catch {
+        continue
+      }
+    }
+
+    return Object.freeze(rects)
   }
 
   protected abstract override cancelDeferredRender(): void

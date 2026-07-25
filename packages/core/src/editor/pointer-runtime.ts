@@ -3,7 +3,7 @@
  * 边界：不处理键盘输入，不创建公开外观类型。
  * 协作模块：输入运行时、布局运行时、渲染辅助函数和文本运行时辅助函数。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { hitTestDocumentLayout, hitTestDocumentLayoutTextHit } from '../layout/runtime'
 import type { TextPosition } from '../operations/transaction'
@@ -20,11 +20,13 @@ import { JWordEditorInputRuntime } from './input-runtime'
 import { createPageStartKeys, mergePageIndexes, renderPageBatch, resolveCanvasPixelRatio } from './rendering'
 import {
   createRuntimeAnchor,
+  collectParagraphRuntimeContexts,
   isWordLikeGrapheme,
   readDoubleClickExpansionKind,
   readProjectionRunText,
   resolveWordSelectionIndex
 } from './text-runtime'
+import { cancelDeferredVisualTask, scheduleDeferredVisualTask } from './visual-task-scheduler'
 import type { PointerPageMetrics } from './types'
 
 export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime {
@@ -163,6 +165,36 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
     )
   }
 
+  protected expandParagraphSelection(anchor: AnchorRef): SelectionState {
+    const position = this.resolveTextPosition(anchor)
+    const paragraph = collectParagraphRuntimeContexts(this.currentProjection)
+      .find((candidate) => candidate.blockId === position.blockId)
+    const firstRun = paragraph?.runs[0]
+    const lastRun = paragraph?.runs[paragraph.runs.length - 1]
+
+    if (paragraph === undefined || firstRun === undefined || lastRun === undefined) {
+      return createSelectionState(anchor, anchor)
+    }
+
+    return createSelectionState(
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: paragraph.sectionId,
+        blockId: paragraph.blockId,
+        runId: firstRun.id,
+        graphemeIndex: 0
+      }),
+      createRuntimeAnchor({
+        documentId: this.currentProjection.document.id,
+        sectionId: paragraph.sectionId,
+        blockId: paragraph.blockId,
+        runId: lastRun.id,
+        graphemeIndex: lastRun.graphemeLength,
+        assoc: -1
+      })
+    )
+  }
+
   /**
    * 读取双击当前字符的左右偏向，避免中文永远只按单个 grapheme 扩选。
    */
@@ -197,9 +229,9 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
     }
 
     const deferredRender = {
-      timeoutId: setTimeout(() => {
+      taskHandle: scheduleDeferredVisualTask(mountedDom, () => {
         this.flushDeferredRenderChunk()
-      }, 0),
+      }),
       chunkSize,
       continuation
     }
@@ -289,9 +321,9 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
     }
 
     mountedDom.deferredRender = {
-      timeoutId: setTimeout(() => {
+      taskHandle: scheduleDeferredVisualTask(mountedDom, () => {
         this.flushDeferredRenderChunk()
-      }, 0),
+      }),
       chunkSize: deferredRender.chunkSize,
       continuation: pass.continuation
     }
@@ -304,7 +336,7 @@ export abstract class JWordEditorPointerRuntime extends JWordEditorInputRuntime 
       return
     }
 
-    clearTimeout(deferredRender.timeoutId)
+    cancelDeferredVisualTask(deferredRender.taskHandle)
     this.mountedDom!.deferredRender = undefined
   }
 }

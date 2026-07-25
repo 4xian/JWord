@@ -3,20 +3,26 @@
  * 边界：不创建运行时对象，不访问 DOM，不执行业务逻辑。
  * 协作模块：projection、selection、transaction、layout、history 和 formatting 类型。
  * 性能/安全约束：constructor/top-level 不访问 window/document/HTMLElement 实例，DOM 只在 mount 后创建，编辑命令统一进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { CanvasLike, createCanvasPool } from '../canvas/pool'
 import type { ParagraphAlignment, SelectionFormattingState } from '../model/formatting-types'
-import type { ModelProperties, ParagraphList } from '../model/types'
-import type { HistoryOperationResult } from '../operations/history'
+import type { Document, ModelProperties, ParagraphList } from '../model/types'
+import type { HistoryOperationResult, HistoryScope } from '../operations/history'
 import type { PageConfig, PageConfigInput } from '../layout/page-config'
 import type { DocumentLayout, LayoutBox, LayoutOptions, LayoutRect } from '../layout/runtime'
 import type { AnchorRef, RangeRef, TextRangeRecord } from '../model/position'
 import type { DocumentProjection } from '../model/projection'
 import type { SelectionState } from '../model/selection'
-import type { Command, TextPosition, TextRange, TransactionEvent, TransactionResult } from '../operations/transaction'
+import type { Command, TextPosition, TextRange, TransactionEvent, TransactionMetadata, TransactionResult, TransactionUpdateMetadata } from '../operations/transaction'
 import type { Resource, ResourceAdapter, ResourceUrlPolicy } from '../resources/types'
 import type { CanvasImageResourceResolver } from '../resources/canvas-image-resolver'
+import type { EditorAnchorSnapshot, EditorLocationQuery, EditorLocationTarget, EditorRangeSnapshot, EditorRangeSnapshotInput, EditorResolvedLocation, EditorScrollToLocationOptions, EditorSelectionSnapshot, EditorTextQueryResult } from './location-types'
+import type { JWordErrorCode, JWordErrorDetails } from '../shared/errors'
+import type { PluginDefinition, PluginDiagnostic } from '../plugins/types'
+import type { JWordDiagnosticsSnapshot, JWordTelemetryOptions } from './observability'
+
+export type { HistoryScope } from '../operations/history'
 
 export type InitialFocusPosition = 'start' | 'end'
 
@@ -46,6 +52,7 @@ export interface EditorUserInput {
   readonly color?: string
 }
 
+/** 创建 editor 时传入的公开初始化、布局、宿主和诊断配置。 */
 export interface EditorOptions {
   /**
    * 挂载后编辑器外壳使用的无障碍标签。
@@ -97,6 +104,16 @@ export interface EditorOptions {
    * 当前本地用户。
    */
   readonly currentUser?: EditorUserInput
+
+  /**
+   * Gate 7 前置插件定义列表。
+   */
+  readonly plugins?: readonly PluginDefinition[]
+
+  /**
+   * Gate 7 R3 telemetry 配置；默认关闭，只有宿主提供 sink 时才发送。
+   */
+  readonly telemetry?: JWordTelemetryOptions
 }
 
 /**
@@ -130,6 +147,14 @@ export interface EditorDocumentInput {
   readonly text?: string
   /** 可选资源表快照。 */
   readonly resources?: readonly Resource[]
+}
+
+/**
+ * 结构化文档模型导入输入。
+ */
+export interface EditorDocumentModelInput {
+  /** 由 DOCX、持久化或宿主系统转换出的 canonical 文档模型。 */
+  readonly document: Document
 }
 
 /**
@@ -172,6 +197,27 @@ export interface EditorCommandOptions {
   readonly origin?: string
   /** 事务标签，会进入 transaction metadata。 */
   readonly label?: string
+  /** Gate 6 协同、自动插入或恢复请求 ID。 */
+  readonly requestId?: string
+  /** Gate 6 协同 room ID。 */
+  readonly roomId?: string
+  /** Gate 6 协同 client ID。 */
+  readonly clientId?: string
+  /** Gate 6 作者 ID。 */
+  readonly authorId?: string
+  /** Gate 6 snapshot ID。 */
+  readonly snapshotId?: string
+  /** Gate 6 version ID。 */
+  readonly versionId?: string
+  /** 当前诊断是否可恢复。 */
+  readonly recoverable?: boolean
+  /**
+   * 命令要进入的独立历史作用域。
+   *
+   * @remarks
+   * 未提供时只按 origin 进入默认用户 undo；remote 和 auto-inserter 默认不进入用户 undo。
+   */
+  readonly historyScope?: HistoryScope
   /**
    * 命令成功后要落到 facade runtime 的选择区。
    *
@@ -179,6 +225,18 @@ export interface EditorCommandOptions {
    * 该值不写入文档模型，只进入 history restore metadata。
    */
   readonly selectionAfter?: SelectionState | null
+}
+
+/** 编码当前 Y.Doc update 时使用的可选输入。 */
+export interface EditorSyncUpdateInput {
+  /** 可选 state vector；用于生成相对调用方状态的增量 update。 */
+  readonly stateVector?: Uint8Array
+}
+
+/** 受控应用远端或恢复 update 时使用的公开选项。 */
+export interface EditorApplyUpdateOptions extends Omit<TransactionUpdateMetadata, 'origin'> {
+  /** 受控 update origin，只允许 Gate 6 三类非本地来源。 */
+  readonly origin: TransactionUpdateMetadata['origin']
 }
 
 /**
@@ -221,6 +279,14 @@ export type EditorEvent =
       readonly kind: 'selectionChange'
       readonly selection: SelectionState | null
       readonly formattingState: SelectionFormattingState
+    }
+  | {
+      readonly kind: 'error'
+      readonly code: JWordErrorCode
+      readonly commandName: string
+      readonly message: string
+      readonly recoverable: boolean
+      readonly details?: JWordErrorDetails
     }
   | {
       readonly kind: 'destroyed'
@@ -284,6 +350,16 @@ export interface Editor {
   loadFixture(fixture: EditorFixture): DocumentProjection
 
   /**
+   * 加载受控结构化文档模型。
+   *
+   * @param input 已转换成 core canonical model 的文档。
+   * @returns 加载后的只读 projection。
+   * @remarks
+   * 副作用：通过初始化事务替换当前 Y.Doc 文档根，不暴露 document-store 或 Y.Doc 内部结构。
+   */
+  loadDocumentModel(input: EditorDocumentModelInput): DocumentProjection
+
+  /**
    * 创建可交给 command 使用的文本锚点。
    *
    * @param input 目标 section、block、run 和 grapheme 边界。
@@ -301,6 +377,54 @@ export interface Editor {
    * ```
    */
   createTextAnchor(input: EditorTextAnchorInput): AnchorRef
+
+  /**
+   * 创建公开 anchor 快照。
+   *
+   * @param input 目标 section、block、run 和 grapheme 边界。
+   * @returns JSON 兼容 anchor 快照。
+   */
+  createAnchorSnapshot(input: EditorTextAnchorInput): EditorAnchorSnapshot
+
+  /**
+   * 创建公开 range 快照。
+   *
+   * @param input 范围起点和焦点。
+   * @returns JSON 兼容 range 快照。
+   */
+  createRangeSnapshot(input: EditorRangeSnapshotInput): EditorRangeSnapshot
+
+  /**
+   * 读取当前选择区的公开快照。
+   *
+   * @returns 当前 selection 快照；没有选择区时返回 null。
+   */
+  readSelectionSnapshot(): EditorSelectionSnapshot | null
+
+  /**
+   * 按文本、块、标题、批注或 range 快照查询中立文本位置。
+   *
+   * @param query 查询输入。
+   * @returns JSON 兼容位置结果列表。
+   */
+  findTextLocations(query: EditorLocationQuery): readonly EditorTextQueryResult[]
+
+  /**
+   * 把公开 location 输入解析成当前文档中的稳定纯数据位置。
+   *
+   * @param input 公开文本位置、anchor 快照、range 快照、selection 快照或 query 结果。
+   * @returns 解析后的 JSON 兼容位置；无法解析时返回 null。
+   */
+  resolveLocation(input: EditorLocationTarget): EditorResolvedLocation | null
+
+  /**
+   * 把公开 location 滚动到已挂载编辑器视口。
+   *
+   * @param input 公开文本位置、anchor 快照、range 快照、selection 快照或 query 结果。
+   * @param options 可选滚动行为。
+   * @returns 是否成功滚动到目标位置。
+   */
+  scrollToLocation(input: EditorLocationTarget, options?: EditorScrollToLocationOptions): boolean
 
   /**
    * 把运行时 AnchorRef 解析成可序列化文本位置。
@@ -587,6 +711,35 @@ export interface Editor {
   executeCommand(command: Command, options?: EditorCommandOptions): TransactionResult
 
   /**
+   * 编码当前 Y.Doc 的二进制更新。
+   *
+   * @param input 可选状态向量。
+   * @returns Yjs 二进制更新；调用方可传给协同提供方、更新日志或另一个编辑器。
+   * @remarks
+   * 无副作用，不暴露 Y.Doc、store、client clock 或内部结构。
+   */
+  encodeSyncUpdate(input?: EditorSyncUpdateInput): Uint8Array
+
+  /**
+   * 受控应用远端、系统恢复或版本恢复更新。
+   *
+   * @param update Yjs 二进制更新。
+   * @param options 来源与 Gate 6 诊断字段。
+   * @returns 事务管线结果。
+   * @remarks
+   * 副作用：经同一 Y.Doc 真源刷新投影、布局和渲染；协同提供方不应直接操作 DOM 或布局缓存。
+   */
+  applySyncUpdate(update: Uint8Array, options: EditorApplyUpdateOptions): TransactionResult
+
+  /**
+   * 用指定 update 的完整文档状态替换当前文档。
+   *
+   * @remarks
+   * 仅供版本恢复使用；实现会先在隔离 Y.Doc 中读取目标版本，再经同一 transaction pipeline 替换当前 canonical 文档。
+   */
+  replaceSyncUpdate(update: Uint8Array, options: EditorApplyUpdateOptions): TransactionResult
+
+  /**
    * 粘贴已清洗的结构化富文本片段。
    *
    * @param fragment UI 或宿主已经完成 HTML 清洗后的结构化片段。
@@ -603,7 +756,7 @@ export interface Editor {
    * @remarks
    * 副作用：通过 Y.UndoManager 回滚 Y.Doc；远端或自动插入 origin 默认不进入用户 undo 栈。
    */
-  undo(): HistoryOperationResult
+  undo(scope?: HistoryScope): HistoryOperationResult
 
   /**
    * 重做最近一次撤销的本地用户历史操作。
@@ -612,21 +765,21 @@ export interface Editor {
    * @remarks
    * 副作用：通过 Y.UndoManager 恢复 Y.Doc。
    */
-  redo(): HistoryOperationResult
+  redo(scope?: HistoryScope): HistoryOperationResult
 
   /**
    * 判断当前是否存在可撤销的用户历史项。
    *
    * @returns 是否可撤销。
    */
-  canUndo(): boolean
+  canUndo(scope?: HistoryScope): boolean
 
   /**
    * 判断当前是否存在可重做的用户历史项。
    *
    * @returns 是否可重做。
    */
-  canRedo(): boolean
+  canRedo(scope?: HistoryScope): boolean
 
   /**
    * 监听 facade 事件。
@@ -643,6 +796,31 @@ export interface Editor {
    * ```
    */
   subscribe(listener: EditorEventListener): () => void
+
+  /**
+   * 执行已注册的插件命令。
+   *
+   * @param commandName 插件注册的命令名称。
+   * @param input 传给插件命令的 JSON 兼容或宿主私有输入。
+   * @returns 插件命令产生的事务结果；未找到命令或命令无事务时返回 undefined。
+   * @remarks
+   * 插件命令如需修改文档，仍必须返回现有 Command 并进入统一 transaction pipeline。
+   */
+  executePluginCommand(commandName: string, input?: unknown): TransactionResult | undefined
+
+  /**
+   * 读取当前 editor 收集到的插件诊断。
+   *
+   * @returns 插件错误、拒绝和诊断快照。
+   */
+  getPluginDiagnostics(): readonly PluginDiagnostic[]
+
+  /**
+   * 导出隐私裁剪后的 diagnostics 快照。
+   *
+   * @returns 不包含文档正文的 diagnostics export。
+   */
+  exportDiagnostics(): JWordDiagnosticsSnapshot
 
   /**
    * 聚焦当前已挂载的编辑器输入层。
@@ -705,12 +883,25 @@ export interface Editor {
   destroy(): void
 }
 
+/** 延迟视觉任务的可取消句柄。 */
+export type DeferredVisualTaskHandle =
+  | {
+      readonly kind: 'animationFrame'
+      readonly view: Window
+      readonly frameId: number
+    }
+  | {
+      readonly kind: 'timeout'
+      readonly timeoutId: ReturnType<typeof setTimeout>
+    }
+
 export interface MountedEditorDom {
   readonly shell: HTMLElement
   readonly canvasContainer: HTMLElement
   readonly hiddenTextarea: HTMLTextAreaElement
   readonly liveRegion: HTMLElement
   readonly textMirror: HTMLElement
+  readonly eventAbortController: AbortController
   readonly handleScroll: () => void
   readonly handleInput: (event: Event) => void
   readonly handleBeforeInput: (event: Event) => void
@@ -725,10 +916,13 @@ export interface MountedEditorDom {
   readonly handleCompositionStart: (event: Event) => void
   readonly handleCompositionUpdate: (event: Event) => void
   readonly handleCompositionEnd: (event: Event) => void
+  readonly handleFocus: () => void
+  readonly handleBlur: () => void
   readonly pool: ReturnType<typeof createCanvasPool>
   readonly pageWrappers: Map<number, HTMLElement>
   readonly baseCanvases: Map<number, HTMLCanvasElement>
   readonly imageResourceResolver?: CanvasImageResourceResolver
+  commentPageIndexes: readonly number[]
   readonly inputState: {
     isComposing: boolean
     compositionText: string
@@ -738,10 +932,11 @@ export interface MountedEditorDom {
     anchor: AnchorRef | null
     pageMetrics: PointerPageMetrics | null
     paintedPageIndexes: readonly number[]
+    autoScrollDeltaY: number
   }
   canvases: Map<number, CanvasLike>
   deferredRender: {
-    timeoutId: ReturnType<typeof setTimeout>
+    taskHandle: DeferredVisualTaskHandle
     chunkSize: number
     continuation: Readonly<{
       dirtyPageIndex: number

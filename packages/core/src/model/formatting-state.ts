@@ -3,7 +3,7 @@
  * 边界：只从 projection + selection 读取聚合状态，不执行命令、不修改 Y.Doc、不接触 DOM。
  * 协作模块：toolbar 状态同步、快捷键高亮和后续命令面板可直接消费这里的 tri-state 结果。
  * 性能/安全约束：按当前选区覆盖的最小目标集合聚合属性，未解析出目标时返回 null 状态。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#step-39实现-toolbar-状态同步selection-改变时显示当前-runparagraph-状态。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { collectSelectionTargets } from './selection-targets'

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "pdf-chinese-font",
+  "description": "Chinese text exported with a portable Noto Sans SC subset font.",
+  "font": {
+    "family": "NotoSansSCGate5Subset",
+    "path": "fixtures/pdf/fonts/NotoSansSC-gate5-subset.ttf",
+    "coveredText": "中文PDF导出"
+  },
+  "document": {
+    "id": "document-pdf-chinese-fixture-text",
+    "sectionId": "section-pdf-chinese-fixture-text",
+    "paragraphId": "paragraph-pdf-chinese-fixture-text",
+    "runId": "run-pdf-chinese-fixture-text",
+    "text": "中文PDF导出"
+  },
+  "pageConfig": {
+    "widthTwips": 7200,
+    "heightTwips": 10080,
+    "marginTwips": {
+      "top": 720,
+      "right": 720,
+      "bottom": 720,
+      "left": 720
+    }
+  },
+  "expectation": {
+    "pdfJsText": "中文PDF导出",
+    "warnings": [],
+    "progress": ["queued", "mapping", "font-loading", "writing", "done"]
+  }
+}

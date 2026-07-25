@@ -3,7 +3,7 @@
  * 边界：只处理纯字符串边界计算，不访问 DOM、不读取文档状态、不承载编辑语义。
  * 协作模块：position 和 operation-adapter 用它在公开 grapheme index 与 Y.Text UTF-16 index 之间转换。
  * 性能/安全约束：Gate 1 只覆盖小文本片段，按需分段即可；非法边界统一抛 JWordError。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createJWordError } from './errors'
@@ -27,12 +27,49 @@ export interface GraphemeSegment {
  * @returns 带 UTF-16 边界的 grapheme 片段。
  */
 export function segmentGraphemes(text: string): readonly GraphemeSegment[] {
-  return [...segmenter.segment(text)].map((segment, index) => ({
-    graphemeIndex: index,
-    utf16StartIndex: segment.index,
-    utf16EndIndex: segment.index + segment.segment.length,
-    segment: segment.segment
-  }))
+  const segments: GraphemeSegment[] = []
+
+  if (hasSingleUnitGraphemesOnly(text)) {
+    for (let index = 0; index < text.length; index += 1) {
+      segments.push({
+        graphemeIndex: index,
+        utf16StartIndex: index,
+        utf16EndIndex: index + 1,
+        segment: text[index]!
+      })
+    }
+
+    return segments
+  }
+
+  for (const segment of segmenter.segment(text)) {
+    segments.push({
+      graphemeIndex: segments.length,
+      utf16StartIndex: segment.index,
+      utf16EndIndex: segment.index + segment.segment.length,
+      segment: segment.segment
+    })
+  }
+
+  return segments
+}
+
+/**
+ * 判断文本是否只包含可直接视为单 grapheme 的 UTF-16 单元。
+ */
+function hasSingleUnitGraphemesOnly(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const codeUnit = text.charCodeAt(index)
+    const isPrintableAscii = codeUnit >= 0x20 && codeUnit <= 0x7e
+    const isCjkExtensionA = codeUnit >= 0x3400 && codeUnit <= 0x4dbf
+    const isCjkUnifiedIdeograph = codeUnit >= 0x4e00 && codeUnit <= 0x9fff
+
+    if (!isPrintableAscii && !isCjkExtensionA && !isCjkUnifiedIdeograph) {
+      return false
+    }
+  }
+
+  return true
 }
 
 /**

@@ -5,7 +5,7 @@
  * 边界：只覆盖公开 UI option、返回句柄和 transaction 接线，不测试分页 layout。
  * 协作模块：packages/ui/src/create-ui.ts、header-footer controller 与 @4xian/jword-core。
  * 约束：通过公开 elements 和稳定 data selector 断言，不读取 controller 私有状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor, type Editor } from '@4xian/jword-core'
@@ -19,7 +19,7 @@ describe('createJWordUi header footer integration', () => {
 
     try {
       expect(harness.ui.elements.headerFooterPanel).not.toBeNull()
-      expect(harness.toolbarHost.querySelector('[data-jword-header-footer]')).not.toBeNull()
+      expect(harness.headerFooterHost.querySelector('[data-jword-header-footer]')).not.toBeNull()
 
       harness.ui.elements.headerFooterPanel!.headerInput.value = 'header-main'
       harness.ui.elements.headerFooterPanel!.footerInput.value = 'footer-main'
@@ -38,7 +38,7 @@ describe('createJWordUi header footer integration', () => {
 
       harness.ui.destroy()
 
-      expect(harness.toolbarHost.querySelector('[data-jword-header-footer]')).toBeNull()
+      expect(harness.headerFooterHost.querySelector('[data-jword-header-footer]')).toBeNull()
     } finally {
       harness.destroy()
     }
@@ -186,6 +186,7 @@ function createHarness(): Harness {
   editor.mount(editorHost)
   const ui = createJWordUi({
     editor,
+    editorHost,
     toolbarHost,
     liveRegionHost,
     headerFooter: {

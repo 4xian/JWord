@@ -5,7 +5,7 @@
  * 边界：只覆盖 undo/redo 和元数据，不测试 UI、快捷键、布局或持久化。
  * 协作模块：事务管线提供状态变更，selection 提供 restore snapshot。
  * 性能/安全约束：测试只使用内存中的 Y.Doc，不触发 DOM、网络或磁盘写入。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#39-history。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -121,6 +121,52 @@ describe('createHistoryManager', () => {
     expect(history.canUndo()).toBe(false)
     expect(history.undo().stackItem).toBeNull()
     expect(getRunText(run).toString()).toBe('远端X')
+  })
+
+  it('discards pending transaction metadata in FIFO order', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-discard' as SectionId)
+    const paragraph = createParagraphRecord('paragraph-discard' as BlockId)
+    const run = createRunRecord('run-discard' as RunId, '元数据')
+    const pipeline = createTransactionPipeline(store.doc)
+    const history = createHistoryManager(store)
+    const position = createPosition(
+      'paragraph-discard' as BlockId,
+      'run-discard' as RunId,
+      3,
+      'section-discard' as SectionId
+    )
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-discard' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([paragraph])
+    getParagraphRuns(paragraph).push([run])
+
+    history.captureNextTransaction({
+      commandName: 'first-command',
+      origin: DEFAULT_HISTORY_ORIGIN
+    })
+    history.captureNextTransaction({
+      commandName: 'second-command',
+      origin: DEFAULT_HISTORY_ORIGIN
+    })
+    history.discardNextTransactionMetadata()
+
+    pipeline.run(
+      {
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: position,
+            text: 'B'
+          }
+        ]
+      },
+      { origin: DEFAULT_HISTORY_ORIGIN }
+    )
+
+    expect(history.undo().metadata?.commandName).toBe('second-command')
   })
 })
 

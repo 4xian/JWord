@@ -18,6 +18,19 @@ import { describe, expect, test } from 'vitest'
 import { createJWordUi } from '../src/create-ui'
 
 describe('selection actions controller', () => {
+  test('把选区浮层挂到 editor 内部 shell，外部宿主不再提供定位上下文', () => {
+    const harness = createHarness('abcdef')
+
+    try {
+      const editorShell = getRequiredElement(harness.editorHost, '[data-jword-editor]')
+      const selectionActions = getRequiredElement(harness.editorHost, '[data-jword-selection-actions="true"]')
+
+      expect(selectionActions.parentElement).toBe(editorShell)
+    } finally {
+      harness.destroy()
+    }
+  })
+
   test('shows floating toolbar only for focused non-collapsed selection and hides on blur', async () => {
     const harness = createHarness('abcdef')
 

@@ -5,12 +5,12 @@
  * 边界：只测试无 DOM 的字体度量服务，不覆盖布局、渲染或真实字体加载。
  * 协作模块：layout 通过 字体管理器获取文本宽度和行高，PDF 后续可复用字体缺失诊断。
  * 约束：测试不访问 window、document 或 画布接口。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/02-technical-decisions.md#27-pdf-决策。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
 
-import { createFontManager } from '../../src/layout/font-manager'
+import { createCanvasTextMeasurer, createFontManager, type CanvasTextMeasurerContext, type TextMeasurer } from '../../src/layout/font-manager'
 
 describe('Gate 2 字体管理器', () => {
   it('resolves available fonts and caches repeated measurements', () => {
@@ -35,6 +35,193 @@ describe('Gate 2 字体管理器', () => {
       hits: 1,
       misses: 1
     })
+  })
+
+  it('uses injected text measurer before wrapping line height and grapheme metadata', () => {
+    const calls: string[] = []
+    const textMeasurer: TextMeasurer = {
+      measureText(text, style) {
+        calls.push(`${text}:${style.fontFamily}:${style.fontSizePx}`)
+
+        return {
+          widthCssPx: 42,
+          baselineRatio: 0.8
+        }
+      }
+    }
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial'],
+      textMeasurer
+    })
+
+    const measurement = manager.measureText('áb', {
+      fontSizePx: 20,
+      lineHeight: 2
+    })
+
+    expect(calls).toEqual(['áb:Arial:20'])
+    expect(measurement.widthCssPx).toBe(42)
+    expect(measurement.heightCssPx).toBe(40)
+    expect(measurement.baselineCssPx).toBe(32)
+    expect(measurement.graphemeCount).toBe(2)
+  })
+
+  it('reuses cached metrics when only paint and decoration properties change', () => {
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial']
+    })
+
+    const first = manager.measureText('abc', {
+      fontSizePx: 16,
+      color: '#ff0000',
+      backgroundColor: '#ffffff',
+      underline: true
+    })
+    const second = manager.measureText('abc', {
+      fontSizePx: 16,
+      color: '#00ff00',
+      backgroundColor: '#000000',
+      strike: true
+    })
+
+    expect(second.widthCssPx).toBe(first.widthCssPx)
+    expect(manager.getCacheStats()).toEqual({
+      size: 1,
+      hits: 1,
+      misses: 1
+    })
+  })
+
+  it('evicts least recently used measurements when cache reaches configured limit', () => {
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial'],
+      measurementCacheLimit: 2
+    })
+
+    manager.measureText('a', { fontSizePx: 16 })
+    manager.measureText('b', { fontSizePx: 16 })
+    manager.measureText('a', { fontSizePx: 16 })
+    manager.measureText('c', { fontSizePx: 16 })
+
+    expect(manager.getCacheStats()).toEqual({
+      size: 2,
+      hits: 1,
+      misses: 3
+    })
+
+    manager.measureText('b', { fontSizePx: 16 })
+
+    expect(manager.getCacheStats()).toEqual({
+      size: 2,
+      hits: 1,
+      misses: 4
+    })
+  })
+
+
+
+  it('accepts browser canvas metrics for non Arial fonts through injected measurer', () => {
+    const calls: string[] = []
+    const textMeasurer: TextMeasurer = {
+      measureText(text, style) {
+        calls.push(`${style.fontFamily}:${style.bold === true}:${style.italic === true}:${text}`)
+
+        return {
+          widthCssPx: 123,
+          heightCssPx: 12,
+          baselineCssPx: 9
+        }
+      }
+    }
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial', 'Times New Roman'],
+      textMeasurer
+    })
+
+    const measurement = manager.measureText('Canvas text', {
+      fontFamily: 'Times New Roman',
+      fontSizePx: 18,
+      bold: true,
+      italic: true
+    })
+
+    expect(calls).toEqual(['Times New Roman:true:true:Canvas text'])
+    expect(measurement.widthCssPx).toBe(123)
+    expect(measurement.baselineCssPx).toBe(16.875)
+    expect(measurement.resolvedFont.fontFamily).toBe('Times New Roman')
+  })
+
+  it('creates canvas text measurer from runtime 2d context without touching DOM itself', () => {
+    const calls: string[] = []
+    const context: CanvasTextMeasurerContext = {
+      set font(value: unknown) {
+        calls.push(`font:${String(value)}`)
+      },
+      measureText(text) {
+        calls.push(`measure:${text}`)
+
+        return {
+          width: 96,
+          actualBoundingBoxAscent: 15,
+          actualBoundingBoxDescent: 5
+        }
+      }
+    }
+    const manager = createFontManager({
+      fallbackFontFamily: 'Arial',
+      availableFontFamilies: ['Arial', 'Times New Roman'],
+      textMeasurer: createCanvasTextMeasurer(context)
+    })
+
+    const measurement = manager.measureText('abc', {
+      fontFamily: 'Times New Roman',
+      fontSizePx: 20,
+      bold: true,
+      italic: true
+    })
+
+    expect(calls).toEqual([
+      'font:italic 700 20px "Times New Roman"',
+      'measure:abc'
+    ])
+    expect(measurement.widthCssPx).toBe(96)
+    expect(measurement.baselineCssPx).toBe(19.5)
+  })
+
+  it('keeps canvas baseline stable across glyph actual bounding boxes', () => {
+    const context: CanvasTextMeasurerContext = {
+      font: '',
+      measureText(text) {
+        return text === '。'
+          ? {
+              width: 16,
+              actualBoundingBoxAscent: 4,
+              actualBoundingBoxDescent: 10,
+              fontBoundingBoxAscent: 14,
+              fontBoundingBoxDescent: 4
+            }
+          : {
+              width: 16,
+              actualBoundingBoxAscent: 13,
+              actualBoundingBoxDescent: 3,
+              fontBoundingBoxAscent: 14,
+              fontBoundingBoxDescent: 4
+            }
+      }
+    }
+    const measurer = createCanvasTextMeasurer(context)
+    const style = {
+      fontFamily: 'Arial',
+      fontSizePx: 16,
+      status: 'available' as const
+    }
+
+    expect(measurer.measureText('字', style).baselineRatio).toBeCloseTo(14 / 18)
+    expect(measurer.measureText('。', style).baselineRatio).toBeCloseTo(14 / 18)
   })
 
   it('falls back and records missing font family without touching DOM', () => {

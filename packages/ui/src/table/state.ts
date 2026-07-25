@@ -3,13 +3,14 @@
  * 边界：只处理行列输入、按钮可用性和摘要文案，不访问 DOM，也不调用 editor 或宿主 adapter。
  * 协作模块：table controller 维护状态，table dom 只消费这里归一化后的数据。
  * 性能/安全约束：状态保持轻量可序列化，避免把 projection 细节长期缓存在 UI 层。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordTableBorderPreset,
   JWordTableSelectionScope,
   JWordTableSelectionTarget
 } from '../types'
+import { readJWordUiText, type ResolvedJWordUiI18n } from '../i18n'
 
 /** table 输入行列维度的最小值。 */
 export const MIN_TABLE_DIMENSION = 1
@@ -36,8 +37,9 @@ export function readTableSelectionSummary(
 }
 
 /** 读取“宿主尚未对接命令”时的默认提示。 */
-export function readDefaultDeferredMessage(actionLabel: string): string {
-  return `${actionLabel} 已触发，但宿主尚未接入表格命令适配器。`
+export function readDefaultDeferredMessage(actionLabel: string, i18n?: ResolvedJWordUiI18n): string {
+  return readJWordUiText(i18n ?? { messages: {} }, 'a11y.table.deferred')
+    .replace('{action}', actionLabel)
 }
 
 /** 把用户输入归一化成安全的表格维度。 */

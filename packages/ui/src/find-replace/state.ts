@@ -3,7 +3,7 @@
  * 边界：只处理草稿归一化和按钮可用态，不访问 DOM、不保存 projection、不执行 editor 命令。
  * 协作模块：后续 find-replace controller 可消费这里的轻量状态。
  * 性能/安全约束：状态对象冻结后只读，避免 UI 层长期缓存查找结果详情。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export interface FindReplaceDraft {

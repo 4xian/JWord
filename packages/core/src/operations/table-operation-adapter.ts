@@ -3,7 +3,7 @@
  * 边界：只处理表格行列、合并、边框和单元格文本，不处理通用文本、图片或资源 operation。
  * 协作模块：operation-adapter 负责分发，block-record-factory 负责创建 row/cell 记录。
  * 性能/安全约束：不访问 DOM，不直接改 projection；所有写入发生在 transaction pipeline 的 Y.Doc transact 内。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.4-4.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 

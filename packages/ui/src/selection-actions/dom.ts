@@ -3,21 +3,29 @@
  * 边界：只负责节点结构、稳定 data attribute 和展示状态，不读取 projection 或事务结果。
  * 协作模块：selection-actions/controller 绑定交互，state 计算显示状态，toolbar/icons 复用图标。
  * 性能/安全约束：DOM 结构保持扁平，所有交互节点都有稳定 selector，避免引入额外布局依赖。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区浮层收尾项。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import { createToolbarIcon } from '../toolbar/icons'
 import type { SelectionActionPosition, SelectionActionsContextControls, SelectionActionsDom, SelectionActionsFormatControls, SelectionActionsViewState } from './types'
 
 /** 创建 selection-actions DOM。 */
-export function createSelectionActionsDom(host: HTMLElement): SelectionActionsDom {
+export function createSelectionActionsDom(
+  host: HTMLElement,
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
+): SelectionActionsDom {
   const root = document.createElement('div')
   const floatingToolbar = document.createElement('div')
   const floatingBar = document.createElement('div')
   const contextMenu = document.createElement('div')
   const contextMenuGroup = document.createElement('div')
   const contextMetaGroup = document.createElement('div')
-  const formatControls = createFormatControls()
-  const contextControls = createContextControls()
+  const formatControls = createFormatControls(i18n)
+  const contextControls = createContextControls(i18n)
 
   root.className = 'jw-selection-actions'
   root.setAttribute('data-jword-selection-actions', 'true')
@@ -34,8 +42,8 @@ export function createSelectionActionsDom(host: HTMLElement): SelectionActionsDo
     formatControls.openLink,
     formatControls.editLink,
     formatControls.removeLink,
-    createColorLabel('文字颜色', 'text-color', 'textColor', formatControls.textColor),
-    createColorLabel('背景色', 'background-color', 'backgroundColor', formatControls.backgroundColor)
+    createColorLabel(readSelectionActionText(i18n, 'textColor'), 'text-color', 'textColor', formatControls.textColor),
+    createColorLabel(readSelectionActionText(i18n, 'backgroundColor'), 'background-color', 'backgroundColor', formatControls.backgroundColor)
   )
   floatingToolbar.append(floatingBar)
 
@@ -74,6 +82,34 @@ export function createSelectionActionsDom(host: HTMLElement): SelectionActionsDo
   }
 }
 
+/** 动态刷新 selection actions 文案。 */
+export function localizeSelectionActionsDom(dom: SelectionActionsDom, i18n: ResolvedJWordUiI18n): void {
+  updateButtonLabel(dom.formatControls.bold, readSelectionActionText(i18n, 'bold'))
+  updateButtonLabel(dom.formatControls.italic, readSelectionActionText(i18n, 'italic'))
+  updateButtonLabel(dom.formatControls.underline, readSelectionActionText(i18n, 'underline'))
+  updateButtonLabel(dom.formatControls.strike, readSelectionActionText(i18n, 'strike'))
+  updateButtonLabel(dom.formatControls.insertLink, readSelectionActionText(i18n, 'insertLink'))
+  updateButtonLabel(dom.formatControls.openLink, readSelectionActionText(i18n, 'openLink'))
+  updateButtonLabel(dom.formatControls.editLink, readSelectionActionText(i18n, 'editLink'))
+  updateButtonLabel(dom.formatControls.removeLink, readSelectionActionText(i18n, 'removeLink'))
+  updateInputLabel(dom.formatControls.textColor, readSelectionActionText(i18n, 'textColor'))
+  updateInputLabel(dom.formatControls.backgroundColor, readSelectionActionText(i18n, 'backgroundColor'))
+  updateColorLabel(dom.formatControls.textColor, readSelectionActionText(i18n, 'textColor'))
+  updateColorLabel(dom.formatControls.backgroundColor, readSelectionActionText(i18n, 'backgroundColor'))
+  updateContextButton(dom.contextControls.cut, readSelectionActionText(i18n, 'cut'))
+  updateContextButton(dom.contextControls.copy, readSelectionActionText(i18n, 'copy'))
+  updateContextButton(dom.contextControls.paste, readSelectionActionText(i18n, 'paste'))
+  updateContextButton(dom.contextControls.pastePlainText, readSelectionActionText(i18n, 'pastePlainText'))
+  updateContextButton(dom.contextControls.clear, readSelectionActionText(i18n, 'clear'))
+  updateContextButton(dom.contextControls.insertLink, readSelectionActionText(i18n, 'insertLink'))
+  updateContextButton(dom.contextControls.openLink, readSelectionActionText(i18n, 'openLink'))
+  updateContextButton(dom.contextControls.editLink, readSelectionActionText(i18n, 'editLink'))
+  updateContextButton(dom.contextControls.removeLink, readSelectionActionText(i18n, 'removeLink'))
+  updateContextButton(dom.contextControls.insertComment, readSelectionActionText(i18n, 'insertComment'))
+  updateContextButton(dom.contextControls.insertBookmark, readSelectionActionText(i18n, 'insertBookmark'))
+  updateContextButton(dom.contextControls.forwardReference, readSelectionActionText(i18n, 'forwardReference'))
+}
+
 /** 根据最新状态重绘 selection-actions DOM。 */
 export function renderSelectionActionsDom(dom: SelectionActionsDom, state: SelectionActionsViewState): void {
   dom.floatingToolbar.hidden = !state.floatingVisible
@@ -86,6 +122,7 @@ export function renderSelectionActionsDom(dom: SelectionActionsDom, state: Selec
   setToggleState(dom.formatControls.italic, state.formatEnabled, state.italicPressed)
   setToggleState(dom.formatControls.underline, state.formatEnabled, state.underlinePressed)
   setToggleState(dom.formatControls.strike, state.formatEnabled, state.strikePressed)
+  syncFormatActionVisibility(dom)
   syncLinkActionVisibility(dom, state)
   dom.formatControls.textColor.disabled = !state.formatEnabled
   dom.formatControls.backgroundColor.disabled = !state.formatEnabled
@@ -115,36 +152,74 @@ export function destroySelectionActionsDom(dom: SelectionActionsDom): void {
 }
 
 /** 创建浮动工具栏中的格式按钮集合。 */
-function createFormatControls(): SelectionActionsFormatControls {
+function createFormatControls(i18n: ResolvedJWordUiI18n): SelectionActionsFormatControls {
   return {
-    bold: createFormatButton('format.bold', '加粗', 'bold'),
-    italic: createFormatButton('format.italic', '斜体', 'italic'),
-    underline: createFormatButton('format.underline', '下划线', 'underline'),
-    strike: createFormatButton('format.strike', '删除线', 'strike'),
-    insertLink: createFormatButton('insert.link', '插入链接', 'link'),
-    openLink: createFormatButton('link.open', '打开链接', 'openLink'),
-    editLink: createFormatButton('link.edit', '编辑链接', 'paragraphStyle'),
-    removeLink: createFormatButton('link.remove', '删除链接', 'trash'),
-    textColor: createColorInput('format.textColor', '文字颜色', '#111111'),
-    backgroundColor: createColorInput('format.backgroundColor', '背景色', '#fff59d')
+    bold: createFormatButton('format.bold', readSelectionActionText(i18n, 'bold'), 'bold'),
+    italic: createFormatButton('format.italic', readSelectionActionText(i18n, 'italic'), 'italic'),
+    underline: createFormatButton('format.underline', readSelectionActionText(i18n, 'underline'), 'underline'),
+    strike: createFormatButton('format.strike', readSelectionActionText(i18n, 'strike'), 'strike'),
+    insertLink: createFormatButton('insert.link', readSelectionActionText(i18n, 'insertLink'), 'link'),
+    openLink: createFormatButton('link.open', readSelectionActionText(i18n, 'openLink'), 'openLink'),
+    editLink: createFormatButton('link.edit', readSelectionActionText(i18n, 'editLink'), 'paragraphStyle'),
+    removeLink: createFormatButton('link.remove', readSelectionActionText(i18n, 'removeLink'), 'trash'),
+    textColor: createColorInput('format.textColor', readSelectionActionText(i18n, 'textColor'), '#111111'),
+    backgroundColor: createColorInput('format.backgroundColor', readSelectionActionText(i18n, 'backgroundColor'), '#fff59d')
   }
 }
 
 /** 创建右键菜单动作集合。 */
-function createContextControls(): SelectionActionsContextControls {
+function createContextControls(i18n: ResolvedJWordUiI18n): SelectionActionsContextControls {
   return {
-    cut: createContextButton('clipboard.cut', '剪切', false, '⌘+X'),
-    copy: createContextButton('clipboard.copy', '复制', false, '⌘+C'),
-    paste: createContextButton('clipboard.paste', '粘贴', false, '⌘+V'),
-    pastePlainText: createContextButton('clipboard.pastePlainText', '仅文本粘贴', false, '⌘+⇧+V'),
-    clear: createContextButton('format.clear', '清除格式'),
-    insertLink: createContextButton('insert.link', '插入链接'),
-    openLink: createContextButton('link.open', '打开链接'),
-    editLink: createContextButton('link.edit', '编辑链接'),
-    removeLink: createContextButton('link.remove', '删除链接'),
-    insertComment: createContextButton('insert.comment', '插入批注'),
-    insertBookmark: createContextButton('insert.bookmark', '插入书签', true),
-    forwardReference: createContextButton('insert.referenceForward', '引用转发', true)
+    cut: createContextButton('clipboard.cut', readSelectionActionText(i18n, 'cut'), false, '⌘+X'),
+    copy: createContextButton('clipboard.copy', readSelectionActionText(i18n, 'copy'), false, '⌘+C'),
+    paste: createContextButton('clipboard.paste', readSelectionActionText(i18n, 'paste'), false, '⌘+V'),
+    pastePlainText: createContextButton('clipboard.pastePlainText', readSelectionActionText(i18n, 'pastePlainText'), false, '⌘+⇧+V'),
+    clear: createContextButton('format.clear', readSelectionActionText(i18n, 'clear')),
+    insertLink: createContextButton('insert.link', readSelectionActionText(i18n, 'insertLink')),
+    openLink: createContextButton('link.open', readSelectionActionText(i18n, 'openLink')),
+    editLink: createContextButton('link.edit', readSelectionActionText(i18n, 'editLink')),
+    removeLink: createContextButton('link.remove', readSelectionActionText(i18n, 'removeLink')),
+    insertComment: createContextButton('insert.comment', readSelectionActionText(i18n, 'insertComment')),
+    insertBookmark: createContextButton('insert.bookmark', readSelectionActionText(i18n, 'insertBookmark'), true),
+    forwardReference: createContextButton('insert.referenceForward', readSelectionActionText(i18n, 'forwardReference'), true)
+  }
+}
+
+/** 读取选区动作双语文案。 */
+function readSelectionActionText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.selectionActions.${key}`)
+}
+
+/** 更新图标按钮的无障碍文案。 */
+function updateButtonLabel(button: HTMLButtonElement, label: string): void {
+  button.title = label
+  button.setAttribute('aria-label', label)
+}
+
+/** 更新颜色输入的无障碍文案。 */
+function updateInputLabel(input: HTMLInputElement, label: string): void {
+  input.title = label
+  input.setAttribute('aria-label', label)
+}
+
+/** 更新颜色控件包装的无障碍文案。 */
+function updateColorLabel(input: HTMLInputElement, label: string): void {
+  updateInputLabel(input, label)
+  input.parentElement?.setAttribute('aria-label', label)
+  if (input.parentElement !== null) {
+    input.parentElement.title = label
+  }
+}
+
+/** 更新右键菜单按钮的可见文案。 */
+function updateContextButton(button: HTMLButtonElement, label: string): void {
+  const labelNode = button.querySelector<HTMLElement>('.jw-context-menu__label')
+
+  button.title = label
+  button.setAttribute('aria-label', label)
+  if (labelNode !== null) {
+    labelNode.title = label
+    labelNode.textContent = label
   }
 }
 
@@ -172,12 +247,6 @@ function createFormatButton(
 function syncLinkActionVisibility(dom: SelectionActionsDom, state: SelectionActionsViewState): void {
   const hasActiveLink = state.activeLinkUrl !== null
 
-  dom.formatControls.bold.hidden = true
-  dom.formatControls.italic.hidden = true
-  dom.formatControls.underline.hidden = true
-  dom.formatControls.strike.hidden = true
-  dom.formatControls.textColor.parentElement?.toggleAttribute('hidden', true)
-  dom.formatControls.backgroundColor.parentElement?.toggleAttribute('hidden', true)
   setActionVisibility(dom.formatControls.insertLink, !hasActiveLink)
   setActionVisibility(dom.formatControls.openLink, hasActiveLink)
   setActionVisibility(dom.formatControls.editLink, hasActiveLink)
@@ -194,6 +263,16 @@ function syncLinkActionVisibility(dom: SelectionActionsDom, state: SelectionActi
   dom.contextControls.openLink.disabled = !state.contextHasLink
   dom.contextControls.editLink.disabled = !state.contextHasLink
   dom.contextControls.removeLink.disabled = !state.contextHasLink
+}
+
+/** 浮动工具栏可见时格式动作保持可见，链接动作由独立逻辑控制。 */
+function syncFormatActionVisibility(dom: SelectionActionsDom): void {
+  setActionVisibility(dom.formatControls.bold, true)
+  setActionVisibility(dom.formatControls.italic, true)
+  setActionVisibility(dom.formatControls.underline, true)
+  setActionVisibility(dom.formatControls.strike, true)
+  dom.formatControls.textColor.parentElement?.toggleAttribute('hidden', false)
+  dom.formatControls.backgroundColor.parentElement?.toggleAttribute('hidden', false)
 }
 
 /** 同步动作按钮的真实可见性，避免 CSS display 覆盖 hidden 属性。 */

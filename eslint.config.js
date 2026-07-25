@@ -1,28 +1,14 @@
+import { readFileSync } from 'node:fs'
+
 import js from '@eslint/js'
 import globals from 'globals'
 import stylistic from '@stylistic/eslint-plugin'
 import tseslint from 'typescript-eslint'
 
+const boundaryPolicy = JSON.parse(readFileSync(new URL('./tools/lint/core-boundary-policy.json', import.meta.url), 'utf8'))
 const corePathPattern = /(?:^|[/\\])packages[/\\]core(?:[/\\]|$)/u
-const coreForbiddenImports = [
-  'react',
-  'react-dom',
-  'vue',
-  '@4xian/jword-ui',
-  '@4xian/jword-docx',
-  '@4xian/jword-pdf',
-  '@4xian/jword-collab',
-  '@4xian/jword-react',
-  '@4xian/jword-vue',
-  '@hocuspocus/server',
-  'hocuspocus',
-  'jszip',
-  'pdf-lib',
-  'fontkit',
-  'vite',
-  '@playwright/test'
-]
-const domIdentifiers = new Set(['window', 'document', 'HTMLElement'])
+const coreForbiddenImports = boundaryPolicy.coreForbiddenImports
+const domIdentifiers = new Set(boundaryPolicy.coreTopLevelDomGlobals)
 
 function isCoreFile(filename) {
   return corePathPattern.test(filename)
@@ -38,14 +24,24 @@ function inspectTopLevelNode(node, report, visited = new Set()) {
     node.type?.startsWith('TS') ||
     node.type === 'FunctionExpression' ||
     node.type === 'ArrowFunctionExpression' ||
-    node.type === 'ClassDeclaration' ||
     (node.type === 'FunctionDeclaration' && node.id) ||
     node.type === 'TSInterfaceDeclaration' ||
     node.type === 'TSTypeAliasDeclaration' ||
     node.type === 'ImportDeclaration' ||
-    node.type === 'ExportNamedDeclaration' ||
     node.type === 'ExportAllDeclaration'
   ) {
+    return
+  }
+
+  if (node.type === 'ExportNamedDeclaration') {
+    if (node.declaration !== null && node.declaration !== undefined) {
+      inspectTopLevelNode(node.declaration, report, visited)
+    }
+    return
+  }
+
+  if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
+    inspectClassStaticNodes(node, report, visited)
     return
   }
 
@@ -71,6 +67,23 @@ function inspectTopLevelNode(node, report, visited = new Set()) {
       continue
     }
     inspectTopLevelNode(value, report, visited)
+  }
+}
+
+function inspectClassStaticNodes(node, report, visited) {
+  for (const member of node.body?.body ?? []) {
+    if (member.type === 'StaticBlock') {
+      inspectTopLevelNode(member, report, visited)
+      continue
+    }
+    if (
+      member.static === true &&
+      (member.type === 'PropertyDefinition' || member.type === 'AccessorProperty') &&
+      member.value !== null &&
+      member.value !== undefined
+    ) {
+      inspectTopLevelNode(member.value, report, visited)
+    }
   }
 }
 
@@ -138,21 +151,33 @@ const jwordRules = {
         if (!isCoreFile(context.filename)) {
           return {}
         }
+        function reportForbiddenImport(node, source) {
+          if (typeof source !== 'string') {
+            return
+          }
+          const isForbidden = coreForbiddenImports.some(
+            (blocked) => source === blocked || source.startsWith(`${blocked}/`)
+          )
+          if (isForbidden) {
+            context.report({
+              node,
+              message: `Core must not import '${source}'. Keep core framework-agnostic and free of docx/pdf/collab/demo dependencies.`
+            })
+          }
+        }
+
         return {
           ImportDeclaration(node) {
-            const source = node.source.value
-            if (typeof source !== 'string') {
-              return
-            }
-            const isForbidden = coreForbiddenImports.some(
-              (blocked) => source === blocked || source.startsWith(`${blocked}/`)
-            )
-            if (isForbidden) {
-              context.report({
-                node,
-                message: `Core must not import '${source}'. Keep core framework-agnostic and free of docx/pdf/collab/demo dependencies.`
-              })
-            }
+            reportForbiddenImport(node, node.source.value)
+          },
+          ExportNamedDeclaration(node) {
+            reportForbiddenImport(node, node.source?.value)
+          },
+          ExportAllDeclaration(node) {
+            reportForbiddenImport(node, node.source?.value)
+          },
+          ImportExpression(node) {
+            reportForbiddenImport(node, node.source?.value)
           }
         }
       }

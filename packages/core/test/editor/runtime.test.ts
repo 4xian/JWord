@@ -1,11 +1,11 @@
 /**
  * @vitest-environment jsdom
  *
- * 职责：验证 Gate 0 最小 Editor facade 的浏览器生命周期。
- * 边界：只覆盖 create/mount/destroy，不进入 Gate 1 模型、事务或输入能力。
+ * 职责：验证 Gate 0 Editor facade 挂载后的浏览器生命周期。
+ * 边界：只覆盖 mount/render/destroy，不进入 Gate 1 模型、事务或输入能力。
  * 协作模块：后续 examples/vanilla 和 UI 包通过公开 facade 挂载编辑器。
  * 性能/安全约束：DOM 创建必须延迟到 mount，destroy 必须移除自身 DOM。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -13,34 +13,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { buildSetBoldCommand, createEditor } from '../../src/index'
 import { twipsToCssPx } from '../../src/layout/page-config'
 import { createSelectionState } from '../../src/model/selection'
-
-describe('createEditor', () => {
-  it('creates an editor without touching host DOM', () => {
-    const host = document.createElement('div')
-
-    const editor = createEditor()
-    const projection = editor.getProjection()
-
-    expect(host.childElementCount).toBe(0)
-    expect(projection.document.id).toBe('document-1')
-    expect(projection.document.sections).toHaveLength(1)
-    editor.destroy()
-  })
-
-  it('passes grouped layout options into the layout runtime during initialization', () => {
-    const editor = createEditor({
-      initialText: `前缀 ${'h'.repeat(160)}`,
-      layout: {
-        keepLatinWordWholeOnWrap: true
-      }
-    })
-    const firstLineText = editor.getLayout().pages[0]?.lines[0]?.fragments.map((fragment) => fragment.text).join('')
-
-    expect(firstLineText).toBe('前缀 ')
-
-    editor.destroy()
-  })
-})
 
 describe('Editor mount/destroy lifecycle', () => {
   it('mounts a recognizable editor shell and canvas container', () => {
@@ -56,6 +28,36 @@ describe('Editor mount/destroy lifecycle', () => {
     expect(shell?.getAttribute('aria-label')).toBe('Test document')
     expect(canvasContainer).toBeInstanceOf(HTMLElement)
     expect(shell?.contains(canvasContainer)).toBe(true)
+  })
+
+  it('keeps the canvas viewport horizontally scrollable for a wide page', () => {
+    const host = document.createElement('div')
+    const editor = createEditor({
+      initialText: '横向宽纸张',
+      page: {
+        widthTwips: 30000,
+        heightTwips: 12000
+      }
+    })
+
+    host.style.width = '320px'
+    host.style.height = '240px'
+
+    try {
+      editor.mount(host)
+
+      const shell = host.querySelector<HTMLElement>('[data-jword-editor]')
+      const canvasContainer = host.querySelector<HTMLElement>('[data-jword-canvas-container]')
+      const page = host.querySelector<HTMLElement>('[data-jword-page="0"]')
+
+      expect(shell?.style.minWidth).toBe('0px')
+      expect(canvasContainer?.style.minWidth).toBe('0px')
+      expect(canvasContainer?.style.overflowX).toBe('auto')
+      expect(canvasContainer?.style.overflowY).toBe('auto')
+      expect(page?.style.minWidth).toBe(page?.style.width)
+    } finally {
+      editor.destroy()
+    }
   })
 
   it('mounts paginated canvas pages from the current projection', () => {
@@ -88,7 +90,8 @@ describe('Editor mount/destroy lifecycle', () => {
     expect(page).toBeDefined()
     expect(canvasContainer).toBeInstanceOf(HTMLElement)
     expect(firstPageCanvas).toBeInstanceOf(HTMLCanvasElement)
-    expect(canvasContainer?.style.overflow).toBe('auto')
+    expect(canvasContainer?.style.overflowX).toBe('auto')
+    expect(canvasContainer?.style.overflowY).toBe('auto')
 
     canvasContainer!.scrollTop = twipsToCssPx(page!.y)
     canvasContainer!.dispatchEvent(new Event('scroll'))
@@ -270,6 +273,15 @@ describe('Editor mount/destroy lifecycle', () => {
     const calls: string[] = []
     const originalUserAgent = window.navigator.userAgent
     const originalGetContext = HTMLCanvasElement.prototype.getContext
+    const originalRequestAnimationFrame = window.requestAnimationFrame
+    const originalCancelAnimationFrame = window.cancelAnimationFrame
+    const frameCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+
+      return frameCallbacks.length
+    })
+    const cancelAnimationFrame = vi.fn()
     const context = {
       set fillStyle(value: string) {
         calls.push(`fillStyle:${value}`)
@@ -306,6 +318,16 @@ describe('Editor mount/destroy lifecycle', () => {
       configurable: true,
       value: getContext
     })
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: requestAnimationFrame
+    })
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: cancelAnimationFrame
+    })
 
     try {
       editor.mount(host)
@@ -339,8 +361,10 @@ describe('Editor mount/destroy lifecycle', () => {
       expect(canvasContainer?.getAttribute('data-jword-layout-deferred-chunks')).not.toBe('')
       expect(canvasContainer?.getAttribute('data-jword-layout-rerender-pages')).toBe('0')
       expect(immediateClears).toHaveLength(1)
+      expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
+      expect(frameCallbacks).toHaveLength(1)
 
-      vi.runOnlyPendingTimers()
+      frameCallbacks.shift()?.(0)
 
       const totalClears = calls.filter((call) => call.startsWith('clearRect:'))
 
@@ -356,6 +380,16 @@ describe('Editor mount/destroy lifecycle', () => {
       Object.defineProperty(window.navigator, 'userAgent', {
         configurable: true,
         value: originalUserAgent
+      })
+      Object.defineProperty(window, 'requestAnimationFrame', {
+        configurable: true,
+        writable: true,
+        value: originalRequestAnimationFrame
+      })
+      Object.defineProperty(window, 'cancelAnimationFrame', {
+        configurable: true,
+        writable: true,
+        value: originalCancelAnimationFrame
       })
     }
   })

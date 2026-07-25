@@ -1,0 +1,43 @@
+{
+  "name": "@4xian/jword-pdf",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --root ../.. packages/pdf/test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@4xian/jword-core": "workspace:*",
+    "fontkit": "2.0.4",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "4.10.38"
+  },
+  "peerDependencies": {
+    "@4xian/jword-license": "workspace:*"
+  },
+  "devDependencies": {
+    "@4xian/jword-license": "workspace:*"
+  }
+}

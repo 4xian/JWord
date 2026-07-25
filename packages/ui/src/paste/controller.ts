@@ -3,15 +3,17 @@
  * 边界：只监听 hidden textarea 的 paste，不解析纯文本、不直接修改文档模型。
  * 协作模块：paste sanitizer 清洗 HTML，core pasteRichTextFragment 执行事务。
  * 性能/安全约束：只有 sanitizer 产出有效片段且 core 接受时才阻止默认事件，否则保留纯文本降级路径。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-415。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor } from '@4xian/jword-core'
 import type { JWordUiLiveRegionController } from '../types'
-import { sanitizePastedHtmlToRichTextFragment } from './sanitizer'
+import { readJWordUiText, resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
+import { sanitizePastedHtmlToRichTextFragmentWithWarnings } from './sanitizer'
 
 interface CreatePasteControllerOptions {
   readonly editor: Editor
   readonly editorHost: HTMLElement
+  readonly i18n?: ResolvedJWordUiI18n
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
@@ -48,7 +50,8 @@ function handlePasteEvent(options: CreatePasteControllerOptions, event: Clipboar
     return
   }
 
-  const fragment = sanitizePastedHtmlToRichTextFragment(html)
+  const result = sanitizePastedHtmlToRichTextFragmentWithWarnings(html)
+  const fragment = result.fragment
 
   if (fragment === null) {
     return
@@ -60,7 +63,14 @@ function handlePasteEvent(options: CreatePasteControllerOptions, event: Clipboar
 
   event.preventDefault()
   event.stopImmediatePropagation()
-  options.assistive.liveRegion?.announce('已粘贴保留格式的安全富文本。', { force: true })
+  const i18n = options.i18n ?? resolveJWordUiI18n()
+  options.assistive.liveRegion?.announce(readJWordUiText(i18n, 'a11y.paste.richTextApplied'), { force: true })
+  for (const warning of result.warnings) {
+    const warningMessage = warning.code === 'PASTE_TABLE_FLATTENED'
+      ? readJWordUiText(i18n, 'a11y.paste.tableFlattened')
+      : warning.message
+    options.assistive.liveRegion?.announce(`WARN: ${warningMessage}`, { force: true })
+  }
 }
 
 /** 读取 editor mount 后的隐藏输入框。 */

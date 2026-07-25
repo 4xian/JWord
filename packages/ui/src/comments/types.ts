@@ -3,9 +3,10 @@
  * 边界：只描述用户、批注 thread、reply、anchor、权限和 controller adapter 的协作形状。
  * 协作模块：comments/state 负责纯状态转换，comments/dom 负责渲染，comments/controller 负责事件调度。
  * 性能/安全约束：纯类型模块，无副作用，可在非浏览器环境安全导入。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.8-4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
+import type { ResolvedJWordUiI18n } from '../i18n'
 import type { JWordReadonlyMode } from '../types'
 
 /** 批注作者的最小身份快照。 */
@@ -324,6 +325,8 @@ export interface CreateCommentsControllerOptions {
   readonly threads?: readonly JWordCommentThread[]
   /** 全局只读配置。 */
   readonly readonly?: JWordReadonlyMode
+  /** 当前 UI 文案字典。 */
+  readonly i18n?: ResolvedJWordUiI18n
   /** 宿主 adapter。 */
   readonly adapter: JWordCommentsAdapter
 }
@@ -418,6 +421,8 @@ export interface CommentsControllerHandle {
   openEditDraft(threadId: string, messageId: string): void
   /** 聚焦当前草稿输入。 */
   focusDraft(): void
+  /** 动态刷新批注 UI 文案。 */
+  setI18n(i18n: ResolvedJWordUiI18n): void
   /** 销毁 controller。 */
   destroy(): void
 }

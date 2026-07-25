@@ -9,15 +9,18 @@
 
 import { describe, expect, test } from 'vitest'
 
-import { sanitizePastedHtmlToRichTextFragment } from '../src/paste/sanitizer'
+import {
+  sanitizePastedHtmlToRichTextFragment,
+  sanitizePastedHtmlToRichTextFragmentWithWarnings
+} from '../src/paste/sanitizer'
 
 describe('paste sanitizer', () => {
-  test('keeps Word-like run and paragraph formats while removing active content', () => {
+  test('keeps semantic run formats while removing style attributes and active content', () => {
     const fragment = sanitizePastedHtmlToRichTextFragment(`
       <!--StartFragment-->
       <p class="MsoNormal" style="text-align:center;margin:0">
         <b><i><span style="color:#C00000;background-color:#FFF2CC" onclick="alert(1)">Word</span></i></b>
-        <span style="text-decoration:underline;font-size:14pt"> 片段</span>
+        <u><span style="font-size:14pt"> 片段</span></u>
         <script>alert('xss')</script>
       </p>
       <ul>
@@ -28,9 +31,6 @@ describe('paste sanitizer', () => {
 
     expect(fragment).toMatchObject({
       paragraphs: [{
-        properties: {
-          alignment: 'center'
-        },
         runs: [{
           text: 'Word',
           properties: {
@@ -42,8 +42,7 @@ describe('paste sanitizer', () => {
         }, {
           text: ' 片段',
           properties: {
-            underline: true,
-            fontSizeTwips: 280
+            underline: true
           }
         }]
       }, {
@@ -63,8 +62,57 @@ describe('paste sanitizer', () => {
     expect(JSON.stringify(fragment)).not.toContain('onerror')
   })
 
+
+  test('preserves br as an explicit line break instead of a space', () => {
+    const fragment = sanitizePastedHtmlToRichTextFragment('<p>Alpha<br>Beta</p>')
+
+    expect(fragment?.paragraphs[0]?.runs.map((run) => run.text).join('')).toBe('Alpha\nBeta')
+  })
+
   test('returns null for empty html so callers can fall back to plain text', () => {
     expect(sanitizePastedHtmlToRichTextFragment('')).toBeNull()
     expect(sanitizePastedHtmlToRichTextFragment('<script>alert(1)</script>')).toBeNull()
+  })
+
+  test('keeps safe links and converts simple tables into paragraphs', () => {
+    const result = sanitizePastedHtmlToRichTextFragmentWithWarnings(`
+      <p>Before <a href="https://example.com/docs">docs</a> <a href="javascript:alert(1)">bad</a></p>
+      <table>
+        <tr><th>Head</th><td><b>Value</b></td></tr>
+        <tr><td>A</td><td>B</td></tr>
+      </table>
+    `)
+
+    expect(result.fragment).toMatchObject({
+      paragraphs: [{
+        runs: [{
+          text: 'Before '
+        }, {
+          text: 'docs'
+        }, {
+          text: 'bad'
+        }]
+      }, {
+        runs: [{
+          text: 'Head\t'
+        }, {
+          text: 'Value',
+          properties: {
+            bold: true
+          }
+        }]
+      }, {
+        runs: [{
+          text: 'A\tB'
+        }]
+      }]
+    })
+    expect(result.warnings).toEqual([{
+      code: 'PASTE_TABLE_FLATTENED',
+      message: '粘贴表格结构暂按制表符文本降级。',
+      fallback: 'tab-separated-text',
+      recoverable: true
+    }])
+    expect(JSON.stringify(result.fragment)).not.toContain('javascript:')
   })
 })

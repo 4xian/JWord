@@ -3,8 +3,13 @@
  * 边界：只负责节点结构、稳定 data-attributes 和纯展示，不调用 editor 或上传适配器。
  * 协作模块：media controller 绑定交互并维护状态，toolbar controller 提供挂载点。
  * 性能/安全约束：保持结构紧凑，不再生成独立大面板，只保留 toolbar 下拉和 URL 弹框。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import { createToolbarIcon } from '../toolbar/icons'
 import type { JWordMediaPanelElements } from '../types'
 
@@ -21,6 +26,7 @@ export interface MediaPanelDom extends JWordMediaPanelElements {}
 
 /** 在 toolbar 分组里创建图片入口。 */
 export function createMediaPanelDom(host: HTMLElement, title: string): MediaPanelDom {
+  const i18n = resolveJWordUiI18n()
   const root = document.createElement('div')
   const triggerButton = document.createElement('button')
   const triggerLabel = document.createElement('span')
@@ -58,12 +64,12 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
 
   fileActionButton.type = 'button'
   fileActionButton.className = 'jw-toolbar__select-option jw-media-toolbar__menu-button'
-  fileActionButton.textContent = '本地上传'
+  fileActionButton.textContent = readMediaText(i18n, 'localUpload')
   fileActionButton.setAttribute('data-jword-media-action-file', 'true')
 
   urlActionButton.type = 'button'
   urlActionButton.className = 'jw-toolbar__select-option jw-media-toolbar__menu-button'
-  urlActionButton.textContent = '网络地址'
+  urlActionButton.textContent = readMediaText(i18n, 'url')
   urlActionButton.setAttribute('data-jword-media-action-url', 'true')
 
   menu.append(fileActionButton, urlActionButton)
@@ -81,12 +87,12 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
 
   dialogCard.className = 'jw-media-toolbar__dialog-card'
   dialogTitle.className = 'jw-media-toolbar__dialog-title'
-  dialogTitle.textContent = '网络地址'
+  dialogTitle.textContent = readJWordUiText(i18n, 'dialog.media.urlTitle')
   dialogDescription.className = 'jw-media-toolbar__dialog-description'
-  dialogDescription.textContent = '输入图片地址后确认，资源会按行内图片方式插入当前光标位置。'
+  dialogDescription.textContent = readJWordUiText(i18n, 'dialog.media.urlDescription')
   dialogInput.type = 'url'
   dialogInput.className = 'jw-media-toolbar__dialog-input'
-  dialogInput.placeholder = '输入同源或 allowlist 图片 URL'
+  dialogInput.placeholder = readJWordUiText(i18n, 'dialog.media.urlPlaceholder')
   dialogInput.setAttribute('data-jword-media-url-dialog-input', 'true')
   dialogError.className = 'jw-media-toolbar__dialog-error'
   dialogError.setAttribute('data-jword-media-url-dialog-error', 'true')
@@ -94,11 +100,11 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
   dialogActions.className = 'jw-media-toolbar__dialog-actions'
   dialogCancelButton.type = 'button'
   dialogCancelButton.className = 'jw-media-toolbar__dialog-button'
-  dialogCancelButton.textContent = '取消'
+  dialogCancelButton.textContent = readJWordUiText(i18n, 'dialog.media.cancel')
   dialogCancelButton.setAttribute('data-jword-media-url-dialog-cancel', 'true')
   dialogConfirmButton.type = 'button'
   dialogConfirmButton.className = 'jw-media-toolbar__dialog-button jw-media-toolbar__dialog-button--primary'
-  dialogConfirmButton.textContent = '确认'
+  dialogConfirmButton.textContent = readJWordUiText(i18n, 'dialog.media.confirm')
   dialogConfirmButton.setAttribute('data-jword-media-url-dialog-confirm', 'true')
   dialogActions.append(dialogCancelButton, dialogConfirmButton)
 
@@ -120,6 +126,30 @@ export function createMediaPanelDom(host: HTMLElement, title: string): MediaPane
     urlDialogCancelButton: dialogCancelButton,
     urlDialogError: dialogError
   }
+}
+
+/** 动态刷新图片入口文案。 */
+export function localizeMediaPanelDom(dom: MediaPanelDom, i18n: ResolvedJWordUiI18n, title: string): void {
+  const triggerLabel = dom.triggerButton.querySelector<HTMLElement>('.jw-media-toolbar__trigger-label')
+  const dialogTitle = dom.urlDialog.querySelector<HTMLElement>('.jw-media-toolbar__dialog-title')
+  const dialogDescription = dom.urlDialog.querySelector<HTMLElement>('.jw-media-toolbar__dialog-description')
+
+  dom.triggerButton.setAttribute('aria-label', title)
+  dom.triggerButton.title = title
+  if (triggerLabel !== null) {
+    triggerLabel.textContent = title
+  }
+  dom.fileActionButton.textContent = readMediaText(i18n, 'localUpload')
+  dom.urlActionButton.textContent = readMediaText(i18n, 'url')
+  if (dialogTitle !== null) {
+    dialogTitle.textContent = readJWordUiText(i18n, 'dialog.media.urlTitle')
+  }
+  if (dialogDescription !== null) {
+    dialogDescription.textContent = readJWordUiText(i18n, 'dialog.media.urlDescription')
+  }
+  dom.urlDialogInput.placeholder = readJWordUiText(i18n, 'dialog.media.urlPlaceholder')
+  dom.urlDialogCancelButton.textContent = readJWordUiText(i18n, 'dialog.media.cancel')
+  dom.urlDialogConfirmButton.textContent = readJWordUiText(i18n, 'dialog.media.confirm')
 }
 
 /** 根据当前状态重绘 toolbar 图片入口。 */
@@ -147,4 +177,9 @@ export function destroyMediaPanel(dom: MediaPanelDom): void {
 /** 重置文件输入框，避免重复上传同一文件时浏览器不触发 change。 */
 export function resetMediaFileInput(dom: MediaPanelDom): void {
   dom.fileInput.value = ''
+}
+
+/** 读取图片入口文案。 */
+function readMediaText(i18n: ResolvedJWordUiI18n, key: string): string {
+  return readJWordUiText(i18n, `menu.media.${key}`)
 }

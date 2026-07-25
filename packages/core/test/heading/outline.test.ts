@@ -5,7 +5,7 @@
  * 边界：只覆盖 core heading outline 与目录 anchor 快照，不测试 UI 滚动或浏览器事件。
  * 协作模块：编辑器门面、段落样式命令、稳定范围快照与标题结构辅助函数。
  * 性能/安全约束：测试只使用内存文档，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, test } from 'vitest'

@@ -3,11 +3,14 @@
  * 边界：只管理宿主元素属性、最近一次播报文案和销毁态，不生成业务文案，也不订阅 editor。
  * 协作模块：后续 createJWordUi 负责在 selection、transaction、destroy 生命周期里调用这里的 announce。
  * 性能/安全约束：不在顶层访问 DOM，只在调用 createLiveRegion 时写入传入宿主，重复文案默认去重避免刷屏。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md#67-a11y-验收。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export interface LiveRegionAnnounceOptions {
   readonly force?: boolean
+  readonly priority?: 'polite' | 'assertive'
+  readonly source?: string
+  readonly event?: string
 }
 
 export interface LiveRegionController {
@@ -19,6 +22,11 @@ export interface LiveRegionController {
 
 export interface CreateLiveRegionOptions {
   readonly host: HTMLElement | null
+  readonly onAnnounce?: (
+    message: string,
+    options: LiveRegionAnnounceOptions,
+    priority: 'polite' | 'assertive'
+  ) => void
 }
 
 /**
@@ -43,10 +51,13 @@ export function createLiveRegion(options: CreateLiveRegionOptions): LiveRegionCo
     }
 
     lastMessage = message
+    const priority = resolveLiveRegionPriority(message, announceOptions)
 
     if (options.host !== null) {
+      options.host.setAttribute('aria-live', priority)
       options.host.textContent = message
     }
+    options.onAnnounce?.(message, announceOptions, priority)
   }
 
   /**
@@ -61,6 +72,11 @@ export function createLiveRegion(options: CreateLiveRegionOptions): LiveRegionCo
    */
   function destroy(): void {
     destroyed = true
+    lastMessage = ''
+
+    if (options.host !== null) {
+      options.host.textContent = ''
+    }
   }
 
   return {
@@ -82,4 +98,19 @@ function configureLiveRegionHost(host: HTMLElement | null): void {
   host.setAttribute('data-jword-live-region', 'true')
   host.setAttribute('aria-live', 'polite')
   host.setAttribute('role', 'status')
+}
+
+
+/** 推断公告优先级，阻断和错误类文案默认走 assertive。 */
+function resolveLiveRegionPriority(
+  message: string,
+  options: LiveRegionAnnounceOptions
+): 'polite' | 'assertive' {
+  if (options.priority !== undefined) {
+    return options.priority
+  }
+
+  return message.startsWith('BLOCKED:') || message.includes('失败') || message.includes('错误')
+    ? 'assertive'
+    : 'polite'
 }

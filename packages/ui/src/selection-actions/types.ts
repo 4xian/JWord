@@ -3,9 +3,10 @@
  * 边界：只描述 controller、state 与 DOM 协作形状，不创建运行时对象。
  * 协作模块：selection-actions/controller、dom、state 以及 create-ui 装配入口。
  * 性能/安全约束：纯类型模块，无副作用，可在非浏览器环境安全导入。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4 选区浮层收尾项。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor, SelectionState } from '@4xian/jword-core'
+import type { ResolvedJWordUiI18n } from '../i18n'
 import type { JWordReadonlyMode, JWordSelectionActionElements, JWordUiLiveRegionController } from '../types'
 import type { ToolbarPressedState } from '../toolbar/state'
 
@@ -15,6 +16,9 @@ export interface SelectionActionPosition {
   readonly top: number
 }
 
+/** 选区颜色控件类型。 */
+export type SelectionActionColorKind = 'text' | 'background'
+
 /** controller 创建参数。 */
 export interface CreateSelectionActionsControllerOptions {
   readonly editor: Editor
@@ -22,6 +26,7 @@ export interface CreateSelectionActionsControllerOptions {
   readonly colorFormat: SelectionActionsColorFormatController
   readonly insertActions?: SelectionActionsInsertController
   readonly readonly?: JWordReadonlyMode
+  readonly i18n?: ResolvedJWordUiI18n
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
@@ -77,9 +82,37 @@ export interface StickyFloatingToolbarState {
   readonly position: SelectionActionPosition | null
 }
 
+/** controller 与命令绑定共享的可变运行态。 */
+export interface SelectionActionsRuntimeState {
+  readonly stableContextSelection: StableContextSelectionState
+  readonly frozenColorSelections: {
+    text: SelectionState | null
+    background: SelectionState | null
+  }
+  readonly activeColorValues: {
+    text: string | null
+    background: string | null
+  }
+  readonly activeColorInputSeen: {
+    text: boolean
+    background: boolean
+  }
+  readonly activeColorReturnedToEditor: {
+    text: boolean
+    background: boolean
+  }
+  dismissedSelectionKey: string | null
+  stickyFloatingSelectionKey: string | null
+  stickyFloatingPosition: SelectionActionPosition | null
+  openColorPicker: SelectionActionColorKind | null
+  interactiveFocus: boolean
+  destroyed: boolean
+}
+
 /** selection-actions controller 对外暴露的最小句柄。 */
 export interface SelectionActionsControllerHandle {
   readonly elements: JWordSelectionActionElements
+  setI18n(i18n: ResolvedJWordUiI18n): void
   refresh(): void
   destroy(): void
 }

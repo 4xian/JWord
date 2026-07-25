@@ -3,7 +3,7 @@
  * 边界：只提供静态配置，不读取 editor 状态，也不创建 DOM 节点。
  * 协作模块：toolbar config/dom/controller 依赖这里的工具元数据完成显隐、渲染和事件绑定。
  * 性能/安全约束：模块初始化只创建常量映射，无浏览器副作用。
- * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md#64-第一阶段内建工具-id。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { ParagraphAlignment, ParagraphList } from '@4xian/jword-core'
 import type { JWordToolbarToolId } from '../types'
@@ -17,7 +17,7 @@ export interface ToolbarOption {
 }
 
 /** toolbar 内建分组。 */
-export type ToolbarGroupId = 'history' | 'document' | 'insert' | 'format' | 'paragraph'
+export type ToolbarGroupId = 'history' | 'document' | 'insert' | 'format' | 'paragraph' | 'view' | 'export'
 
 /** toolbar 内建控件种类。 */
 export type ToolbarControlKind = 'button' | 'select' | 'color'
@@ -90,7 +90,10 @@ export const BUILTIN_TOOL_IDS = [
   'history.undo',
   'history.redo',
   'document.pagePreset',
+  'document.pageOrientation',
+  'document.customPageSize',
   'document.findReplace',
+  'document.watermark',
   'document.headingOutline',
   'document.headerFooter',
   'document.footer',
@@ -120,15 +123,23 @@ export const BUILTIN_TOOL_IDS = [
   'paragraph.firstLineIndent',
   'paragraph.hangingIndent',
   'paragraph.style',
-  'paragraph.list'
+  'paragraph.list',
+  'view.fitWidth',
+  'view.fitPage',
+  'view.fullscreen',
+  'view.presentation',
+  'view.zoomReset',
+  'view.theme',
+  'view.locale',
+  'export.native'
 ] as const satisfies readonly JWordToolbarToolId[]
 
 /** 默认显示顺序采用新的 icon toolbar 布局，并隐藏旧的左缩进下拉。 */
 export const DEFAULT_VISIBLE_TOOL_IDS = [
   'history.undo',
   'history.redo',
-  'document.pagePreset',
   'document.findReplace',
+  'document.watermark',
   'document.headingOutline',
   'document.headerFooter',
   'document.footer',
@@ -163,7 +174,30 @@ const PAGE_PRESET_OPTIONS: readonly ToolbarOption[] = [
   { value: 'a3', label: 'A3' },
   { value: 'a4', label: 'A4' },
   { value: 'a5', label: 'A5' },
-  { value: 'letter', label: 'Letter' }
+  { value: 'b5', label: 'B5' },
+  { value: 'letter', label: 'Letter' },
+  { value: 'legal', label: 'Legal' },
+  { value: 'envelope3', label: '3号信封' },
+  { value: 'envelope5', label: '5号信封' },
+  { value: 'envelope6', label: '6号信封' },
+  { value: 'envelope7', label: '7号信封' },
+  { value: 'envelope9', label: '9号信封' },
+  { value: 'custom', label: '自定义大小' }
+] as const
+
+const PAGE_ORIENTATION_OPTIONS: readonly ToolbarOption[] = [
+  { value: 'portrait', label: '纵向', icon: 'fitPage' },
+  { value: 'landscape', label: '横向', icon: 'fitWidth' }
+] as const
+
+const VIEW_THEME_OPTIONS: readonly ToolbarOption[] = [
+  { value: 'light', label: '浅色', icon: 'themeLight' },
+  { value: 'dark', label: '深色', icon: 'themeDark' }
+] as const
+
+const VIEW_LOCALE_OPTIONS: readonly ToolbarOption[] = [
+  { value: 'zh-CN', label: '中文', icon: 'language' },
+  { value: 'en-US', label: 'English', icon: 'language' }
 ] as const
 
 const FONT_FAMILY_OPTIONS: readonly ToolbarOption[] = [
@@ -375,16 +409,41 @@ const BUILTIN_TOOL_DEFINITIONS = [
     id: 'document.pagePreset',
     group: 'document',
     kind: 'select',
-    label: '纸张',
-    tooltip: '纸张大小',
+    label: '页面大小',
+    tooltip: '页面大小',
     dataAttribute: 'data-jword-page-preset',
-    fieldLabel: '纸张',
-    triggerVariant: 'boxed',
+    fieldLabel: '页面大小',
+    triggerVariant: 'icon',
+    triggerIcon: 'layout',
     menuLayout: 'text',
-    triggerMinWidthPx: 52,
-    menuMinWidthPx: 72,
-    menuMaxWidthPx: 104,
+    triggerMinWidthPx: 70,
+    menuMinWidthPx: 96,
+    menuMaxWidthPx: 124,
     options: PAGE_PRESET_OPTIONS
+  },
+  {
+    id: 'document.pageOrientation',
+    group: 'document',
+    kind: 'select',
+    label: '页面方向',
+    tooltip: '页面方向',
+    dataAttribute: 'data-jword-page-orientation',
+    fieldLabel: '页面方向',
+    triggerVariant: 'icon',
+    triggerIcon: 'fitPage',
+    menuLayout: 'icon',
+    menuMinWidthPx: 112,
+    menuMaxWidthPx: 144,
+    options: PAGE_ORIENTATION_OPTIONS
+  },
+  {
+    id: 'document.customPageSize',
+    group: 'document',
+    kind: 'button',
+    label: '自定义页面',
+    tooltip: '自定义页面大小',
+    dataAttribute: 'data-jword-custom-page-size',
+    icon: 'layout'
   },
   {
     id: 'document.findReplace',
@@ -394,6 +453,15 @@ const BUILTIN_TOOL_DEFINITIONS = [
     tooltip: '查找替换',
     dataAttribute: 'data-jword-open-find-replace',
     icon: 'search'
+  },
+  {
+    id: 'document.watermark',
+    group: 'document',
+    kind: 'button',
+    label: '页面水印',
+    tooltip: '设置页面水印',
+    dataAttribute: 'data-jword-open-watermark',
+    icon: 'watermark'
   },
   {
     id: 'document.headingOutline',
@@ -729,6 +797,90 @@ const BUILTIN_TOOL_DEFINITIONS = [
     menuMinWidthPx: 160,
     menuMaxWidthPx: 192,
     options: PARAGRAPH_LIST_OPTIONS
+  },
+  {
+    id: 'view.fitWidth',
+    group: 'view',
+    kind: 'button',
+    label: '适应宽度',
+    tooltip: '适应宽度',
+    dataAttribute: 'data-jword-view-fit-width',
+    icon: 'fitWidth'
+  },
+  {
+    id: 'view.fitPage',
+    group: 'view',
+    kind: 'button',
+    label: '适应整页',
+    tooltip: '适应整页',
+    dataAttribute: 'data-jword-view-fit-page',
+    icon: 'fitPage'
+  },
+  {
+    id: 'view.fullscreen',
+    group: 'view',
+    kind: 'button',
+    label: '全屏模式',
+    tooltip: '全屏模式',
+    dataAttribute: 'data-jword-view-fullscreen',
+    icon: 'fullscreen'
+  },
+  {
+    id: 'view.presentation',
+    group: 'view',
+    kind: 'button',
+    label: '演示模式',
+    tooltip: '演示模式',
+    dataAttribute: 'data-jword-view-presentation',
+    icon: 'presentation'
+  },
+  {
+    id: 'view.zoomReset',
+    group: 'view',
+    kind: 'button',
+    label: '还原视图',
+    tooltip: '还原为 100%',
+    dataAttribute: 'data-jword-view-zoom-reset',
+    icon: 'reset'
+  },
+  {
+    id: 'view.theme',
+    group: 'view',
+    kind: 'select',
+    label: '主题设置',
+    tooltip: '主题设置',
+    dataAttribute: 'data-jword-view-theme',
+    fieldLabel: '主题设置',
+    triggerVariant: 'icon',
+    triggerIcon: 'themeLight',
+    menuLayout: 'icon',
+    menuMinWidthPx: 112,
+    menuMaxWidthPx: 144,
+    options: VIEW_THEME_OPTIONS
+  },
+  {
+    id: 'view.locale',
+    group: 'view',
+    kind: 'select',
+    label: '语言设置',
+    tooltip: '语言设置',
+    dataAttribute: 'data-jword-view-locale',
+    fieldLabel: '语言设置',
+    triggerVariant: 'icon',
+    triggerIcon: 'language',
+    menuLayout: 'icon',
+    menuMinWidthPx: 128,
+    menuMaxWidthPx: 160,
+    options: VIEW_LOCALE_OPTIONS
+  },
+  {
+    id: 'export.native',
+    group: 'export',
+    kind: 'button',
+    label: '原生格式',
+    tooltip: '导出原生 JWord 格式',
+    dataAttribute: 'data-jword-export-native',
+    icon: 'download'
   }
 ] as const satisfies readonly BuiltinToolDefinition[]
 

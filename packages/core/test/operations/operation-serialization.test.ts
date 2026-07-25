@@ -5,7 +5,7 @@
  * 边界：只覆盖文本位置形状、拆分段落显式 run ID 和编辑器事务入口，不测试协同 provider。
  * 协作模块：编辑器门面、事务管线、操作适配器和后续 docx/collab/auto-inserter 复用同一 operation 形状。
  * 性能/安全约束：测试只使用内存文档，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

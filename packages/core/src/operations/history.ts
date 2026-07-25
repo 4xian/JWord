@@ -3,21 +3,31 @@
  * 边界：只负责 undo/redo、tracked origin 和 stack metadata，不处理 UI、快捷键、布局或持久化。
  * 协作模块：transaction pipeline 负责产生状态变更，selection 负责提供恢复快照，Editor Facade 后续负责串联调用。
  * 性能/安全约束：默认只跟踪本地用户 origin，不访问 DOM，不把远端或自动插入默认塞进用户 undo 栈。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#39-history。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'
 
 import type { DocumentStore } from '../model/document-store'
 import type { SelectionRestoreSnapshot } from '../model/selection'
+import { hasYjsTransactionChanged } from './yjs-transaction-change'
 
 type HistoryStackItem = NonNullable<ReturnType<Y.UndoManager['undo']>>
 
 /** 本地用户操作默认进入用户 undo 栈。 */
 export const DEFAULT_HISTORY_ORIGIN = 'local-user'
 
+/** auto inserter 独立 undo scope 使用的内部 Yjs origin。 */
+export const AUTO_INSERTER_HISTORY_ORIGIN = Symbol.for('jword.history.auto-inserter')
+
+/** version restore 独立 undo scope 使用的内部 Yjs origin。 */
+export const VERSION_RESTORE_HISTORY_ORIGIN = Symbol.for('jword.history.version-restore')
+
 /** Y.StackItem.meta 中保存 JWord 历史元数据的键。 */
 export const HISTORY_STACK_METADATA_KEY = 'jword-history-metadata'
+
+/** Editor facade 支持的 history scope。 */
+export type HistoryScope = 'user' | 'auto-inserter' | 'version-restore'
 
 /**
  * 创建 history manager 的选项。
@@ -52,12 +62,12 @@ export interface HistoryOperationResult {
 export interface HistoryManager {
   readonly undoManager: Y.UndoManager
   readonly trackedOrigins: ReadonlySet<unknown>
-  captureNextTransaction(metadata: HistoryEntryMetadata): void
-  discardNextTransactionMetadata(): void
-  undo(): HistoryOperationResult
-  redo(): HistoryOperationResult
-  canUndo(): boolean
-  canRedo(): boolean
+  captureNextTransaction(metadata: HistoryEntryMetadata, scope?: HistoryScope): void
+  discardNextTransactionMetadata(scope?: HistoryScope): void
+  undo(scope?: HistoryScope): HistoryOperationResult
+  redo(scope?: HistoryScope): HistoryOperationResult
+  canUndo(scope?: HistoryScope): boolean
+  canRedo(scope?: HistoryScope): boolean
   stopCapturing(): void
   clear(): void
   readMetadata(stackItem: HistoryStackItem): HistoryEntryMetadata | undefined
@@ -78,10 +88,98 @@ export function createHistoryManager(
   const trackedOrigins = new Set<unknown>(
     options.trackedOrigins ?? new Set([DEFAULT_HISTORY_ORIGIN])
   )
+  const scopedHistories = new Map<HistoryScope, ScopedHistoryManager>()
+  const undoManager = createScopedHistoryManager(doc, 'user', trackedOrigins, options.captureTimeout)
+
+  scopedHistories.set('user', undoManager)
+  scopedHistories.set(
+    'auto-inserter',
+    createScopedHistoryManager(doc, 'auto-inserter', new Set([AUTO_INSERTER_HISTORY_ORIGIN]), options.captureTimeout)
+  )
+  scopedHistories.set(
+    'version-restore',
+    createScopedHistoryManager(doc, 'version-restore', new Set([VERSION_RESTORE_HISTORY_ORIGIN]), options.captureTimeout)
+  )
+
+  return {
+    undoManager: undoManager.undoManager,
+    trackedOrigins,
+    captureNextTransaction(metadata, scope = 'user') {
+      readScopedHistoryManager(scopedHistories, scope).pendingMetadata.push(metadata)
+    },
+    discardNextTransactionMetadata(scope = 'user') {
+      readScopedHistoryManager(scopedHistories, scope).pendingMetadata.shift()
+    },
+    undo(scope = 'user') {
+      const scopedHistory = readScopedHistoryManager(scopedHistories, scope)
+      const stackItem = scopedHistory.undoManager.undo()
+
+      copyMetadataToLatestStackItem(stackItem, scopedHistory.undoManager.redoStack)
+
+      return createHistoryOperationResult(stackItem)
+    },
+    redo(scope = 'user') {
+      const scopedHistory = readScopedHistoryManager(scopedHistories, scope)
+      const stackItem = scopedHistory.undoManager.redo()
+
+      copyMetadataToLatestStackItem(stackItem, scopedHistory.undoManager.undoStack)
+
+      return createHistoryOperationResult(stackItem)
+    },
+    canUndo(scope = 'user') {
+      return readScopedHistoryManager(scopedHistories, scope).undoManager.canUndo()
+    },
+    canRedo(scope = 'user') {
+      return readScopedHistoryManager(scopedHistories, scope).undoManager.canRedo()
+    },
+    stopCapturing() {
+      for (const scopedHistory of scopedHistories.values()) {
+        scopedHistory.undoManager.stopCapturing()
+      }
+    },
+    clear() {
+      for (const scopedHistory of scopedHistories.values()) {
+        scopedHistory.undoManager.clear()
+        scopedHistory.pendingMetadata.length = 0
+      }
+    },
+    readMetadata(stackItem) {
+      return readHistoryMetadata(stackItem)
+    }
+  }
+}
+
+/** 读取指定 history scope 应该使用的内部 Yjs transaction origin。 */
+export function readHistoryScopeTransactionOrigin(scope: HistoryScope): unknown {
+  if (scope === 'auto-inserter') {
+    return AUTO_INSERTER_HISTORY_ORIGIN
+  }
+
+  if (scope === 'version-restore') {
+    return VERSION_RESTORE_HISTORY_ORIGIN
+  }
+
+  return DEFAULT_HISTORY_ORIGIN
+}
+
+interface ScopedHistoryManager {
+  readonly scope: HistoryScope
+  readonly undoManager: Y.UndoManager
+  readonly pendingMetadata: HistoryEntryMetadata[]
+}
+
+/** 创建指定 history scope 的 Y.UndoManager 和待写入 metadata 队列。 */
+function createScopedHistoryManager(
+  doc: Y.Doc,
+  scope: HistoryScope,
+  trackedOrigins: ReadonlySet<unknown>,
+  captureTimeout: number | undefined
+): ScopedHistoryManager {
   const pendingMetadata: HistoryEntryMetadata[] = []
   const undoManager = new Y.UndoManager(doc, {
-    trackedOrigins,
-    captureTimeout: options.captureTimeout ?? 500
+    trackedOrigins: new Set(trackedOrigins),
+    captureTimeout: captureTimeout ?? 500,
+    captureTransaction: hasYjsTransactionChanged
   })
 
   undoManager.on('stack-item-added', (event) => {
@@ -93,45 +191,24 @@ export function createHistoryManager(
   })
 
   return {
+    scope,
     undoManager,
-    trackedOrigins,
-    captureNextTransaction(metadata) {
-      pendingMetadata.push(metadata)
-    },
-    discardNextTransactionMetadata() {
-      pendingMetadata.pop()
-    },
-    undo() {
-      const stackItem = undoManager.undo()
-
-      copyMetadataToLatestStackItem(stackItem, undoManager.redoStack)
-
-      return createHistoryOperationResult(stackItem)
-    },
-    redo() {
-      const stackItem = undoManager.redo()
-
-      copyMetadataToLatestStackItem(stackItem, undoManager.undoStack)
-
-      return createHistoryOperationResult(stackItem)
-    },
-    canUndo() {
-      return undoManager.canUndo()
-    },
-    canRedo() {
-      return undoManager.canRedo()
-    },
-    stopCapturing() {
-      undoManager.stopCapturing()
-    },
-    clear() {
-      undoManager.clear()
-      pendingMetadata.length = 0
-    },
-    readMetadata(stackItem) {
-      return readHistoryMetadata(stackItem)
-    }
+    pendingMetadata
   }
+}
+
+/** 从已登记的 scope map 中读取对应 history manager。 */
+function readScopedHistoryManager(
+  scopedHistories: ReadonlyMap<HistoryScope, ScopedHistoryManager>,
+  scope: HistoryScope
+): ScopedHistoryManager {
+  const scopedHistory = scopedHistories.get(scope)
+
+  if (scopedHistory === undefined) {
+    throw new Error(`Unknown history scope: ${scope}`)
+  }
+
+  return scopedHistory
 }
 
 function copyMetadataToLatestStackItem(

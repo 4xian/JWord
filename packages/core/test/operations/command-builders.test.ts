@@ -5,7 +5,7 @@
  * 边界：只覆盖 command 构造和 transaction pipeline 语义，不测试 toolbar DOM、输入事件或 editor.ts 接线。
  * 协作模块：后续 toolbar 和快捷键可复用这些纯函数 builder，再交给 Editor facade 执行。
  * 性能/安全约束：测试只依赖内存中的 projection 和 Y.Doc，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md#gate-3---输入与基础编辑。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

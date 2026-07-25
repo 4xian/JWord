@@ -5,7 +5,7 @@
  * 边界：只覆盖 fixture 读取、operation 重建和 projection 对比，不测试 docx、协同、自动插入器或磁盘写入。
  * 协作模块：Editor facade、transaction pipeline 和后续 docx/collab/auto-inserter 集成测试会复用同一 fixture 形状。
  * 性能/安全约束：测试只读取仓库内小型 JSON fixture，不访问 DOM、网络或外部文档。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/06-acceptance-and-testing.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { readFile } from 'node:fs/promises'

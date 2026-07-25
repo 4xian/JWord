@@ -5,10 +5,10 @@
  * 边界：只验证 fixture 行段落解释、benchmark 输出和 visual baseline，不覆盖浏览器交互细节。
  * 协作模块：fixtures/plain-text、fixtures/visual-baselines、benchmarks/gate2-render-benchmark.mjs 和 packages/core layout/render。
  * 约束：不依赖人工截图，不做 32 轮扩展，不读取 demo DOM。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 2.14 与 Step 2.15。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
@@ -389,8 +389,16 @@ console.log(JSON.stringify({
   }
 }
 
+/** 在 Phase 3 artifact 模式禁止测试内部 build fallback。 */
 function ensureBuiltCore(): Promise<void> {
   builtCorePromise ??= Promise.resolve().then(() => {
+    if (existsSync(join(process.cwd(), 'packages', 'core', 'dist', 'index.js'))) {
+      return
+    }
+    if (process.env.JWORD_PHASE3_ARTIFACT_MANIFEST !== undefined) {
+      throw new Error('Phase 3 artifact mode requires packages/core/dist/index.js')
+    }
+
     const childEnv = {
       ...process.env,
       NODE_OPTIONS: '',

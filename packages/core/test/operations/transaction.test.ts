@@ -5,7 +5,7 @@
  * 边界：只测试 Command/Operation 包装、transact 外壳和 adapter 调用，不测试布局、渲染或输入。
  * 协作模块：后续 history、selection 和 Editor Facade 会复用同一事务入口。
  * 性能/安全约束：测试只依赖内存中的 Y.Doc，不触发 DOM 或外部 I/O。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -21,6 +21,7 @@ import {
   getSectionBlocks
 } from '../../src/model/document-store'
 import type { BlockId, DocumentId, RunId, SectionId } from '../../src/model/position'
+import type { Paragraph } from '../../src/model/types'
 import { createTransactionPipeline } from '../../src/operations/transaction'
 import type { Operation, TextPosition } from '../../src/operations/transaction'
 
@@ -125,6 +126,220 @@ describe('createTransactionPipeline', () => {
     expect(observedOrigins).toContain('local-user')
   })
 
+  it('输入事务只重建变更段落的 projection 快照', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-1' as SectionId)
+    const firstParagraph = createParagraphRecord('paragraph-1' as BlockId)
+    const secondParagraph = createParagraphRecord('paragraph-2' as BlockId)
+    const thirdParagraph = createParagraphRecord('paragraph-3' as BlockId)
+    const firstRun = createRunRecord('run-1' as RunId, '第一段')
+    const secondRun = createRunRecord('run-2' as RunId, '第二段')
+    const thirdRun = createRunRecord('run-3' as RunId, '第三段')
+    const pipeline = createTransactionPipeline(store.doc)
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-incremental' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([firstParagraph, secondParagraph, thirdParagraph])
+    getParagraphRuns(firstParagraph).push([firstRun])
+    getParagraphRuns(secondParagraph).push([secondRun])
+    getParagraphRuns(thirdParagraph).push([thirdRun])
+
+    const baseline = pipeline.run(
+      {
+        name: 'seedProjection',
+        operations: []
+      },
+      { origin: 'local-user' }
+    ).projection
+
+    const result = pipeline.run(
+      {
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: {
+              sectionId: 'section-1',
+              blockId: 'paragraph-2',
+              runId: 'run-2',
+              graphemeIndex: 3
+            },
+            text: '更新'
+          }
+        ]
+      },
+      { origin: 'local-user' }
+    )
+
+    const previousSection = baseline.document.sections[0]
+    const nextSection = result.projection.document.sections[0]
+    const previousBlocks = previousSection?.blocks ?? []
+    const nextBlocks = nextSection?.blocks ?? []
+    const nextSecondParagraph = nextBlocks[1] as Paragraph | undefined
+
+    expect(nextSection).not.toBe(previousSection)
+    expect(nextBlocks[0]).toBe(previousBlocks[0])
+    expect(nextBlocks[1]).not.toBe(previousBlocks[1])
+    expect(nextBlocks[2]).toBe(previousBlocks[2])
+    expect(nextSecondParagraph?.runs[0]?.inlines).toEqual([
+      {
+        kind: 'text',
+        text: '第二段更新'
+      }
+    ])
+  })
+
+  it('默认本地事务不编码 update byte length 诊断', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-1' as SectionId)
+    const paragraph = createParagraphRecord('paragraph-1' as BlockId)
+    const run = createRunRecord('run-1' as RunId, '诊断')
+    const pipeline = createTransactionPipeline(store.doc)
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-diagnostic' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([paragraph])
+    getParagraphRuns(paragraph).push([run])
+
+    const result = pipeline.run(
+      {
+        name: 'insertText',
+        operations: [
+          {
+            kind: 'insertText',
+            at: createTestPosition(2),
+            text: '跳过'
+          }
+        ]
+      },
+      { origin: 'local-user' }
+    )
+
+    expect(getRunText(run).toString()).toBe('诊断跳过')
+    expect(result.dirty).toBe(true)
+    expect(result.diagnostic.updateByteLength).toBe(0)
+  })
+
+  /** dirty 只反映本次 Yjs transaction 是否产生可编码变化。 */
+  it('distinguishes local no-ops from insert, delete, and same-value Y.Map writes', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-1' as SectionId)
+    const paragraph = createParagraphRecord('paragraph-1' as BlockId)
+    const run = createRunRecord('run-1' as RunId, 'ab')
+    const pipeline = createTransactionPipeline(store.doc, {
+      updateByteLengthDiagnostics: true
+    })
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-change-semantics' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([paragraph])
+    getParagraphRuns(paragraph).push([run])
+
+    const baselineProjection = pipeline.run(
+      { name: 'seedProjection', operations: [] },
+      { origin: 'local-user' }
+    ).projection
+    const noOpResult = pipeline.run(
+      {
+        name: 'insertEmptyText',
+        operations: [{ kind: 'insertText', at: createTestPosition(1), text: '' }]
+      },
+      { origin: 'local-user' }
+    )
+
+    expect.soft(noOpResult.dirty).toBe(false)
+    expect.soft(noOpResult.projection).toBe(baselineProjection)
+    expect.soft(noOpResult.diagnostic.updateByteLength).toBe(0)
+
+    const insertResult = pipeline.run(
+      {
+        name: 'insertText',
+        operations: [{ kind: 'insertText', at: createTestPosition(2), text: 'c' }]
+      },
+      { origin: 'local-user' }
+    )
+    const deleteResult = pipeline.run(
+      {
+        name: 'deleteText',
+        operations: [{
+          kind: 'deleteRange',
+          range: {
+            anchor: createTestPosition(2),
+            focus: createTestPosition(3)
+          }
+        }]
+      },
+      { origin: 'local-user' }
+    )
+    const firstPropertyResult = pipeline.run(
+      {
+        name: 'setBold',
+        operations: [{ kind: 'setRunProperties', runId: 'run-1' as RunId, properties: { bold: true } }]
+      },
+      { origin: 'local-user' }
+    )
+    const samePropertyResult = pipeline.run(
+      {
+        name: 'setBoldAgain',
+        operations: [{ kind: 'setRunProperties', runId: 'run-1' as RunId, properties: { bold: true } }]
+      },
+      { origin: 'local-user' }
+    )
+
+    expect(insertResult.dirty).toBe(true)
+    expect(insertResult.diagnostic.updateByteLength).toBeGreaterThan(0)
+    expect(deleteResult.dirty).toBe(true)
+    expect(deleteResult.diagnostic.updateByteLength).toBeGreaterThan(0)
+    expect(firstPropertyResult.dirty).toBe(true)
+    expect(samePropertyResult.dirty).toBe(true)
+    expect(getRunText(run).toString()).toBe('ab')
+  })
+
+  /** 空 mutation 复用 projection，真实 mutation 仍产生 dirty transaction。 */
+  it('distinguishes empty and document-changing transaction mutations', () => {
+    const store = createDocumentStore()
+    const section = createSectionRecord('section-1' as SectionId)
+    const paragraph = createParagraphRecord('paragraph-1' as BlockId)
+    const run = createRunRecord('run-1' as RunId, 'mutation')
+    const pipeline = createTransactionPipeline(store.doc, {
+      updateByteLengthDiagnostics: true
+    })
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-mutation' as DocumentId)
+    store.sections.push([section])
+    getSectionBlocks(section).push([paragraph])
+    getParagraphRuns(paragraph).push([run])
+
+    const baselineProjection = pipeline.run(
+      { name: 'seedProjection', operations: [] },
+      { origin: 'local-user' }
+    ).projection
+    /** 不写入 Y.Doc 的空 mutation。 */
+    const emptyMutation = () => {}
+    const emptyResult = pipeline.runMutation('emptyMutation', { origin: 'local-user' }, emptyMutation)
+
+    expect.soft(emptyResult.dirty).toBe(false)
+    expect.soft(emptyResult.projection).toBe(baselineProjection)
+    expect.soft(emptyResult.diagnostic.updateByteLength).toBe(0)
+
+    /** 向现有 Y.Text 写入一个字符的真实 mutation。 */
+    const insertMutationText = () => {
+      getRunText(run).insert(getRunText(run).length, '!')
+    }
+    const mutationResult = pipeline.runMutation(
+      'insertMutationText',
+      { origin: 'local-user' },
+      insertMutationText
+    )
+
+    expect(mutationResult.dirty).toBe(true)
+    expect(mutationResult.diagnostic.updateByteLength).toBeGreaterThan(0)
+    expect(mutationResult.projection.document.sections[0]?.blocks[0]).toMatchObject({
+      kind: 'paragraph'
+    })
+    expect(getRunText(run).toString()).toBe('mutation!')
+  })
+
   it('rejects blank origin before running a transaction', () => {
     const pipeline = createTransactionPipeline()
 
@@ -137,5 +352,36 @@ describe('createTransactionPipeline', () => {
         { origin: '   ' }
       )
     ).toThrow('事务 origin 不能为空')
+  })
+
+  it('isolates listener errors and continues notifying later listeners', () => {
+    const store = createDocumentStore()
+    const pipeline = createTransactionPipeline(store.doc)
+    const observedEvents: string[] = []
+
+    store.document.set(DOCUMENT_STORE_FIELDS.document.id, 'document-1' as DocumentId)
+
+    pipeline.subscribe((event) => {
+      observedEvents.push(`before:${event.commandName}:${event.origin}`)
+    })
+    pipeline.subscribe(() => {
+      throw new Error('监听器失败')
+    })
+    pipeline.subscribe((event) => {
+      observedEvents.push(`after:${event.commandName}:${event.origin}`)
+    })
+
+    const result = pipeline.run(
+      {
+        name: 'noop',
+        operations: []
+      },
+      { origin: 'local-user' }
+    )
+
+    expect(result.commandName).toBe('noop')
+    expect(result.origin).toBe('local-user')
+    expect(result.operationKinds).toEqual([])
+    expect(observedEvents).toEqual(['before:noop:local-user', 'after:noop:local-user'])
   })
 })

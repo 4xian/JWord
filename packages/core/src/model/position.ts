@@ -3,7 +3,7 @@
  * 边界：这里只定义边界，Yjs index、UTF-16、grapheme 转换与锚点解析 helper 分开处理。
  * 协作模块：selection、comment、revision、auto inserter 和 remote cursor 后续复用 AnchorRef/RangeRef。
  * 性能/安全约束：不在 top-level 访问 DOM 或文档状态，创建函数只做品牌化和不可变包装。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'
@@ -16,7 +16,7 @@ import {
 declare const opaqueBrand: unique symbol
 const anchorStateSymbol = Symbol('jword.anchor.state')
 
-type Opaque<Value, Name extends string> = Value & {
+export type Opaque<Value, Name extends string> = Value & {
   readonly [opaqueBrand]: Name
 }
 
@@ -56,6 +56,7 @@ export interface AnchorRefInput {
   readonly blockId: BlockId
   readonly runId: RunId
   readonly graphemeIndex: GraphemeIndex
+  readonly assoc?: number
 }
 
 /**
@@ -76,6 +77,13 @@ export interface AnchorRefSnapshot extends AnchorRefInput {
   readonly relativePosition?: Y.RelativePosition
 }
 
+/**
+ * AnchorRef 是可变句柄，外层对象冻结只保证宿主不能直接改写内部状态。
+ *
+ * @remarks
+ * 内部状态仅迁移/解析路径可变：Operation adapter 迁移文本锚点时会改写 block/run/text，
+ * resolveAnchorRef 会同步刷新 graphemeIndex。对外读取必须继续通过防御性快照。
+ */
 interface AnchorRefState {
   kind: 'block' | 'text'
   documentId: DocumentId
@@ -185,7 +193,7 @@ export function createAnchorRef(input: AnchorRefInput): AnchorRef {
     runId: input.runId,
     graphemeIndex: input.graphemeIndex,
     text: undefined,
-    assoc: 0,
+    assoc: input.assoc ?? 0,
     relativePosition: undefined
   })
 }
@@ -329,6 +337,9 @@ export function readAnchorRefSnapshot(anchor: AnchorRef): AnchorRefSnapshot {
 
 /**
  * 解析锚点的当前位置。
+ *
+ * @remarks
+ * resolveAnchorRef 会同步刷新内部 graphemeIndex，使句柄后续快照跟随 Y.RelativePosition。
  *
  * @param anchor 稳定锚点。
  * @param doc 需要解析相对位置的 Y.Doc。

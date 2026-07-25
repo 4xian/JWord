@@ -3,7 +3,7 @@
  * 边界：只在 UI 装配层处理 DOM 事件和控件状态，不改 core transaction pipeline。
  * 协作模块：create-ui 与各 UI controller 通过 canEdit/blockEdit 协作。
  * 性能/安全约束：只绑定固定输入类事件，销毁时恢复本模块写入的 DOM 状态。
- * Specs：docs/superpowers/plans/2026-05-24-jword-global-readonly-mode.md#task-1-增加只读配置类型和-guard-骨架。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordReadonlyOptions,
@@ -36,7 +36,6 @@ const BLOCKED_EDIT_EVENTS = [
   'cut',
   'drop',
   'keydown',
-  'mousedown',
   'contextmenu',
   'dblclick'
 ] as const
@@ -120,12 +119,46 @@ function bindReadonlyEvents(
 ): void {
   for (const type of BLOCKED_EDIT_EVENTS) {
     options.editorHost.addEventListener(type, (event) => {
+      if (isReadonlyAllowedKeydown(event)) {
+        return
+      }
+
       preventReadonlyEdit(event, options.assistive.liveRegion)
     }, {
       capture: true,
       signal: signalController.signal
     })
   }
+}
+
+/** 判断只读模式下仍允许透传的复制快捷键。 */
+function isReadonlyAllowedKeydown(event: Event): boolean {
+  if (!(event instanceof KeyboardEvent)) {
+    return false
+  }
+
+  if (isReadonlyNavigationKey(event.key)) {
+    return true
+  }
+
+  if (!event.altKey && (event.ctrlKey || event.metaKey)) {
+    return ['a', 'c', 'f', 'h'].includes(event.key.toLowerCase())
+  }
+
+  return false
+}
+
+/** 判断键盘事件是否只移动或扩展选区。 */
+function isReadonlyNavigationKey(key: string): boolean {
+  return key === 'ArrowLeft'
+    || key === 'ArrowRight'
+    || key === 'ArrowUp'
+    || key === 'ArrowDown'
+    || key === 'Home'
+    || key === 'End'
+    || key === 'PageUp'
+    || key === 'PageDown'
+    || key === 'Escape'
 }
 
 /** 阻止一次只读模式下的编辑事件。 */

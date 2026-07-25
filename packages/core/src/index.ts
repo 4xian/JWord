@@ -3,7 +3,7 @@
  * 边界：暴露 Editor facade、命令、投影、opaque 位置、分页 layout 和 canvas render 入口，不导出可写 Yjs 容器。
  * 协作模块：examples、UI package、React/Vue wrapper 通过此入口消费 core。
  * 性能/安全约束：入口文件不访问 DOM，不产生副作用，保证 SSR/Node 可导入。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/04-engineering-standards.md#46-api-稳定性。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 export type {
@@ -24,23 +24,119 @@ export type {
 export type {
   Editor,
   EditorCommandOptions,
+  EditorSyncUpdateInput,
   EditorDocumentInput,
+  EditorDocumentModelInput,
   EditorEvent,
   EditorEventListener,
   EditorFixture,
   EditorHitTestPoint,
+  EditorAnchorSnapshot,
+  EditorLocationQuery,
+  EditorLocationTarget,
   EditorOptions,
+  EditorRangeSnapshot,
+  EditorRangeSnapshotInput,
+  EditorResolvedLocation,
+  EditorScrollToLocationOptions,
+  JWordDiagnosticsCollaborationSummary,
+  JWordDiagnosticsFeatureFlag,
+  JWordDiagnosticsLayoutMetrics,
+  JWordDiagnosticsLicenseState,
+  JWordDiagnosticsOperationSummary,
+  JWordDiagnosticsPackageVersion,
+  JWordDiagnosticsPluginEntry,
+  JWordDiagnosticsPrivacySummary,
+  JWordDiagnosticsSelectionSummary,
+  JWordDiagnosticsServerSummary,
+  JWordDiagnosticsSnapshot,
+  JWordDiagnosticsTransactionSummary,
+  JWordPluginDiagnosticTelemetryEvent,
+  JWordTelemetryEvent,
+  JWordTelemetryOptions,
+  JWordTelemetrySink,
+  EditorApplyUpdateOptions,
   EditorRichTextFragment,
   EditorRichTextParagraph,
   EditorRichTextRun,
+  EditorSelectionSnapshot,
   EditorTextAnchorInput,
+  EditorTextLocation,
+  EditorTextQueryResult,
   EditorUser,
   EditorUserInput,
-  InitialFocusPosition
+  HistoryScope,
+  InitialFocusPosition,
+  PluginAdapterExecute,
+  PluginAdapterExecuteOptions,
+  PluginAdapterKind,
+  PluginAdapterRegisterOptions,
+  PluginAdapterRegistration,
+  PluginAdapterRegistry,
+  PluginAdapterResolveOptions,
+  PluginAdapterResolution,
+  PluginAdapterSlot,
+  PluginCollabProviderAdapterDescriptor,
+  PluginCommandContext,
+  PluginCommandDefinition,
+  PluginCommandMiddleware,
+  PluginCommandMiddlewareInput,
+  PluginCommandNext,
+  PluginContext,
+  PluginDecoration,
+  PluginDecorationReadInput,
+  PluginDecorationReadReason,
+  PluginDefinition,
+  PluginDiagnostic,
+  PluginDiagnosticCode,
+  PluginDiagnosticInput,
+  PluginDiagnosticsReporter,
+  PluginDisposable,
+  PluginExportAdapterDescriptor,
+  PluginFormatAdapterSlot,
+  PluginImportAdapterDescriptor,
+  PluginPageOverlayDecoration,
+  PluginPersistenceAdapterDescriptor,
+  PluginResolvedDecoration,
+  PluginResolvedPageOverlayDecoration,
+  PluginResolvedTextHighlightDecoration,
+  PluginTextHighlightDecoration,
+  ExperimentalDecorationProvider,
+  PluginKeyBindingContext,
+  PluginKeyBindingDefinition,
+  PluginKeyBindingPredicate,
+  PluginLifecycleEventMap,
+  PluginLifecycleEventName,
+  PluginLifecycleListener
 } from './editor/runtime'
 export { createEditor } from './editor/runtime'
+export { createTextInserter } from './collaboration/inserter'
+export type {
+  TextInserter,
+  TextInserterError,
+  TextInserterErrorCode,
+  TextInserterErrorEvent,
+  TextInserterFlushPolicy,
+  TextInserterMode,
+  TextInserterOptions,
+  TextInserterProgressEvent,
+  TextInserterProgressPhase,
+  TextInserterRetryInput,
+  TextInserterUndoScope
+} from './collaboration/inserter'
+export {
+  createEditorSharedDocument,
+  createEditorWithSharedDocument,
+  readEditorSharedDocument,
+  refreshEditorSharedDocument
+} from './editor/collaboration-document'
+export type {
+  EditorSharedDocument,
+  EditorSharedDocumentRefreshInput
+} from './editor/collaboration-document'
 export { JWordError } from './shared/errors'
 export type { JWordErrorCode, JWordErrorDetails } from './shared/errors'
+export { countGraphemes, splitGraphemes } from './shared/grapheme'
 export {
   buildDeleteResourceCommand,
   buildDeleteSelectedImageCommand,
@@ -96,7 +192,11 @@ export {
   buildInsertLinkCommand,
   buildSetLinkCommand
 } from './operations/link-command-builders'
-export { buildAddRevisionMetadataCommand } from './operations/revision-command-builders'
+export {
+  buildAcceptRevisionCommand,
+  buildAddRevisionMetadataCommand,
+  buildRejectRevisionCommand
+} from './operations/revision-command-builders'
 export type { AddRevisionMetadataInput } from './operations/revision-command-builders'
 export { buildSetSectionPropertiesCommand } from './operations/section-command-builders'
 export type { SectionPropertiesInput } from './operations/section-command-builders'
@@ -111,19 +211,30 @@ export {
   replaceAllMatches
 } from './find-replace/find-replace'
 export type {
+  FindTextOptions,
   FindTextMatch,
   ReplaceAllMatchesResult
 } from './find-replace/find-replace'
 export { isAllowedLinkUrl } from './link/policy'
-export { createFontManager } from './layout/font-manager'
+export {
+  SCRIPT_FONT_SCALE,
+  SUBSCRIPT_BASELINE_SHIFT_RATIO,
+  SUPERSCRIPT_BASELINE_SHIFT_RATIO,
+  createCanvasTextMeasurer,
+  createFontManager
+} from './layout/font-manager'
 export type {
+  CanvasTextMeasurerContext,
+  CanvasTextMetricsLike,
   FontAvailabilityStatus,
   FontCacheStats,
   FontManager,
   FontManagerOptions,
   ResolvedFontStyle,
   RunTextStyle,
-  TextMeasurement
+  TextMeasurement,
+  TextMeasurementMetrics,
+  TextMeasurer
 } from './layout/font-manager'
 export type {
   HistoryEntryMetadata,
@@ -188,7 +299,9 @@ export {
   twipsToCssPx
 } from './layout/page-config'
 export type { PageConfig, PageConfigInput, PageMargins, PageOrientation, PagePreset } from './layout/page-config'
+export { createRangeRef } from './model/position'
 export type { AnchorRef, RangeRef } from './model/position'
+export { createDocumentProjection } from './model/projection'
 export type { DocumentProjection } from './model/projection'
 export type {
   AbortSignalLike,
@@ -218,6 +331,8 @@ export type {
   TextPosition,
   TextRange,
   TransactionEvent,
+  TransactionDiagnostic,
+  TransactionDiagnosticSource,
   TransactionMetadata,
   TransactionPipelineOptions,
   TransactionResult

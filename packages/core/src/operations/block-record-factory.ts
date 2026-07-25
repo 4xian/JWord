@@ -3,7 +3,7 @@
  * 边界：只创建记录和复制结构化 inline，不应用 operation、不查找现有 store。
  * 协作模块：operation-adapter 插入 block、图片 run 分裂和 table adapter 复用这里的记录工厂。
  * 性能/安全约束：不访问 DOM，不持有外部可写状态；纯文本 run 默认只写 Y.Text，避免结构化 inline 覆盖后续输入。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#34-operation。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import * as Y from 'yjs'
 
@@ -135,7 +135,16 @@ export function syncRunResourceIds(run: RunRecord, inlines: readonly Run['inline
 /** 从 model paragraph 创建 Y.Doc paragraph 记录。 */
 function createParagraphRecordFromModel(paragraph: Paragraph): BlockRecord {
   const record = new Y.Map<BlockRecordValue>() as BlockRecord
-  const properties = createPropertyMap(paragraph.properties ?? {})
+  const properties = createPropertyMap({
+    ...(paragraph.properties ?? {}),
+    ...(paragraph.styleId === undefined ? {} : { styleId: paragraph.styleId }),
+    ...(paragraph.list === undefined
+      ? {}
+      : {
+          listNumberingId: paragraph.list.numberingId,
+          listLevel: paragraph.list.level
+        })
+  })
   const runs = new Y.Array<RunRecord>()
 
   record.set(DOCUMENT_STORE_FIELDS.block.kind, 'paragraph')

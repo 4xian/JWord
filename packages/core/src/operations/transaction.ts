@@ -3,14 +3,16 @@
  * 边界：负责 Command、Operation 和内部文档初始化 mutation 的 Y.Doc transact 包装，不实现布局、渲染、输入或协同。
  * 协作模块：后续 model、history、selection、Editor Facade 和外部自动插入通道将复用这里的 origin 语义。
  * 性能/安全约束：不访问 DOM，不做副作用归一化，只把编辑意图送入同一个 Y.Doc 事务。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 05-implementation-gates.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'
 
-import type { Block, Comment, CommentMessage, ImageInline, ModelProperties, RevisionMetadata, RunLink, TableBorder } from '../model/types'
+import type { Block, Comment, CommentMessage, ImageInline, ModelProperties, RevisionFormatSnapshot, RevisionMetadata, RunLink, TableBorder } from '../model/types'
 import { createDocumentProjection } from '../model/projection'
 import { createOperationAdapter } from './operation-adapter'
+import { createProjectionAfterOperationTransaction, readProjectionBeforeTransaction } from './projection-dirty-scope'
+import { hasYjsTransactionChanged } from './yjs-transaction-change'
 import { createJWordError } from '../shared/errors'
 import type { DocumentProjection } from '../model/projection'
 import type { TextRangeRecord } from '../model/position'
@@ -54,6 +56,8 @@ export type OperationKind =
   | 'deleteCommentThread'
   | 'setRunLink'
   | 'addRevisionMetadata'
+  | 'acceptRevision'
+  | 'rejectRevision'
 
 const OPERATION_KINDS = new Set<OperationKind>([
   'insertText',
@@ -89,7 +93,9 @@ const OPERATION_KINDS = new Set<OperationKind>([
   'reopenCommentThread',
   'deleteCommentThread',
   'setRunLink',
-  'addRevisionMetadata'
+  'addRevisionMetadata',
+  'acceptRevision',
+  'rejectRevision'
 ])
 
 /**
@@ -370,6 +376,22 @@ export interface SetRunLinkOperation extends OperationBase<'setRunLink'> {
 export interface AddRevisionMetadataOperation extends OperationBase<'addRevisionMetadata'> {
   readonly revision: RevisionMetadata
   readonly runId: string
+  readonly range?: AddRevisionMetadataRange
+}
+
+/** 接受或拒绝单条修订。 */
+export interface ResolveRevisionOperation extends OperationBase<'acceptRevision' | 'rejectRevision'> {
+  readonly revisionId: string
+  readonly range: TextRange
+  readonly formatTargets: readonly RevisionFormatSnapshot[]
+}
+
+/** 局部写入修订 metadata 的 run 范围。 */
+export interface AddRevisionMetadataRange {
+  readonly startGraphemeIndex: number
+  readonly endGraphemeIndex: number
+  readonly revisedRunId?: string
+  readonly trailingRunId?: string
 }
 
 /**
@@ -410,6 +432,7 @@ export type Operation =
   | DeleteCommentThreadOperation
   | SetRunLinkOperation
   | AddRevisionMetadataOperation
+  | ResolveRevisionOperation
 
 /**
  * 最小命令描述。
@@ -427,7 +450,42 @@ export interface Command {
  */
 export interface TransactionMetadata {
   readonly origin: string
+  readonly historyOrigin?: unknown
   readonly label?: string
+  readonly requestId?: string
+  readonly roomId?: string
+  readonly clientId?: string
+  readonly authorId?: string
+  readonly source?: TransactionDiagnosticSource
+  readonly snapshotId?: string
+  readonly versionId?: string
+  readonly recoverable?: boolean
+}
+
+/** Gate 6 事务诊断来源。 */
+export type TransactionDiagnosticSource =
+  | 'local'
+  | 'remote'
+  | 'system-recovery'
+  | 'version-restore'
+  | 'auto-inserter'
+
+/** 事务完成后对外可见的稳定诊断字段。 */
+export interface TransactionDiagnostic {
+  readonly commandName: string
+  readonly origin: string
+  readonly operationKinds: readonly OperationKind[]
+  readonly updateByteLength: number
+  readonly source: TransactionDiagnosticSource
+  readonly local: boolean
+  readonly remote: boolean
+  readonly requestId?: string
+  readonly roomId?: string
+  readonly clientId?: string
+  readonly authorId?: string
+  readonly snapshotId?: string
+  readonly versionId?: string
+  readonly recoverable?: boolean
 }
 
 /**
@@ -441,6 +499,7 @@ export interface TransactionResult {
   readonly operationKinds: readonly OperationKind[]
   readonly projection: DocumentProjection
   readonly dirty: boolean
+  readonly diagnostic: TransactionDiagnostic
 }
 
 /**
@@ -452,6 +511,7 @@ export interface TransactionEvent {
   readonly operationKinds: readonly OperationKind[]
   readonly projection: DocumentProjection
   readonly dirty: boolean
+  readonly diagnostic: TransactionDiagnostic
 }
 
 /**
@@ -467,6 +527,11 @@ export type TransactionListener = (event: TransactionEvent) => void
  */
 export type TransactionMutation = () => void
 
+/** 远端或恢复通道应用 Yjs update 的输入元数据。 */
+export interface TransactionUpdateMetadata extends TransactionMetadata {
+  readonly origin: 'remote-user' | 'system-recovery' | 'version-restore' | 'auto-inserter'
+}
+
 /**
  * 事务管线上下文。
  */
@@ -474,6 +539,7 @@ export interface TransactionPipeline {
   readonly doc: Y.Doc
   subscribe(listener: TransactionListener): () => void
   run(command: Command, metadata: TransactionMetadata): TransactionResult
+  applyUpdate(update: Uint8Array, metadata: TransactionUpdateMetadata): TransactionResult
   runMutation(
     commandName: string,
     metadata: TransactionMetadata,
@@ -483,6 +549,7 @@ export interface TransactionPipeline {
 
 export interface TransactionPipelineOptions {
   readonly resourceUrlPolicy?: ResourceUrlPolicy
+  readonly updateByteLengthDiagnostics?: boolean
 }
 
 /**
@@ -508,6 +575,15 @@ export function createTransactionPipeline(
     ...(options.resourceUrlPolicy === undefined ? {} : { resourceUrlPolicy: options.resourceUrlPolicy })
   })
   const listeners = new Set<TransactionListener>()
+  const updateByteLengthDiagnostics = options.updateByteLengthDiagnostics === true
+  let currentProjection: DocumentProjection | undefined
+  let internalTransactionDepth = 0
+
+  doc.on('afterTransaction', () => {
+    if (internalTransactionDepth === 0) {
+      currentProjection = undefined
+    }
+  })
 
   return {
     doc,
@@ -524,19 +600,71 @@ export function createTransactionPipeline(
       const operations = [...command.operations]
       const operationKinds = operations.map((operation) => operation.kind)
       const metadataSnapshot = { ...metadata }
+      const stateBefore = readStateVectorForUpdateByteLength(doc, updateByteLengthDiagnostics)
+      const previousProjection = readProjectionBeforeTransaction(doc, currentProjection)
 
-      doc.transact(() => {
-        adapter.applyAll(operations)
-      }, metadataSnapshot.origin)
+      let transaction: Y.Transaction | undefined
 
+      internalTransactionDepth += 1
+      try {
+        doc.transact((currentTransaction) => {
+          transaction = currentTransaction
+          adapter.applyAll(operations)
+        }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+      } finally {
+        internalTransactionDepth -= 1
+      }
+      const dirty = transaction !== undefined && hasYjsTransactionChanged(transaction)
+      const updateByteLength = readUpdateByteLength(doc, stateBefore, dirty)
+
+      currentProjection = dirty
+        ? createProjectionAfterOperationTransaction(doc, previousProjection, operations)
+        : previousProjection ?? createDocumentProjection(doc)
       const result = {
         commandName: command.name,
         origin: metadataSnapshot.origin,
         metadata: metadataSnapshot,
         operations,
         operationKinds,
-        projection: createDocumentProjection(doc),
-        dirty: operations.length > 0
+        projection: currentProjection,
+        dirty,
+        diagnostic: createTransactionDiagnostic(command.name, operationKinds, metadataSnapshot, updateByteLength)
+      }
+
+      notifyListeners(listeners, result)
+
+      return result
+    },
+    applyUpdate(update, metadata) {
+      validateTransactionName('applySyncUpdate', metadata)
+
+      const metadataSnapshot = { ...metadata }
+      const stateBefore = readStateVectorForUpdateByteLength(doc, updateByteLengthDiagnostics)
+      const previousProjection = readProjectionBeforeTransaction(doc, currentProjection)
+
+      const transaction = captureYjsTransaction(doc, () => {
+        internalTransactionDepth += 1
+        try {
+          Y.applyUpdate(doc, update, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+        } finally {
+          internalTransactionDepth -= 1
+        }
+      })
+      const dirty = transaction !== undefined && hasYjsTransactionChanged(transaction)
+      const updateByteLength = readUpdateByteLength(doc, stateBefore, dirty)
+
+      currentProjection = dirty === false && previousProjection !== undefined
+        ? previousProjection
+        : createDocumentProjection(doc)
+      const result = {
+        commandName: 'applySyncUpdate',
+        origin: metadataSnapshot.origin,
+        metadata: metadataSnapshot,
+        operations: [],
+        operationKinds: [],
+        projection: currentProjection,
+        dirty,
+        diagnostic: createTransactionDiagnostic('applySyncUpdate', [], metadataSnapshot, updateByteLength)
       }
 
       notifyListeners(listeners, result)
@@ -547,19 +675,35 @@ export function createTransactionPipeline(
       validateTransactionName(commandName, metadata)
 
       const metadataSnapshot = { ...metadata }
+      const stateBefore = readStateVectorForUpdateByteLength(doc, updateByteLengthDiagnostics)
 
-      doc.transact(() => {
-        mutation()
-      }, metadataSnapshot.origin)
+      const previousProjection = readProjectionBeforeTransaction(doc, currentProjection)
+      let transaction: Y.Transaction | undefined
 
+      internalTransactionDepth += 1
+      try {
+        doc.transact((currentTransaction) => {
+          transaction = currentTransaction
+          mutation()
+        }, metadataSnapshot.historyOrigin ?? metadataSnapshot.origin)
+      } finally {
+        internalTransactionDepth -= 1
+      }
+      const dirty = transaction !== undefined && hasYjsTransactionChanged(transaction)
+      const updateByteLength = readUpdateByteLength(doc, stateBefore, dirty)
+
+      currentProjection = dirty
+        ? createDocumentProjection(doc)
+        : previousProjection ?? createDocumentProjection(doc)
       const result = {
         commandName,
         origin: metadataSnapshot.origin,
         metadata: metadataSnapshot,
         operations: [],
         operationKinds: [],
-        projection: createDocumentProjection(doc),
-        dirty: true
+        projection: currentProjection,
+        dirty,
+        diagnostic: createTransactionDiagnostic(commandName, [], metadataSnapshot, updateByteLength)
       }
 
       notifyListeners(listeners, result)
@@ -567,6 +711,90 @@ export function createTransactionPipeline(
       return result
     }
   }
+}
+
+
+/** 仅在显式开启 update 长度诊断时读取事务前状态。 */
+function readStateVectorForUpdateByteLength(doc: Y.Doc, enabled: boolean): Uint8Array | undefined {
+  return enabled ? Y.encodeStateVector(doc) : undefined
+}
+
+/** 在诊断模式下计算本次事务实际产生的 update 长度。 */
+function readUpdateByteLength(
+  doc: Y.Doc,
+  stateBefore: Uint8Array | undefined,
+  dirty: boolean
+): number {
+  if (stateBefore === undefined || dirty === false) {
+    return 0
+  }
+
+  return Y.encodeStateAsUpdate(doc, stateBefore).byteLength
+}
+
+/** 执行一次 Yjs 写入并在成功或异常后清理临时 transaction listener。 */
+function captureYjsTransaction(doc: Y.Doc, action: () => void): Y.Transaction | undefined {
+  let capturedTransaction: Y.Transaction | undefined
+  /** 捕获当前公开入口触发的 transaction。 */
+  const listener = (transaction: Y.Transaction) => {
+    capturedTransaction ??= transaction
+  }
+
+  doc.on('afterTransaction', listener)
+  try {
+    action()
+  } finally {
+    doc.off('afterTransaction', listener)
+  }
+
+  return capturedTransaction
+}
+
+function createTransactionDiagnostic(
+  commandName: string,
+  operationKinds: readonly OperationKind[],
+  metadata: TransactionMetadata,
+  updateByteLength: number
+): TransactionDiagnostic {
+  const source = resolveTransactionDiagnosticSource(metadata)
+
+  return {
+    commandName,
+    origin: metadata.origin,
+    operationKinds,
+    updateByteLength,
+    source,
+    local: source === 'local',
+    remote: source === 'remote',
+    ...(metadata.requestId === undefined ? {} : { requestId: metadata.requestId }),
+    ...(metadata.roomId === undefined ? {} : { roomId: metadata.roomId }),
+    ...(metadata.clientId === undefined ? {} : { clientId: metadata.clientId }),
+    ...(metadata.authorId === undefined ? {} : { authorId: metadata.authorId }),
+    ...(metadata.snapshotId === undefined ? {} : { snapshotId: metadata.snapshotId }),
+    ...(metadata.versionId === undefined ? {} : { versionId: metadata.versionId }),
+    ...(metadata.recoverable === undefined ? {} : { recoverable: metadata.recoverable })
+  }
+}
+
+function resolveTransactionDiagnosticSource(metadata: TransactionMetadata): TransactionDiagnosticSource {
+  if (metadata.source !== undefined) {
+    return metadata.source
+  }
+
+  if (metadata.origin === 'remote-user') {
+    return 'remote'
+  }
+  if (metadata.origin === 'system-recovery') {
+    return 'system-recovery'
+  }
+  if (metadata.origin === 'version-restore') {
+    return 'version-restore'
+  }
+  if (metadata.origin === 'auto-inserter') {
+    return 'auto-inserter'
+  }
+
+  return 'local'
 }
 
 function validateTransactionInput(command: Command, metadata: TransactionMetadata): void {
@@ -600,10 +828,38 @@ function notifyListeners(
     origin: result.origin,
     operationKinds: result.operationKinds,
     projection: result.projection,
-    dirty: result.dirty
+    dirty: result.dirty,
+    diagnostic: result.diagnostic
   }
 
+  const listenerErrors: unknown[] = []
+
   for (const listener of listeners) {
-    listener(event)
+    try {
+      listener(event)
+    } catch (error) {
+      listenerErrors.push(error)
+    }
   }
+
+  if (listenerErrors.length > 0) {
+    logTransactionListenerErrors(result.commandName, listenerErrors)
+  }
+}
+
+/** 仅在开发模式下暴露监听器异常，避免已提交事务被监听器副作用回滚。 */
+function logTransactionListenerErrors(commandName: string, errors: readonly unknown[]): void {
+  const runtime = globalThis as typeof globalThis & {
+    readonly process?: {
+      readonly env?: {
+        readonly NODE_ENV?: string
+      }
+    }
+  }
+
+  if (runtime.process?.env?.NODE_ENV !== 'development') {
+    return
+  }
+
+  console.error(`[JWord] 事务监听器失败：${commandName}`, errors.length === 1 ? errors[0] : errors)
 }

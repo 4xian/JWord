@@ -3,7 +3,7 @@
  * 边界：只委托 examples/vanilla，不启动包构建或发布任务。
  * 协作模块：examples/vanilla/package.json 与 pnpm workspace 过滤。
  * 性能/安全约束：只运行本地开发服务，绝不 commit、tag 或 publish。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/05-implementation-gates.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'

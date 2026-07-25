@@ -3,7 +3,7 @@
  * 边界：只处理 anchor/focus、direction、affinity 和恢复快照，不读取 DOM、不做 hit-test、不触发布局。
  * 协作模块：输入系统、历史模块、批注、修订和远端光标后续复用同一套 AnchorRef/RangeRef。
  * 性能/安全约束：选择区对象冻结后只读，不持有可写 Yjs 容器，不访问浏览器环境。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
@@ -125,18 +125,9 @@ function inferDirection(anchor: AnchorRef, focus: AnchorRef): SelectionDirection
     return 'none'
   }
 
-  if (
-    anchorSnapshot.documentId === focusSnapshot.documentId &&
-    anchorSnapshot.sectionId === focusSnapshot.sectionId &&
-    anchorSnapshot.blockId === focusSnapshot.blockId &&
-    anchorSnapshot.runId === focusSnapshot.runId
-  ) {
-    return Number(anchorSnapshot.graphemeIndex) < Number(focusSnapshot.graphemeIndex)
-      ? 'forward'
-      : 'backward'
-  }
-
-  return 'forward'
+  return compareAnchorSnapshots(anchorSnapshot, focusSnapshot) < 0
+    ? 'forward'
+    : 'backward'
 }
 
 function areAnchorsAtSamePosition(anchor: AnchorRef, focus: AnchorRef): boolean {
@@ -150,4 +141,37 @@ function areAnchorsAtSamePosition(anchor: AnchorRef, focus: AnchorRef): boolean 
     anchorSnapshot.runId === focusSnapshot.runId &&
     anchorSnapshot.graphemeIndex === focusSnapshot.graphemeIndex
   )
+}
+
+/** 按文档、节、块、run、grapheme 的稳定序推断两个锚点先后。 */
+function compareAnchorSnapshots(
+  anchor: ReturnType<typeof readAnchorRefSnapshot>,
+  focus: ReturnType<typeof readAnchorRefSnapshot>
+): number {
+  return compareStableIds(anchor.documentId, focus.documentId) ||
+    compareStableIds(anchor.sectionId, focus.sectionId) ||
+    compareStableIds(anchor.blockId, focus.blockId) ||
+    compareStableIds(anchor.runId, focus.runId) ||
+    Number(anchor.graphemeIndex) - Number(focus.graphemeIndex)
+}
+
+/** 比较带数字后缀的稳定 id，避免 paragraph-10 排在 paragraph-2 前。 */
+function compareStableIds(left: unknown, right: unknown): number {
+  const leftText = String(left)
+  const rightText = String(right)
+  const leftNumber = readTrailingNumber(leftText)
+  const rightNumber = readTrailingNumber(rightText)
+
+  if (leftNumber !== null && rightNumber !== null && leftText.replace(/\d+$/u, '') === rightText.replace(/\d+$/u, '')) {
+    return leftNumber - rightNumber
+  }
+
+  return leftText.localeCompare(rightText)
+}
+
+/** 读取 id 尾部数字。 */
+function readTrailingNumber(value: string): number | null {
+  const match = /(\d+)$/u.exec(value)
+
+  return match === null ? null : Number.parseInt(match[1]!, 10)
 }

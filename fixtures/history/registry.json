@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "id": "update-log-basic",
+      "kind": "update-log",
+      "input": {
+        "source": "fixtures/collab/registry.json#remote-local-same-paragraph"
+      },
+      "updateLog": {
+        "expectedOrigins": [
+          "remote:user-b",
+          "local:user-a"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "OFFLINE_RECONNECT_SYNCED"
+        ]
+      }
+    },
+    {
+      "id": "snapshot-checkpoint",
+      "kind": "snapshot",
+      "input": {
+        "source": "fixtures/collab/registry.json#docx-import-t1-collab"
+      },
+      "snapshot": {
+        "expectedState": "checkpoint-created"
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_SNAPSHOT_STALE"
+        ]
+      }
+    },
+    {
+      "id": "version-preview-readonly",
+      "kind": "version-preview",
+      "input": {
+        "source": "fixtures/history/registry.json#snapshot-checkpoint"
+      },
+      "versionPreview": {
+        "expectedMode": "readonly"
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": []
+      }
+    },
+    {
+      "id": "restore-local-only",
+      "kind": "restore",
+      "input": {
+        "source": "fixtures/history/registry.json#version-preview-readonly"
+      },
+      "restoreExpectation": {
+        "expectedTextIncludes": [
+          "restored-local-version"
+        ],
+        "preservesOrigins": [
+          "remote:user-b",
+          "ai:auto-inserter"
+        ]
+      },
+      "diagnosticsExpectation": {
+        "expectedCodes": [
+          "COLLAB_RESTORE_CONFLICT_RESOLVED",
+          "COLLAB_HISTORY_ORIGIN_SKIPPED"
+        ]
+      }
+    }
+  ]
+}

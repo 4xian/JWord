@@ -1,0 +1,3 @@
+{
+  "extends": "./tsconfig.gate7-public-api.json"
+}

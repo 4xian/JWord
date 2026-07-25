@@ -3,11 +3,11 @@
  * 边界：只消费既有 DocumentLayout 和 DocumentProjection，不构建具体页面盒。
  * 协作模块：engine 调用这里决定从哪一页重排、何时复用后缀页面。
  * 性能/安全约束：保持确定性切片和稳定页判断，不修改输入投影。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { segmentGraphemes } from '../shared/grapheme'
-import type { FontManager, ResolvedFontStyle, RunTextStyle } from './font-manager'
+import { readFontManagerCompatibilitySignature, type FontManager, type ResolvedFontStyle, type RunTextStyle } from './font-manager'
 import type { Block, Inline, Paragraph, Run } from '../model/types'
 import type { PageConfig } from './page-config'
 import type { DocumentProjection } from '../model/projection'
@@ -110,6 +110,13 @@ function isCompatibleLayoutFontManager(
   projection: DocumentProjection
 ): boolean {
   if (previousFontManager === nextFontManager) {
+    return true
+  }
+
+  const previousSignature = readFontManagerCompatibilitySignature(previousFontManager)
+  const nextSignature = readFontManagerCompatibilitySignature(nextFontManager)
+
+  if (previousSignature !== undefined && previousSignature === nextSignature) {
     return true
   }
 

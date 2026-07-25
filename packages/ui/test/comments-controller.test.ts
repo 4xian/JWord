@@ -5,7 +5,7 @@
  * 边界：只验证 draft、thread 操作和 anchor 聚焦是否走 adapter，不验证主进程 wiring。
  * 协作模块：packages/ui/src/comments/controller.ts。
  * 约束：controller 只能调 adapter，不直接触碰 core。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.8-4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, test, vi } from 'vitest'

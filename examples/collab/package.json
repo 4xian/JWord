@@ -1,0 +1,28 @@
+{
+  "name": "@4xian/jword-example-collab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:server": "node --experimental-strip-types server/dev-server.ts",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@4xian/jword-collab": "workspace:*",
+    "@4xian/jword-collab-server": "workspace:*",
+    "@4xian/jword-core": "workspace:*",
+    "@4xian/jword-docx": "workspace:*",
+    "@4xian/jword-license": "workspace:*",
+    "@4xian/jword-persistence": "workspace:*",
+    "@4xian/jword-ui": "workspace:*",
+    "@hocuspocus/server": "4.0.0",
+    "y-protocols": "1.0.7",
+    "yjs": "13.6.30"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vite": "8.0.12"
+  }
+}

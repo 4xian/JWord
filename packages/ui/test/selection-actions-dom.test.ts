@@ -87,6 +87,24 @@ describe('selection actions dom', () => {
     }
   })
 
+  test('选中文本时浮动工具栏保留格式按钮可见', () => {
+    const host = document.createElement('div')
+    const dom = createSelectionActionsDom(host)
+
+    try {
+      renderSelectionActionsDom(dom, createViewState())
+
+      expect(dom.formatControls.bold.hidden).toBe(false)
+      expect(dom.formatControls.italic.hidden).toBe(false)
+      expect(dom.formatControls.underline.hidden).toBe(false)
+      expect(dom.formatControls.strike.hidden).toBe(false)
+      expect(dom.formatControls.textColor.parentElement?.hidden).toBe(false)
+      expect(dom.formatControls.backgroundColor.parentElement?.hidden).toBe(false)
+    } finally {
+      destroySelectionActionsDom(dom)
+    }
+  })
+
   test('按当前选区是否有链接切换浮动工具栏与右键菜单链接动作', () => {
     const host = document.createElement('div')
     const dom = createSelectionActionsDom(host)

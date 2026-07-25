@@ -3,7 +3,7 @@
  * 边界：只服务纯数据 layout，不读取 projection、不绘制 Canvas、不访问 DOM。
  * 协作模块：engine 负责遍历文档结构，本模块负责段落缩进、对齐、换页和行内盒追加。
  * 性能/安全约束：所有 helper 只修改当前 layout cursor，不保留跨次布局状态。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { cssPxToTwips } from './page-config'
@@ -29,6 +29,7 @@ import type { Resource } from '../resources/types'
 import type {
   EmptyTextAnchorBox,
   InlineBox,
+  LineBox,
   LayoutCursor,
   MutableLineBox,
   MutablePageBox,
@@ -79,7 +80,7 @@ export function appendNonTextInlineBox(
   cursor.x += inlineBox.width
 }
 
-function resolveInlineObjectGeometry(
+export function resolveInlineObjectGeometry(
   inline: Exclude<Inline, { readonly kind: 'text' | 'break' }>,
   pageConfig: PageConfig,
   lineHeight: number
@@ -181,9 +182,7 @@ export function startParagraph(
     pageBreakPolicy: resolveParagraphPageBreakPolicy(paragraph)
   }
 
-  if (resolveParagraphList(paragraph) === undefined) {
-    delete cursor.listCounters
-  } else if (readParagraphLineCount(cursor, paragraph.id) === 0) {
+  if (resolveParagraphList(paragraph) !== undefined && readParagraphLineCount(cursor, paragraph.id) === 0) {
     const listMarker = resolveParagraphListMarker(cursor, paragraph, layoutProperties.markerGapTwips)
 
     if (listMarker !== undefined) {
@@ -231,17 +230,84 @@ export function ensureLineFits(
 ): void {
   const contentRight = cursor.page.contentRect.x + cursor.page.contentRect.width
 
-  if (cursor.line !== undefined && cursor.line.fragments.length > 0 && cursor.x + nextWidth > contentRight) {
-    flushLine(cursor)
+  if (
+    cursor.line !== undefined
+    && (cursor.line.fragments.length > 0 || cursor.line.inlines.length > 0)
+    && cursor.x + nextWidth > contentRight
+  ) {
+    flushLine(cursor, { justify: true })
   }
 
   if (cursor.y + nextHeight > cursor.page.contentRect.y + cursor.page.contentRect.height) {
+    if (moveOrphanLinesToNextPage(cursor, pages, pageConfig, section)) {
+      ensureLine(cursor, section.id, paragraph, pageConfig)
+      return
+    }
+
+    discardEmptyCurrentParagraph(cursor)
     startNewPage(cursor, pages, pageConfig)
     assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
     startParagraph(cursor, section.id, paragraph, pageConfig)
   }
 
   ensureLine(cursor, section.id, paragraph, pageConfig)
+}
+
+/**
+ * 在段落完成后执行 widow 控制，避免续排页只留下过少段尾行。
+ */
+export function applyParagraphWidowControl(cursor: LayoutCursor, pages: MutablePageBox[]): void {
+  const currentParagraph = cursor.paragraph
+
+  if (
+    currentParagraph === undefined
+    || currentParagraph.pageBreakPolicy.widowControl !== true
+    || currentParagraph.lines.length >= currentParagraph.pageBreakPolicy.widowLines
+  ) {
+    return
+  }
+
+  const previousPage = findPreviousParagraphPage(pages, cursor.page, currentParagraph.paragraphId)
+  const previousParagraph = previousPage?.paragraphs.find((paragraph) =>
+    paragraph.paragraphId === currentParagraph.paragraphId
+  )
+
+  if (previousPage === undefined || previousParagraph === undefined) {
+    return
+  }
+
+  const movableCount = previousParagraph.lines.length - currentParagraph.pageBreakPolicy.orphanLines
+  const requestedCount = currentParagraph.pageBreakPolicy.widowLines - currentParagraph.lines.length
+  const moveCount = Math.min(movableCount, requestedCount)
+
+  if (moveCount <= 0) {
+    return
+  }
+
+  const movedSourceLines = previousParagraph.lines.slice(previousParagraph.lines.length - moveCount)
+  const remainingPreviousLines = previousParagraph.lines.slice(0, previousParagraph.lines.length - moveCount)
+  const insertY = currentParagraph.y
+  let nextY = insertY
+  const movedLines = movedSourceLines.map((line) => {
+    const movedLine = cloneLineForPage(line, cursor.page.pageIndex, insertY - line.y + (nextY - insertY))
+
+    nextY += movedLine.height
+    return movedLine
+  })
+  const shiftY = nextY - insertY
+  const shiftedCurrentLines = currentParagraph.lines.map((line) => cloneLineForPage(line, cursor.page.pageIndex, shiftY))
+
+  previousParagraph.lines = remainingPreviousLines
+  previousParagraph.height = resolveParagraphHeight(previousParagraph)
+  previousPage.lines = previousPage.lines.filter((line) => !movedSourceLines.includes(line))
+
+  currentParagraph.lines = [...movedLines, ...shiftedCurrentLines]
+  currentParagraph.height = resolveParagraphHeight(currentParagraph)
+  cursor.page.lines = [
+    ...cursor.page.lines.filter((line) => line.paragraphId !== currentParagraph.paragraphId),
+    ...currentParagraph.lines
+  ]
+  cursor.y += shiftY
 }
 
 export function ensureLine(
@@ -333,7 +399,11 @@ export function appendTextFragment(input: Readonly<{
   input.cursor.x += input.width
 }
 
-export function flushLine(cursor: LayoutCursor): void {
+interface FlushLineOptions {
+  readonly justify?: boolean
+}
+
+export function flushLine(cursor: LayoutCursor, options: FlushLineOptions = {}): void {
   if (cursor.line === undefined) {
     return
   }
@@ -342,7 +412,7 @@ export function flushLine(cursor: LayoutCursor): void {
 
   if (line.fragments.length > 0 || line.inlines.length > 0) {
     alignLineContentToBaseline(line)
-    alignLineToParagraph(line, cursor)
+    alignLineToParagraph(line, cursor, options.justify === true)
     const frozenLine = freezeLine(line)
 
     cursor.page.lines.push(frozenLine)
@@ -406,6 +476,30 @@ function alignLineContentToBaseline(line: MutableLineBox): void {
   }
 
   line.height = Math.max(1, maxBottom - line.y)
+}
+
+/** 移除被整体挪到下一页的空段落盒，避免段前距在上一页留下不可见块。 */
+function discardEmptyCurrentParagraph(cursor: LayoutCursor): void {
+  const paragraph = cursor.paragraph
+
+  if (paragraph === undefined || paragraph.lines.length > 0) {
+    return
+  }
+
+  const paragraphIndex = cursor.page.paragraphs.indexOf(paragraph)
+
+  if (paragraphIndex >= 0) {
+    cursor.page.paragraphs.splice(paragraphIndex, 1)
+  }
+
+  const blockIndex = cursor.page.blocks.indexOf(paragraph)
+
+  if (blockIndex >= 0) {
+    cursor.page.blocks.splice(blockIndex, 1)
+  }
+
+  cursor.paragraph = undefined
+  cursor.line = undefined
 }
 
 function resolveTargetBaseline(line: MutableLineBox): number {
@@ -478,7 +572,7 @@ export function startNewPage(
   cursor.x = page.contentRect.x
 }
 
-function alignLineToParagraph(line: MutableLineBox, cursor: LayoutCursor): void {
+function alignLineToParagraph(line: MutableLineBox, cursor: LayoutCursor, shouldJustifyLine: boolean): void {
   const paragraph = cursor.paragraph
 
   if (paragraph === undefined || line.width <= 0) {
@@ -487,6 +581,12 @@ function alignLineToParagraph(line: MutableLineBox, cursor: LayoutCursor): void 
 
   const availableWidth = Math.max(0, cursor.page.contentRect.x + cursor.page.contentRect.width - line.x)
   const remainingWidth = Math.max(0, availableWidth - line.width)
+
+  if (paragraph.alignment === 'justify' && shouldJustifyLine) {
+    justifyLineToParagraph(line, remainingWidth)
+    return
+  }
+
   const offset = paragraph.alignment === 'right'
     ? remainingWidth
     : paragraph.alignment === 'center' ? remainingWidth / 2 : 0
@@ -517,6 +617,134 @@ function alignLineToParagraph(line: MutableLineBox, cursor: LayoutCursor): void 
       })
     }
   }
+}
+
+interface JustifyGap {
+  readonly x: number
+  readonly count: number
+}
+
+/** 将软换行产生的非末行拉伸到段落右边界。 */
+function justifyLineToParagraph(line: MutableLineBox, remainingWidth: number): void {
+  if (remainingWidth <= 0 || line.fragments.length < 2) {
+    return
+  }
+
+  const expandableFragmentGaps = new Map<number, number>()
+  const interFragmentGaps = new Map<number, number>()
+  const gaps: JustifyGap[] = []
+
+  for (let index = 0; index < line.fragments.length; index += 1) {
+    const fragment = line.fragments[index]
+    const nextFragment = line.fragments[index + 1]
+
+    if (fragment === undefined) {
+      continue
+    }
+
+    if (isWhitespaceJustifyText(fragment.text)) {
+      const count = countJustifyGraphemes(fragment.text)
+
+      expandableFragmentGaps.set(index, count)
+      gaps.push({
+        x: fragment.x + fragment.width,
+        count
+      })
+      continue
+    }
+
+    if (
+      nextFragment !== undefined
+      && isCjkJustifyText(fragment.text)
+      && isCjkJustifyText(nextFragment.text)
+    ) {
+      interFragmentGaps.set(index, 1)
+      gaps.push({
+        x: fragment.x + fragment.width,
+        count: 1
+      })
+    }
+  }
+
+  const totalGapCount = gaps.reduce((sum, gap) => sum + gap.count, 0)
+
+  if (totalGapCount <= 0) {
+    return
+  }
+
+  const extraPerGap = remainingWidth / totalGapCount
+  let offset = 0
+
+  for (let index = 0; index < line.fragments.length; index += 1) {
+    const fragment = line.fragments[index]
+
+    if (fragment === undefined) {
+      continue
+    }
+
+    const widthDelta = extraPerGap * (expandableFragmentGaps.get(index) ?? 0)
+
+    line.fragments[index] = Object.freeze({
+      ...fragment,
+      x: fragment.x + offset,
+      width: fragment.width + widthDelta,
+      advanceTwips: expandFragmentAdvanceTwips(fragment.advanceTwips, widthDelta)
+    })
+    offset += widthDelta + (extraPerGap * (interFragmentGaps.get(index) ?? 0))
+  }
+
+  for (let index = 0; index < line.inlines.length; index += 1) {
+    const inline = line.inlines[index]
+
+    if (inline !== undefined) {
+      line.inlines[index] = shiftInlineBoxX(inline, resolveJustifyOffsetBeforeX(gaps, extraPerGap, inline.x))
+    }
+  }
+
+  line.width += remainingWidth
+}
+
+/** 判断文本片段是否可通过空白宽度扩展。 */
+function isWhitespaceJustifyText(text: string): boolean {
+  return /^\s+$/u.test(text)
+}
+
+/** 判断文本片段是否可在 CJK 字符间扩展。 */
+function isCjkJustifyText(text: string): boolean {
+  return /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]$/u.test(text)
+}
+
+/** 统计可扩展空白字素数量。 */
+function countJustifyGraphemes(text: string): number {
+  return Math.max(1, Array.from(text).length)
+}
+
+/** 扩展片段内部 advance，保持命中测试边界随宽度增长。 */
+function expandFragmentAdvanceTwips(advanceTwips: readonly number[], widthDelta: number): readonly number[] {
+  if (widthDelta === 0 || advanceTwips.length <= 1) {
+    return advanceTwips
+  }
+
+  const step = widthDelta / (advanceTwips.length - 1)
+
+  return Object.freeze(advanceTwips.map((advance, index) => advance + (step * index)))
+}
+
+/** 计算指定 x 坐标前已插入的 justify 偏移。 */
+function resolveJustifyOffsetBeforeX(gaps: readonly JustifyGap[], extraPerGap: number, x: number): number {
+  return gaps.reduce((offset, gap) => x >= gap.x ? offset + (gap.count * extraPerGap) : offset, 0)
+}
+
+/** 平移行内盒的 x 坐标。 */
+function shiftInlineBoxX(box: InlineBox, offset: number): InlineBox {
+  if (offset === 0) {
+    return box
+  }
+
+  return Object.freeze({
+    ...box,
+    x: box.x + offset
+  }) as unknown as InlineBox
 }
 
 /**
@@ -557,6 +785,136 @@ function getParagraphLineCounts(cursor: LayoutCursor): Map<string, number> {
   }
 
   return cursor.paragraphLineCounts
+}
+
+/** 当前页只留下不足 orphan 阈值的段首行时，把这些行整体移到下一页。 */
+function moveOrphanLinesToNextPage(
+  cursor: LayoutCursor,
+  pages: MutablePageBox[],
+  pageConfig: PageConfig,
+  section: Section
+): boolean {
+  const currentParagraph = cursor.paragraph
+
+  if (
+    currentParagraph === undefined
+    || currentParagraph.pageBreakPolicy.widowControl !== true
+    || currentParagraph.lines.length === 0
+    || currentParagraph.lines.length >= currentParagraph.pageBreakPolicy.orphanLines
+  ) {
+    return false
+  }
+
+  const sourcePage = cursor.page
+  const movedLines = currentParagraph.lines
+
+  sourcePage.lines = sourcePage.lines.filter((line) => !movedLines.includes(line))
+  removeParagraphFromPage(sourcePage, currentParagraph)
+  startNewPage(cursor, pages, pageConfig)
+  assignPageSectionBoundary(cursor.page, section, cursor.sectionContext)
+
+  let nextY = cursor.page.contentRect.y
+  const nextParagraph = cloneParagraphForPage(currentParagraph, cursor.page.pageIndex, nextY - currentParagraph.y)
+  const nextLines = movedLines.map((line) => {
+    const movedLine = cloneLineForPage(line, cursor.page.pageIndex, nextY - line.y)
+
+    nextY += movedLine.height
+    return movedLine
+  })
+
+  nextParagraph.y = cursor.page.contentRect.y
+  nextParagraph.lines = nextLines
+  nextParagraph.height = resolveParagraphHeight(nextParagraph)
+  cursor.page.paragraphs.push(nextParagraph)
+  cursor.page.blocks.push(nextParagraph)
+  cursor.page.lines.push(...nextLines)
+  cursor.paragraph = nextParagraph
+  cursor.line = undefined
+  cursor.y = nextY
+  cursor.x = nextParagraph.x
+
+  return true
+}
+
+/** 查找当前页之前最近的同段落页面。 */
+function findPreviousParagraphPage(
+  pages: readonly MutablePageBox[],
+  page: MutablePageBox,
+  paragraphId: string
+): MutablePageBox | undefined {
+  for (let index = page.pageIndex - 1; index >= 0; index -= 1) {
+    const previousPage = pages[index]
+
+    if (previousPage?.paragraphs.some((paragraph) => paragraph.paragraphId === paragraphId) === true) {
+      return previousPage
+    }
+  }
+
+  return undefined
+}
+
+/** 从页面索引中移除空段落盒。 */
+function removeParagraphFromPage(page: MutablePageBox, paragraph: MutableParagraphBox): void {
+  const paragraphIndex = page.paragraphs.indexOf(paragraph)
+
+  if (paragraphIndex >= 0) {
+    page.paragraphs.splice(paragraphIndex, 1)
+  }
+
+  const blockIndex = page.blocks.indexOf(paragraph)
+
+  if (blockIndex >= 0) {
+    page.blocks.splice(blockIndex, 1)
+  }
+}
+
+/** 复制段落盒到目标页面。 */
+function cloneParagraphForPage(
+  paragraph: MutableParagraphBox,
+  pageIndex: number,
+  offsetY: number
+): MutableParagraphBox {
+  return {
+    ...paragraph,
+    pageIndex,
+    y: paragraph.y + offsetY,
+    lines: []
+  }
+}
+
+/** 复制行盒和内部片段到目标页面与纵向偏移。 */
+function cloneLineForPage(line: LineBox, pageIndex: number, offsetY: number): MutableLineBox {
+  return {
+    ...line,
+    pageIndex,
+    y: line.y + offsetY,
+    baseline: line.baseline + offsetY,
+    fragments: line.fragments.map((fragment) => Object.freeze({
+      ...fragment,
+      pageIndex,
+      y: fragment.y + offsetY,
+      baseline: fragment.baseline + offsetY
+    })),
+    inlines: line.inlines.map((inline) => Object.freeze({
+      ...inline,
+      pageIndex,
+      y: inline.y + offsetY,
+      ...(inline.kind === 'emptyTextAnchor'
+        ? { baseline: inline.baseline + offsetY }
+        : {})
+    })) as InlineBox[]
+  }
+}
+
+/** 根据段落现有行重算高度。 */
+function resolveParagraphHeight(paragraph: MutableParagraphBox): number {
+  if (paragraph.lines.length === 0) {
+    return 0
+  }
+
+  return paragraph.lines.reduce((bottom, line) =>
+    Math.max(bottom, line.y + line.height),
+  paragraph.y) - paragraph.y
 }
 
 function resolveParagraphListMarker(

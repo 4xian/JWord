@@ -3,10 +3,15 @@
  * 边界：只处理 draft、错误和确认按钮禁用规则，不访问 DOM，也不直接调用宿主 adapter。
  * 协作模块：link/controller 维护状态，link/dom 通过这些 helper 渲染 dialog。
  * 性能/安全约束：状态保持最小可序列化，不在 UI 层复制 editor 或 selection 对象。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { isAllowedJWordLinkUrl } from './policy'
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import type {
   JWordLinkDialogMode,
   JWordLinkDialogState,
@@ -37,23 +42,31 @@ export function createLinkDialogState(
 }
 
 /** 读取当前草稿的纯校验错误。 */
-export function readLinkValidationError(draft: JWordLinkDraft, policy: JWordLinkUrlPolicy = {}): string {
+export function readLinkValidationError(
+  draft: JWordLinkDraft,
+  policy: JWordLinkUrlPolicy = {},
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
+): string {
   if (draft.visibleText.length === 0) {
-    return '请输入显示文本。'
+    return readJWordUiText(i18n, 'dialog.link.errorVisibleTextRequired')
   }
 
   if (draft.url.length === 0) {
-    return '请输入链接地址。'
+    return readJWordUiText(i18n, 'dialog.link.errorUrlRequired')
   }
 
   if (!isAllowedJWordLinkUrl(draft.url, policy)) {
-    return '链接地址协议不受支持。'
+    return readJWordUiText(i18n, 'dialog.link.errorProtocolUnsupported')
   }
 
   return ''
 }
 
 /** 判断当前 dialog 是否应禁用确认按钮。 */
-export function readLinkConfirmDisabled(state: JWordLinkDialogState, policy: JWordLinkUrlPolicy = {}): boolean {
-  return state.busy || readLinkValidationError(state.draft, policy).length > 0
+export function readLinkConfirmDisabled(
+  state: JWordLinkDialogState,
+  policy: JWordLinkUrlPolicy = {},
+  i18n: ResolvedJWordUiI18n = resolveJWordUiI18n()
+): boolean {
+  return state.busy || readLinkValidationError(state.draft, policy, i18n).length > 0
 }

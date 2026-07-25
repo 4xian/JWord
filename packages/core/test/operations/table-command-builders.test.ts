@@ -5,7 +5,7 @@
  * 边界：只覆盖 command 形状与默认表格模型，不测试 Y.Doc 写入、布局、渲染或浏览器交互。
  * 协作模块：transaction pipeline 与 operation adapter 会消费这些 builder 产出的 operation。
  * 性能/安全约束：测试只依赖内存 projection，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-2---表格纵线step-44-47。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

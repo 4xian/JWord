@@ -5,7 +5,7 @@
  * 边界：只覆盖只读 布局盒到画布 指令的转换，不覆盖布局生成、命中测试和矩形映射 或真实浏览器画布。
  * 协作模块：渲染器消费布局盒，结合 视口虚拟器和画布池 管理每页 canvas。
  * 性能/安全约束：测试使用确定性 mock canvas，不访问 DOM，不创建真实图形资源，不使用单长 canvas。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-分页-canvas-渲染。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -58,7 +58,7 @@ describe('renderPageCanvas', () => {
     ])
   })
 
-  it('在选区高亮之上绘制 run 背景，保证背景色选择时可实时预览', () => {
+  it('在 run 背景之上、文本之下绘制选区高亮，避免背景色遮住选区', () => {
     const canvas = createMockCanvas()
     const page = createPageLayout(0, '背景色', {
       backgroundColor: '#00aa66'
@@ -78,8 +78,114 @@ describe('renderPageCanvas', () => {
       ]
     })
 
-    expect(canvas.calls.indexOf('fillStyle:#cfe3ff')).toBeLessThan(canvas.calls.indexOf('fillStyle:#00aa66'))
-    expect(canvas.calls.indexOf('fillStyle:#00aa66')).toBeLessThan(canvas.calls.indexOf('fillText:背景色,72,110'))
+    expect(canvas.calls.indexOf('fillStyle:#00aa66')).toBeLessThan(canvas.calls.indexOf('fillStyle:#cfe3ff'))
+    expect(canvas.calls.indexOf('fillStyle:#cfe3ff')).toBeLessThan(canvas.calls.indexOf('fillText:背景色,72,110'))
+  })
+
+  it('在选区之下绘制批注范围高亮，并过滤非当前页矩形', () => {
+    const canvas = createMockCanvas()
+    const page = createPageLayout(0, '批注文本') satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page,
+      commentRects: [
+        {
+          pageIndex: 0,
+          x: cssPxToTwips(72),
+          y: cssPxToTwips(96),
+          width: cssPxToTwips(60),
+          height: cssPxToTwips(18)
+        },
+        {
+          pageIndex: 1,
+          x: cssPxToTwips(72),
+          y: cssPxToTwips(916),
+          width: cssPxToTwips(60),
+          height: cssPxToTwips(18)
+        }
+      ],
+      selectionRects: [
+        {
+          pageIndex: 0,
+          x: cssPxToTwips(84),
+          y: cssPxToTwips(96),
+          width: cssPxToTwips(36),
+          height: cssPxToTwips(18)
+        }
+      ]
+    })
+
+    expect(canvas.calls).toContain('fillStyle:#fff3bf')
+    expect(canvas.calls).toContain('fillRect:72,96,60,18')
+    expect(canvas.calls).not.toContain('fillRect:72,916,60,18')
+    expect(canvas.calls.indexOf('fillStyle:#fff3bf')).toBeLessThan(canvas.calls.indexOf('fillStyle:#cfe3ff'))
+    expect(canvas.calls.indexOf('fillStyle:#cfe3ff')).toBeLessThan(canvas.calls.indexOf('fillText:批注文本,72,110'))
+  })
+
+  it('绘制 experimental 插件装饰且不把装饰画到错误页面', () => {
+    const canvas = createMockCanvas()
+    const page = createPageLayout(0, '插件装饰') satisfies LayoutBox
+
+    renderPageCanvas({
+      canvas,
+      page,
+      experimentalDecorations: [
+        {
+          kind: 'textHighlight',
+          pluginName: 'review.decorations',
+          providerName: 'highlights',
+          id: 'range-1',
+          pageIndex: 0,
+          rects: [{
+            pageIndex: 0,
+            x: cssPxToTwips(72),
+            y: cssPxToTwips(96),
+            width: cssPxToTwips(48),
+            height: cssPxToTwips(18)
+          }],
+          color: '#fde68a'
+        },
+        {
+          kind: 'pageOverlay',
+          pluginName: 'review.decorations',
+          providerName: 'markers',
+          id: 'marker-1',
+          pageIndex: 0,
+          rect: {
+            pageIndex: 0,
+            x: cssPxToTwips(180),
+            y: cssPxToTwips(120),
+            width: cssPxToTwips(60),
+            height: cssPxToTwips(18)
+          },
+          color: '#bfdbfe',
+          label: '审阅'
+        },
+        {
+          kind: 'pageOverlay',
+          pluginName: 'review.decorations',
+          providerName: 'markers',
+          id: 'marker-2',
+          pageIndex: 1,
+          rect: {
+            pageIndex: 1,
+            x: cssPxToTwips(180),
+            y: cssPxToTwips(940),
+            width: cssPxToTwips(60),
+            height: cssPxToTwips(18)
+          }
+        }
+      ]
+    })
+
+    expect(canvas.calls).toContain('fillStyle:#fde68a')
+    expect(canvas.calls).toContain('fillRect:72,96,48,18')
+    expect(canvas.calls.indexOf('fillStyle:#fde68a')).toBeLessThan(canvas.calls.indexOf('fillText:插件装饰,72,110'))
+    expect(canvas.calls).toContain('fillStyle:#bfdbfe')
+    expect(canvas.calls).toContain('fillRect:180,120,60,18')
+    expect(canvas.calls.some((call) => call.startsWith('fillText:审阅,'))).toBe(true)
+    expect(canvas.calls).not.toContain('fillRect:180,940,60,18')
   })
 
   it('在高 DPR 屏幕上放大 backing store，但保持页面 CSS 尺寸不变', () => {
@@ -357,6 +463,31 @@ describe('syncPageCanvases', () => {
 
     expect(third.get(1)).toBe(pageOneCanvas)
     expect(third.get(2)).toBe(pageZeroCanvas)
+  })
+
+  it('向页面渲染透传批注矩形', () => {
+    const pool = createCanvasPool({
+      createCanvas: () => createMockCanvas()
+    })
+    const pages = [createPageLayout(0, '批注页') satisfies LayoutBox]
+    const result = syncPageCanvases({
+      pages,
+      retainedPageIndexes: [0],
+      canvases: new Map(),
+      pool,
+      commentRects: [
+        {
+          pageIndex: 0,
+          x: cssPxToTwips(72),
+          y: cssPxToTwips(96),
+          width: cssPxToTwips(60),
+          height: cssPxToTwips(18)
+        }
+      ]
+    })
+
+    expect((result.get(0) as MockCanvas | undefined)?.calls).toContain('fillStyle:#fff3bf')
+    expect((result.get(0) as MockCanvas | undefined)?.calls).toContain('fillRect:72,96,60,18')
   })
 })
 
@@ -637,7 +768,8 @@ function createHeaderFooterPageLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(20),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(32)
       },
       {
         kind: 'headerFooter',
@@ -649,7 +781,8 @@ function createHeaderFooterPageLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(760),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(772)
       }
     ]
   }
@@ -675,7 +808,8 @@ function createHeaderFooterPageNumberLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(20),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(32)
       },
       {
         kind: 'headerFooter',
@@ -687,7 +821,8 @@ function createHeaderFooterPageNumberLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(20),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(32)
       },
       {
         kind: 'headerFooter',
@@ -699,7 +834,8 @@ function createHeaderFooterPageNumberLayout(): LayoutBox {
         x: cssPxToTwips(72),
         y: cssPxToTwips(760),
         width: cssPxToTwips(456),
-        height: cssPxToTwips(20)
+        height: cssPxToTwips(20),
+        baseline: cssPxToTwips(772)
       }
     ]
   }

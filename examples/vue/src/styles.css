@@ -1,0 +1,45 @@
+.jword-vue-example {
+  min-height: 100vh;
+  padding: 24px;
+  color: #172033;
+  background: #f6f8fb;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.jword-vue-example h1 {
+  margin: 0 0 16px;
+  font-size: 28px;
+}
+
+.jword-vue-example__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0 0 16px;
+}
+
+.jword-vue-example__controls button,
+.jword-vue-example__controls output {
+  margin: 0 12px 12px 0;
+}
+
+.jword-vue-example__controls button {
+  border: 1px solid #16a34a;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #fff;
+  background: #16a34a;
+  cursor: pointer;
+}
+
+.jword-vue-example__controls output {
+  min-width: 88px;
+  color: #334155;
+}
+
+.jword-vue-example__editor {
+  border: 1px solid #d7deea;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 8%);
+}

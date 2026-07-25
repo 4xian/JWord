@@ -3,7 +3,7 @@
  * 边界：只读取 document、section、paragraph、run、table 的最小结构，不写状态、不做布局、渲染、输入或导入导出。
  * 协作模块：layout、render、docx、pdf 后续只消费这里产出的只读快照，不直接读写 Y.Doc。
  * 性能/安全约束：当前实现是完整快照派生，不访问 DOM，不缓存可写 Yjs 容器引用。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#32-状态真源。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import * as Y from 'yjs'
@@ -61,6 +61,18 @@ export interface DocumentProjection {
 }
 
 /**
+ * 投影增量刷新时的脏范围。
+ *
+ * @remarks
+ * `blockIds` 使用顶层 block id；表格单元格内段落变化时由调用方折算到外层 table id。
+ */
+export interface ProjectionDirtyScope {
+  readonly document?: boolean
+  readonly sectionIds?: readonly string[]
+  readonly blockIds?: readonly string[]
+}
+
+/**
  * 从 DocumentStore 或 Y.Doc 派生只读投影。
  *
  * @param input 文档状态壳或 Y.Doc。
@@ -68,6 +80,77 @@ export interface DocumentProjection {
  */
 export function createDocumentProjection(input: DocumentStore | Y.Doc): DocumentProjection {
   const store = input instanceof Y.Doc ? createDocumentStore(input) : input
+
+  return createFullDocumentProjection(store)
+}
+
+/**
+ * 基于上一版 projection 和脏范围，只重建受影响的 section/block。
+ *
+ * @param input 文档状态壳或 Y.Doc。
+ * @param previous 上一次事务后的只读投影。
+ * @param dirty 本次事务命中的顶层脏范围。
+ * @returns 复用未变节点后的只读投影。
+ */
+export function createIncrementalDocumentProjection(
+  input: DocumentStore | Y.Doc,
+  previous: DocumentProjection,
+  dirty: ProjectionDirtyScope
+): DocumentProjection {
+  if (dirty.document === true) {
+    return createDocumentProjection(input)
+  }
+
+  const dirtySectionIds = new Set(dirty.sectionIds ?? [])
+  const dirtyBlockIds = new Set(dirty.blockIds ?? [])
+
+  if (dirtySectionIds.size === 0 && dirtyBlockIds.size === 0) {
+    return previous
+  }
+
+  const store = input instanceof Y.Doc ? createDocumentStore(input) : input
+  const previousSectionsById = new Map(previous.document.sections.map((section) => [section.id, section]))
+  let changed = false
+  const sections = store.sections.toArray().map((section) => {
+    const sectionId = readString(section.get(DOCUMENT_STORE_FIELDS.section.id), 'section')
+    const previousSection = previousSectionsById.get(sectionId)
+
+    if (previousSection === undefined) {
+      changed = true
+
+      return projectSection(section)
+    }
+
+    const nextSection = projectSectionIncrementally(
+      section,
+      previousSection,
+      dirtySectionIds.has(sectionId),
+      dirtyBlockIds
+    )
+
+    if (nextSection !== previousSection) {
+      changed = true
+    }
+
+    return nextSection
+  })
+
+  if (!changed && sections.length === previous.document.sections.length) {
+    return previous
+  }
+
+  const document: Document = {
+    ...previous.document,
+    sections: deepFreezeArray(sections)
+  }
+
+  return deepFreeze({
+    document: deepFreeze(document)
+  })
+}
+
+/** 完整派生当前文档投影。 */
+function createFullDocumentProjection(store: DocumentStore): DocumentProjection {
   const documentId = readString(
     store.document.get(DOCUMENT_STORE_FIELDS.document.id),
     'document'
@@ -96,6 +179,46 @@ export function createDocumentProjection(input: DocumentStore | Y.Doc): Document
 }
 
 function projectSection(section: SectionRecord): Section {
+  return deepFreeze({
+    ...projectSectionMetadata(section),
+    blocks: deepFreezeArray(getSectionBlocks(section).toArray().map(projectBlock))
+  })
+}
+
+/** 只重建脏 block，未命中的 block 直接复用上一版冻结快照。 */
+function projectSectionIncrementally(
+  section: SectionRecord,
+  previous: Section,
+  forceSectionRefresh: boolean,
+  dirtyBlockIds: ReadonlySet<string>
+): Section {
+  const previousBlocksById = new Map(previous.blocks.map((block) => [block.id, block]))
+  let changed = forceSectionRefresh
+  const blocks = getSectionBlocks(section).toArray().map((block) => {
+    const blockId = readString(block.get(DOCUMENT_STORE_FIELDS.block.id), 'block')
+    const previousBlock = previousBlocksById.get(blockId)
+
+    if (previousBlock === undefined || dirtyBlockIds.has(blockId)) {
+      changed = true
+
+      return projectBlock(block)
+    }
+
+    return previousBlock
+  })
+
+  if (!changed && blocks.length === previous.blocks.length) {
+    return previous
+  }
+
+  return deepFreeze({
+    ...projectSectionMetadata(section),
+    blocks: deepFreezeArray(blocks)
+  })
+}
+
+/** 投影 section 自身元数据，不读取块树。 */
+function projectSectionMetadata(section: SectionRecord): Omit<Section, 'blocks'> {
   const properties = section.get(DOCUMENT_STORE_FIELDS.section.properties) as Y.Map<unknown> | undefined
   const page = projectSectionPage(properties?.get('page'))
   const columns = readOptionalNumber(properties?.get('columns'))
@@ -105,7 +228,7 @@ function projectSection(section: SectionRecord): Section {
   const headerIds = projectStringList(section.get(DOCUMENT_STORE_FIELDS.section.headerIds))
   const footerIds = projectStringList(section.get(DOCUMENT_STORE_FIELDS.section.footerIds))
 
-  return deepFreeze({
+  return {
     kind: 'section',
     id: readString(section.get(DOCUMENT_STORE_FIELDS.section.id), 'section'),
     ...(breakType === undefined ? {} : { breakType }),
@@ -114,9 +237,8 @@ function projectSection(section: SectionRecord): Section {
     ...(headerIds === undefined ? {} : { headerIds }),
     ...(footerIds === undefined ? {} : { footerIds }),
     ...(headerFooterSameAsPrevious === undefined ? {} : { headerFooterSameAsPrevious }),
-    ...(pageNumbering === undefined ? {} : { pageNumbering }),
-    blocks: deepFreezeArray(getSectionBlocks(section).toArray().map(projectBlock))
-  })
+    ...(pageNumbering === undefined ? {} : { pageNumbering })
+  }
 }
 
 function projectBlock(block: BlockRecord): Block {

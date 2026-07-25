@@ -3,7 +3,7 @@
  * 边界：只读取 projection 并创建 RangeRef 快照，不访问 DOM、不滚动页面、不写文档状态。
  * 协作模块：Editor facade 提供 projection、TextAnchor 和 RangeRef 快照能力。
  * 性能/安全约束：保持轻量同步遍历，不缓存 projection 副本，目录目标不用字符 offset 持久化。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createSelectionState } from '../model/selection'

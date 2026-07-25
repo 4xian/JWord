@@ -1,0 +1,975 @@
+/**
+ * 职责：生成 Gate 5 第一版 DOCX Transitional OPC package。
+ * 边界：只写 package graph、T1 文本/段落/run 格式、列表、基础表格和 inline data URL 图片。
+ * 协作模块：index.ts 的 exportDocx 入口、inspectDocxPackage 和后续 roundtrip diff 复用本模块输出。
+ * 性能/安全约束：不访问 DOM，不读取磁盘，不引入 Node-only API，media 只消费 projection 中已内联的 data URL。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
+ */
+
+import type {
+  Block,
+  DocumentProjection,
+  ImageInline,
+  Paragraph,
+  Resource,
+  Run,
+  Section,
+  TableBorder
+} from '@4xian/jword-core'
+import { assertJWordFeatureEntitled } from '@4xian/jword-license'
+import JSZip from 'jszip'
+
+import {
+  escapeXmlAttribute,
+  escapeXmlText,
+  readBooleanProperty,
+  readNumberProperty,
+  readPositiveTwips,
+  readStringProperty,
+  splitTextInlineXml,
+  twipsToEmu,
+  writeAppPropertiesXml,
+  writeCorePropertiesXml,
+  writeNumberingXml,
+  writeStylesXml
+} from './export-utils.js'
+import { writeTableXml } from './export-table.js'
+import type {
+  DocxOpaquePreservation,
+  DocxOpaqueUnsupportedPart,
+  DocxOpaqueUnsupportedRelationship,
+  DocxWarning,
+  ExportDocxOptions,
+  ExportDocxResult
+} from './types.js'
+
+const PACKAGE_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships'
+const CONTENT_TYPES_NS = 'http://schemas.openxmlformats.org/package/2006/content-types'
+const CORE_PROPERTIES_REL = 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties'
+const OFFICE_REL_BASE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+const OFFICE_DOCUMENT_REL = `${OFFICE_REL_BASE}/officeDocument`
+const EXTENDED_PROPERTIES_REL = `${OFFICE_REL_BASE}/extended-properties`
+const STYLES_REL = `${OFFICE_REL_BASE}/styles`
+const NUMBERING_REL = `${OFFICE_REL_BASE}/numbering`
+const IMAGE_REL = `${OFFICE_REL_BASE}/image`
+const HYPERLINK_REL = `${OFFICE_REL_BASE}/hyperlink`
+const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+const WORD_DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
+const DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+const PICTURE_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture'
+const DOCX_ZIP_ENTRY_DATE = new Date('1980-01-01T00:00:00Z')
+
+interface ExportMediaItem {
+  readonly resourceId: string
+  readonly sequence: number
+  readonly relationshipId: string
+  readonly part: string
+  readonly target: string
+  readonly mimeType: string
+  readonly extension: string
+  readonly bytes: Uint8Array
+}
+
+interface ExportNumberingDefinition {
+  readonly numberingId: string
+  readonly abstractNumberingId: string
+  readonly maxLevel: number
+}
+
+interface ExportHyperlinkItem {
+  readonly target: string
+  readonly relationshipId: string
+}
+
+interface ExportParagraphNumbering {
+  readonly numberingId: string
+  readonly level: number
+}
+
+interface ExportContext {
+  readonly mediaByResourceId: ReadonlyMap<string, ExportMediaItem>
+  readonly hyperlinksByTarget: ReadonlyMap<string, ExportHyperlinkItem>
+  readonly numberingDefinitions: readonly ExportNumberingDefinition[]
+  readonly characterStyleIds: readonly string[]
+  readonly opaqueParts: readonly DocxOpaqueUnsupportedPart[]
+  readonly opaqueRelationships: readonly DocxOpaqueUnsupportedRelationship[]
+  readonly warnings: readonly DocxWarning[]
+}
+
+/** 构建最小 DOCX package 并返回二进制。 */
+export async function buildExportDocxPackage(
+  projection: DocumentProjection,
+  options: ExportDocxOptions
+): Promise<ExportDocxResult> {
+  assertExportNotCancelled(options)
+  assertJWordFeatureEntitled(options.license, 'docx.export')
+
+  const zip = new JSZip()
+  const mediaItems = collectExportMediaItems(projection.document.resources ?? [])
+  const context = createExportContext(projection, mediaItems, options.opaque)
+
+  assertExportNotCancelled(options)
+
+  writeZipFile(zip, '[Content_Types].xml', writeContentTypesXml(mediaItems, context.opaqueParts))
+  writeZipFile(zip, '_rels/.rels', writeRootRelationshipsXml())
+  writeZipFile(zip, 'docProps/core.xml', writeCorePropertiesXml())
+  writeZipFile(zip, 'docProps/app.xml', writeAppPropertiesXml())
+  writeZipFile(zip, 'word/document.xml', writeDocumentXml(projection, context))
+  writeZipFile(zip, 'word/_rels/document.xml.rels', writeDocumentRelationshipsXml(mediaItems, context))
+  writeZipFile(zip, 'word/styles.xml', writeStylesXml(context.characterStyleIds))
+  writeZipFile(zip, 'word/numbering.xml', writeNumberingXml(context.numberingDefinitions))
+
+  for (const item of mediaItems) {
+    assertExportNotCancelled(options)
+
+    writeZipFile(zip, item.part, item.bytes)
+  }
+
+  for (const part of context.opaqueParts) {
+    assertExportNotCancelled(options)
+
+    writeZipFile(zip, part.part, readOpaquePartContent(part))
+  }
+
+  assertExportNotCancelled(options)
+
+  const bytes = await zip.generateAsync({ type: 'arraybuffer' })
+  const warnings = [
+    ...collectExportUnsupportedWarnings(projection),
+    ...context.warnings
+  ]
+
+  assertExportNotCancelled(options)
+
+  return {
+    bytes,
+    warnings,
+    diagnostics: {
+      ...(options.requestId === undefined ? {} : { requestId: options.requestId }),
+      mainDocumentPart: 'word/document.xml'
+    }
+  }
+}
+
+/** 写入固定元数据的 ZIP entry，避免相同投影导出出不同哈希。 */
+function writeZipFile(zip: JSZip, path: string, data: string | Uint8Array): void {
+  zip.file(path, data, {
+    date: DOCX_ZIP_ENTRY_DATE,
+    createFolders: false
+  })
+}
+
+/** 检查 DOCX 导出任务是否已被取消。 */
+function assertExportNotCancelled(options: ExportDocxOptions): void {
+  if (options.signal?.aborted !== true) {
+    return
+  }
+
+  throw createDocxExportCancelledError(options.requestId)
+}
+
+/** 创建 DOCX 导出取消错误。 */
+function createDocxExportCancelledError(requestId?: string): Error & {
+  readonly name: 'DocxUnsupportedError'
+  readonly code: 'DOCX_USER_CANCELLED'
+  readonly requestId?: string
+} {
+  const error = new Error('用户取消') as Error & {
+    name: 'DocxUnsupportedError'
+    code: 'DOCX_USER_CANCELLED'
+    requestId?: string
+  }
+
+  error.name = 'DocxUnsupportedError'
+  error.code = 'DOCX_USER_CANCELLED'
+
+  if (requestId !== undefined) {
+    error.requestId = requestId
+  }
+
+  return error
+}
+
+/** 创建正文写入时共享的导出上下文。 */
+function createExportContext(
+  projection: DocumentProjection,
+  mediaItems: readonly ExportMediaItem[],
+  opaque: DocxOpaquePreservation | undefined
+): ExportContext {
+  const opaqueParts = readSafeOpaqueParts(opaque)
+
+  return {
+    mediaByResourceId: new Map(mediaItems.map((item) => [item.resourceId, item])),
+    hyperlinksByTarget: collectExportHyperlinksByTarget(projection),
+    numberingDefinitions: collectExportNumberingDefinitions(projection),
+    characterStyleIds: collectExportCharacterStyleIds(projection),
+    opaqueParts,
+    opaqueRelationships: readSafeOpaqueRelationships(opaque, opaqueParts),
+    warnings: collectOpaquePreserveSkippedWarnings(opaque)
+  }
+}
+
+/** 读取编辑后仍可安全原样写回的 opaque part。 */
+function readSafeOpaqueParts(
+  opaque: DocxOpaquePreservation | undefined
+): readonly DocxOpaqueUnsupportedPart[] {
+  return opaque?.unsupportedParts.filter((part) => part.unsafeToPreserveAfterEdit === false) ?? []
+}
+
+/** 读取目标 part 也会写回的安全 opaque relationship。 */
+function readSafeOpaqueRelationships(
+  opaque: DocxOpaquePreservation | undefined,
+  opaqueParts: readonly DocxOpaqueUnsupportedPart[]
+): readonly DocxOpaqueUnsupportedRelationship[] {
+  const preservedParts = new Set(opaqueParts.map((part) => part.part))
+
+  return opaque?.unsupportedRelationships.filter((relationship) =>
+    relationship.unsafeToPreserveAfterEdit === false &&
+    relationship.sourcePart === 'word/document.xml' &&
+    (relationship.targetMode === 'External' || preservedParts.has(relationship.target))
+  ) ?? []
+}
+
+/** 为被跳过的 unsafe opaque 记录生成导出 warning。 */
+function collectOpaquePreserveSkippedWarnings(
+  opaque: DocxOpaquePreservation | undefined
+): readonly DocxWarning[] {
+  if (opaque === undefined) {
+    return []
+  }
+
+  return [
+    ...opaque.unsupportedParts.flatMap((part) => part.unsafeToPreserveAfterEdit
+      ? [{
+        code: 'DOCX_OPAQUE_PART_PRESERVE_SKIPPED' as const,
+        severity: 'warning' as const,
+        part: part.part,
+        message: `DOCX opaque part was not preserved after edit: ${part.part}`,
+        fallback: 'omit-unsafe-opaque-part',
+        recoverable: true
+      }]
+      : []
+    ),
+    ...opaque.unsupportedRelationships.flatMap((relationship) => relationship.unsafeToPreserveAfterEdit
+      ? [{
+        code: 'DOCX_OPAQUE_RELATIONSHIP_PRESERVE_SKIPPED' as const,
+        severity: 'warning' as const,
+        part: relationship.sourcePart,
+        path: relationship.id,
+        message: `DOCX opaque relationship was not preserved after edit: ${relationship.id}`,
+        fallback: 'omit-unsafe-opaque-relationship',
+        recoverable: true
+      }]
+      : []
+    )
+  ]
+}
+
+/** 收集当前导出器会省略的 T2 metadata warning。 */
+function collectExportUnsupportedWarnings(projection: DocumentProjection): readonly DocxWarning[] {
+  const warnings: DocxWarning[] = []
+
+  if (projection.document.sections.some(hasHeaderFooterExportMetadata)) {
+    warnings.push({
+      code: 'DOCX_HEADER_FOOTER_EXPORT_UNSUPPORTED',
+      severity: 'warning',
+      part: 'word/document.xml',
+      path: 'document.sections.header-footer',
+      message: 'DOCX export does not write header/footer content yet',
+      fallback: 'omit-header-footer',
+      recoverable: true
+    })
+  }
+
+  if (projection.document.sections.some((section) => section.pageNumbering !== undefined)) {
+    warnings.push({
+      code: 'DOCX_PAGE_NUMBERING_EXPORT_UNSUPPORTED',
+      severity: 'warning',
+      part: 'word/document.xml',
+      path: 'document.sections.page-numbering',
+      message: 'DOCX export does not write section page numbering yet',
+      fallback: 'omit-page-numbering',
+      recoverable: true
+    })
+  }
+
+  if ((projection.document.comments?.length ?? 0) > 0) {
+    warnings.push({
+      code: 'DOCX_COMMENTS_EXPORT_UNSUPPORTED',
+      severity: 'warning',
+      part: 'word/document.xml',
+      path: 'document.comments',
+      message: 'DOCX export does not write comments yet',
+      fallback: 'omit-comments',
+      recoverable: true
+    })
+  }
+
+  if ((projection.document.revisions?.length ?? 0) > 0) {
+    warnings.push({
+      code: 'DOCX_REVISIONS_EXPORT_UNSUPPORTED',
+      severity: 'warning',
+      part: 'word/document.xml',
+      path: 'document.revisions',
+      message: 'DOCX export does not write revision metadata yet',
+      fallback: 'omit-revisions',
+      recoverable: true
+    })
+  }
+
+  return [
+    ...warnings,
+    ...collectUnsupportedImageExportWarnings(projection)
+  ]
+}
+
+/** 收集正文图片导出时会因不支持 MIME 而省略的 warning。 */
+function collectUnsupportedImageExportWarnings(projection: DocumentProjection): readonly DocxWarning[] {
+  const resourcesById = new Map((projection.document.resources ?? []).map((resource) => [resource.id, resource]))
+  const warnedResourceIds = new Set<string>()
+  const warnings: DocxWarning[] = []
+
+  for (const image of readExportImageInlines(projection)) {
+    if (warnedResourceIds.has(image.resourceId)) {
+      continue
+    }
+
+    const resource = resourcesById.get(image.resourceId)
+    if (resource === undefined || readImageExtension(resource.mime) !== undefined) {
+      continue
+    }
+
+    warnedResourceIds.add(image.resourceId)
+    warnings.push({
+      code: 'DOCX_IMAGE_EXPORT_MIME_UNSUPPORTED',
+      severity: 'warning',
+      part: 'word/document.xml',
+      path: `resource:${resource.id}`,
+      message: `DOCX export does not support image MIME type: ${resource.mime}`,
+      fallback: 'omit-image',
+      recoverable: true
+    })
+  }
+
+  return warnings
+}
+
+/** 读取导出正文中所有 inline image。 */
+function readExportImageInlines(projection: DocumentProjection): readonly ImageInline[] {
+  return projection.document.sections.flatMap((section) =>
+    section.blocks.flatMap(readBlockParagraphs).flatMap((paragraph) =>
+      paragraph.runs.flatMap((run) => run.inlines.filter((inline): inline is ImageInline => inline.kind === 'image'))
+    )
+  )
+}
+
+/** 判断 section 是否包含当前 DOCX export 尚未写出的页眉页脚 metadata。 */
+function hasHeaderFooterExportMetadata(section: Section): boolean {
+  return (section.headerIds?.length ?? 0) > 0 ||
+    (section.footerIds?.length ?? 0) > 0 ||
+    section.headerFooterSameAsPrevious !== undefined
+}
+
+/** 收集正文中出现的 external hyperlink 目标。 */
+function collectExportHyperlinksByTarget(projection: DocumentProjection): ReadonlyMap<string, ExportHyperlinkItem> {
+  const hyperlinks = new Map<string, ExportHyperlinkItem>()
+
+  for (const paragraph of projection.document.sections.flatMap((section) =>
+    section.blocks.flatMap(readBlockParagraphs)
+  )) {
+    for (const run of paragraph.runs) {
+      const target = run.link?.target
+
+      if (target === undefined || target.length === 0 || hyperlinks.has(target)) {
+        continue
+      }
+
+      hyperlinks.set(target, {
+        target,
+        relationshipId: `rIdHyperlink${hyperlinks.size + 1}`
+      })
+    }
+  }
+
+  return hyperlinks
+}
+
+/** 读取 projection 里可直接写入 package 的 data URL 图片资源。 */
+function collectExportMediaItems(resources: readonly Resource[]): readonly ExportMediaItem[] {
+  const items: ExportMediaItem[] = []
+
+  for (const resource of resources) {
+    const extension = readImageExtension(resource.mime)
+    if (resource.status !== 'success' || resource.source.kind !== 'dataUrl' || extension === undefined) {
+      continue
+    }
+
+    const sequence = items.length + 1
+    const part = `word/media/image${sequence}.${extension}`
+
+    items.push({
+      resourceId: resource.id,
+      sequence,
+      relationshipId: `rIdImage${sequence}`,
+      part,
+      target: `media/image${sequence}.${extension}`,
+      mimeType: resource.mime,
+      extension,
+      bytes: readDataUrlBytes(resource.source.url)
+    })
+  }
+
+  return items
+}
+
+/** 收集文档中出现过的列表定义。 */
+function collectExportNumberingDefinitions(projection: DocumentProjection): readonly ExportNumberingDefinition[] {
+  const definitions = new Map<string, ExportNumberingDefinition>()
+
+  for (const paragraph of projection.document.sections.flatMap((section) =>
+    section.blocks.flatMap(readBlockParagraphs)
+  )) {
+    const numbering = readParagraphNumbering(paragraph)
+
+    if (numbering === undefined) {
+      continue
+    }
+
+    const existing = definitions.get(numbering.numberingId)
+    definitions.set(numbering.numberingId, {
+      numberingId: numbering.numberingId,
+      abstractNumberingId: existing?.abstractNumberingId ?? String(definitions.size + 1),
+      maxLevel: Math.max(existing?.maxLevel ?? 0, numbering.level)
+    })
+  }
+
+  return [...definitions.values()]
+}
+
+/** 收集导出正文中直接引用的 character style。 */
+function collectExportCharacterStyleIds(projection: DocumentProjection): readonly string[] {
+  const styleIds = new Set<string>()
+
+  for (const paragraph of projection.document.sections.flatMap((section) =>
+    section.blocks.flatMap(readBlockParagraphs)
+  )) {
+    for (const run of paragraph.runs) {
+      const styleId = readStringProperty(run.properties, 'styleId')
+
+      if (styleId !== undefined && styleId.length > 0) {
+        styleIds.add(styleId)
+      }
+    }
+  }
+
+  return [...styleIds]
+}
+
+/** 读取 image MIME 对应的 DOCX media 扩展名。 */
+function readImageExtension(mimeType: string): string | undefined {
+  if (mimeType === 'image/png') {
+    return 'png'
+  }
+
+  if (mimeType === 'image/jpeg') {
+    return 'jpg'
+  }
+
+  return undefined
+}
+
+/** 从 base64 data URL 读取二进制。 */
+function readDataUrlBytes(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl
+  const binary = globalThis.atob(base64)
+  const bytes = new Uint8Array(binary.length)
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+
+  return bytes
+}
+
+/** 读取 safe opaque part 的原始内容。 */
+function readOpaquePartContent(part: DocxOpaqueUnsupportedPart): string | Uint8Array {
+  if (part.text !== undefined) {
+    return part.text
+  }
+
+  return new Uint8Array(part.bytes ?? [])
+}
+
+/** 写 OPC content types。 */
+function writeContentTypesXml(
+  mediaItems: readonly ExportMediaItem[],
+  opaqueParts: readonly DocxOpaqueUnsupportedPart[]
+): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    `<Types xmlns="${CONTENT_TYPES_NS}">`,
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+    '<Default Extension="xml" ContentType="application/xml"/>',
+    '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
+    '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>',
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>',
+    '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
+    '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>',
+    ...mediaItems.map((item) => `<Override PartName="/${item.part}" ContentType="${escapeXmlAttribute(item.mimeType)}"/>`),
+    ...opaqueParts.flatMap(writeOpaquePartContentTypeXml),
+    '</Types>'
+  ].join('')
+}
+
+/** 写 safe opaque part 的 content type override。 */
+function writeOpaquePartContentTypeXml(part: DocxOpaqueUnsupportedPart): readonly string[] {
+  return part.contentType === undefined
+    ? []
+    : [`<Override PartName="/${escapeXmlAttribute(part.part)}" ContentType="${escapeXmlAttribute(part.contentType)}"/>`]
+}
+
+/** 写 package 根 relationships。 */
+function writeRootRelationshipsXml(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    `<Relationships xmlns="${PACKAGE_REL_NS}">`,
+    `<Relationship Id="rIdOfficeDocument" Type="${OFFICE_DOCUMENT_REL}" Target="word/document.xml"/>`,
+    `<Relationship Id="rIdCoreProperties" Type="${CORE_PROPERTIES_REL}" Target="docProps/core.xml"/>`,
+    `<Relationship Id="rIdExtendedProperties" Type="${EXTENDED_PROPERTIES_REL}" Target="docProps/app.xml"/>`,
+    '</Relationships>'
+  ].join('')
+}
+
+/** 写主文档 relationships。 */
+function writeDocumentRelationshipsXml(
+  mediaItems: readonly ExportMediaItem[],
+  context: ExportContext
+): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    `<Relationships xmlns="${PACKAGE_REL_NS}">`,
+    `<Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/>`,
+    `<Relationship Id="rIdNumbering" Type="${NUMBERING_REL}" Target="numbering.xml"/>`,
+    ...mediaItems.map((item) => `<Relationship Id="${item.relationshipId}" Type="${IMAGE_REL}" Target="${item.target}"/>`),
+    ...[...context.hyperlinksByTarget.values()].map((item) =>
+      `<Relationship Id="${item.relationshipId}" Type="${HYPERLINK_REL}" Target="${escapeXmlAttribute(item.target)}" TargetMode="External"/>`
+    ),
+    ...context.opaqueRelationships.map(writeOpaqueRelationshipXml),
+    '</Relationships>'
+  ].join('')
+}
+
+/** 写 safe opaque relationship。 */
+function writeOpaqueRelationshipXml(relationship: DocxOpaqueUnsupportedRelationship): string {
+  return [
+    `<Relationship Id="${escapeXmlAttribute(relationship.id)}"`,
+    ` Type="${escapeXmlAttribute(relationship.type ?? `${OFFICE_REL_BASE}/${relationship.kind}`)}"`,
+    ` Target="${escapeXmlAttribute(readDocumentRelationshipTarget(relationship))}"`,
+    relationship.targetMode === undefined ? '' : ` TargetMode="${escapeXmlAttribute(relationship.targetMode)}"`,
+    '/>'
+  ].join('')
+}
+
+/** 把 package part 路径转换成 word/document.xml.rels 中的 Target。 */
+function readDocumentRelationshipTarget(relationship: DocxOpaqueUnsupportedRelationship): string {
+  if (relationship.targetMode === 'External') {
+    return relationship.target
+  }
+
+  return relationship.target.startsWith('word/')
+    ? relationship.target.slice('word/'.length)
+    : `../${relationship.target}`
+}
+
+/** 写正文 XML。 */
+function writeDocumentXml(projection: DocumentProjection, context: ExportContext): string {
+  const sections = projection.document.sections
+  const bodyXml = sections.length === 0
+    ? '<w:p/>'
+    : sections.map((section, index) => writeSectionBodyXml(
+      section,
+      context,
+      index === sections.length - 1
+    )).join('')
+  const sectionPropertiesXml = writeSectionPropertiesXml(
+    sections[sections.length - 1]
+  )
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    `<w:document xmlns:w="${WORD_NS}" xmlns:r="${REL_NS}">`,
+    `<w:body>${bodyXml}${sectionPropertiesXml}</w:body>`,
+    '</w:document>'
+  ].join('')
+}
+
+/** 写单个 section 的正文块，非末节把分节属性写入本节结束段落。 */
+function writeSectionBodyXml(section: Section, context: ExportContext, isLastSection: boolean): string {
+  if (isLastSection) {
+    return section.blocks.length === 0
+      ? '<w:p/>'
+      : section.blocks.map((block) => writeBlockXml(block, context)).join('')
+  }
+
+  const sectionPropertiesXml = writeSectionPropertiesXml(section)
+
+  if (section.blocks.length === 0) {
+    return writeSectionBreakParagraphXml(sectionPropertiesXml)
+  }
+
+  return section.blocks.map((block, index) => {
+    if (index !== section.blocks.length - 1) {
+      return writeBlockXml(block, context)
+    }
+
+    return writeSectionEndingBlockXml(block, context, sectionPropertiesXml)
+  }).join('')
+}
+
+/** 写带分节符的 section 末尾块。 */
+function writeSectionEndingBlockXml(
+  block: Block,
+  context: ExportContext,
+  sectionPropertiesXml: string
+): string {
+  if (block.kind === 'paragraph') {
+    return writeParagraphXml(block, context, sectionPropertiesXml)
+  }
+
+  return `${writeBlockXml(block, context)}${writeSectionBreakParagraphXml(sectionPropertiesXml)}`
+}
+
+/** 写只有分节属性的空段落。 */
+function writeSectionBreakParagraphXml(sectionPropertiesXml: string): string {
+  return `<w:p><w:pPr>${sectionPropertiesXml}</w:pPr></w:p>`
+}
+
+/** 写正文末尾 section properties。 */
+function writeSectionPropertiesXml(section: Section | undefined): string {
+  const page = section?.page
+  const children = [
+    writePageSizeXml(page),
+    writePageMarginsXml(page?.marginTwips)
+  ].filter((child) => child.length > 0).join('')
+
+  return children.length === 0 ? '<w:sectPr/>' : `<w:sectPr>${children}</w:sectPr>`
+}
+
+/** 写 section 页面尺寸 XML。 */
+function writePageSizeXml(page: Section['page'] | undefined): string {
+  if (page?.widthTwips === undefined && page?.heightTwips === undefined) {
+    return ''
+  }
+
+  return `<w:pgSz${page.widthTwips === undefined ? '' : ` w:w="${Math.round(page.widthTwips)}"`}${page.heightTwips === undefined ? '' : ` w:h="${Math.round(page.heightTwips)}"`}/>`
+}
+
+/** 写 section 页边距 XML。 */
+function writePageMarginsXml(margins: NonNullable<Section['page']>['marginTwips'] | undefined): string {
+  if (margins === undefined) {
+    return ''
+  }
+
+  return [
+    '<w:pgMar',
+    typeof margins.top === 'number' ? ` w:top="${Math.round(margins.top)}"` : '',
+    typeof margins.right === 'number' ? ` w:right="${Math.round(margins.right)}"` : '',
+    typeof margins.bottom === 'number' ? ` w:bottom="${Math.round(margins.bottom)}"` : '',
+    typeof margins.left === 'number' ? ` w:left="${Math.round(margins.left)}"` : '',
+    '/>'
+  ].join('')
+}
+
+/** 写 block XML。 */
+function writeBlockXml(block: Block, context: ExportContext): string {
+  if (block.kind === 'paragraph') {
+    return writeParagraphXml(block, context)
+  }
+
+  return writeTableXml(block, {
+    writeBlock: (nestedBlock) => writeBlockXml(nestedBlock, context)
+  })
+}
+
+/** 从 block 中递归读取段落，用于列表定义收集。 */
+function readBlockParagraphs(block: Block): readonly Paragraph[] {
+  if (block.kind === 'paragraph') {
+    return [block]
+  }
+
+  return block.rows.flatMap((row) =>
+    row.cells.flatMap((cell) => cell.blocks.flatMap(readBlockParagraphs))
+  )
+}
+
+/** 写段落 XML。 */
+function writeParagraphXml(
+  paragraph: Paragraph,
+  context: ExportContext,
+  sectionPropertiesXml = ''
+): string {
+  const runs = paragraph.runs.length === 0
+    ? '<w:r/>'
+    : paragraph.runs.map((run) => writeRunXml(run, context)).join('')
+
+  return `<w:p>${writeParagraphPropertiesXml(paragraph, sectionPropertiesXml)}${runs}</w:p>`
+}
+
+/** 写 run XML。 */
+function writeRunXml(run: Run, context: ExportContext): string {
+  const inlineXml = run.inlines.flatMap((inline) => readInlineXml(inline, context)).join('')
+  const runXml = `<w:r>${writeRunPropertiesXml(run)}${inlineXml}</w:r>`
+  const hyperlink = run.link === undefined ? undefined : context.hyperlinksByTarget.get(run.link.target)
+
+  return hyperlink === undefined
+    ? runXml
+    : `<w:hyperlink r:id="${hyperlink.relationshipId}">${runXml}</w:hyperlink>`
+}
+
+/** 写段落属性 XML。 */
+function writeParagraphPropertiesXml(paragraph: Paragraph, sectionPropertiesXml = ''): string {
+  const properties = paragraph.properties
+  const children = [
+    paragraph.styleId === undefined ? '' : `<w:pStyle w:val="${escapeXmlAttribute(paragraph.styleId)}"/>`,
+    writeParagraphNumberingXml(paragraph),
+    writeParagraphSpacingXml(paragraph),
+    writeParagraphIndentXml(properties),
+    readStringProperty(properties, 'alignment') === undefined ? '' : `<w:jc w:val="${escapeXmlAttribute(readStringProperty(properties, 'alignment')!)}"/>`,
+    sectionPropertiesXml
+  ].filter((child) => child.length > 0).join('')
+
+  return children.length === 0 ? '' : `<w:pPr>${children}</w:pPr>`
+}
+
+/** 写段落编号 XML。 */
+function writeParagraphNumberingXml(paragraph: Paragraph): string {
+  const numbering = readParagraphNumbering(paragraph)
+
+  if (numbering === undefined) {
+    return ''
+  }
+
+  return [
+    '<w:numPr>',
+    `<w:ilvl w:val="${numbering.level}"/>`,
+    `<w:numId w:val="${escapeXmlAttribute(numbering.numberingId)}"/>`,
+    '</w:numPr>'
+  ].join('')
+}
+
+/** 读取段落编号快照。 */
+function readParagraphNumbering(paragraph: Paragraph): ExportParagraphNumbering | undefined {
+  if (
+    paragraph.list !== undefined &&
+    paragraph.list.numberingId.length > 0 &&
+    Number.isFinite(paragraph.list.level)
+  ) {
+    return {
+      numberingId: paragraph.list.numberingId,
+      level: Math.max(0, Math.round(paragraph.list.level))
+    }
+  }
+
+  const numberingId = readStringProperty(paragraph.properties, 'listNumberingId')
+  const level = readNumberProperty(paragraph.properties, 'listLevel')
+
+  if (numberingId === undefined || numberingId.length === 0 || level === undefined) {
+    return undefined
+  }
+
+  return {
+    numberingId,
+    level: Math.max(0, Math.round(level))
+  }
+}
+
+/** 写段落间距 XML。 */
+function writeParagraphSpacingXml(paragraph: Paragraph): string {
+  const properties = paragraph.properties
+  const before = readNumberProperty(properties, 'spacingBeforeTwips')
+  const after = readNumberProperty(properties, 'spacingAfterTwips')
+  const lineHeight = readParagraphLineHeight(paragraph)
+
+  if (before === undefined && after === undefined && lineHeight === undefined) {
+    return ''
+  }
+
+  return [
+    '<w:spacing',
+    before === undefined ? '' : ` w:before="${before}"`,
+    after === undefined ? '' : ` w:after="${after}"`,
+    lineHeight === undefined ? '' : ` w:line="${Math.round(lineHeight * 240)}" w:lineRule="auto"`,
+    '/>'
+  ].join('')
+}
+
+/** 读取段落内第一份显式行距。 */
+function readParagraphLineHeight(paragraph: Paragraph): number | undefined {
+  for (const run of paragraph.runs) {
+    const lineHeight = readNumberProperty(run.properties, 'lineHeight')
+
+    if (lineHeight !== undefined && lineHeight > 0) {
+      return lineHeight
+    }
+  }
+
+  return undefined
+}
+
+/** 写段落缩进 XML。 */
+function writeParagraphIndentXml(properties: Paragraph['properties']): string {
+  const left = readNumberProperty(properties, 'indentLeftTwips')
+  const firstLine = readNumberProperty(properties, 'firstLineIndentTwips')
+  const hanging = readNumberProperty(properties, 'hangingIndentTwips')
+
+  if (left === undefined && firstLine === undefined && hanging === undefined) {
+    return ''
+  }
+
+  return `<w:ind${left === undefined ? '' : ` w:left="${left}"`}${firstLine === undefined ? '' : ` w:firstLine="${firstLine}"`}${hanging === undefined ? '' : ` w:hanging="${hanging}"`}/>`
+}
+
+/** 写 run 属性 XML。 */
+function writeRunPropertiesXml(run: Run): string {
+  const properties = run.properties
+  const children = [
+    writeRunStyleXml(properties),
+    writeRunFontFamilyXml(properties),
+    readBooleanProperty(properties, 'bold') ? '<w:b/>' : '',
+    readBooleanProperty(properties, 'italic') ? '<w:i/>' : '',
+    readBooleanProperty(properties, 'strike') ? '<w:strike/>' : '',
+    readRunColorXml(properties),
+    writeRunFontSizeXml(properties),
+    readBooleanProperty(properties, 'underline') ? '<w:u w:val="single"/>' : '',
+    writeRunBackgroundColorXml(properties),
+    writeRunVerticalAlignXml(properties)
+  ].filter((child) => child.length > 0).join('')
+
+  return children.length === 0 ? '' : `<w:rPr>${children}</w:rPr>`
+}
+
+/** 写 run character style 引用。 */
+function writeRunStyleXml(properties: Run['properties']): string {
+  const styleId = readStringProperty(properties, 'styleId')
+
+  return styleId === undefined || styleId.length === 0
+    ? ''
+    : `<w:rStyle w:val="${escapeXmlAttribute(styleId)}"/>`
+}
+
+/** 写 run 字体 XML。 */
+function writeRunFontFamilyXml(properties: Run['properties']): string {
+  const fontFamily = readStringProperty(properties, 'fontFamily')
+
+  if (fontFamily === undefined || fontFamily.length === 0) {
+    return ''
+  }
+
+  const value = escapeXmlAttribute(fontFamily)
+
+  return `<w:rFonts w:ascii="${value}" w:hAnsi="${value}" w:eastAsia="${value}" w:cs="${value}"/>`
+}
+
+/** 写 run 字号 XML。 */
+function writeRunFontSizeXml(properties: Run['properties']): string {
+  const fontSizeTwips = readNumberProperty(properties, 'fontSizeTwips')
+
+  if (fontSizeTwips === undefined || fontSizeTwips <= 0) {
+    return ''
+  }
+
+  return `<w:sz w:val="${Math.max(1, Math.round(fontSizeTwips / 10))}"/>`
+}
+
+/** 写 run 文本颜色 XML。 */
+function readRunColorXml(properties: Run['properties']): string {
+  const color = readStringProperty(properties, 'color')
+  const value = color?.startsWith('#') === true ? color.slice(1) : color
+
+  return value === undefined ? '' : `<w:color w:val="${escapeXmlAttribute(value.toUpperCase())}"/>`
+}
+
+/** 写 run 背景色 XML。 */
+function writeRunBackgroundColorXml(properties: Run['properties']): string {
+  const backgroundColor = readStringProperty(properties, 'backgroundColor')
+  const value = backgroundColor?.startsWith('#') === true ? backgroundColor.slice(1) : backgroundColor
+
+  return value === undefined
+    ? ''
+    : `<w:shd w:val="clear" w:color="auto" w:fill="${escapeXmlAttribute(value.toUpperCase())}"/>`
+}
+
+/** 写 run 上下标 XML。 */
+function writeRunVerticalAlignXml(properties: Run['properties']): string {
+  if (readBooleanProperty(properties, 'superscript')) {
+    return '<w:vertAlign w:val="superscript"/>'
+  }
+
+  if (readBooleanProperty(properties, 'subscript')) {
+    return '<w:vertAlign w:val="subscript"/>'
+  }
+
+  return ''
+}
+
+/** 写单个 inline XML。 */
+function readInlineXml(inline: Run['inlines'][number], context: ExportContext): readonly string[] {
+  if (inline.kind === 'text') {
+    return splitTextInlineXml(inline.text)
+  }
+
+  if (inline.kind === 'break') {
+    return [`<w:br${inline.breakType === 'line' ? '' : ` w:type="${inline.breakType}"`}/>`]
+  }
+
+  if (inline.kind === 'image') {
+    return writeImageInlineXml(inline, context)
+  }
+
+  return []
+}
+
+/** 写 inline image DrawingML。 */
+function writeImageInlineXml(inline: ImageInline, context: ExportContext): readonly string[] {
+  const mediaItem = context.mediaByResourceId.get(inline.resourceId)
+
+  if (mediaItem === undefined) {
+    return []
+  }
+
+  const widthTwips = readPositiveTwips(inline.widthTwips) ?? 1440
+  const heightTwips = readPositiveTwips(inline.heightTwips) ?? 1440
+  const cx = twipsToEmu(widthTwips)
+  const cy = twipsToEmu(heightTwips)
+  const name = `Picture ${mediaItem.sequence}`
+  const description = inline.alt === undefined ? '' : ` descr="${escapeXmlAttribute(inline.alt)}"`
+
+  return [[
+    '<w:drawing>',
+    `<wp:inline xmlns:wp="${WORD_DRAWING_NS}" distT="0" distB="0" distL="0" distR="0">`,
+    `<wp:extent cx="${cx}" cy="${cy}"/>`,
+    `<wp:docPr id="${mediaItem.sequence}" name="${escapeXmlAttribute(name)}"${description}/>`,
+    '<wp:cNvGraphicFramePr/>',
+    `<a:graphic xmlns:a="${DRAWING_NS}">`,
+    '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">',
+    `<pic:pic xmlns:pic="${PICTURE_NS}">`,
+    '<pic:nvPicPr>',
+    `<pic:cNvPr id="${mediaItem.sequence}" name="${escapeXmlAttribute(name)}"/>`,
+    '<pic:cNvPicPr/>',
+    '</pic:nvPicPr>',
+    '<pic:blipFill>',
+    `<a:blip r:embed="${mediaItem.relationshipId}"/>`,
+    '<a:stretch><a:fillRect/></a:stretch>',
+    '</pic:blipFill>',
+    '<pic:spPr>',
+    `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>`,
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>',
+    '</pic:spPr>',
+    '</pic:pic>',
+    '</a:graphicData>',
+    '</a:graphic>',
+    '</wp:inline>',
+    '</w:drawing>'
+  ].join('')]
+}

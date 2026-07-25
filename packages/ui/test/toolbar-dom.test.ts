@@ -7,13 +7,127 @@
  * 约束：断言基于稳定 data attribute / inline CSS variable，不把浏览器布局像素写死成快照。
  */
 
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
 
+import { resolveJWordUiI18n } from '../src/i18n'
 import { resolveToolbarConfig } from '../src/toolbar/config'
-import { createToolbarDom, destroyToolbarDom, renderToolbarState } from '../src/toolbar/dom'
+import { createToolbarDom, destroyToolbarDom, localizeToolbarDom, renderToolbarState } from '../src/toolbar/dom'
 import type { ToolbarState } from '../src/toolbar/state'
 
+const toolbarStylesheetPath = existsSync('packages/ui/src/styles/toolbar.css')
+  ? 'packages/ui/src/styles/toolbar.css'
+  : 'src/styles/toolbar.css'
+
 describe('toolbar select dom', () => {
+  test('renders professional tabs by default and switches active tab without rebuilding controls', () => {
+    const host = document.createElement('div')
+    const config = resolveToolbarConfig()
+    const dom = createToolbarDom(host, config)
+
+    try {
+      const homeTab = host.querySelector<HTMLButtonElement>('[data-jword-toolbar-tab="home"]')
+      const pageTab = host.querySelector<HTMLButtonElement>('[data-jword-toolbar-tab="page"]')
+      const homePanel = host.querySelector<HTMLElement>('[data-jword-toolbar-tab-panel="home"]')
+      const pagePanel = host.querySelector<HTMLElement>('[data-jword-toolbar-tab-panel="page"]')
+
+      expect(host.getAttribute('data-jword-toolbar-mode')).toBe('professional')
+      expect(homeTab?.textContent).toBe('开始')
+      expect(homeTab?.getAttribute('aria-selected')).toBe('true')
+      expect(homePanel?.hidden).toBe(false)
+      expect(pagePanel?.hidden).toBe(true)
+      expect(homePanel?.querySelector('[data-jword-tool-id="format.bold"]')).not.toBeNull()
+
+      pageTab?.click()
+
+      expect(host.getAttribute('data-jword-toolbar-active-tab')).toBe('page')
+      expect(homeTab?.getAttribute('aria-selected')).toBe('false')
+      expect(pageTab?.getAttribute('aria-selected')).toBe('true')
+      expect(homePanel?.hidden).toBe(true)
+      expect(pagePanel?.hidden).toBe(false)
+      expect(pagePanel?.querySelector('[data-jword-tool-id="document.pagePreset"]')).not.toBeNull()
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
+  test('mode picker is fixed under toolbar host and switches through a selected dropdown option', () => {
+    const host = document.createElement('div')
+    const config = resolveToolbarConfig()
+    const dom = createToolbarDom(host, config)
+
+    try {
+      const topRow = host.querySelector<HTMLElement>('.jw-toolbar__top-row')
+      const picker = host.querySelector<HTMLElement>('[data-jword-toolbar-mode-picker="true"]')
+      const switcher = host.querySelector<HTMLButtonElement>('[data-jword-toolbar-mode-switcher="true"]')
+      const menu = host.querySelector<HTMLElement>('[data-jword-toolbar-mode-menu="true"]')
+      const professionalOption = host.querySelector<HTMLButtonElement>('[data-jword-toolbar-mode-option="professional"]')
+      const commonOption = host.querySelector<HTMLButtonElement>('[data-jword-toolbar-mode-option="common"]')
+      const tabs = host.querySelector<HTMLElement>('.jw-toolbar__tabs')
+      const homePanel = host.querySelector<HTMLElement>('[data-jword-toolbar-tab-panel="home"]')
+      const commonPanel = host.querySelector<HTMLElement>('[data-jword-toolbar-common-panel="true"]')
+
+      expect(picker).toBeInstanceOf(HTMLElement)
+      expect(picker?.parentElement).toBe(host)
+      expect(topRow?.contains(picker!)).toBe(false)
+      expect(switcher?.textContent).toContain('切换工具栏')
+      expect(menu?.hidden).toBe(true)
+      expect(commonPanel?.hidden).toBe(true)
+      expect(professionalOption?.getAttribute('data-jword-selected')).toBe('true')
+      expect(commonOption?.getAttribute('data-jword-selected')).toBe('false')
+
+      switcher?.click()
+
+      expect(host.getAttribute('data-jword-toolbar-mode')).toBe('professional')
+      expect(menu?.hidden).toBe(false)
+
+      commonOption?.click()
+
+      expect(host.getAttribute('data-jword-toolbar-mode')).toBe('common')
+      expect(menu?.hidden).toBe(true)
+      expect(topRow?.hidden).toBe(true)
+      expect(tabs?.hidden).toBe(true)
+      expect(homePanel?.hidden).toBe(true)
+      expect(commonPanel?.hidden).toBe(false)
+      expect(commonPanel?.querySelector('[data-jword-tool-id="format.bold"]')).not.toBeNull()
+      expect(commonPanel?.querySelector('[data-jword-tool-id="document.pagePreset"]')).toBeNull()
+      expect(professionalOption?.getAttribute('data-jword-selected')).toBe('false')
+      expect(commonOption?.getAttribute('data-jword-selected')).toBe('true')
+
+      switcher?.click()
+      professionalOption?.click()
+
+      expect(host.getAttribute('data-jword-toolbar-mode')).toBe('professional')
+      expect(topRow?.hidden).toBe(false)
+      expect(tabs?.hidden).toBe(false)
+      expect(homePanel?.hidden).toBe(false)
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
+  test('localizes professional tabs and mode switcher without recreating toolbar', () => {
+    const host = document.createElement('div')
+    const config = resolveToolbarConfig()
+    const dom = createToolbarDom(host, config)
+
+    try {
+      const homeTab = host.querySelector<HTMLButtonElement>('[data-jword-toolbar-tab="home"]')
+      const switcher = host.querySelector<HTMLButtonElement>('[data-jword-toolbar-mode-switcher="true"]')
+
+      localizeToolbarDom(dom, config, resolveJWordUiI18n({ locale: 'en-US' }))
+
+      expect(host.getAttribute('lang')).toBe('en-US')
+      expect(homeTab?.textContent).toBe('Home')
+      expect(switcher?.textContent).toContain('Switch toolbar')
+      expect(switcher?.getAttribute('aria-label')).toBe('Switch toolbar')
+      expect(host.querySelector('[data-jword-toolbar-mode-option="professional"]')?.textContent).toContain('Professional toolbar')
+      expect(host.querySelector('[data-jword-toolbar-mode-option="common"]')?.textContent).toContain('Common toolbar')
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
   test('does not render legacy toolbar summary nodes', () => {
     const host = document.createElement('div')
     const dom = createToolbarDom(host, resolveToolbarConfig({
@@ -56,7 +170,7 @@ describe('toolbar select dom', () => {
     }
   })
 
-  test('renders heading outline as a toggle button without toolbar caret', () => {
+  test('renders heading outline as a toggle button without a dropdown arrow', () => {
     const host = document.createElement('div')
     const dom = createToolbarDom(host, resolveToolbarConfig({
       visibleTools: ['document.findReplace', 'document.headingOutline']
@@ -71,9 +185,161 @@ describe('toolbar select dom', () => {
       const findReplace = host.querySelector<HTMLElement>('[data-jword-tool-id="document.findReplace"]')
       const headingOutline = host.querySelector<HTMLElement>('[data-jword-tool-id="document.headingOutline"]')
 
-      expect(findReplace?.querySelector('.jw-toolbar__button-caret')).toBeInstanceOf(HTMLElement)
-      expect(headingOutline?.querySelector('.jw-toolbar__button-caret')).toBeNull()
+      expect(findReplace?.querySelector('.jw-toolbar__select-arrow')).toBeInstanceOf(HTMLElement)
+      expect(headingOutline?.querySelector('.jw-toolbar__select-arrow')).toBeNull()
       expect(headingOutline?.getAttribute('aria-pressed')).toBe('true')
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
+  test('groups professional dropdown icons and carets without absolute positioning', () => {
+    const host = document.createElement('div')
+    const style = document.createElement('style')
+
+    style.textContent = readFileSync(toolbarStylesheetPath, 'utf8')
+    document.head.append(style)
+    document.body.append(host)
+
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      professional: {
+        tabTools: {
+          page: ['document.pagePreset', 'document.headerFooter']
+        }
+      }
+    }))
+
+    try {
+      const selectTrigger = host.querySelector<HTMLElement>(
+        '[data-jword-tool-id="document.pagePreset"] .jw-toolbar__select-trigger'
+      )
+      const selectIcon = selectTrigger?.querySelector<HTMLElement>('.jw-toolbar__select-trigger-icon')
+      const selectArrow = selectTrigger?.querySelector<HTMLElement>('.jw-toolbar__select-arrow')
+      const selectRow = selectTrigger?.querySelector<HTMLElement>(':scope > .jw-toolbar__select-trigger-row')
+      const selectFieldLabel = selectTrigger?.querySelector<HTMLElement>(':scope > .jw-toolbar__select-field-label')
+      const button = host.querySelector<HTMLElement>('[data-jword-tool-id="document.headerFooter"]')
+      const buttonIcon = button?.querySelector<HTMLElement>('.jw-toolbar__button-icon')
+      const buttonArrow = button?.querySelector<HTMLElement>('.jw-toolbar__select-arrow')
+      const buttonRow = button?.querySelector<HTMLElement>(':scope > .jw-toolbar__button-icon-row')
+      const buttonLabel = button?.querySelector<HTMLElement>(':scope > .jw-toolbar__button-label')
+
+      expect(selectRow).toBeInstanceOf(HTMLElement)
+      expect(selectIcon?.parentElement).toBe(selectRow)
+      expect(selectArrow?.parentElement).toBe(selectRow)
+      expect(selectFieldLabel?.parentElement).toBe(selectTrigger)
+      expect(selectRow?.contains(selectFieldLabel ?? null)).toBe(false)
+      expect(buttonRow).toBeInstanceOf(HTMLElement)
+      expect(buttonIcon?.parentElement).toBe(buttonRow)
+      expect(buttonArrow?.parentElement).toBe(buttonRow)
+      expect(buttonLabel?.parentElement).toBe(button)
+      expect(buttonRow?.contains(buttonLabel ?? null)).toBe(false)
+      expect(getComputedStyle(selectArrow!).position).not.toBe('absolute')
+      expect(getComputedStyle(selectFieldLabel!).position).not.toBe('absolute')
+      expect(getComputedStyle(selectFieldLabel!).display).toBe('block')
+      expect(getComputedStyle(buttonArrow!).position).not.toBe('absolute')
+      expect(getComputedStyle(buttonLabel!).position).not.toBe('absolute')
+    } finally {
+      destroyToolbarDom(dom)
+      style.remove()
+      host.remove()
+    }
+  })
+
+
+  test('exposes toolbar role and roving tabindex keyboard navigation', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.bold', 'format.italic', 'format.fontFamily', 'format.textColor']
+    }))
+
+    document.body.append(host)
+
+    try {
+      renderToolbarState(dom, createToolbarState())
+
+      const bold = host.querySelector<HTMLButtonElement>('[data-jword-tool-id="format.bold"]')
+      const italic = host.querySelector<HTMLButtonElement>('[data-jword-tool-id="format.italic"]')
+      const fontTrigger = host.querySelector<HTMLButtonElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger')
+      const colorInput = host.querySelector<HTMLInputElement>('[data-jword-tool-id="format.textColor"] .jw-toolbar__color')
+      const nativeSelect = host.querySelector<HTMLSelectElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select')
+
+      expect(host.getAttribute('role')).toBe('toolbar')
+      expect(bold?.tabIndex).toBe(0)
+      expect(italic?.tabIndex).toBe(-1)
+      expect(fontTrigger?.tabIndex).toBe(-1)
+      expect(nativeSelect?.tabIndex).toBe(-1)
+      expect(colorInput?.tabIndex).toBe(-1)
+
+      bold?.focus()
+      bold?.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        bubbles: true
+      }))
+
+      expect(document.activeElement).toBe(italic)
+      expect(bold?.tabIndex).toBe(-1)
+      expect(italic?.tabIndex).toBe(0)
+
+      italic?.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'End',
+        bubbles: true
+      }))
+
+      expect(document.activeElement).toBe(colorInput)
+      expect(colorInput?.tabIndex).toBe(0)
+    } finally {
+      destroyToolbarDom(dom)
+      host.remove()
+    }
+  })
+
+  test('adds listbox option semantics to custom select menus', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.fontFamily']
+    }))
+
+    try {
+      renderToolbarState(dom, createToolbarState({
+        fontFamilyValue: 'Arial'
+      }))
+
+      const menu = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-menu')
+      const trigger = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger')
+      const arialOption = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-option[data-jword-option-value="Arial"]')
+      const simsunOption = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-option[data-jword-option-value="SimSun"]')
+
+      expect(menu?.getAttribute('role')).toBe('listbox')
+      expect(menu?.id).not.toBe('')
+      expect(trigger?.getAttribute('aria-controls')).toBe(menu?.id)
+      expect(arialOption?.getAttribute('role')).toBe('option')
+      expect(arialOption?.getAttribute('aria-selected')).toBe('true')
+      expect(simsunOption?.getAttribute('aria-selected')).toBe('false')
+    } finally {
+      destroyToolbarDom(dom)
+    }
+  })
+
+  test('links tooltip ids to focusable toolbar controls', () => {
+    const host = document.createElement('div')
+    const dom = createToolbarDom(host, resolveToolbarConfig({
+      visibleTools: ['format.bold', 'format.fontFamily', 'format.textColor']
+    }))
+
+    try {
+      const bold = host.querySelector<HTMLElement>('[data-jword-tool-id="format.bold"]')
+      const fontTrigger = host.querySelector<HTMLElement>('[data-jword-tool-id="format.fontFamily"] .jw-toolbar__select-trigger')
+      const colorInput = host.querySelector<HTMLElement>('[data-jword-tool-id="format.textColor"] .jw-toolbar__color')
+      const boldTooltip = bold?.closest('.jw-toolbar__tooltip-anchor')?.querySelector<HTMLElement>('[role="tooltip"]')
+      const fontTooltip = fontTrigger?.closest('.jw-toolbar__tooltip-anchor')?.querySelector<HTMLElement>('[role="tooltip"]')
+      const colorTooltip = colorInput?.closest('.jw-toolbar__tooltip-anchor')?.querySelector<HTMLElement>('[role="tooltip"]')
+
+      expect(boldTooltip?.id).not.toBe('')
+      expect(fontTooltip?.id).not.toBe('')
+      expect(colorTooltip?.id).not.toBe('')
+      expect(bold?.getAttribute('aria-describedby')).toBe(boldTooltip?.id)
+      expect(fontTrigger?.getAttribute('aria-describedby')).toBe(fontTooltip?.id)
+      expect(colorInput?.getAttribute('aria-describedby')).toBe(colorTooltip?.id)
     } finally {
       destroyToolbarDom(dom)
     }
@@ -111,6 +377,14 @@ describe('toolbar select dom', () => {
     } finally {
       destroyToolbarDom(dom)
     }
+  })
+
+  test('styles professional select tiles with wrapper hover and open background', () => {
+    const stylesheet = readFileSync(toolbarStylesheetPath, 'utf8')
+    const professionalSelectScope = ".jw-toolbar[data-jword-toolbar-mode='professional'] .jw-toolbar__tabpanel:not([data-jword-toolbar-tab-panel='home']) .jw-toolbar__select-wrap"
+
+    expect(stylesheet).toContain(`${professionalSelectScope}:hover`)
+    expect(stylesheet).toContain(`${professionalSelectScope}[data-jword-open='true']`)
   })
 
   test('prevents mouse down on toolbar buttons and custom select parts from stealing editor focus', () => {
@@ -318,6 +592,7 @@ function createToolbarState(overrides: Partial<ToolbarState> = {}): ToolbarState
     runFormatEnabled: true,
     paragraphFormatEnabled: true,
     pagePresetValue: 'a4',
+    pageOrientationValue: 'portrait',
     boldPressed: 'false',
     italicPressed: 'false',
     underlinePressed: 'false',

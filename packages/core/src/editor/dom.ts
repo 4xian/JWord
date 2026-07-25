@@ -3,7 +3,7 @@
  * 边界：不持有 editor 状态，不执行编辑 command。
  * 协作模块：layout rect、projection 和 mounted editor DOM。
  * 性能/安全约束：constructor/top-level 不访问 window/document/HTMLElement 实例，DOM 只在 mount 后创建，编辑命令统一进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { splitGraphemes } from '../shared/grapheme'
 import type { LayoutRect } from '../layout/runtime'
@@ -67,7 +67,7 @@ export function applyVisuallyHiddenStyle(element: HTMLDivElement): void {
   element.style.border = '0'
   element.style.margin = '-1px'
   element.style.overflow = 'hidden'
-  element.style.clip = 'rect(0 0 0 0)'
+  element.style.clipPath = 'inset(50%)'
 }
 
 export function syncHiddenTextareaPosition(input: Readonly<{

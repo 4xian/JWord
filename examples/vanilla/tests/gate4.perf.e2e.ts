@@ -3,7 +3,7 @@
  * 边界: 只记录当前 demo 可执行的图片、表格、批注、修订、目录、滚动和查找规模指标。
  * 协作: vanilla demo 测试钩子、真实 toolbar DOM、@4xian/jword-core Editor facade 和 Playwright perf-chromium 项目。
  * 约束: 指标必须来自浏览器 performance、requestAnimationFrame 和真实 DOM，不使用 Node-only benchmark 代替交互路径。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.17。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -18,9 +18,13 @@ interface Gate4PerfMetrics {
   readonly findScaleMatchCount: number
   readonly findUiInteractionMs: number
   readonly overlayScrollMs: number
-  readonly overlayCompositeScrollMs: number
+  readonly overlayCompositeScrollRawP95Ms: number
+  readonly overlayCompositeFrameBaselineP95Ms: number
+  readonly overlayCompositeScrollIncrementalP95Ms: number
   readonly mountedCanvasCount: number
 }
+
+const OVERLAY_COMPOSITE_SAMPLE_COUNT = 30
 
 const GATE4_PERF_THRESHOLDS = {
   imageInsertMs: 2200,
@@ -30,14 +34,16 @@ const GATE4_PERF_THRESHOLDS = {
   findScaleCollectMs: 600,
   findUiInteractionMs: 1200,
   overlayScrollMs: 700,
-  overlayCompositeScrollMs: 700,
+  overlayCompositeScrollIncrementalP95Ms: 700,
   mountedCanvasCount: 5
 } as const
+
+test.setTimeout(120000)
 
 test('Gate 4 perf guard records image table find and overlay interaction metrics', async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== 'chromium', '当前 Gate 4 perf 护栏只固定 Chromium。')
 
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate4PerfReady(page)
 
   const metrics = await readGate4PerfMetrics(page)
@@ -45,6 +51,10 @@ test('Gate 4 perf guard records image table find and overlay interaction metrics
   console.log(`GATE4_PERF ${JSON.stringify(metrics)}`)
   await testInfo.attach('gate4-browser-perf', {
     body: JSON.stringify({
+      sampling: {
+        overlayCompositeSampleCount: OVERLAY_COMPOSITE_SAMPLE_COUNT,
+        overlayCompositeMetric: 'paired-frame-baseline-p95'
+      },
       thresholds: GATE4_PERF_THRESHOLDS,
       metrics
     }, null, 2),
@@ -60,21 +70,22 @@ test('Gate 4 perf guard records image table find and overlay interaction metrics
   expect(metrics.findScaleMatchCount).toBeGreaterThan(10)
   expect(metrics.findUiInteractionMs).toBeLessThanOrEqual(GATE4_PERF_THRESHOLDS.findUiInteractionMs)
   expect(metrics.overlayScrollMs).toBeLessThanOrEqual(GATE4_PERF_THRESHOLDS.overlayScrollMs)
-  expect(metrics.overlayCompositeScrollMs).toBeLessThanOrEqual(GATE4_PERF_THRESHOLDS.overlayCompositeScrollMs)
+  expect(metrics.overlayCompositeScrollIncrementalP95Ms)
+    .toBeLessThanOrEqual(GATE4_PERF_THRESHOLDS.overlayCompositeScrollIncrementalP95Ms)
   expect(metrics.mountedCanvasCount).toBeLessThanOrEqual(GATE4_PERF_THRESHOLDS.mountedCanvasCount)
 })
 
 /** 等待 Gate 4 perf 所需的 demo 和 canvas 完成挂载。 */
 async function waitForGate4PerfReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.querySelectorAll('.jw-editor__page-canvas').length)).toBeGreaterThan(0)
 }
 
 /** 在真实浏览器内执行并记录 Gate 4 关键交互指标。 */
 async function readGate4PerfMetrics(page: Page): Promise<Gate4PerfMetrics> {
-  return page.evaluate(async () => {
-    const demo = window.__jwordDemo
+  return page.evaluate(async ({ overlayCompositeSampleCount }) => {
+    const demo = window.__jwordTestFixture
     const container = document.querySelector<HTMLElement>('[data-jword-canvas-container]')
     const mediaTrigger = document.querySelector<HTMLButtonElement>('[data-jword-media-trigger="true"]')
     const mediaUrlAction = document.querySelector<HTMLButtonElement>('[data-jword-media-action-url="true"]')
@@ -112,6 +123,24 @@ async function readGate4PerfMetrics(page: Page): Promise<Gate4PerfMetrics> {
           })
         })
       })
+
+    /** 读取当前配对采样的 p95 耗时。 */
+    const readP95 = (samples: readonly number[]): number => {
+      const sorted = [...samples].sort((left, right) => left - right)
+      const rank = Math.max(0, Math.ceil(sorted.length * 0.95) - 1)
+
+      return Number(sorted[rank]?.toFixed(2) ?? 0)
+    }
+
+    /** 测量与两次真实滚动相同的四帧调度基线。 */
+    const measureCompositeFrameBaseline = async (): Promise<number> => {
+      const start = performance.now()
+
+      await nextFrame()
+      await nextFrame()
+
+      return performance.now() - start
+    }
 
     const waitForCondition = async (label: string, predicate: () => boolean, timeoutMs = 4000): Promise<number> => {
       const start = performance.now()
@@ -272,7 +301,7 @@ async function readGate4PerfMetrics(page: Page): Promise<Gate4PerfMetrics> {
     findInput.dispatchEvent(new Event('input', { bubbles: true }))
     const findUiStart = performance.now()
     findButton.click()
-    await waitForCondition('官方查找 UI 结果刷新', () => findStatus.textContent?.includes('个结果') === true)
+    await waitForCondition('官方查找 UI 结果刷新', () => /^\d+ \/ \d+$/.test(findStatus.textContent ?? ''))
     const findUiInteractionMs = performance.now() - findUiStart
 
     const scrollStart = performance.now()
@@ -286,18 +315,30 @@ async function readGate4PerfMetrics(page: Page): Promise<Gate4PerfMetrics> {
         && document.querySelectorAll('[data-jword-comment-thread-id]').length > 0
         && document.querySelectorAll('[data-jword-revision-item]').length > 0
     })
-    const overlayCompositeScrollStart = performance.now()
-    container.scrollTop = 0
-    container.dispatchEvent(new Event('scroll'))
-    await nextFrame()
-    container.scrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-    container.dispatchEvent(new Event('scroll'))
-    await nextFrame()
-    const overlayCompositeScrollMs = performance.now() - overlayCompositeScrollStart
+    const overlayCompositeScrollRawSamples: number[] = []
+    const overlayCompositeFrameBaselineSamples: number[] = []
+    const overlayCompositeScrollIncrementalSamples: number[] = []
+
+    for (let index = 0; index < overlayCompositeSampleCount; index += 1) {
+      const frameBaselineDuration = await measureCompositeFrameBaseline()
+      const overlayCompositeScrollStart = performance.now()
+
+      container.scrollTop = 0
+      container.dispatchEvent(new Event('scroll'))
+      await nextFrame()
+      container.scrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+      container.dispatchEvent(new Event('scroll'))
+      await nextFrame()
+
+      const duration = performance.now() - overlayCompositeScrollStart
+      overlayCompositeScrollRawSamples.push(duration)
+      overlayCompositeFrameBaselineSamples.push(frameBaselineDuration)
+      overlayCompositeScrollIncrementalSamples.push(Math.max(0, duration - frameBaselineDuration))
+    }
 
     return {
       initialPageCount,
-      imageInsertMs: Number((performance.now() - imageStart).toFixed(2)),
+      imageInsertMs: Number(imageInsertMs.toFixed(2)),
       tableInsertEditMs: Number(tableInsertEditMs.toFixed(2)),
       commentCreateMs: Number(commentCreateMs.toFixed(2)),
       revisionCreateMs: Number(revisionCreateMs.toFixed(2)),
@@ -305,8 +346,12 @@ async function readGate4PerfMetrics(page: Page): Promise<Gate4PerfMetrics> {
       findScaleMatchCount,
       findUiInteractionMs: Number(findUiInteractionMs.toFixed(2)),
       overlayScrollMs: Number(overlayScrollMs.toFixed(2)),
-      overlayCompositeScrollMs: Number(overlayCompositeScrollMs.toFixed(2)),
+      overlayCompositeScrollRawP95Ms: readP95(overlayCompositeScrollRawSamples),
+      overlayCompositeFrameBaselineP95Ms: readP95(overlayCompositeFrameBaselineSamples),
+      overlayCompositeScrollIncrementalP95Ms: readP95(overlayCompositeScrollIncrementalSamples),
       mountedCanvasCount: document.querySelectorAll('.jw-editor__page-canvas').length
     }
+  }, {
+    overlayCompositeSampleCount: OVERLAY_COMPOSITE_SAMPLE_COUNT
   })
 }

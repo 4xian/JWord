@@ -5,7 +5,7 @@
  * 边界：只检查容器初始化和事务 origin，不实现具体编辑操作。
  * 协作模块：transaction pipeline、model、history 和 persistence 后续复用同一个状态壳。
  * 性能/安全约束：测试只使用内存中的 Y.Doc，不触发 DOM、网络或磁盘写入。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#32-状态真源。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

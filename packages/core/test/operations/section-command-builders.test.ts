@@ -5,7 +5,7 @@
  * 边界：只覆盖 section properties 写入、projection 与 layout 可消费结果，不测试 UI 或浏览器交互。
  * 协作模块：Editor facade、transaction pipeline、projection 与 layout 共同承载 4.13 纵线。
  * 性能/安全约束：测试只依赖内存文档，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'

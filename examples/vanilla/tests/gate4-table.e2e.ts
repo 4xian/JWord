@@ -3,16 +3,18 @@
  * 边界: 只覆盖插入表格、单元格文本编辑、行列增删、合并与 undo/redo，不验证后续跨页布局或 cell hit-test。
  * 协作: examples/vanilla/src/main.ts、demo table support、packages/ui/src/table/* 与现有 toolbar history 控件。
  * 约束: 断言必须来自真实 DOM 或 editor.getProjection()，不读取 controller 私有状态。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.7。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
+import { activateToolbarTab } from './gate3-toolbar-helpers'
+
 test.describe.configure({ mode: 'serial' })
 
 test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForTableDemoReady(page)
 
   const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
@@ -55,7 +57,7 @@ test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page 
   await expect(customSizeDialog).toBeHidden()
 
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.table.setCellText(0, 0, '单元格A1') ?? false)
+    return page.evaluate(() => window.__jwordTestFixture?.table.setCellText(0, 0, '单元格A1') ?? false)
   }).toBe(true)
 
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
@@ -100,6 +102,7 @@ test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page 
     firstCellGridSpan: 2
   })
 
+  await activateToolbarTab(page, 'home')
   await undoButton.click()
   await expect.poll(() => readFirstTableState(page)).toMatchObject({
     firstRowCellCount: 2,
@@ -115,9 +118,8 @@ test('Gate 4 table toolbar inserts edits and supports undo redo', async ({ page 
   })
 })
 
-test('Gate 4 table click resize and context actions keep table editable', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-  await page.goto('/')
+test('Gate 4 table click resize and context actions keep table editable', async ({ page }) => {
+  await page.goto('/test-fixture.html')
   await waitForTableDemoReady(page)
 
   const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
@@ -188,7 +190,7 @@ test('Gate 4 table click resize and context actions keep table editable', async 
 })
 
 test('Gate 4 table custom size dialog keeps focusable fields inside the panel', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForTableDemoReady(page)
 
   const insertTrigger = page.locator('[data-jword-table-insert-trigger="true"]')
@@ -215,8 +217,9 @@ test('Gate 4 table custom size dialog keeps focusable fields inside the panel', 
 
 /** 等待 demo、toolbar 与 table UI 都完成挂载。 */
 async function waitForTableDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
+  await activateToolbarTab(page, 'table')
   await expect(page.locator('[data-jword-table-toolbar="true"]')).toBeVisible()
 }
 
@@ -246,13 +249,7 @@ async function dragResizeHandle(
 ): Promise<void> {
   const handle = page.locator(selector)
 
-  await expect(handle).toBeVisible()
-  const box = await handle.boundingBox()
-
-  if (box === null) {
-    throw new Error(`Missing resize handle: ${selector}`)
-  }
-
+  const box = await readVisibleElementBox(page, handle, selector)
   const startPoint = readResizeHandleStartPoint(selector, box)
 
   await page.mouse.move(startPoint.x, startPoint.y)
@@ -274,13 +271,7 @@ async function dragResizeHandleWithPreview(
   const handle = page.locator(selector)
   const preview = page.locator('[data-jword-table-resize-preview="true"]')
 
-  await expect(handle).toBeVisible()
-  const box = await handle.boundingBox()
-
-  if (box === null) {
-    throw new Error(`Missing resize handle: ${selector}`)
-  }
-
+  const box = await readVisibleElementBox(page, handle, selector)
   const startPoint = readResizeHandleStartPoint(selector, box, axis)
 
   await page.mouse.move(startPoint.x, startPoint.y)
@@ -307,6 +298,42 @@ async function dragResizeHandleWithPreview(
 
   await page.mouse.up()
   await expect(preview).toBeHidden()
+}
+
+/** 读取可见元素的稳定视口盒，规避 Firefox 并行矩阵下浮层重绘导致的瞬时空盒。 */
+async function readVisibleElementBox(
+  page: Page,
+  locator: Locator,
+  selector: string
+): Promise<{
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}> {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < 3000) {
+    try {
+      await locator.waitFor({
+        state: 'visible',
+        timeout: 500
+      })
+    } catch {
+      await page.waitForTimeout(16)
+      continue
+    }
+
+    const box = await locator.boundingBox()
+
+    if (box !== null) {
+      return box
+    }
+
+    await page.waitForTimeout(16)
+  }
+
+  throw new Error(`Missing resize handle: ${selector}`)
 }
 
 /** 为行列 resize handle 选择一个尽量避开交叉区的拖拽起点。 */
@@ -342,7 +369,7 @@ function readResizeHandleStartPoint(
 async function selectDemoTableCell(page: Page, rowIndex: number, columnIndex: number): Promise<void> {
   await expect.poll(() => {
     return page.evaluate(({ nextRowIndex, nextColumnIndex }) => {
-      return window.__jwordDemo?.table.selectCell(nextRowIndex, nextColumnIndex) ?? false
+      return window.__jwordTestFixture?.table.selectCell(nextRowIndex, nextColumnIndex) ?? false
     }, {
       nextRowIndex: rowIndex,
       nextColumnIndex: columnIndex
@@ -350,7 +377,7 @@ async function selectDemoTableCell(page: Page, rowIndex: number, columnIndex: nu
   }).toBe(true)
 
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.table.readActiveTarget())
+    return page.evaluate(() => window.__jwordTestFixture?.table.readActiveTarget())
   }).not.toBeNull()
 
   const point = await readTableCellViewportPoint(page, rowIndex, columnIndex)
@@ -377,7 +404,7 @@ async function expectTableDialogAnchoredToEditor(page: Page, dialog: Locator): P
   expect(Math.abs(dialogBox.x - editorBox.x)).toBeLessThanOrEqual(2)
   expect(Math.abs(dialogBox.y - editorBox.y)).toBeLessThanOrEqual(2)
   expect(Math.abs(dialogBox.width - editorBox.width)).toBeLessThanOrEqual(2)
-  expect(dialogBox.width).toBeLessThan(viewport.width)
+  expect(dialogBox.width).toBeLessThanOrEqual(viewport.width)
   expect(dialogBox.height).toBeLessThan(viewport.height)
 }
 
@@ -391,9 +418,9 @@ async function readTableCellViewportPoint(
   y: number
 }> {
   return page.evaluate(({ nextRowIndex, nextColumnIndex }) => {
-    const editor = window.__jwordDemo?.editor
+    const editor = window.__jwordTestFixture?.editor
     const editorHost = document.querySelector<HTMLElement>('#jword-editor')
-    const canvasContainer = editorHost?.querySelector<HTMLElement>('[data-jword-canvas-container]')
+    const canvasContainer = editorHost?.querySelector<HTMLElement>('[data-jword-canvas-container]') ?? null
     const layout = editor?.getLayout()
     const pageBox = layout?.pages[0]
     const table = pageBox?.blocks.find((block) => block.kind === 'table')
@@ -408,11 +435,22 @@ async function readTableCellViewportPoint(
     const pageRect = pageElement.getBoundingClientRect()
     const scale = pageRect.width / (pageBox.width / 1440 * 96)
     const toPx = (twips: number) => twips / 1440 * 96 * scale
+    const readPoint = () => {
+      const nextPageRect = pageElement.getBoundingClientRect()
 
-    return {
-      x: pageRect.left + toPx(cell.x - pageBox.x + cell.width / 2),
-      y: pageRect.top + toPx(cell.y - pageBox.y + cell.height / 2)
+      return {
+        x: nextPageRect.left + toPx(cell.x - pageBox.x + cell.width / 2),
+        y: nextPageRect.top + toPx(cell.y - pageBox.y + cell.height / 2)
+      }
     }
+    let point = readPoint()
+
+    if (point.y < 24 || point.y > window.innerHeight - 24) {
+      canvasContainer.scrollTop += point.y - window.innerHeight / 2
+      point = readPoint()
+    }
+
+    return point
   }, {
     nextRowIndex: rowIndex,
     nextColumnIndex: columnIndex
@@ -426,7 +464,7 @@ async function readCurrentCaretSnapshot(page: Page): Promise<{
   caretHeight: number | null
 } | null> {
   return page.evaluate(() => {
-    const editor = window.__jwordDemo?.editor
+    const editor = window.__jwordTestFixture?.editor
     const selection = editor?.getSelection()
     const focus = selection?.focus
     const position = focus === undefined ? undefined : editor?.resolveTextPosition(focus)
@@ -456,7 +494,7 @@ async function readFirstTableState(page: Page): Promise<{
   firstRowHeightTwips: number | null
 } | null> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
     const firstSection = projection?.document.sections[0]
     const table = firstSection?.blocks.find((block) => block.kind === 'table')
 

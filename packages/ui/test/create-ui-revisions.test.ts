@@ -2,16 +2,17 @@
  * @vitest-environment jsdom
  *
  * 职责：验证 createJWordUi 对修订 metadata 面板的入口级装配。
- * 边界：只覆盖 revision 列表显示、点击定位 range 和销毁，不测试接受/拒绝修订。
+ * 边界：覆盖 revision 列表显示、点击定位 range、接受/拒绝按钮和销毁。
  * 协作模块：packages/ui/src/create-ui.ts、revisions controller 与 @4xian/jword-core。
  * 约束：通过公开 elements 和稳定 data selector 断言，不读取 controller 私有状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.14。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
   buildAddRevisionMetadataCommand,
   createEditor,
   createSelectionState,
+  type DocumentProjection,
   type Editor
 } from '@4xian/jword-core'
 import { describe, expect, test } from 'vitest'
@@ -19,12 +20,53 @@ import { describe, expect, test } from 'vitest'
 import { createJWordUi } from '../src/create-ui'
 
 describe('createJWordUi revisions integration', () => {
+  test('未提供修订 host 时会在 editorHost 内创建右侧浮动工作区并在销毁后清理', () => {
+    const harness = createHarness({ useDefaultRevisionsHost: true })
+
+    try {
+      const workspace = harness.editorHost.querySelector<HTMLElement>(
+        ':scope > [data-jword-side-workspace="right"][data-jword-revisions-host]'
+      )
+
+      expect(workspace).not.toBeNull()
+      expect(harness.ui.elements.revisionsPanel?.host).toBe(workspace)
+      expect(workspace?.querySelector('[data-jword-revisions-panel]')).not.toBeNull()
+
+      const revisionsButton = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toggle-revisions]')
+      const title = harness.ui.elements.revisionsPanel?.title
+      const closeButton = harness.ui.elements.revisionsPanel?.closeButton
+
+      revisionsButton?.click()
+
+      expect(harness.ui.elements.revisionsPanel?.root.hidden).toBe(false)
+      expect(revisionsButton?.getAttribute('aria-pressed')).toBe('true')
+      expect(title?.textContent).toBe('修订记录')
+      expect(closeButton?.getAttribute('aria-label')).toBe('关闭修订记录')
+
+      harness.ui.setLocale('en-US')
+
+      expect(title?.textContent).toBe('Revisions')
+      expect(closeButton?.getAttribute('aria-label')).toBe('Close revisions')
+
+      closeButton?.click()
+
+      expect(harness.ui.elements.revisionsPanel?.root.hidden).toBe(true)
+      expect(revisionsButton?.getAttribute('aria-pressed')).toBe('false')
+
+      harness.ui.destroy()
+
+      expect(harness.editorHost.querySelector('[data-jword-side-workspace="right"]')).toBeNull()
+    } finally {
+      harness.destroy()
+    }
+  })
+
   test('启用 revisions option 后会显示 revision metadata 并点击定位 range', () => {
     const harness = createHarness()
 
     try {
       expect(harness.ui.elements.revisionsPanel).not.toBeNull()
-      expect(harness.toolbarHost.querySelector('[data-jword-revisions-panel]')).not.toBeNull()
+      expect(harness.revisionsHost.querySelector('[data-jword-revisions-panel]')).not.toBeNull()
       expect(harness.ui.elements.revisionsPanel!.root.textContent).toContain('修订记录')
 
       const revisionSelection = createSelection(harness.editor, 1, 4)
@@ -44,7 +86,7 @@ describe('createJWordUi revisions integration', () => {
       harness.editor.setSelection(createSelection(harness.editor, 0, 0))
       harness.ui.refresh()
 
-      const item = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-revision-item]')
+      const item = harness.revisionsHost.querySelector<HTMLButtonElement>('[data-jword-revision-item]')
 
       expect(item).not.toBeNull()
       expect(item?.textContent).toContain('格式')
@@ -53,15 +95,54 @@ describe('createJWordUi revisions integration', () => {
 
       item?.click()
 
-      expect(readSelectionOffsets(harness.editor)).toEqual([1, 4])
+      expect(readSelectionParagraphOffsets(harness.editor)).toEqual([1, 4])
 
       harness.ui.destroy()
 
-      expect(harness.toolbarHost.querySelector('[data-jword-revisions-panel]')).toBeNull()
+      expect(harness.revisionsHost.querySelector('[data-jword-revisions-panel]')).toBeNull()
     } finally {
       harness.destroy()
     }
   })
+
+  test('修订面板接受和拒绝按钮会通过 core command 单事务处理当前修订', () => {
+    for (const action of ['accept', 'reject'] as const) {
+      const harness = createHarness()
+
+      try {
+        const revisionSelection = createSelection(harness.editor, 1, 4)
+        const command = buildAddRevisionMetadataCommand(
+          harness.editor.getProjection(),
+          revisionSelection,
+          {
+            authorId: 'author-r',
+            createdAt: '2026-05-24T04:41:00.000Z',
+            type: 'insert',
+            summary: '插入文本'
+          }
+        )
+
+        expect(command).not.toBeNull()
+        harness.editor.executeCommand(command!, { selectionAfter: revisionSelection })
+        harness.ui.refresh()
+
+        let button = harness.revisionsHost.querySelector<HTMLButtonElement>(`[data-jword-revision-${action}]`)
+
+        expect(button).not.toBeNull()
+
+        harness.ui.setLocale('en-US')
+        button = harness.revisionsHost.querySelector<HTMLButtonElement>(`[data-jword-revision-${action}]`)
+        button?.click()
+
+        expect(harness.editor.getProjection().document.revisions).toBeUndefined()
+        expect(readParagraphText(harness.editor)).toBe(action === 'accept' ? 'abcdef' : 'aef')
+        expect(harness.liveRegionHost.textContent).toBe(action === 'accept' ? 'Revision accepted.' : 'Revision rejected.')
+      } finally {
+        harness.destroy()
+      }
+    }
+  })
+
 })
 
 interface Harness {
@@ -69,12 +150,13 @@ interface Harness {
   readonly editorHost: HTMLElement
   readonly toolbarHost: HTMLElement
   readonly revisionsHost: HTMLElement
+  readonly liveRegionHost: HTMLElement
   readonly ui: ReturnType<typeof createJWordUi>
   destroy(): void
 }
 
 /** 创建入口级 UI 测试环境。 */
-function createHarness(): Harness {
+function createHarness(options: { readonly useDefaultRevisionsHost?: boolean } = {}): Harness {
   const editorHost = document.createElement('div')
   const toolbarHost = document.createElement('div')
   const liveRegionHost = document.createElement('div')
@@ -88,9 +170,7 @@ function createHarness(): Harness {
     editorHost,
     toolbarHost,
     liveRegionHost,
-    revisions: {
-      host: revisionsHost
-    }
+    revisions: options.useDefaultRevisionsHost === true ? {} : { host: revisionsHost }
   })
 
   return {
@@ -98,6 +178,7 @@ function createHarness(): Harness {
     editorHost,
     toolbarHost,
     revisionsHost,
+    liveRegionHost,
     ui,
     destroy(): void {
       editor.destroy()
@@ -127,16 +208,60 @@ function createSelection(editor: Editor, start: number, end: number) {
   )
 }
 
-/** 读取当前选择区的 run 内起止下标。 */
-function readSelectionOffsets(editor: Editor): readonly [number, number] | null {
+/** 读取当前选择区在段落内的全局起止下标。 */
+function readSelectionParagraphOffsets(editor: Editor): readonly [number, number] | null {
   const selection = editor.getSelection()
 
   if (selection === null) {
     return null
   }
 
+  const projection = editor.getProjection()
+  const anchor = editor.resolveTextPosition(selection.anchor)
+  const focus = editor.resolveTextPosition(selection.focus)
+
   return [
-    editor.resolveTextPosition(selection.anchor).graphemeIndex,
-    editor.resolveTextPosition(selection.focus).graphemeIndex
+    readParagraphOffset(projection, anchor.blockId, anchor.runId, anchor.graphemeIndex),
+    readParagraphOffset(projection, focus.blockId, focus.runId, focus.graphemeIndex)
   ]
+}
+
+/** 把 run 内下标换算成段落内全局下标。 */
+function readParagraphOffset(
+  projection: DocumentProjection,
+  blockId: string,
+  runId: string,
+  graphemeIndex: number
+): number {
+  for (const section of projection.document.sections) {
+    const block = section.blocks.find((candidate) => candidate.id === blockId)
+
+    if (block?.kind !== 'paragraph') {
+      continue
+    }
+
+    let offset = 0
+
+    for (const run of block.runs) {
+      if (run.id === runId) {
+        return offset + graphemeIndex
+      }
+
+      offset += run.inlines.reduce((count, inline) => {
+        return inline.kind === 'text' ? count + Array.from(inline.text).length : count
+      }, 0)
+    }
+  }
+
+  throw new Error(`缺少测试选区 run：${runId}`)
+}
+
+
+/** 读取第一段纯文本。 */
+function readParagraphText(editor: Editor): string {
+  const block = editor.getProjection().document.sections[0]?.blocks[0]
+
+  return block?.kind === 'paragraph'
+    ? block.runs.flatMap((run) => run.inlines).flatMap((inline) => inline.kind === 'text' ? [inline.text] : []).join('')
+    : ''
 }

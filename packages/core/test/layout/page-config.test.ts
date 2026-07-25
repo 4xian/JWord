@@ -5,7 +5,7 @@
  * 边界：只测试纯数据页面配置，不覆盖布局、渲染、输入或 DOM。
  * 协作模块：layout 后续消费 页面配置，渲染器后续只使用换算后的页面尺寸。
  * 约束：测试不访问浏览器环境，不写磁盘，不依赖外部字体。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -70,6 +70,17 @@ describe('Gate 2 page config', () => {
     expect(a3.heightTwips).toBe(23811)
     expect(a5.widthTwips).toBe(8391)
     expect(a5.heightTwips).toBe(11906)
+  })
+
+  it('supports B5, Legal and common envelope presets', () => {
+    expect(createPageConfig({ preset: 'b5' }).widthTwips).toBe(9978)
+    expect(createPageConfig({ preset: 'b5' }).heightTwips).toBe(14173)
+    expect(createPageConfig({ preset: 'legal' }).widthTwips).toBe(12240)
+    expect(createPageConfig({ preset: 'legal' }).heightTwips).toBe(20160)
+    expect(createPageConfig({ preset: 'envelope5' }).widthTwips).toBe(6236)
+    expect(createPageConfig({ preset: 'envelope5' }).heightTwips).toBe(12472)
+    expect(createPageConfig({ preset: 'envelope9' }).widthTwips).toBe(12983)
+    expect(createPageConfig({ preset: 'envelope9' }).heightTwips).toBe(18369)
   })
 
   it('converts twip and CSS px with stable Word units', () => {

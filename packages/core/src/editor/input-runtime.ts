@@ -3,18 +3,25 @@
  * 边界：不直接访问画布绘制细节，不修改布局引擎。
  * 协作模块：挂载运行时、选择区、事务操作和文本运行时辅助函数。
  * 性能/安全约束：构造函数和顶层代码不访问浏览器对象，DOM 只在挂载后创建，编辑命令统一进入事务流水线。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { AnchorRef } from '../model/position'
 import { createSelectionState, isSelectionCollapsed } from '../model/selection'
 import type { SelectionState } from '../model/selection'
-import { POINTER_MULTI_CLICK_GRACE_MS } from './constants'
+import { JWordError } from '../shared/errors'
+import type { JWordErrorCode, JWordErrorDetails } from '../shared/errors'
+import {
+  POINTER_AUTO_SCROLL_EDGE_PX,
+  POINTER_AUTO_SCROLL_INTERVAL_MS,
+  POINTER_AUTO_SCROLL_MAX_STEP_PX,
+  POINTER_MULTI_CLICK_GRACE_MS
+} from './constants'
 import { focusHiddenTextarea } from './dom'
-import { JWordEditorTextEditingRuntime } from './text-editing-runtime'
+import { JWordEditorKeyboardTextRuntime } from './keyboard-text-runtime'
 import { normalizePlainText, readClipboardData, readEventData, readInputType, isCompositionKeyboardEvent } from './text-runtime'
 import type { PointerPageMetrics } from './types'
 
-export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRuntime {
+export abstract class JWordEditorInputRuntime extends JWordEditorKeyboardTextRuntime {
   protected handleRuntimeInput(event: Event): void {
     const textarea = event.currentTarget
     const mountedDom = this.mountedDom
@@ -51,13 +58,12 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
       }
     }
 
-    this.runProtectedInputHandler(() => {
+    this.runProtectedInputHandler('insertText', () => {
       this.insertPlainTextFromRuntime(text)
     })
 
-    // 输入法提交后，同一任务内读取纯文本镜像的测试和无障碍消费方需要立即看到结果。
-    this.cancelDeferredTextMirrorSync()
-    this.syncMountedTextMirror()
+    // 小文档保持同步镜像；大文档把全文串联让出 input 热路径。
+    this.syncMountedTextMirrorAfterInput()
   }
 
   protected handleRuntimeCompositionStart(event: Event): void {
@@ -105,13 +111,12 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
       return
     }
 
-    this.runProtectedInputHandler(() => {
+    this.runProtectedInputHandler('insertText', () => {
       this.insertPlainTextFromRuntime(text)
     })
 
-    // 输入法结束事件后，调用方会同步读取纯文本镜像。
-    this.cancelDeferredTextMirrorSync()
-    this.syncMountedTextMirror()
+    // 小文档保持同步镜像；大文档把全文串联让出 composition 热路径。
+    this.syncMountedTextMirrorAfterInput()
   }
 
   /**
@@ -131,11 +136,10 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
     }
 
     event.preventDefault()
-    this.runProtectedInputHandler(() => {
+    this.runProtectedInputHandler('splitParagraph', () => {
       this.splitParagraphFromRuntime()
     })
-    this.cancelDeferredTextMirrorSync()
-    this.syncMountedTextMirror()
+    this.syncMountedTextMirrorAfterInput()
   }
 
   protected handleRuntimeKeyDown(event: KeyboardEvent): void {
@@ -154,7 +158,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
 
     if (usesCommandModifier && lowerKey === 'z') {
       event.preventDefault()
-      this.runProtectedInputHandler(() => {
+      this.runProtectedInputHandler(event.shiftKey ? 'redo' : 'undo', () => {
         if (event.shiftKey) {
           this.redo()
           return
@@ -167,7 +171,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
 
     if (usesCommandModifier && lowerKey === 'y') {
       event.preventDefault()
-      this.runProtectedInputHandler(() => {
+      this.runProtectedInputHandler('redo', () => {
         this.redo()
       })
       return
@@ -175,7 +179,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
 
     if (usesCommandModifier && lowerKey === 'a') {
       event.preventDefault()
-      this.runProtectedInputHandler(() => {
+      this.runProtectedInputHandler('selectAll', () => {
         this.selectAllTextFromRuntime()
       })
       return
@@ -183,7 +187,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
 
     if (usesCommandModifier && lowerKey === 'b') {
       event.preventDefault()
-      this.runProtectedInputHandler(() => {
+      this.runProtectedInputHandler('setBold', () => {
         this.toggleRuntimeBold()
       })
       return
@@ -191,7 +195,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
 
     if (usesCommandModifier && lowerKey === 'i') {
       event.preventDefault()
-      this.runProtectedInputHandler(() => {
+      this.runProtectedInputHandler('setItalic', () => {
         this.toggleRuntimeItalic()
       })
       return
@@ -200,58 +204,94 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
     switch (event.key) {
       case 'Backspace':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
-          this.deleteBackwardFromRuntime()
+        this.runProtectedInputHandler('deleteBackward', () => {
+          this.deleteBackwardFromRuntime(isWordModifierKey(event))
         })
         return
       case 'Delete':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
-          this.deleteForwardFromRuntime()
+        this.runProtectedInputHandler('deleteForward', () => {
+          this.deleteForwardFromRuntime(isWordModifierKey(event))
         })
         return
       case 'Enter':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
+        this.runProtectedInputHandler('splitParagraph', () => {
           this.splitParagraphFromRuntime()
         })
         return
       case 'ArrowLeft':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
-          this.moveSelectionHorizontally(-1)
+        this.runProtectedInputHandler('moveSelection', () => {
+          this.moveSelectionHorizontally(-1, event.shiftKey, isWordModifierKey(event))
         })
         return
       case 'ArrowRight':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
-          this.moveSelectionHorizontally(1)
+        this.runProtectedInputHandler('moveSelection', () => {
+          this.moveSelectionHorizontally(1, event.shiftKey, isWordModifierKey(event))
         })
         return
       case 'ArrowUp':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
-          this.moveSelectionVertically(-1)
+        this.runProtectedInputHandler('moveSelection', () => {
+          this.moveSelectionVertically(-1, event.shiftKey)
         })
         return
       case 'ArrowDown':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
-          this.moveSelectionVertically(1)
+        this.runProtectedInputHandler('moveSelection', () => {
+          this.moveSelectionVertically(1, event.shiftKey)
         })
         return
       case 'Home':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
-          this.moveSelectionToLineBoundary('start')
+        this.runProtectedInputHandler('moveSelection', () => {
+          this.moveSelectionToLineBoundary('start', event.shiftKey)
         })
         return
       case 'End':
         event.preventDefault()
-        this.runProtectedInputHandler(() => {
-          this.moveSelectionToLineBoundary('end')
+        this.runProtectedInputHandler('moveSelection', () => {
+          this.moveSelectionToLineBoundary('end', event.shiftKey)
         })
         return
+      case 'PageUp':
+        event.preventDefault()
+        this.runProtectedInputHandler('moveSelection', () => {
+          this.moveSelectionByPage(-1, event.shiftKey)
+        })
+        return
+      case 'PageDown':
+        event.preventDefault()
+        this.runProtectedInputHandler('moveSelection', () => {
+          this.moveSelectionByPage(1, event.shiftKey)
+        })
+        return
+      case 'Tab':
+        event.preventDefault()
+        this.runProtectedInputHandler('tab', () => {
+          this.handleTabFromRuntime(event.shiftKey)
+        })
+        return
+    }
+
+    const pluginKeyBindingResult = this.pluginHost.handleKeyBinding({
+      rawKey: event.key,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      projection: this.currentProjection,
+      selection: this.currentSelection,
+      mounted: this.mountedDom !== undefined
+    })
+
+    if (pluginKeyBindingResult.handled) {
+      if (pluginKeyBindingResult.preventDefault) {
+        event.preventDefault()
+      }
+      return
     }
   }
 
@@ -279,7 +319,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
     event.preventDefault()
     clipboardData.setData('text/plain', text)
     clipboardData.setData('text/html', this.readSelectionHtml())
-    this.runProtectedInputHandler(() => {
+    this.runProtectedInputHandler('deleteSelection', () => {
       this.deleteSelectedTextFromRuntime()
     })
   }
@@ -298,7 +338,7 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
     }
 
     event.preventDefault()
-    this.runProtectedInputHandler(() => {
+    this.runProtectedInputHandler('insertText', () => {
       this.insertPlainTextFromRuntime(text)
     })
   }
@@ -318,6 +358,21 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
 
     this.cancelDeferredPointerSelectionWork()
     event.preventDefault()
+
+    if (event.detail >= 3) {
+      mountedDom.pointerState.anchor = null
+      mountedDom.pointerState.pageMetrics = null
+      mountedDom.pointerState.paintedPageIndexes = this.selectionPageIndexes
+      focusHiddenTextarea(mountedDom)
+      this.commitSelection(this.expandParagraphSelection(anchor), {
+        source: 'pointer',
+        render: false,
+        emit: false
+      })
+      this.finalizeMountedPointerSelection()
+      return
+    }
+
     mountedDom.pointerState.anchor = anchor
     mountedDom.pointerState.pageMetrics = pageMetrics ?? null
     mountedDom.pointerState.paintedPageIndexes = this.selectionPageIndexes
@@ -335,6 +390,8 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
     if (mountedDom === undefined || mountedDom.pointerState.anchor === null) {
       return
     }
+
+    this.updatePointerAutoScroll(event)
 
     const pageMetrics = this.resolvePointerPageMetrics(event, mountedDom.pointerState.pageMetrics ?? undefined)
     const focus = pageMetrics === undefined ? undefined : this.resolvePointerAnchor(event, pageMetrics)
@@ -405,7 +462,10 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
     this.scheduleDeferredPointerSelectionFinalize()
   }
 
-  protected runProtectedInputHandler(action: () => void): void {
+  /**
+   * 执行输入处理动作，并把异常转为宿主可观测的可恢复错误事件。
+   */
+  protected runProtectedInputHandler(commandName: string, action: () => void): void {
     const mountedDom = this.mountedDom
 
     try {
@@ -415,19 +475,149 @@ export abstract class JWordEditorInputRuntime extends JWordEditorTextEditingRunt
         mountedDom.liveRegion.textContent = ''
         mountedDom.hiddenTextarea.value = ''
       }
-    } catch {
+    } catch (error) {
       if (mountedDom !== undefined) {
         mountedDom.liveRegion.textContent = '输入失败'
         mountedDom.hiddenTextarea.value = ''
       }
+
+      const payload = normalizeInputRuntimeError(error)
+
+      this.emit({
+        kind: 'error',
+        commandName,
+        recoverable: true,
+        ...payload
+      })
+      logDevelopmentInputError(commandName, error)
     }
   }
 
   protected abstract resolvePointerPageMetrics(event: MouseEvent, cachedPageMetrics?: PointerPageMetrics): PointerPageMetrics | undefined
   protected abstract resolvePointerAnchor(event: MouseEvent, pageMetrics: PointerPageMetrics): AnchorRef | undefined
+  protected abstract expandParagraphSelection(anchor: AnchorRef): SelectionState
   protected abstract expandWordSelection(
     anchor: AnchorRef,
     event?: MouseEvent,
     pageMetrics?: PointerPageMetrics
   ): SelectionState
+
+  /** 根据拖拽指针与视口边缘距离启动或停止自动滚动。 */
+  private updatePointerAutoScroll(event: MouseEvent): void {
+    const mountedDom = this.mountedDom
+
+    if (mountedDom === undefined) {
+      return
+    }
+
+    const rect = mountedDom.canvasContainer.getBoundingClientRect()
+    const distanceToTop = event.clientY - rect.top
+    const distanceToBottom = rect.bottom - event.clientY
+    const direction = distanceToTop < POINTER_AUTO_SCROLL_EDGE_PX
+      ? -1
+      : distanceToBottom < POINTER_AUTO_SCROLL_EDGE_PX
+        ? 1
+        : 0
+
+    if (direction === 0) {
+      this.cancelPointerAutoScroll()
+      return
+    }
+
+    const edgeDistance = direction < 0 ? distanceToTop : distanceToBottom
+    const edgeRatio = (POINTER_AUTO_SCROLL_EDGE_PX - Math.max(0, edgeDistance)) / POINTER_AUTO_SCROLL_EDGE_PX
+
+    mountedDom.pointerState.autoScrollDeltaY = direction * Math.max(
+      1,
+      Math.ceil(edgeRatio * POINTER_AUTO_SCROLL_MAX_STEP_PX)
+    )
+    this.ensurePointerAutoScroll()
+  }
+
+  /** 保持拖拽自动滚动定时器唯一，并同步触发视口刷新。 */
+  private ensurePointerAutoScroll(): void {
+    if (this.deferredPointerAutoScrollId !== undefined) {
+      return
+    }
+
+    this.deferredPointerAutoScrollId = setInterval(() => {
+      const mountedDom = this.mountedDom
+
+      if (mountedDom === undefined || mountedDom.pointerState.anchor === null) {
+        this.cancelPointerAutoScroll()
+        return
+      }
+
+      const previousScrollTop = mountedDom.canvasContainer.scrollTop
+
+      mountedDom.canvasContainer.scrollTop = previousScrollTop + mountedDom.pointerState.autoScrollDeltaY
+
+      if (mountedDom.canvasContainer.scrollTop !== previousScrollTop) {
+        mountedDom.handleScroll()
+      }
+    }, POINTER_AUTO_SCROLL_INTERVAL_MS)
+  }
+
+  /** 停止拖拽自动滚动并重置本次拖拽步进。 */
+  private cancelPointerAutoScroll(): void {
+    if (this.deferredPointerAutoScrollId !== undefined) {
+      clearInterval(this.deferredPointerAutoScrollId)
+      this.deferredPointerAutoScrollId = undefined
+    }
+
+    if (this.mountedDom !== undefined) {
+      this.mountedDom.pointerState.autoScrollDeltaY = 0
+    }
+  }
+}
+
+interface InputRuntimeErrorPayload {
+  readonly code: JWordErrorCode
+  readonly message: string
+  readonly details?: JWordErrorDetails
+}
+
+/** 将未知异常收敛为稳定的输入错误事件 payload。 */
+function normalizeInputRuntimeError(error: unknown): InputRuntimeErrorPayload {
+  if (error instanceof JWordError) {
+    return {
+      code: error.code,
+      message: error.message,
+      ...(error.details === undefined ? {} : { details: error.details })
+    }
+  }
+
+  if (error instanceof Error) {
+    return {
+      code: 'EDITOR_INPUT_HANDLER_FAILED',
+      message: error.message
+    }
+  }
+
+  return {
+    code: 'EDITOR_INPUT_HANDLER_FAILED',
+    message: '输入处理异常'
+  }
+}
+
+/** 仅在开发模式下把输入异常同步输出到控制台，便于定位宿主集成问题。 */
+function logDevelopmentInputError(commandName: string, error: unknown): void {
+  const runtime = globalThis as typeof globalThis & {
+    readonly process?: {
+      readonly env?: {
+        readonly NODE_ENV?: string
+      }
+    }
+  }
+
+  if (runtime.process?.env?.NODE_ENV !== 'development') {
+    return
+  }
+
+  console.error(`[JWord] 输入处理失败：${commandName}`, error)
+}
+
+/** 判断平台逐词移动/删除修饰键。 */
+function isWordModifierKey(event: KeyboardEvent): boolean {
+  return event.ctrlKey || event.altKey
 }

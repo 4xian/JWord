@@ -7,6 +7,20 @@
     "baseUrl": ".",
     "paths": {
       "@4xian/jword-core": ["./packages/core/src/index.ts"],
+      "@4xian/jword-native": ["./packages/native/src/index.ts"],
+      "@4xian/jword-native/worker": ["./packages/native/src/worker.ts"],
+      "@4xian/jword-license": ["./packages/license/src/index.ts"],
+      "@4xian/jword-docx": ["./packages/docx/src/index.ts"],
+      "@4xian/jword-docx/worker": ["./packages/docx/src/worker.ts"],
+      "@4xian/jword-pdf": ["./packages/pdf/src/index.ts"],
+      "@4xian/jword-pdf/worker": ["./packages/pdf/src/worker.ts"],
+      "@4xian/jword-collab": ["./packages/collab/src/index.ts"],
+      "@4xian/jword-collab/experimental": ["./packages/collab/src/experimental.ts"],
+      "@4xian/jword-collab-server": ["./packages/collab-server/src/index.ts"],
+      "@4xian/jword-persistence": ["./packages/persistence/src/index.ts"],
+      "@4xian/jword-react": ["./packages/react/src/index.ts"],
+      "@4xian/jword-vue": ["./packages/vue/src/index.ts"],
+      "@4xian/jword-devtools": ["./packages/devtools/src/index.ts"],
       "@4xian/jword-ui": ["./packages/ui/src/index.ts"],
       "@4xian/jword-ui/styles.css": ["./packages/ui/src/styles/toolbar.css"]
     },
@@ -23,7 +37,7 @@
     "useUnknownInCatchVariables": true,
     "skipLibCheck": false,
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "declarationMap": false,
+    "sourceMap": false
   }
 }

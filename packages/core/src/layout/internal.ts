@@ -3,7 +3,7 @@
  * 边界：只服务 layout 子目录内部模块，不暴露新的仓库级能力。
  * 协作模块：engine、incremental 和 types 共同维持分页盒构建的最小公共逻辑。
  * 性能/安全约束：工具函数保持纯计算，不访问 DOM、不持有文档状态。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#36-layout-engine。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { twipsToCssPx } from './page-config'
@@ -28,6 +28,7 @@ import type {
 
 export const PAGE_GAP_TWIPS = 720
 export const FONT_MANAGER_COMPATIBILITY_PROBE_TEXTS = Object.freeze(['M', '中', '😀', ' ', '.'])
+const HEADER_FOOTER_BASELINE_RATIO = 0.6
 
 export function createPage(pageIndex: number, pageConfig: PageConfig): MutablePageBox {
   const pageY = pageIndex * (pageConfig.heightTwips + PAGE_GAP_TWIPS)
@@ -198,6 +199,7 @@ function createHeaderFooterBox(
   const y = role === 'header'
     ? page.y
     : page.contentRect.y + page.contentRect.height
+  const baseline = resolveHeaderFooterBaseline(y, height)
 
   return Object.freeze({
     kind: 'headerFooter',
@@ -209,8 +211,14 @@ function createHeaderFooterBox(
     x: page.contentRect.x,
     y,
     width: page.contentRect.width,
-    height: Math.max(0, height)
+    height: Math.max(0, height),
+    baseline
   })
+}
+
+/** 根据 layout 盒子计算页眉页脚文字基线，后续 renderer 不再各自硬编码比例。 */
+function resolveHeaderFooterBaseline(y: number, height: number): number {
+  return y + (Math.max(0, height) * HEADER_FOOTER_BASELINE_RATIO)
 }
 
 export function createInlineObjectPayload(

@@ -3,7 +3,7 @@
  * 边界：只处理状态快照、标签与默认文案，不访问 DOM，也不直接调用 editor 或上传适配器。
  * 协作模块：media controller 维护状态，media dom 只消费这里归一化后的数据。
  * 性能/安全约束：状态保持最小可序列化，避免在 UI 层持有多份冗余资源数据。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type {
   JWordMediaCommandResult,
@@ -12,6 +12,7 @@ import type {
   JWordMediaStatus,
   JWordMediaUploadSource
 } from '../types'
+import { readJWordUiText, resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 
 /** 单个资源项的进度快照。 */
 export interface MediaPanelProgressState {
@@ -53,6 +54,7 @@ export function createMediaResourceId(): string {
 /** 为一次新的上传/插入动作创建 pending 项。 */
 export function createPendingMediaPanelItem(input: {
   readonly source: JWordMediaUploadSource
+  readonly i18n?: ResolvedJWordUiI18n
 }): MediaPanelItemState {
   return {
     id: createMediaPanelItemId(),
@@ -66,7 +68,7 @@ export function createPendingMediaPanelItem(input: {
     },
     error: null,
     applyState: 'deferred',
-    applyMessage: '等待上传结果。'
+    applyMessage: readJWordUiText(input.i18n ?? resolveJWordUiI18n(), 'a11y.media.uploading')
   }
 }
 
@@ -91,14 +93,15 @@ export function createFailedMediaPanelItem(input: {
 /** 把进度事件合并进当前项。 */
 export function applyMediaPanelProgress(
   item: MediaPanelItemState,
-  progress: MediaPanelProgressState
+  progress: MediaPanelProgressState,
+  i18n?: ResolvedJWordUiI18n
 ): MediaPanelItemState {
   return {
     ...item,
     status: 'pending',
     progress,
     error: null,
-    applyMessage: readMediaProgressLabel(progress)
+    applyMessage: readMediaProgressLabel(progress, i18n)
   }
 }
 
@@ -106,7 +109,8 @@ export function applyMediaPanelProgress(
 export function applyMediaPanelUploadSuccess(
   item: MediaPanelItemState,
   resource: JWordMediaResource,
-  commandResult: JWordMediaCommandResult
+  commandResult: JWordMediaCommandResult,
+  i18n?: ResolvedJWordUiI18n
 ): MediaPanelItemState {
   const retryTokenPatch = resource.retryToken === undefined
     ? {}
@@ -122,8 +126,8 @@ export function applyMediaPanelUploadSuccess(
     applyState: commandResult.kind,
     applyMessage: commandResult.message ?? (
       commandResult.kind === 'applied'
-        ? readDefaultAppliedMessage()
-        : readDefaultDeferredMessage()
+        ? readDefaultAppliedMessage(i18n)
+        : readDefaultDeferredMessage(i18n)
     )
   }
 }
@@ -157,19 +161,21 @@ export function readMediaSourceLabel(source: JWordMediaUploadSource): string {
 }
 
 /** 读取默认的 deferred 文案。 */
-export function readDefaultDeferredMessage(): string {
-  return '资源已就绪，等待主进程对接 core 的 inline image command。'
+export function readDefaultDeferredMessage(i18n?: ResolvedJWordUiI18n): string {
+  return readJWordUiText(i18n ?? resolveJWordUiI18n(), 'a11y.media.deferred')
 }
 
 /** 读取默认的 applied 文案。 */
-export function readDefaultAppliedMessage(): string {
-  return '资源已就绪，并已插入当前文档。'
+export function readDefaultAppliedMessage(i18n?: ResolvedJWordUiI18n): string {
+  return readJWordUiText(i18n ?? resolveJWordUiI18n(), 'a11y.media.applied')
 }
 
 /** 读取进度标签。 */
-export function readMediaProgressLabel(progress: MediaPanelProgressState | null): string {
+export function readMediaProgressLabel(progress: MediaPanelProgressState | null, i18n?: ResolvedJWordUiI18n): string {
+  const resolvedI18n = i18n ?? resolveJWordUiI18n()
+
   if (progress === null) {
-    return '上传中。'
+    return readJWordUiText(resolvedI18n, 'a11y.media.uploading')
   }
 
   if (progress.total === undefined || progress.total <= 0) {
@@ -178,5 +184,5 @@ export function readMediaProgressLabel(progress: MediaPanelProgressState | null)
 
   const percent = Math.max(0, Math.min(100, Math.round((progress.loaded / progress.total) * 100)))
 
-  return `上传中 ${percent}%`
+  return readJWordUiText(resolvedI18n, 'a11y.media.uploadingPercent').replace('{percent}', String(percent))
 }

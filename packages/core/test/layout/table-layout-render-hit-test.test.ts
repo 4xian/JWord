@@ -5,7 +5,7 @@
  * 边界：只覆盖 core 纯数据布局、边框绘制和单元格文本命中，不测试浏览器事件系统。
  * 协作模块：layout 产出表格几何，renderer 消费表格盒绘制边框，query 把页面点映射回单元格文本位置。
  * 性能/安全约束：测试使用内存 mock canvas，不访问 DOM、网络或磁盘。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-2---表格纵线step-44-47。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -169,7 +169,7 @@ describe('table layout render hit-test', () => {
     expect(Math.abs(topInset - bottomInset)).toBeLessThanOrEqual(1)
   })
 
-  it('renders table fragment backgrounds and decorations after selection overlays', () => {
+  it('renders table fragment backgrounds before selection overlays and text decorations after text', () => {
     const layout = layoutDocument({
       projection: createStyledTableProjection(),
       pageConfig: createPageConfig({
@@ -218,8 +218,8 @@ describe('table layout render hit-test', () => {
 
     expect(backgroundIndex).toBeGreaterThanOrEqual(0)
     expect(selectionIndex).toBeGreaterThanOrEqual(0)
-    expect(backgroundIndex).toBeGreaterThan(selectionIndex)
-    expect(textIndex).toBeGreaterThan(backgroundIndex)
+    expect(backgroundIndex).toBeLessThan(selectionIndex)
+    expect(textIndex).toBeGreaterThan(selectionIndex)
     expect(decorationRectCount).toBeGreaterThanOrEqual(2)
   })
 

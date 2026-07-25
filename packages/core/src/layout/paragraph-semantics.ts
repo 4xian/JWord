@@ -3,7 +3,7 @@
  * 边界：只做纯数据默认值和标签推导，不访问 DOM、不绘制 Canvas、不读取运行时状态。
  * 协作模块：internal 复用 run 默认样式，paragraph-flow 复用缩进/间距和列表 marker 规则。
  * 性能/安全约束：保持纯函数，避免把编号状态散落到多个模块；编号累加仍由 flow 游标持有。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#step-316。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { twipsToCssPx } from './page-config'
@@ -31,6 +31,7 @@ const LIST_BASE_INDENT_TWIPS = 720
 const LIST_LEVEL_OFFSET_TWIPS = 360
 const LIST_MARKER_GAP_TWIPS = 120
 const BULLET_MARKERS = Object.freeze(['•', '◦', '▪'])
+const BULLET_NUMBERING_IDS = new Set(['jword-list-bullet', 'paste-bullet'])
 const HEADING_DEFAULTS: Readonly<Record<string, HeadingStyleDefaults>> = Object.freeze({
   Heading1: Object.freeze({
     runStyle: Object.freeze({
@@ -126,7 +127,7 @@ export function resolveParagraphList(paragraph: Paragraph): ParagraphList | unde
  * 归一化列表类型，当前只区分 ordered / bullet。
  */
 export function resolveParagraphListKind(list: ParagraphList): 'bullet' | 'ordered' {
-  return list.numberingId.toLowerCase().includes('bullet') ? 'bullet' : 'ordered'
+  return BULLET_NUMBERING_IDS.has(list.numberingId) ? 'bullet' : 'ordered'
 }
 
 /**

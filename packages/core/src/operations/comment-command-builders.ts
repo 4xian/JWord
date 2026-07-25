@@ -3,7 +3,7 @@
  * 边界：只生成命令和操作，不执行事务、不写入投影，也不处理界面交互。
  * 协作模块：编辑器门面、文本范围快照、事务流水线和投影共同提供批注闭环。
  * 性能/安全约束：builder 只依赖当前 projection 与 selection，保持 JSON 兼容输出。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-3---批注与超链接step-48-410。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createTextRangeRecord } from '../model/position'
@@ -12,10 +12,6 @@ import { isSelectionCollapsed } from '../model/selection'
 import type { SelectionState } from '../model/selection'
 import type { Comment, CommentMessage } from '../model/types'
 import type { Command } from './transaction'
-
-let commentThreadSequence = 0
-let commentMessageSequence = 0
-let commentRangeSequence = 0
 
 export interface AddCommentThreadInput {
   readonly authorId: string
@@ -49,9 +45,9 @@ export function buildAddCommentThreadCommand(
   const usedThreadIds = collectCommentThreadIds(projection)
   const usedMessageIds = collectCommentMessageIds(projection)
   const usedRangeIds = collectCommentRangeIds(projection)
-  const threadId = allocateCommentId(usedThreadIds, 'comment-thread', () => ++commentThreadSequence)
-  const messageId = allocateCommentId(usedMessageIds, 'comment-message', () => ++commentMessageSequence)
-  const anchorRangeId = allocateCommentId(usedRangeIds, 'comment-range', () => ++commentRangeSequence)
+  const threadId = allocateCommentId(usedThreadIds, 'comment-thread')
+  const messageId = allocateCommentId(usedMessageIds, 'comment-message')
+  const anchorRangeId = allocateCommentId(usedRangeIds, 'comment-range')
   const rangeSnapshot = createTextRangeRecord(anchorRangeId, selection.range)
   const message = createCommentMessage(messageId, anchorRangeId, input)
   const thread: Comment = {
@@ -90,7 +86,7 @@ export function buildReplyCommentThreadCommand(
   }
 
   const usedMessageIds = collectCommentMessageIds(projection)
-  const messageId = allocateCommentId(usedMessageIds, 'comment-message', () => ++commentMessageSequence)
+  const messageId = allocateCommentId(usedMessageIds, 'comment-message')
 
   return {
     name: 'replyCommentThread',
@@ -246,15 +242,13 @@ function collectCommentRangeIds(projection: DocumentProjection): Set<string> {
 /**
  * 分配当前 projection 内唯一的批注相关 ID。
  */
-function allocateCommentId(
-  usedIds: Set<string>,
-  prefix: string,
-  nextSequence: () => number
-): string {
-  let candidate = `${prefix}-${nextSequence()}`
+function allocateCommentId(usedIds: Set<string>, prefix: string): string {
+  let sequence = 1
+  let candidate = `${prefix}-${sequence}`
 
   while (usedIds.has(candidate)) {
-    candidate = `${prefix}-${nextSequence()}`
+    sequence += 1
+    candidate = `${prefix}-${sequence}`
   }
 
   usedIds.add(candidate)

@@ -2,11 +2,13 @@
  * @fileoverview 职责: 用真实浏览器补齐 Gate 4 批注 anchor 与链接 allowlist 的最小 E2E 回归。
  * 边界: 只覆盖 vanilla demo 中官方 comments/link UI 到 core projection 的公开链路，不测试 controller 私有状态。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/comments、packages/ui/src/link 与 core command builders。
- * 约束: 所有断言来自真实 DOM、window.__jwordDemo 公开 facade 或 editor projection；不绕过 transaction pipeline 修改状态。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.8-4.10、Step 4.17。
+ * 约束: 所有断言来自真实 DOM、window.__jwordTestFixture 公开 facade 或 editor projection；不绕过 transaction pipeline 修改状态。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+
+import { activateToolbarTab } from './gate3-toolbar-helpers'
 
 interface CommentAnchorProbe {
   readonly threadCount: number
@@ -22,7 +24,7 @@ interface LinkProbe {
 }
 
 test('Gate 4 comments keep anchor stable after preceding text edits and support resolve reopen', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate4ContentDemoReady(page)
   await selectFirstRunRange(page, 1, 3)
 
@@ -58,7 +60,7 @@ test('Gate 4 comments keep anchor stable after preceding text edits and support 
 })
 
 test('Gate 4 link dialog rejects unsafe urls and inserts an allowlisted link through toolbar UI', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate4ContentDemoReady(page)
   await selectFirstRunRange(page, 1, 3)
 
@@ -82,7 +84,7 @@ test('Gate 4 link dialog rejects unsafe urls and inserts an allowlisted link thr
 })
 
 test('Gate 4 link overlay click toggles quick tools after a selected link is hidden', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate4ContentDemoReady(page)
   await selectFirstRunRange(page, 1, 3)
 
@@ -116,7 +118,7 @@ test('Gate 4 link overlay click toggles quick tools after a selected link is hid
 })
 
 test('Gate 4 link target context menu uses the hit link state instead of stale selection state', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForGate4ContentDemoReady(page)
   await selectFirstRunRange(page, 1, 3)
 
@@ -147,16 +149,17 @@ test('Gate 4 link target context menu uses the hit link state instead of stale s
 
 /** 等待 demo、toolbar、批注与链接官方 UI 都完成挂载。 */
 async function waitForGate4ContentDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-toolbar]')).toBeVisible()
   await expect(page.locator('[data-jword-comments-sidebar]')).toHaveCount(1)
   await expect(page.locator('[data-jword-link-panel]')).toHaveCount(1)
+  await activateToolbarTab(page, 'insert')
 }
 
 /** 通过公开 demo hook 选择第一段首个 run 的文本范围。 */
 async function selectFirstRunRange(page: Page, anchorGraphemeIndex: number, focusGraphemeIndex: number): Promise<void> {
   await page.evaluate(({ anchorIndex, focusIndex }) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const section = demo?.editor.getProjection().document.sections[0]
     const block = section?.blocks[0]
     const run = block?.kind === 'paragraph' ? block.runs[0] : undefined
@@ -200,7 +203,7 @@ async function insertTextAtFirstRunStart(page: Page, text: string): Promise<void
 /** 读取批注 projection 与 range snapshot 定位结果。 */
 async function readCommentAnchorProbe(page: Page): Promise<CommentAnchorProbe> {
   return page.evaluate(() => {
-    const editor = window.__jwordDemo?.editor
+    const editor = window.__jwordTestFixture?.editor
     const projection = editor?.getProjection()
     const thread = projection?.document.comments?.[0]
     const located = thread === undefined ? null : editor?.locateRangeSnapshot(thread.rangeSnapshot) ?? null
@@ -226,7 +229,7 @@ async function readCommentAnchorProbe(page: Page): Promise<CommentAnchorProbe> {
 /** 读取链接 projection 与当前活动链接。 */
 async function readLinkProbe(page: Page): Promise<LinkProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const projection = demo?.editor.getProjection()
     const linkedRun = projection?.document.sections
       .flatMap((section) => section.blocks)

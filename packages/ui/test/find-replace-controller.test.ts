@@ -5,7 +5,7 @@
  * 边界：只覆盖 controller 到 editor selection 与宿主滚动回调，不测试 canvas 渲染。
  * 协作模块：find-replace controller 与 core find helper。
  * 约束：滚动由宿主注入回调承接，controller 不直接读取页面布局。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.12。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor } from '@4xian/jword-core'
@@ -98,6 +98,46 @@ describe('find replace controller', () => {
       controller.elements.replaceAllButton.click()
 
       expect(readFindOverlayRects(editorHost)).toHaveLength(0)
+    } finally {
+      controller.destroy()
+      editor.destroy()
+      host.remove()
+      editorHost.remove()
+    }
+  })
+
+  test('大命中量只渲染当前命中附近的有限 overlay', () => {
+    const editor = createEditor({
+      initialText: Array.from({ length: 60 }, (_, index) => `alpha ${index}`).join('\n\n')
+    })
+    const editorHost = document.createElement('div')
+    const host = document.createElement('div')
+    const controller = createFindReplaceController({
+      editor,
+      host,
+      editorHost
+    })
+
+    document.body.append(editorHost, host)
+    editor.mount(editorHost)
+
+    try {
+      controller.elements.queryInput.value = 'alpha'
+      controller.elements.queryInput.dispatchEvent(new Event('input', {
+        bubbles: true
+      }))
+
+      controller.elements.findButton.click()
+
+      expect(controller.elements.status.textContent).toBe('1 / 60')
+      expect(readFindOverlayRects(editorHost)).toHaveLength(24)
+      expect(readActiveOverlayIndexes(editorHost)).toEqual(['0'])
+
+      controller.elements.previousButton.click()
+
+      expect(controller.elements.status.textContent).toBe('60 / 60')
+      expect(readFindOverlayRects(editorHost)).toHaveLength(24)
+      expect(readActiveOverlayIndexes(editorHost)).toEqual(['59'])
     } finally {
       controller.destroy()
       editor.destroy()

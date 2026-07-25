@@ -3,14 +3,14 @@
  * 边界: 只覆盖 packages/ui 的 command adapter 与 core editor facade 协作，不验证上传流程或 DOM 面板。
  * 协作: packages/ui/src/media/core-command-adapter.ts 与 @4xian/jword-core 的图片命令/锚点迁移共同保证插图后的继续输入体验。
  * 约束: 断言只依赖公开 editor facade 和 adapter 结果，不直接访问内部 store。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 1。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, test } from 'vitest'
-import { createEditor, createSelectionState, type Resource } from '@4xian/jword-core'
-import { createCoreMediaCommandAdapter } from '../src/index'
+import { createEditor, createSelectionState } from '@4xian/jword-core'
+import { createCoreMediaCommandAdapter, type JWordMediaResource } from '../src/index'
 
-const INLINE_RESOURCE: Resource = {
+const INLINE_RESOURCE: JWordMediaResource = {
   kind: 'resource',
   id: 'media-adapter-inline-image',
   mime: 'image/png',

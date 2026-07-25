@@ -5,7 +5,7 @@
  * 边界：只覆盖 DOM 结构和渲染，不验证 controller 事件或宿主回调。
  * 协作模块：packages/ui/src/link/dom.ts 与 packages/ui/src/link/state.ts。
  * 约束：确认按钮状态与 dialog/quick tools 显隐必须由 state 驱动。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 3。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { describe, expect, test } from 'vitest'
 import { createLinkPanelDom, destroyLinkPanel, renderLinkPanel } from '../src/link/dom'

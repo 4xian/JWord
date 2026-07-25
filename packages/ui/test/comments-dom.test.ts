@@ -5,7 +5,7 @@
  * 边界：只覆盖 sidebar 节点和 anchor hook，不验证 controller 事件或宿主回调。
  * 协作模块：packages/ui/src/comments/dom.ts 与 packages/ui/src/comments/state.ts。
  * 约束：右侧 sidebar 必须展示 thread、作者、详情消息和草稿输入，且不依赖全局样式。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 4.8-4.10。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, test } from 'vitest'

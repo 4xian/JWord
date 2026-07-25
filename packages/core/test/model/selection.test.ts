@@ -5,7 +5,7 @@
  * 边界：只覆盖纯数据选择区，不测试 DOM 输入、hit-test、布局或 history undo。
  * 协作模块：history、input、comment、revision 和 remote cursor 后续复用这些选择区状态。
  * 性能/安全约束：测试只使用不可变 AnchorRef，不触发 DOM、网络或磁盘写入。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md#35-anchor-与-selection。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -49,6 +49,18 @@ describe('SelectionState', () => {
     expect(isSelectionCollapsed(selection)).toBe(true)
   })
 
+  it('按文档序推断跨 run 与跨段反向选区', () => {
+    const firstRunStart = createTestAnchor(0)
+    const secondRunStart = createTestAnchor(0, { runId: 'run-2' })
+    const firstParagraphStart = createTestAnchor(0)
+    const secondParagraphStart = createTestAnchor(0, { blockId: 'paragraph-2', runId: 'run-3' })
+
+    expect(createSelectionState(firstRunStart, secondRunStart).direction).toBe('forward')
+    expect(createSelectionState(secondRunStart, firstRunStart).direction).toBe('backward')
+    expect(createSelectionState(firstParagraphStart, secondParagraphStart).direction).toBe('forward')
+    expect(createSelectionState(secondParagraphStart, firstParagraphStart).direction).toBe('backward')
+  })
+
   it('restores selection from an immutable snapshot', () => {
     const selection = createSelectionState(createTestAnchor(0), createTestAnchor(3), {
       direction: 'forward',
@@ -61,12 +73,19 @@ describe('SelectionState', () => {
   })
 })
 
-function createTestAnchor(graphemeIndex: number) {
+function createTestAnchor(
+  graphemeIndex: number,
+  overrides: Partial<Readonly<{
+    sectionId: string
+    blockId: string
+    runId: string
+  }>> = {}
+) {
   return createAnchorRef({
     documentId: 'document-1' as DocumentId,
-    sectionId: 'section-1' as SectionId,
-    blockId: 'paragraph-1' as BlockId,
-    runId: 'run-1' as RunId,
+    sectionId: (overrides.sectionId ?? 'section-1') as SectionId,
+    blockId: (overrides.blockId ?? 'paragraph-1') as BlockId,
+    runId: (overrides.runId ?? 'run-1') as RunId,
     graphemeIndex: createGraphemeIndex(graphemeIndex)
   })
 }

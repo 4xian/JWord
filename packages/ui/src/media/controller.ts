@@ -3,7 +3,7 @@
  * 边界：不实现上传协议或 core command builder 本体；这里只维护 UI 状态并调度宿主注入的命令适配器。
  * 协作模块：create-ui 负责装配，media dom 负责节点结构，宿主通过 media options 注入 adapter/commands。
  * 性能/安全约束：图片入口只保留行内插图，不再暴露块级模式或独立大面板。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { Editor } from '@4xian/jword-core'
 import type {
@@ -21,10 +21,16 @@ import type {
 import {
   createMediaPanelDom,
   destroyMediaPanel,
+  localizeMediaPanelDom,
   renderMediaPanel,
   resetMediaFileInput,
   type MediaPanelDom
 } from './dom'
+import {
+  readJWordUiText,
+  resolveJWordUiI18n,
+  type ResolvedJWordUiI18n
+} from '../i18n'
 import { isAllowedJWordMediaUrl } from './policy'
 import {
   applyMediaPanelFailure,
@@ -40,7 +46,9 @@ interface CreateMediaControllerOptions {
   readonly editor: Editor
   readonly host: HTMLElement
   readonly media: JWordMediaOptions
+  readonly disabled?: boolean
   readonly readonly?: JWordReadonlyMode
+  readonly i18n?: ResolvedJWordUiI18n
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
   }
@@ -48,18 +56,21 @@ interface CreateMediaControllerOptions {
 
 interface MediaControllerHandle {
   readonly elements: JWordMediaPanelElements
+  setI18n(i18n: ResolvedJWordUiI18n): void
   refresh(): void
   destroy(): void
 }
 
 /** 创建 Gate 4 toolbar 图片入口 controller。 */
 export function createMediaController(options: CreateMediaControllerOptions): MediaControllerHandle {
-  const dom = createMediaPanelDom(options.host, options.media.title ?? '图片')
+  let i18n = options.i18n ?? resolveJWordUiI18n()
+  const dom = createMediaPanelDom(options.host, readMediaTitle(i18n, options.media.title))
   const adapter = options.media.adapter
   const commands = options.media.commands
   const liveRegion = options.assistive.liveRegion
   const signalController = new AbortController()
   const readonlyMode = options.readonly === true || (typeof options.readonly === 'object' && options.readonly.enabled === true)
+  const disabledMode = options.disabled === true
   let items: MediaPanelItemState[] = []
   let menuOpen = false
   let urlDialogOpen = false
@@ -67,6 +78,15 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   let urlError = ''
   let busy = false
   let activeUrlItemId: string | null = null
+  /** 读取当前语言的媒体播报文案。 */
+  function mediaText(key: string, replacements: Readonly<Record<string, string>> = {}): string {
+    let message = readJWordUiText(i18n, `a11y.media.${key}`)
+    for (const [placeholder, value] of Object.entries(replacements)) {
+      message = message.replace(`{${placeholder}}`, value)
+    }
+    return message
+  }
+  localizeMediaPanelDom(dom, i18n, readMediaTitle(i18n, options.media.title))
   const unsubscribeEditor = options.editor.subscribe((event) => {
     if (event.kind !== 'destroyed') {
       return
@@ -75,9 +95,9 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
     menuOpen = false
     urlDialogOpen = false
     busy = false
-    urlError = 'JWord editor 已销毁，无法继续插入图片。'
+    urlError = mediaText('editorDestroyed')
     refresh()
-    liveRegion?.announce('JWord editor 已销毁，图片入口已关闭。', { force: true })
+    liveRegion?.announce(mediaText('destroyed'), { force: true })
   })
 
   /** 统一触发 live region 播报。 */
@@ -88,11 +108,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   /** 用当前内存状态刷新 toolbar 图片入口。 */
   function refresh(): void {
     renderMediaPanel(dom, {
-      menuOpen: readonlyMode ? false : menuOpen,
-      urlDialogOpen: readonlyMode ? false : urlDialogOpen,
+      menuOpen: readonlyMode || disabledMode ? false : menuOpen,
+      urlDialogOpen: readonlyMode || disabledMode ? false : urlDialogOpen,
       urlValue: urlDraft,
       urlError,
-      busy: busy || readonlyMode
+      busy: busy || readonlyMode || disabledMode
     })
   }
 
@@ -122,7 +142,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   /** 打开 URL 弹框。 */
   function openUrlDialog(): void {
     if (readonlyMode) {
-      announce('当前为只读模式。')
+      announce(mediaText('readonly'))
       return
     }
 
@@ -164,8 +184,9 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
     const currentItem = activeUrlItemId === null ? undefined : readItem(activeUrlItemId)
 
     if (currentItem === undefined || currentItem.source.kind !== 'url' || currentItem.source.url !== url) {
-      const nextItem = createPendingMediaPanelItem({
-        source
+    const nextItem = createPendingMediaPanelItem({
+      source,
+      i18n
       })
 
       activeUrlItemId = nextItem.id
@@ -180,7 +201,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
     }, {
       loaded: 0,
       total: 100
-    })
+    }, i18n)
 
     upsertItem(nextItem)
 
@@ -199,12 +220,12 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
             return
           }
 
-          upsertItem(applyMediaPanelProgress(currentItem, progress))
+          upsertItem(applyMediaPanelProgress(currentItem, progress, i18n))
         }
       })
-      const commandResult = await applyMediaCommand(result.resource, commands, options.editor)
+      const commandResult = await applyMediaCommand(result.resource, commands, options.editor, i18n)
       const currentItem = readItem(item.id) ?? item
-      const nextItem = applyMediaPanelUploadSuccess(currentItem, result.resource, commandResult)
+      const nextItem = applyMediaPanelUploadSuccess(currentItem, result.resource, commandResult, i18n)
 
       upsertItem(nextItem)
       busy = false
@@ -216,10 +237,10 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
         activeUrlItemId = null
       }
 
-      announce(`图片资源已就绪：${readMediaSourceLabel(source)}。`)
+      announce(mediaText('uploadReady', { source: readMediaSourceLabel(source) }))
       refresh()
     } catch (error) {
-      const normalizedError = normalizeMediaError(error)
+      const normalizedError = normalizeMediaError(error, i18n)
       const currentItem = readItem(item.id) ?? item
       const nextItem = applyMediaPanelFailure(currentItem, normalizedError.error, normalizedError.retryToken)
 
@@ -232,7 +253,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
         urlError = normalizedError.error.message
       }
 
-      announce(`图片上传失败：${normalizedError.error.message}`)
+      announce(mediaText('uploadFailed', { message: normalizedError.error.message }))
       refresh()
     }
   }
@@ -240,7 +261,12 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   /** 提交当前文件输入。 */
   function submitSelectedFile(file: JWordMediaUploadFile): void {
     if (readonlyMode) {
-      announce('当前为只读模式。')
+      announce(mediaText('readonly'))
+      resetMediaFileInput(dom)
+      return
+    }
+    if (disabledMode) {
+      announce(mediaText('adapterMissing'))
       resetMediaFileInput(dom)
       return
     }
@@ -249,12 +275,13 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
       source: {
         kind: 'file',
         file
-      }
+      },
+      i18n
     })
 
     upsertItem(pendingItem)
     busy = true
-    announce(`图片上传已开始：${file.name}。`)
+    announce(mediaText('uploadStarted', { source: file.name }))
     refresh()
     void runUpload(pendingItem, pendingItem.source)
   }
@@ -262,7 +289,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   /** 提交当前 URL 输入。 */
   function submitCurrentUrl(): void {
     if (readonlyMode) {
-      announce('当前为只读模式。')
+      announce(mediaText('readonly'))
+      return
+    }
+    if (disabledMode) {
+      announce(mediaText('adapterMissing'))
       return
     }
 
@@ -275,14 +306,14 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
     urlDraft = url
 
     if (url.length === 0) {
-      urlError = '请输入一个图片 URL。'
+      urlError = readJWordUiText(i18n, 'dialog.media.errorUrlRequired')
       announce(urlError)
       refresh()
       return
     }
 
     if (!isAllowedJWordMediaUrl(url, options.media.urlPolicy)) {
-      urlError = '当前 URL 不在 allowlist 中；请改用同源、data:、blob: 或宿主放行的地址。'
+      urlError = readJWordUiText(i18n, 'dialog.media.errorUrlDisallowed')
       announce(urlError)
       refresh()
       return
@@ -292,7 +323,7 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
 
     busy = true
     urlError = ''
-    announce(`图片上传已开始：${url}。`)
+    announce(mediaText('uploadStarted', { source: url }))
     refresh()
     void runUpload(pendingItem, pendingItem.source)
   }
@@ -315,7 +346,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   function bindEvents(): void {
     dom.triggerButton.addEventListener('click', () => {
       if (readonlyMode) {
-        announce('当前为只读模式。')
+        announce(mediaText('readonly'))
+        return
+      }
+      if (disabledMode) {
+        announce(mediaText('adapterMissing'))
         return
       }
 
@@ -328,7 +363,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
     }, { signal: signalController.signal })
     dom.fileActionButton.addEventListener('click', () => {
       if (readonlyMode) {
-        announce('当前为只读模式。')
+        announce(mediaText('readonly'))
+        return
+      }
+      if (disabledMode) {
+        announce(mediaText('adapterMissing'))
         return
       }
 
@@ -341,7 +380,11 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
     }, { signal: signalController.signal })
     dom.urlActionButton.addEventListener('click', () => {
       if (readonlyMode) {
-        announce('当前为只读模式。')
+        announce(mediaText('readonly'))
+        return
+      }
+      if (disabledMode) {
+        announce(mediaText('adapterMissing'))
         return
       }
 
@@ -400,6 +443,16 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
 
   return {
     elements: dom,
+    setI18n(nextI18n): void {
+      i18n = nextI18n
+      if (urlError.length > 0 && urlDraft.length === 0) {
+        urlError = readJWordUiText(i18n, 'dialog.media.errorUrlRequired')
+      } else if (urlError.length > 0 && !isAllowedJWordMediaUrl(urlDraft, options.media.urlPolicy)) {
+        urlError = readJWordUiText(i18n, 'dialog.media.errorUrlDisallowed')
+      }
+      localizeMediaPanelDom(dom, i18n, readMediaTitle(i18n, options.media.title))
+      refresh()
+    },
     refresh,
     destroy(): void {
       signalController.abort()
@@ -409,11 +462,17 @@ export function createMediaController(options: CreateMediaControllerOptions): Me
   }
 }
 
+/** 读取图片入口标题，宿主自定义 title 优先。 */
+function readMediaTitle(i18n: ResolvedJWordUiI18n, title: string | undefined): string {
+  return title ?? readJWordUiText(i18n, 'menu.media.title')
+}
+
 /** 图片入口当前只走行内图片 command。 */
 async function applyMediaCommand(
   resource: JWordMediaResource,
   commands: JWordMediaCommandAdapter | undefined,
-  editor: Editor
+  editor: Editor,
+  i18n: ResolvedJWordUiI18n
 ): Promise<JWordMediaCommandResult> {
   const projection = editor.getProjection()
   const selection = editor.getSelection()
@@ -422,7 +481,7 @@ async function applyMediaCommand(
   if (commands === undefined) {
     return {
       kind: 'deferred',
-      message: readDefaultDeferredMessage()
+      message: readDefaultDeferredMessage(i18n)
     }
   }
 
@@ -439,7 +498,7 @@ async function applyMediaCommand(
   if (commands.insertInlineImage === undefined) {
     return {
       kind: 'deferred',
-      message: readDefaultDeferredMessage()
+      message: readDefaultDeferredMessage(i18n)
     }
   }
 
@@ -452,7 +511,10 @@ async function applyMediaCommand(
 }
 
 /** 把各种 throw 形状收敛成统一错误快照。 */
-function normalizeMediaError(error: unknown): { readonly error: JWordMediaErrorState, readonly retryToken?: string } {
+function normalizeMediaError(
+  error: unknown,
+  i18n: ResolvedJWordUiI18n
+): { readonly error: JWordMediaErrorState, readonly retryToken?: string } {
   if (isMediaErrorLike(error)) {
     const retryTokenPatch = error.retryToken === undefined
       ? {}
@@ -479,7 +541,7 @@ function normalizeMediaError(error: unknown): { readonly error: JWordMediaErrorS
   return {
     error: {
       code: 'MEDIA_UPLOAD_FAILED',
-      message: '媒体上传失败。'
+      message: readJWordUiText(i18n, 'dialog.media.errorUploadFailed')
     }
   }
 }

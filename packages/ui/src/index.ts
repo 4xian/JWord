@@ -3,13 +3,52 @@
  * 边界：只做符号导出，不访问 DOM，不引入运行时副作用。
  * 协作模块：examples、宿主应用和后续 wrapper 通过此入口消费 UI SDK。
  * 性能/安全约束：保持入口稳定，避免把内部实现细节暴露为公开契约。
- * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md#5-4xianjword-ui-的目标公开面。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 export { createJWordUi } from './create-ui'
+export { createJWord } from './editor-shell'
+export type {
+  CreateJWordOptions,
+  JWordEditorShell,
+  JWordEditorShellSlots,
+  JWordEditorShellUiOptions
+} from './editor-shell'
+export {
+  DEFAULT_JWORD_UI_I18N_DICTIONARY,
+  resolveJWordUiI18n
+} from './i18n'
+export {
+  DEFAULT_JWORD_UI_THEME_TOKENS
+} from './theme'
 export { createCoreMediaCommandAdapter } from './media/core-command-adapter'
 export { createCoreTableCommandAdapter } from './table/core-command-adapter'
 export type {
   CreateJWordUiOptions,
+  JWordUiThemeName,
+  JWordUiThemeToken,
+  JWordUiThemeOptions,
+  JWordUiTextDirection,
+  JWordUiI18nKey,
+  JWordUiI18nDictionary,
+  JWordUiI18nOptions,
+  JWordUiToastTextKey,
+  JWordToastOptions,
+  JWordToastType,
+  JWordDebugOptions,
+  JWordLogEntry,
+  JWordLogLevel,
+  JWordLogger,
+  JWordUiStatusBarTextKey,
+  JWordStatusBarBrandOptions,
+  JWordStatusBarBrandProtectionMode,
+  JWordStatusBarDocumentStats,
+  JWordStatusBarElements,
+  JWordStatusBarItemId,
+  JWordStatusBarLocale,
+  JWordStatusBarLocaleSwitcherOptions,
+  JWordStatusBarOptions,
+  JWordStatusBarThemeSwitcherOptions,
+  JWordStatusBarZoomOptions,
   JWordMediaAdapter,
   JWordMediaCommandAdapter,
   JWordMediaCommandResult,
@@ -56,10 +95,16 @@ export type {
   JWordSelectedImageTarget,
   JWordToolbarControlElement,
   JWordToolbarElements,
+  JWordToolbarPluginItem,
   JWordToolbarOptions,
   JWordToolbarToolId,
   JWordUiElements,
-  JWordUiInstance
+  JWordUiInstance,
+  JWordWatermarkOptions,
+  JWordUiPluginExtension,
+  JWordUiPluginRenderContext,
+  JWordMenuPluginAction,
+  JWordMenuPluginItem
 } from './types'
 export { createFindReplaceController } from './find-replace/controller'
 export type {

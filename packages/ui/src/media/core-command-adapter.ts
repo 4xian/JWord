@@ -3,7 +3,7 @@
  * 边界：只负责参数映射、命令执行和最小成功/延期文案，不实现上传适配器或 DOM。
  * 协作模块：media controller 通过该桥接层真正写入 editor，examples/vanilla 和未来宿主都可直接复用。
  * 性能/安全约束：所有图片写入仍走 editor facade 的 transaction pipeline，不旁路修改 projection。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md#iteration-1---图片纵线step-41-43。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import {
@@ -31,6 +31,7 @@ import type {
   JWordMediaResource,
   JWordSelectedImageTarget
 } from '../types'
+import { readJWordUiText, resolveJWordUiI18n, type ResolvedJWordUiI18n } from '../i18n'
 
 type InlineImageInsertOperation = Extract<Command['operations'][number], {
   kind: 'insertImage'
@@ -39,7 +40,18 @@ type InlineImageInsertOperation = Extract<Command['operations'][number], {
 }
 
 /** 创建基于 core command builders 的默认图片命令适配器。 */
-export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
+export function createCoreMediaCommandAdapter(
+  i18nOrReader: ResolvedJWordUiI18n | (() => ResolvedJWordUiI18n) | undefined = undefined
+): JWordMediaCommandAdapter {
+  const readI18n = typeof i18nOrReader === 'function'
+    ? i18nOrReader
+    : () => i18nOrReader ?? resolveJWordUiI18n()
+
+  /** 读取图片命令结果文案。 */
+  function mediaText(key: string): string {
+    return readJWordUiText(readI18n(), `a11y.media.${key}`)
+  }
+
   return {
     resolveSelectedImageTarget(projection, selection) {
       const target = resolveSelectedImageTarget(projection, selection)
@@ -60,8 +72,8 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
       return executeMediaCommand(
         command,
         request,
-        '当前选区无法插入行内图片。',
-        '已插入行内图片。',
+        mediaText('insertUnavailable'),
+        mediaText('inserted'),
         selectionAfter
       )
     },
@@ -75,8 +87,8 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
       return executeMediaCommand(
         command,
         request,
-        '当前选区未命中可替换的图片。',
-        '已替换当前图片资源。'
+        mediaText('replaceUnavailable'),
+        mediaText('replaced')
       )
     },
     resizeSelectedImage(input) {
@@ -88,8 +100,8 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
       return executeMediaCommand(
         command,
         input,
-        '当前图片尺寸未变化，或当前选区未命中可调整的图片。',
-        '已更新图片尺寸。'
+        mediaText('resizeUnavailable'),
+        mediaText('resized')
       )
     },
     setSelectedImageRotation(input) {
@@ -102,8 +114,8 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
       return executeMediaCommand(
         command,
         input,
-        '当前图片旋转角度未变化，或当前选区未命中可旋转的图片。',
-        input.rotationDegrees === 0 ? '已重置图片旋转角度。' : '已更新图片旋转角度。'
+        mediaText('rotateUnavailable'),
+        input.rotationDegrees === 0 ? mediaText('rotationReset') : mediaText('rotated')
       )
     },
     moveSelectedImage(input) {
@@ -116,7 +128,7 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
       if (command === null) {
         return {
           kind: 'deferred',
-          message: '当前图片未移动，或当前拖拽落点不可用。'
+          message: mediaText('moveUnavailable')
         }
       }
 
@@ -125,7 +137,7 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
 
       return {
         kind: 'applied',
-        message: '已更新图片位置。'
+        message: mediaText('moved')
       }
     },
     deleteSelectedImage(input) {
@@ -134,8 +146,8 @@ export function createCoreMediaCommandAdapter(): JWordMediaCommandAdapter {
       return executeMediaCommand(
         command,
         input,
-        '当前选区未命中可删除的图片。',
-        '已删除当前图片。'
+        mediaText('deleteUnavailable'),
+        mediaText('deleted')
       )
     }
   }

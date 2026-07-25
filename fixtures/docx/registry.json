@@ -1,0 +1,447 @@
+{
+  "schemaVersion": 1,
+  "gate": "gate5",
+  "scope": "docx-import-export",
+  "status": "fixture-input-ready",
+  "notes": [
+    "This registry records deterministic, reviewable .docx fixture inputs.",
+    "Each input.path must exist on disk before compatibility artifact generation.",
+    "T1 fixtures must not produce unsupported warnings."
+  ],
+  "fixtures": [
+    {
+      "id": "docx-t1-paragraphs",
+      "tier": "T1",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t1-paragraphs.docx",
+        "state": "available",
+        "description": "Basic paragraphs and text runs."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["paragraph-text", "run-text"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t1-paragraphs/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "same paragraph count and text content after export and re-import",
+        "diffFields": ["sectionCount", "blockCount", "paragraphText"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "page count, text flow, and paragraph spacing match the JWord canvas baseline",
+        "baselinePath": "fixtures/docx/baselines/docx-t1-paragraphs/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t1-run-styles",
+      "tier": "T1",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t1-run-styles.docx",
+        "state": "available",
+        "description": "Bold, italic, underline, strike, superscript, subscript, font, size, color, and highlight."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["run-style", "font-family", "font-size", "text-color", "highlight-color"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t1-run-styles/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "all T1 run styles survive export and re-import",
+        "diffFields": ["paragraphText", "runStyle"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "run styling is visible without glyph loss or color drift beyond tolerance",
+        "baselinePath": "fixtures/docx/baselines/docx-t1-run-styles/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t1-paragraph-formatting",
+      "tier": "T1",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t1-paragraph-formatting.docx",
+        "state": "available",
+        "description": "Alignment, indentation, first-line indent, hanging indent, line spacing, and paragraph spacing."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["paragraph-alignment", "paragraph-indent", "line-spacing", "paragraph-spacing"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t1-paragraph-formatting/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "paragraph formatting fields survive export and re-import",
+        "diffFields": ["paragraphText", "paragraphStyle"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "alignment, indent, and spacing match the JWord canvas baseline",
+        "baselinePath": "fixtures/docx/baselines/docx-t1-paragraph-formatting/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t1-headings",
+      "tier": "T1",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t1-headings.docx",
+        "state": "available",
+        "description": "Heading 1, Heading 2, and Heading 3 paragraphs."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["heading"],
+        "requiredCapabilities": ["heading-1", "heading-2", "heading-3"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t1-headings/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "heading levels and text survive export and re-import",
+        "diffFields": ["paragraphText", "paragraphStyle"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "heading hierarchy and visible size differences match baseline",
+        "baselinePath": "fixtures/docx/baselines/docx-t1-headings/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t1-lists",
+      "tier": "T1",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t1-lists.docx",
+        "state": "available",
+        "description": "Basic ordered, unordered, and multi-level lists."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["list"],
+        "requiredCapabilities": ["bullet-list", "ordered-list", "multi-level-list"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t1-lists/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "list type, level, marker order, and text survive export and re-import",
+        "diffFields": ["paragraphText", "listMetadata", "paragraphStyle"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "list markers and indentation match the JWord canvas baseline",
+        "baselinePath": "fixtures/docx/baselines/docx-t1-lists/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t1-table-basic",
+      "tier": "T1",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t1-table-basic.docx",
+        "state": "available",
+        "description": "Simple table with borders, cell text, and basic column widths."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["table"],
+        "requiredCapabilities": ["table-grid", "table-border", "table-cell-text", "table-column-width"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t1-table-basic/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "table dimensions, border intent, cell text, and column widths survive export and re-import",
+        "diffFields": ["tableStructure", "paragraphText", "tableStyle"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "table lines and cell text positions match baseline within tolerance",
+        "baselinePath": "fixtures/docx/baselines/docx-t1-table-basic/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t1-inline-image",
+      "tier": "T1",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t1-inline-image.docx",
+        "state": "available",
+        "description": "Inline image with size and alt text."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["inline-image", "resource-ref", "image-size", "image-alt-text"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t1-inline-image/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "image resource relationship, size, and alt text survive export and re-import",
+        "diffFields": ["resourceRefs", "imageSize", "imageAltText"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "inline image is rendered at expected size and anchored position",
+        "baselinePath": "fixtures/docx/baselines/docx-t1-inline-image/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t1-page-setup",
+      "tier": "T1",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t1-page-setup.docx",
+        "state": "available",
+        "description": "Page size, margins, and page break."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph", "page-break"],
+        "requiredCapabilities": ["page-size", "page-margin", "page-break"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t1-page-setup/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "page setup and page breaks survive export and re-import",
+        "diffFields": ["sectionCount", "pageSetup", "blockCount"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "page size, margins, and page break positions match baseline",
+        "baselinePath": "fixtures/docx/baselines/docx-t1-page-setup/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t2-header-footer",
+      "tier": "T2",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t2-header-footer.docx",
+        "state": "available",
+        "description": "Basic header and footer text."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["header-text", "footer-text"]
+      },
+      "expectedWarnings": [
+        {
+          "code": "DOCX_HEADER_FOOTER_EXPORT_UNSUPPORTED",
+          "severity": "warning",
+          "recoverable": true,
+          "fallback": "omit-header-footer"
+        }
+      ],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t2-header-footer/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "basic header/footer text is preserved or produces a stable warning",
+        "diffFields": ["sectionCount", "headerFooterRefs", "warnings"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "header and footer text appear on expected pages when supported",
+        "baselinePath": "fixtures/docx/baselines/docx-t2-header-footer/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t2-page-number",
+      "tier": "T2",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t2-page-number.docx",
+        "state": "available",
+        "description": "Basic page number field in footer."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["page-number"]
+      },
+      "expectedWarnings": [
+        {
+          "code": "DOCX_PAGE_NUMBERING_EXPORT_UNSUPPORTED",
+          "severity": "warning",
+          "recoverable": true,
+          "fallback": "omit-page-numbering"
+        }
+      ],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t2-page-number/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "page number field is preserved or produces a stable warning",
+        "diffFields": ["sectionCount", "pageNumberRefs", "warnings"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "page numbers render consistently when supported",
+        "baselinePath": "fixtures/docx/baselines/docx-t2-page-number/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t2-comments",
+      "tier": "T2",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t2-comments.docx",
+        "state": "available",
+        "description": "Basic comment range and comment text."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["comment-range", "comment-text"]
+      },
+      "expectedWarnings": [
+        {
+          "code": "DOCX_COMMENTS_EXPORT_UNSUPPORTED",
+          "severity": "warning",
+          "recoverable": true,
+          "fallback": "omit-comments"
+        }
+      ],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t2-comments/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "comment range and text are preserved or produce a stable warning",
+        "diffFields": ["paragraphText", "commentRefs", "warnings"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "main document text remains stable; comment rendering is optional unless supported",
+        "baselinePath": "fixtures/docx/baselines/docx-t2-comments/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t2-links",
+      "tier": "T2",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t2-links.docx",
+        "state": "available",
+        "description": "Basic external hyperlink."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["hyperlink"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t2-links/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "visible text and external target survive export and re-import",
+        "diffFields": ["paragraphText", "linkRefs", "warnings"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "visible link text and styling match baseline; clickable PDF annotation is optional until implemented",
+        "baselinePath": "fixtures/docx/baselines/docx-t2-links/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t2-section-breaks",
+      "tier": "T2",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t2-section-breaks.docx",
+        "state": "available",
+        "description": "Basic next-page and continuous section breaks."
+      },
+      "projectionSummary": {
+        "sections": 2,
+        "blocks": ["paragraph", "section-break"],
+        "requiredCapabilities": ["section-break", "section-page-setup"]
+      },
+      "expectedWarnings": [],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t2-section-breaks/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "basic section metadata survives or produces stable warning",
+        "diffFields": ["sectionCount", "pageSetup", "warnings"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "section page boundaries and page setup match baseline when supported",
+        "baselinePath": "fixtures/docx/baselines/docx-t2-section-breaks/pdf.png",
+        "state": "pending"
+      }
+    },
+    {
+      "id": "docx-t2-floating-object-warning",
+      "tier": "T2",
+      "status": "fixture-input-ready",
+      "input": {
+        "path": "fixtures/docx/inputs/docx-t2-floating-object-warning.docx",
+        "state": "available",
+        "description": "Simple floating object that must warn or degrade to inline."
+      },
+      "projectionSummary": {
+        "sections": 1,
+        "blocks": ["paragraph"],
+        "requiredCapabilities": ["floating-object-warning"]
+      },
+      "expectedWarnings": [
+        {
+          "code": "DOCX_DRAWING_FLOATING_UNSUPPORTED",
+          "severity": "warning",
+          "recoverable": true,
+          "fallback": "preserve-empty-inline"
+        }
+      ],
+      "importScreenshotBaseline": {
+        "path": "fixtures/docx/baselines/docx-t2-floating-object-warning/import.png",
+        "state": "pending"
+      },
+      "docxRoundtrip": {
+        "expected": "floating object is preserved, degraded with warning, or marked unsafe to preserve after edit",
+        "diffFields": ["resourceRefs", "opaquePreservation", "warnings"]
+      },
+      "pdfVisualExpectation": {
+        "expected": "degraded inline rendering is visible or unsupported object is omitted only with warning",
+        "baselinePath": "fixtures/docx/baselines/docx-t2-floating-object-warning/pdf.png",
+        "state": "pending"
+      }
+    }
+  ]
+}

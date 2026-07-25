@@ -3,15 +3,18 @@
  * 边界：不读取键盘/剪贴板事件，不修改文档模型。
  * 协作模块：canvas renderer、layout、transaction operation 和 mounted DOM。
  * 性能/安全约束：constructor/top-level 不访问 window/document/HTMLElement 实例，DOM 只在 mount 后创建，编辑命令统一进入 transaction pipeline。
- * Specs：docs/superpowers/specs/2026-05-11-jword-canonical/03-architecture.md 与 04-engineering-standards.md#45-模块边界。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import type { CanvasLike } from '../canvas/pool'
 import { renderPageCanvas, syncPageCanvases } from '../canvas/renderer'
 import type { Command, Operation, TextPosition } from '../operations/transaction'
-import { getCaretRect as getLayoutCaretRect, hitTestDocumentLayout } from '../layout/runtime'
+import { hitTestDocumentLayout } from '../layout/runtime'
 import type { DocumentLayout, LayoutBox, LayoutDirtyRange, LayoutRect, LineBox, PageBox } from '../layout/runtime'
 import { cssPxToTwips, twipsToCssPx } from '../layout/page-config'
+import type { PluginResolvedDecoration } from '../plugins/types'
 import type { EditorPageElement, MountedEditorDom } from './types'
+
+const LAYOUT_LINE_MATCH_TOLERANCE_TWIPS = 1
 
 export function createPageElement(mountedDom: MountedEditorDom, layoutPage: LayoutBox, scale: number) {
   const page = mountedDom.canvasContainer.ownerDocument.createElement('div')
@@ -22,6 +25,15 @@ export function createPageElement(mountedDom: MountedEditorDom, layoutPage: Layo
 
 export function flattenLayoutLines(layout: DocumentLayout): readonly LineBox[] {
   return Object.freeze(layout.pages.flatMap((page) => page.lines))
+}
+
+/** 按页号和容差匹配当前 caret 所在 layout 行，避免浮点抖动导致键盘导航失效。 */
+export function isLayoutLineMatchingCaret(line: LineBox, caretRect: LayoutRect): boolean {
+  const caretCenterY = caretRect.y + (caretRect.height / 2)
+
+  return line.pageIndex === caretRect.pageIndex
+    && caretCenterY >= line.y - LAYOUT_LINE_MATCH_TOLERANCE_TWIPS
+    && caretCenterY <= line.y + line.height + LAYOUT_LINE_MATCH_TOLERANCE_TWIPS
 }
 
 export function resolveLineBoundaryPosition(
@@ -117,8 +129,17 @@ export function syncPageWrappers(
     if (currentChild !== wrapper) {
       mountedDom.canvasContainer.insertBefore(wrapper, currentChild)
     }
+  }
 
-    alignPageWrapperToDevicePixels(mountedDom, wrapper, layoutPage, scale)
+  const containerWidth = mountedDom.canvasContainer.clientWidth
+  const containerLeft = containerWidth > 0
+    ? mountedDom.canvasContainer.getBoundingClientRect().left
+    : 0
+
+  for (const layoutPage of pages) {
+    const wrapper = mountedDom.pageWrappers.get(layoutPage.pageIndex)!
+
+    alignPageWrapperToDevicePixels(wrapper, layoutPage, scale, containerWidth, containerLeft)
   }
 }
 
@@ -132,6 +153,7 @@ export function updatePageElement(
   page.setAttribute('data-jword-page', String(layoutPage.pageIndex))
   page.style.position = 'relative'
   page.style.width = `${twipsToCssPx(layoutPage.width, scale)}px`
+  page.style.minWidth = page.style.width
   page.style.height = `${twipsToCssPx(layoutPage.height, scale)}px`
   page.style.margin = '0 auto 48px'
   page.style.background = '#ffffff'
@@ -156,13 +178,14 @@ export function updatePageElement(
   }
 }
 
+/** 使用同一次容器几何读取把页面左边缘对齐到设备像素。 */
 function alignPageWrapperToDevicePixels(
-  mountedDom: MountedEditorDom,
   page: EditorPageElement,
   layoutPage: LayoutBox,
-  scale: number
+  scale: number,
+  containerWidth: number,
+  containerLeft: number
 ): void {
-  const containerWidth = mountedDom.canvasContainer.clientWidth
   const pageWidth = twipsToCssPx(layoutPage.width, scale)
 
   if (containerWidth <= 0 || pageWidth <= 0) {
@@ -170,9 +193,8 @@ function alignPageWrapperToDevicePixels(
     return
   }
 
-  const containerRect = mountedDom.canvasContainer.getBoundingClientRect()
   const centeredLeft = Math.max(0, (containerWidth - pageWidth) / 2)
-  const alignedLeft = Math.max(0, Math.round(containerRect.left + centeredLeft) - containerRect.left)
+  const alignedLeft = Math.max(0, Math.round(containerLeft + centeredLeft) - containerLeft)
 
   page.style.margin = `0 0 48px ${alignedLeft}px`
 }
@@ -209,8 +231,10 @@ export function renderPageBatch(input: Readonly<{
   rerenderPageIndexes: readonly number[]
   selectionRender: Readonly<{
     selectionRects?: readonly LayoutRect[]
+    commentRects?: readonly LayoutRect[]
     caretRect?: LayoutRect
   }>
+  experimentalDecorations?: readonly PluginResolvedDecoration[]
   scale: number
   pixelRatio: number
 }>): Map<number, CanvasLike> {
@@ -223,6 +247,12 @@ export function renderPageBatch(input: Readonly<{
     ...(input.selectionRender.selectionRects === undefined
       ? {}
       : { selectionRects: input.selectionRender.selectionRects }),
+    ...(input.selectionRender.commentRects === undefined
+      ? {}
+      : { commentRects: input.selectionRender.commentRects }),
+    ...(input.experimentalDecorations === undefined
+      ? {}
+      : { experimentalDecorations: input.experimentalDecorations }),
     ...(input.selectionRender.caretRect === undefined
       ? {}
       : { caretRect: input.selectionRender.caretRect }),
@@ -343,6 +373,13 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
     case 'setRunLink':
     case 'addRevisionMetadata':
       return findRunPageIndexes(layout, operation.runId)
+    case 'acceptRevision':
+    case 'rejectRevision':
+      return mergePageIndexes(
+        findTextPositionPageIndexes(layout, operation.range.anchor),
+        findTextPositionPageIndexes(layout, operation.range.focus),
+        ...operation.formatTargets.map((target) => findRunPageIndexes(layout, target.runId))
+      )
     case 'setParagraphProperties':
       return findParagraphPageIndexes(layout, operation.paragraphId)
     case 'setSectionProperties':
@@ -397,9 +434,22 @@ export function resolveOperationDirtyPageIndexes(layout: DocumentLayout, operati
 }
 
 export function findTextPositionPageIndexes(layout: DocumentLayout, position: TextPosition): readonly number[] {
-  const caretRect = getLayoutCaretRect(layout, position)
+  const pageIndexes: number[] = []
+  let foundPosition = false
 
-  return caretRect === undefined ? [] : [caretRect.pageIndex]
+  for (const page of layout.pages) {
+    if (pageContainsTextPosition(page, position)) {
+      pageIndexes.push(page.pageIndex)
+      foundPosition = true
+      continue
+    }
+
+    if (foundPosition) {
+      break
+    }
+  }
+
+  return mergePageIndexes(pageIndexes)
 }
 
 export function isSameTextPosition(left: TextPosition, right: TextPosition): boolean {
@@ -407,6 +457,56 @@ export function isSameTextPosition(left: TextPosition, right: TextPosition): boo
     && left.blockId === right.blockId
     && left.runId === right.runId
     && left.graphemeIndex === right.graphemeIndex
+}
+
+/** 判断页面是否包含目标文本位置，避免 dirty page 推导构建全布局查询缓存。 */
+function pageContainsTextPosition(page: PageBox, position: TextPosition): boolean {
+  for (const line of page.lines) {
+    if (
+      line.fragments.some((fragment) => fragmentContainsTextPosition(fragment, position))
+      || line.inlines.some((inline) => isSameTextPosition(inline.at, position))
+    ) {
+      return true
+    }
+  }
+
+  for (const block of page.blocks) {
+    if (block.kind !== 'table') {
+      continue
+    }
+
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        if (
+          (cell.textPosition !== undefined && isSameTextPosition(cell.textPosition, position))
+          || cell.fragments.some((fragment) => fragmentContainsTextPosition(fragment, position))
+          || cell.inlines.some((inline) => isSameTextPosition(inline.at, position))
+        ) {
+          return true
+        }
+      }
+    }
+  }
+
+  return false
+}
+
+/** 判断文本片段是否覆盖目标文本位置。 */
+function fragmentContainsTextPosition(
+  fragment: Readonly<{
+    sectionId: string
+    blockId: string
+    runId: string
+    start: TextPosition
+    end: TextPosition
+  }>,
+  position: TextPosition
+): boolean {
+  return fragment.sectionId === position.sectionId
+    && fragment.blockId === position.blockId
+    && fragment.runId === position.runId
+    && position.graphemeIndex >= fragment.start.graphemeIndex
+    && position.graphemeIndex <= fragment.end.graphemeIndex
 }
 
 export function findRunPageIndexes(layout: DocumentLayout, runId: string): readonly number[] {
@@ -433,6 +533,12 @@ function findSectionPageIndexes(layout: DocumentLayout, sectionId: string): read
 export function findBlockPageIndexes(layout: DocumentLayout, blockId: string): readonly number[] {
   return mergePageIndexes(
     findParagraphPageIndexes(layout, blockId),
+    layout.pages.flatMap((page) => page.blocks.some((block) =>
+      block.kind === 'table' && block.tableId === blockId
+      || block.kind === 'table' && block.rows.some((row) =>
+        row.cells.some((cell) => cell.blockIds.includes(blockId))
+      )
+    ) ? [page.pageIndex] : []),
     layout.pages.flatMap((page) => page.lines.some((line) =>
       line.fragments.some((fragment) => fragment.blockId === blockId)
       || line.inlines.some((inline) => inline.blockId === blockId)

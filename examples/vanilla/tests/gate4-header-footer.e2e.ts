@@ -2,11 +2,13 @@
  * @fileoverview 职责: 用真实浏览器覆盖 Gate 4 页眉页脚、分节和页码的最小验收路径。
  * 边界: 只验证官方 UI 在 vanilla host 的装配、section properties 落地和 layout 可读输出，不实现页眉页脚正文编辑器。
  * 协作: examples/vanilla/src/main.ts、packages/ui/src/header-footer/*、core section command 与 layout。
- * 约束: 断言来自真实 DOM 或 window.__jwordDemo.editor 公开 facade，不读取 controller 私有状态。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.13。
+ * 约束: 断言来自真实 DOM 或 window.__jwordTestFixture.editor 公开 facade，不读取 controller 私有状态。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+
+import { activateToolbarTab } from './gate3-toolbar-helpers'
 
 interface HeaderFooterProbe {
   readonly sectionBreakType: string | null
@@ -22,7 +24,7 @@ interface HeaderFooterProbe {
 
 test('Gate 4 header footer panel writes section metadata and layout exposes page fields', async ({ page }) => {
   await recordCanvasTextCalls(page)
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForHeaderFooterDemoReady(page)
 
   await page.locator('[data-jword-toggle-header-footer]').click()
@@ -102,9 +104,10 @@ async function recordCanvasTextCalls(page: Page): Promise<void> {
 
 /** 等待 demo、editor 和页眉页脚官方 UI 完成挂载。 */
 async function waitForHeaderFooterDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-canvas-container]')).toBeVisible()
   await expect(page.locator('[data-jword-header-footer]')).toBeAttached()
+  await activateToolbarTab(page, 'page')
 }
 
 /** 读取真实浏览器 canvas 文本绘制记录。 */
@@ -115,8 +118,8 @@ async function readCanvasTextCalls(page: Page): Promise<readonly string[]> {
 /** 读取 section projection 与 layout 页级输出。 */
 async function readHeaderFooterProbe(page: Page): Promise<HeaderFooterProbe> {
   return page.evaluate(() => {
-    const projection = window.__jwordDemo?.editor.getProjection()
-    const layout = window.__jwordDemo?.editor.getLayout()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
+    const layout = window.__jwordTestFixture?.editor.getLayout()
     const section = projection?.document.sections[0]
     const firstPage = layout?.pages[0]
 

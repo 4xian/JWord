@@ -5,11 +5,11 @@
  * 边界：只覆盖公开 UI option、返回句柄和目录项点击定位，不测试滚动动画。
  * 协作模块：packages/ui/src/create-ui.ts、heading controller 与 @4xian/jword-core。
  * 约束：通过公开 elements 和稳定 data selector 断言，不读取 controller 私有状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.11。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor, createSelectionState, twipsToCssPx, type Editor } from '@4xian/jword-core'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 
 import { createJWordUi } from '../src/create-ui'
 
@@ -24,7 +24,7 @@ describe('createJWordUi heading outline integration', () => {
 
       expect(harness.ui.elements.headingOutlinePanel).not.toBeNull()
       expect(harness.outlineHost.querySelector('[data-jword-heading-outline]')).not.toBeNull()
-      expect(harness.editorHost.querySelector('[data-jword-editor] [data-jword-heading-outline-host]')).toBe(harness.outlineHost)
+      expect(harness.editorHost.querySelector('[data-jword-heading-outline-host]')).toBeNull()
       expect(harness.toolbarHost.querySelector('[data-jword-heading-outline]')).toBeNull()
       expect(harness.ui.elements.headingOutlinePanel!.list.getAttribute('role')).toBe('tree')
 
@@ -52,8 +52,8 @@ describe('createJWordUi heading outline integration', () => {
     }
   })
 
-  test('toolbar 宿主启用目录时会在 jw-editor 内创建左侧侧栏宿主', () => {
-    const harness = createHarness({ useToolbarAsHeadingHost: true })
+  test('未提供目录 slot 时会在 editorHost 内创建左侧浮动工作区', () => {
+    const harness = createHarness({ useDefaultHeadingHost: true })
 
     try {
       setParagraphStyle(harness.editor, 0, 'Heading1')
@@ -61,10 +61,12 @@ describe('createJWordUi heading outline integration', () => {
 
       const outlineButton = harness.toolbarHost.querySelector<HTMLButtonElement>('[data-jword-toggle-heading-outline]')
       const outlineHost = harness.editorHost.querySelector<HTMLElement>(
-        '[data-jword-editor] [data-jword-heading-outline-host]'
+        ':scope > [data-jword-side-workspace="left"][data-jword-heading-outline-host]'
       )
 
       expect(outlineHost).not.toBeNull()
+      expect(outlineHost?.parentElement).toBe(harness.editorHost)
+      expect(harness.editorHost.querySelector('[data-jword-editor] [data-jword-heading-outline-host]')).toBeNull()
       expect(harness.toolbarHost.querySelector('[data-jword-heading-outline]')).toBeNull()
       expect(harness.ui.elements.headingOutlinePanel?.list.hidden).toBe(true)
       expect(outlineButton?.disabled).toBe(false)
@@ -76,17 +78,52 @@ describe('createJWordUi heading outline integration', () => {
       expect(outlineButton?.getAttribute('aria-pressed')).toBe('true')
       expect(outlineHost?.querySelector('[data-jword-heading-outline-sidebar]')).not.toBeNull()
 
+      const title = harness.ui.elements.headingOutlinePanel?.title
+      const closeButton = harness.ui.elements.headingOutlinePanel?.closeButton
+
+      expect(title?.textContent).toBe('目录大纲')
+      expect(closeButton?.getAttribute('aria-label')).toBe('关闭目录大纲')
+
+      harness.ui.setLocale('en-US')
+
+      expect(title?.textContent).toBe('Document outline')
+      expect(closeButton?.getAttribute('aria-label')).toBe('Close document outline')
+
+      closeButton?.click()
+
+      expect(harness.ui.elements.headingOutlinePanel?.root.hidden).toBe(true)
+      expect(outlineButton?.getAttribute('aria-pressed')).toBe('false')
+
       outlineButton?.click()
 
-      expect(harness.ui.elements.headingOutlinePanel?.list.hidden).toBe(true)
-      expect(outlineButton?.getAttribute('aria-pressed')).toBe('false')
+      expect(harness.ui.elements.headingOutlinePanel?.root.hidden).toBe(false)
+      expect(outlineButton?.getAttribute('aria-pressed')).toBe('true')
     } finally {
       harness.destroy()
     }
   })
 
+  test('测试环境销毁时会清理状态栏完整性定时器', () => {
+    vi.useFakeTimers()
+    const harness = createHarness()
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle')
+
+    try {
+      harness.destroy()
+      const callCountAfterDestroy = getComputedStyleSpy.mock.calls.length
+
+      vi.advanceTimersByTime(500)
+
+      expect(getComputedStyleSpy).toHaveBeenCalledTimes(callCountAfterDestroy)
+    } finally {
+      getComputedStyleSpy.mockRestore()
+      harness.destroy()
+      vi.useRealTimers()
+    }
+  })
+
   test('没有目录项时 toolbar 目录按钮禁用且不会打开侧栏', () => {
-    const harness = createHarness({ useToolbarAsHeadingHost: true })
+    const harness = createHarness({ useDefaultHeadingHost: true })
 
     try {
       harness.ui.refresh()
@@ -115,7 +152,7 @@ describe('createJWordUi heading outline integration', () => {
 
   test('全局只读允许导航时目录按钮保持可用并只做定位', () => {
     const harness = createHarness({
-      useToolbarAsHeadingHost: true,
+      useDefaultHeadingHost: true,
       readonly: true
     })
 
@@ -148,7 +185,7 @@ describe('createJWordUi heading outline integration', () => {
 
   test('全局只读允许导航但没有目录项时目录按钮仍保持禁用', () => {
     const harness = createHarness({
-      useToolbarAsHeadingHost: true,
+      useDefaultHeadingHost: true,
       readonly: true
     })
 
@@ -259,7 +296,7 @@ interface Harness {
 }
 
 /** 创建入口级 UI 测试环境。 */
-function createHarness(options: { readonly useToolbarAsHeadingHost?: boolean, readonly readonly?: boolean } = {}): Harness {
+function createHarness(options: { readonly useDefaultHeadingHost?: boolean, readonly readonly?: boolean } = {}): Harness {
   const editorHost = document.createElement('div')
   const toolbarHost = document.createElement('div')
   const liveRegionHost = document.createElement('div')
@@ -276,9 +313,7 @@ function createHarness(options: { readonly useToolbarAsHeadingHost?: boolean, re
     toolbarHost,
     liveRegionHost,
     ...(options.readonly === undefined ? {} : { readonly: options.readonly }),
-    headingOutline: {
-      host: options.useToolbarAsHeadingHost === true ? toolbarHost : outlineHost
-    }
+    headingOutline: options.useDefaultHeadingHost === true ? {} : { host: outlineHost }
   })
 
   return {
@@ -288,6 +323,7 @@ function createHarness(options: { readonly useToolbarAsHeadingHost?: boolean, re
     outlineHost,
     ui,
     destroy(): void {
+      ui.destroy()
       editor.destroy()
       editorHost.remove()
       toolbarHost.remove()

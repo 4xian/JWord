@@ -3,9 +3,9 @@
  * 边界：只描述装配参数、工具栏配置和返回句柄，不创建任何运行时对象。
  * 协作模块：create-ui 入口、toolbar controller/dom、media panel 与外部宿主通过这些类型对齐。
  * 性能/安全约束：纯类型模块，无副作用，可在非浏览器环境安全导入。
- * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
-import type { DocumentProjection, Editor, SelectionState } from '@4xian/jword-core'
+import type { DocumentProjection, Editor, ResourceUrlPolicy, SelectionState } from '@4xian/jword-core'
 import type {
   JWordCommentPermissionOptions,
   JWordCommentThread,
@@ -21,7 +21,10 @@ export type JWordToolbarToolId =
   | 'history.undo'
   | 'history.redo'
   | 'document.pagePreset'
+  | 'document.pageOrientation'
+  | 'document.customPageSize'
   | 'document.findReplace'
+  | 'document.watermark'
   | 'document.headingOutline'
   | 'document.headerFooter'
   | 'document.footer'
@@ -52,13 +55,362 @@ export type JWordToolbarToolId =
   | 'paragraph.hangingIndent'
   | 'paragraph.style'
   | 'paragraph.list'
+  | 'view.fitWidth'
+  | 'view.fitPage'
+  | 'view.fullscreen'
+  | 'view.presentation'
+  | 'view.zoomReset'
+  | 'view.theme'
+  | 'view.locale'
+  | 'export.native'
+
+/** 顶部工具栏展示模式。 */
+export type JWordToolbarMode = 'professional' | 'common'
+
+/** 顶部工具栏专业模式 Tab ID。 */
+export type JWordToolbarTabId =
+  | 'home'
+  | 'insert'
+  | 'table'
+  | 'page'
+  | 'tools'
+  | 'view'
+  | 'export'
+
+
+/** UI 主题名称。 */
+export type JWordUiThemeName = 'light' | 'dark'
+
+/** UI 主题 token 名称，运行时会映射为 --jw-* CSS custom properties。 */
+export type JWordUiThemeToken =
+  | 'colorSurface'
+  | 'colorSurfaceMuted'
+  | 'colorSurfaceElevated'
+  | 'colorText'
+  | 'colorTextMuted'
+  | 'colorBorder'
+  | 'colorBorderStrong'
+  | 'colorAccent'
+  | 'colorAccentMuted'
+  | 'colorDanger'
+  | 'radiusControl'
+  | 'radiusPanel'
+  | 'shadowShell'
+  | 'shadowOverlay'
+  | 'focusRing'
+
+/** 宿主传入的轻量主题覆盖。 */
+export interface JWordUiThemeOptions {
+  /** 主题名；默认 light。 */
+  readonly name?: JWordUiThemeName
+  /** 宿主额外主题 class，只挂到 SDK UI 根节点。 */
+  readonly className?: string
+  /** token 覆盖；key 使用 camelCase，运行时转换成 --jw-*。 */
+  readonly tokens?: Partial<Record<JWordUiThemeToken, string>>
+}
+
+/** UI 文本方向。 */
+export type JWordUiTextDirection = 'ltr' | 'rtl' | 'auto'
+
+/** toolbar 文案 key。 */
+export type JWordUiToolbarTextKey =
+  | 'toolbar.ariaLabel'
+  | `toolbar.${string}`
+  | `toolbar.${JWordToolbarToolId}.label`
+  | `toolbar.${JWordToolbarToolId}.tooltip`
+  | `toolbar.${JWordToolbarToolId}.fieldLabel`
+  | `toolbar.${JWordToolbarToolId}.option.${string}`
+
+/** menu 文案 key。 */
+export type JWordUiMenuTextKey = `menu.${string}`
+
+/** dialog 文案 key。 */
+export type JWordUiDialogTextKey = `dialog.${string}`
+
+/** a11y 播报文案 key。 */
+export type JWordUiA11yTextKey = `a11y.${string}`
+
+/** diagnostics 短文案 key。 */
+export type JWordUiDiagnosticsTextKey = `diagnostics.${string}`
+
+/** Toast 文案 key。 */
+export type JWordUiToastTextKey = `toast.${string}`
+
+/** UI i18n 字典 key。 */
+export type JWordUiI18nKey =
+  | JWordUiToolbarTextKey
+  | JWordUiStatusBarTextKey
+  | JWordUiMenuTextKey
+  | JWordUiDialogTextKey
+  | JWordUiA11yTextKey
+  | JWordUiDiagnosticsTextKey
+  | JWordUiToastTextKey
+
+/** UI i18n 字典，允许宿主只覆盖少量 key。 */
+export type JWordUiI18nDictionary = Readonly<Partial<Record<JWordUiI18nKey, string>>>
+
+/** createJWordUi 的 i18n 输入。 */
+export interface JWordUiI18nOptions {
+  /** 语言标签；默认 zh-CN。 */
+  readonly locale?: string
+  /** 文本方向；默认不强制。 */
+  readonly dir?: JWordUiTextDirection
+  /** 局部覆盖字典；宿主覆盖优先，未覆盖 key 按 locale 读取内建中英文字典。 */
+  readonly messages?: JWordUiI18nDictionary
+}
+
+/** 状态栏文案 key。 */
+export type JWordUiStatusBarTextKey = `statusBar.${string}`
+
+/** 状态栏首批内建语言。 */
+export type JWordStatusBarLocale = 'zh-CN' | 'en-US'
+
+/** Toast 可见语义类型。 */
+export type JWordToastType = 'info' | 'success' | 'warning' | 'error'
+
+/** 单次 Toast 调用参数。 */
+export interface JWordToastOptions {
+  /** 已完成本地化的可见文案。 */
+  readonly message: string
+  /** 可见颜色和 live region 优先级。 */
+  readonly type: JWordToastType
+  /** 自动关闭毫秒数；小于等于零表示不自动关闭。 */
+  readonly duration: number
+}
+
+/** Debug 日志级别。 */
+export type JWordLogLevel = 'debug' | 'info' | 'warning' | 'error'
+
+/** 宿主可接收的结构化日志 entry。 */
+export interface JWordLogEntry {
+  readonly level: JWordLogLevel
+  readonly scope: string
+  readonly event: string
+  readonly message: string
+  readonly details?: Readonly<Record<string, unknown>>
+}
+
+/** Debug 日志接收器。 */
+export interface JWordLogger {
+  write(entry: JWordLogEntry): void
+}
+
+/** UI 实例级 debug 配置。 */
+export interface JWordDebugOptions {
+  /** 默认 false；只有显式开启才输出日志。 */
+  readonly enabled?: boolean
+  /** 可选宿主日志接收器；为空时使用 console。 */
+  readonly logger?: JWordLogger
+}
+
+/** 状态栏首批 item id。 */
+export type JWordStatusBarItemId =
+  | 'brand'
+  | 'wordCount'
+  | 'characterCount'
+  | 'paragraphCount'
+  | 'page'
+  | 'selection'
+  | 'fullscreen'
+  | 'presentation'
+  | 'zoomSlider'
+  | 'zoomPercent'
+  | 'zoomReset'
+  | 'fitWidth'
+  | 'fitPage'
+  | 'themeSwitcher'
+  | 'localeSwitcher'
+
+/** 状态栏品牌显示配置。 */
+export type JWordStatusBarBrandProtectionMode = 'hidden' | 'restore' | 'watermarkFallback'
+
+/** 状态栏品牌显示配置。 */
+export interface JWordStatusBarBrandOptions {
+  /** 品牌文案；未传时使用内建文案。 */
+  readonly label?: string
+  /** 版权防篡改策略；默认 restore。 */
+  readonly protection?: JWordStatusBarBrandProtectionMode
+}
+
+/** 状态栏缩放配置；首批运行时会 clamp 到 20%-400%。 */
+export interface JWordStatusBarZoomOptions {
+  /** 最小缩放百分比；默认 20。 */
+  readonly minPercent?: number
+  /** 最大缩放百分比；默认 400。 */
+  readonly maxPercent?: number
+  /** 缩放滑块步进百分比；默认 10。 */
+  readonly stepPercent?: number
+}
+
+/** 状态栏主题切换配置。 */
+export interface JWordStatusBarThemeSwitcherOptions {
+  /** 可切换主题列表；默认 light、dark。 */
+  readonly themes?: readonly JWordUiThemeName[]
+}
+
+/** 状态栏语言切换配置。 */
+export interface JWordStatusBarLocaleSwitcherOptions {
+  /** 可切换语言列表；首批只支持 zh-CN 和 en-US。 */
+  readonly locales?: readonly JWordStatusBarLocale[]
+}
+
+/** 状态栏配置。 */
+export interface JWordStatusBarOptions {
+  /** 状态栏挂载宿主；为空时 SDK 自动创建。 */
+  readonly host?: HTMLElement
+  /** 全屏和演示模式作用宿主；为空时使用 editorHost。 */
+  readonly fullscreenHost?: HTMLElement
+  /** 显式声明显示顺序；字段存在时严格采用该列表。 */
+  readonly visibleItems?: readonly JWordStatusBarItemId[]
+  /** 从默认项或 visibleItems 中过滤的状态栏项。 */
+  readonly hiddenItems?: readonly JWordStatusBarItemId[]
+  /** 品牌配置；false 表示隐藏品牌文案。 */
+  readonly brand?: false | JWordStatusBarBrandOptions
+  /** 缩放配置。 */
+  readonly zoom?: JWordStatusBarZoomOptions
+  /** 主题切换配置；false 表示隐藏主题切换。 */
+  readonly themeSwitcher?: false | JWordStatusBarThemeSwitcherOptions
+  /** 语言切换配置；false 表示隐藏语言切换。 */
+  readonly localeSwitcher?: false | JWordStatusBarLocaleSwitcherOptions
+}
+
+/** 状态栏文档统计。 */
+export interface JWordStatusBarDocumentStats {
+  /** 按 MVP 口径统计的词数。 */
+  readonly words: number
+  /** 非空白 grapheme 字符数。 */
+  readonly characters: number
+  /** 段落块数量，包含表格单元格内段落。 */
+  readonly paragraphs: number
+}
+
+
+/** 编辑器实例级页面水印配置。 */
+export interface JWordWatermarkOptions {
+  /** 水印内容，支持换行；空白内容视为清除。 */
+  readonly text: string
+  /** 字体大小，单位 px；默认 28。 */
+  readonly fontSizePx?: number
+  /** 水印颜色；默认灰色。 */
+  readonly color?: string
+  /** 水印透明度；默认 0.18。 */
+  readonly opacity?: number
+  /** 旋转角度；默认 -30。 */
+  readonly rotateDeg?: number
+}
 
 /** 工具栏显隐配置。 */
 export interface JWordToolbarOptions {
+  /** 工具栏展示模式；未传时默认专业模式，旧 visibleTools 用法会兼容为常用模式。 */
+  readonly mode?: JWordToolbarMode
+  /** 专业模式下是否显示切换到常用工具栏的按钮；默认显示。 */
+  readonly modeSwitcher?: boolean
+  /** 常用模式配置。 */
+  readonly common?: {
+    /** 常用模式显示顺序；为空数组表示不显示常用工具。 */
+    readonly visibleTools?: readonly JWordToolbarToolId[]
+    /** 从常用工具中隐藏指定工具。 */
+    readonly hiddenTools?: readonly JWordToolbarToolId[]
+  }
+  /** 专业模式配置。 */
+  readonly professional?: {
+    /** 专业模式默认激活 Tab。 */
+    readonly defaultTab?: JWordToolbarTabId
+    /** 隐藏指定专业模式 Tab。 */
+    readonly hiddenTabs?: readonly JWordToolbarTabId[]
+    /** 覆盖指定 Tab 的工具顺序。 */
+    readonly tabTools?: Partial<Record<JWordToolbarTabId, readonly JWordToolbarToolId[]>>
+  }
   /** 显式声明显示顺序；字段存在时严格采用该列表，空数组表示不显示工具。 */
   readonly visibleTools?: readonly JWordToolbarToolId[]
   /** 未传 visibleTools 时从全部内建工具中过滤；已传 visibleTools 时从该列表中过滤。 */
   readonly hiddenTools?: readonly JWordToolbarToolId[]
+}
+
+/** 插件 toolbar / menu 读取状态时可见的只读上下文。 */
+export interface JWordUiPluginRenderContext {
+  /** 当前 editor facade。 */
+  readonly editor: Editor
+  /** 当前只读文档投影。 */
+  readonly projection: DocumentProjection
+  /** 当前选择区快照。 */
+  readonly selection: SelectionState | null
+  /** 宿主 UI 是否处于只读模式。 */
+  readonly readonly: boolean
+}
+
+/** 插件 toolbar 按钮定义。 */
+export interface JWordToolbarPluginItem {
+  /** 当前插件内唯一名称。 */
+  readonly name: string
+  /** 当前 M4 仅落地按钮工具。 */
+  readonly kind: 'button'
+  /** 可见按钮文案。 */
+  readonly label: string
+  /** 无障碍标签；未传时复用 label。 */
+  readonly ariaLabel?: string
+  /** tooltip 文案；未传时复用 label。 */
+  readonly tooltip?: string
+  /** 点击时执行的 core 插件命令。 */
+  readonly commandName: string
+  /** 传给插件命令的输入。 */
+  readonly input?: unknown
+  /** 只读模式下是否仍允许触发。 */
+  readonly allowReadonly?: boolean
+  /** 返回按钮是否可用。 */
+  readonly enabled?: (context: JWordUiPluginRenderContext) => boolean
+  /** 返回按钮是否处于按下态。 */
+  readonly active?: (context: JWordUiPluginRenderContext) => boolean
+  /** 返回命令执行后的播报文案；未返回文案时不播报。 */
+  readonly announce?: (context: JWordUiPluginRenderContext) => string | undefined
+}
+
+/** 插件菜单动作定义。 */
+export interface JWordMenuPluginAction {
+  /** 当前菜单内唯一动作名称。 */
+  readonly name: string
+  /** 菜单动作文案。 */
+  readonly label: string
+  /** 菜单动作辅助说明，用于展示尺寸、快捷信息等次级文案。 */
+  readonly description?: string
+  /** 无障碍标签；未传时复用 label。 */
+  readonly ariaLabel?: string
+  /** 点击时执行的 core 插件命令。 */
+  readonly commandName: string
+  /** 传给插件命令的输入。 */
+  readonly input?: unknown
+  /** 只读模式下是否仍允许触发。 */
+  readonly allowReadonly?: boolean
+  /** 返回菜单动作是否可用。 */
+  readonly enabled?: (context: JWordUiPluginRenderContext) => boolean
+  /** 返回菜单动作是否处于选中态。 */
+  readonly active?: (context: JWordUiPluginRenderContext) => boolean
+  /** 返回命令执行后的播报文案；未返回文案时不播报。 */
+  readonly announce?: (context: JWordUiPluginRenderContext) => string | undefined
+}
+
+/** 插件菜单定义。 */
+export interface JWordMenuPluginItem {
+  /** 当前插件内唯一菜单名称。 */
+  readonly name: string
+  /** 菜单触发按钮文案。 */
+  readonly label: string
+  /** 无障碍标签；未传时复用 label。 */
+  readonly ariaLabel?: string
+  /** tooltip 文案；未传时复用 label。 */
+  readonly tooltip?: string
+  /** 菜单动作列表。 */
+  readonly items: readonly JWordMenuPluginAction[]
+}
+
+/** UI 包消费的插件扩展声明。 */
+export interface JWordUiPluginExtension {
+  /** 对应 core 插件名称。 */
+  readonly pluginName: string
+  /** 插件 toolbar 按钮。 */
+  readonly toolbarItems?: readonly JWordToolbarPluginItem[]
+  /** 插件菜单。 */
+  readonly menus?: readonly JWordMenuPluginItem[]
 }
 
 /** Gate 4 第一版图片资源状态。 */
@@ -154,11 +506,7 @@ export interface JWordMediaAdapter {
 }
 
 /** URL allowlist。 */
-export interface JWordMediaUrlPolicy {
-  readonly allowDataUrl?: boolean
-  readonly allowBlobUrl?: boolean
-  readonly allowExternalUrl?: (url: URL) => boolean
-}
+export type JWordMediaUrlPolicy = ResourceUrlPolicy
 
 /** 当前选中的图片目标快照。 */
 export interface JWordSelectedImageTarget {
@@ -393,26 +741,30 @@ export interface JWordLinkOptions {
 
 /** Gate 4 页眉页脚和页码基础 UI 配置。 */
 export interface JWordHeaderFooterOptions {
-  /** 页眉页脚面板挂载宿主。 */
-  readonly host: HTMLElement
+  /** 页眉页脚面板挂载宿主；为空时挂到 SDK 默认 toolbar 面板宿主。 */
+  readonly host?: HTMLElement
 }
 
 /** Gate 4 基础目录面板配置。 */
 export interface JWordHeadingOutlineOptions {
-  /** 目录面板挂载宿主。 */
-  readonly host: HTMLElement
+  /** 目录面板挂载宿主；为空时挂到 SDK 默认 editor shell 宿主。 */
+  readonly host?: HTMLElement
 }
 
 /** Gate 4 查找替换基础 UI 配置。 */
 export interface JWordFindReplaceOptions {
-  /** 查找替换面板挂载宿主。 */
-  readonly host: HTMLElement
+  /** 查找替换面板挂载宿主；为空时挂到 SDK 默认 toolbar 面板宿主。 */
+  readonly host?: HTMLElement
+  /** 是否启用 Ctrl/Cmd+F 与 Ctrl/Cmd+H 快捷键；默认启用。 */
+  readonly keyboardShortcuts?: boolean
+  /** 是否大小写敏感；默认 true，宿主可设 false 启用大小写不敏感搜索。 */
+  readonly caseSensitive?: boolean
 }
 
 /** Gate 4 修订 metadata 面板配置。 */
 export interface JWordRevisionsOptions {
-  /** 修订面板挂载宿主。 */
-  readonly host: HTMLElement
+  /** 修订面板挂载宿主；为空时挂到 SDK 默认 toolbar 面板宿主。 */
+  readonly host?: HTMLElement
 }
 
 /** 全局只读模式配置。 */
@@ -432,21 +784,29 @@ export type JWordReadonlyMode = JWordReadonlyOptions | boolean | undefined
 export interface CreateJWordUiOptions {
   /** 已创建并可供 UI 调用的 core editor facade。 */
   readonly editor: Editor
-  /** toolbar 挂载宿主。 */
-  readonly toolbarHost: HTMLElement
+  /** toolbar 挂载宿主；为空时 SDK 会在已挂载的 editorHost 内创建默认宿主。 */
+  readonly toolbarHost?: HTMLElement
   /** 已挂载 editor 的宿主；传入后可复用 Gate 3 的大文档 blocked summary 规则。 */
   readonly editorHost?: HTMLElement
   /** live region 宿主；为空时只关闭播报，不阻止 toolbar 工作。 */
   readonly liveRegionHost?: HTMLElement | null
   /** 隐藏文本镜像宿主；为空时只关闭 mirror，不阻止 toolbar 工作。 */
   readonly assistiveMirrorHost?: HTMLElement | null
+  /** 主题 token 与宿主 class 覆盖；默认 light。 */
+  readonly theme?: JWordUiThemeOptions
+  /** UI 文案和 a11y 播报覆盖；缺失 key 回退内建中文。 */
+  readonly i18n?: JWordUiI18nOptions
+  /** 实例级调试日志；默认关闭。 */
+  readonly debug?: boolean | JWordDebugOptions
   /** toolbar 的最小显隐配置；false 表示隐藏整条 toolbar。 */
   readonly toolbar?: false | JWordToolbarOptions
+  /** 底部状态栏配置；默认启用，false 表示禁用。 */
+  readonly statusBar?: true | false | JWordStatusBarOptions
   /** SDK 级用户上下文。 */
   readonly user?: JWordUserOptions
-  /** Gate 4 第一版图片 panel。 */
+  /** 图片入口配置；为空时使用默认轻量适配器并显示官方图片入口。 */
   readonly media?: JWordMediaOptions
-  /** Gate 4 Iteration 2 表格工具。 */
+  /** 表格入口配置；为空时使用默认 core 表格命令适配器并显示官方表格入口。 */
   readonly table?: JWordTableOptions
   /** Gate 4 批注侧栏；传 `true` 时启用 SDK 默认右侧 rail。 */
   readonly comments?: true | JWordCommentsOptions
@@ -462,11 +822,18 @@ export interface CreateJWordUiOptions {
   readonly revisions?: JWordRevisionsOptions
   /** 宿主级全局只读模式。 */
   readonly readonly?: boolean | JWordReadonlyOptions
+  /** Gate 7 M4 插件 UI 扩展声明。 */
+  readonly pluginExtensions?: readonly JWordUiPluginExtension[]
 }
 
 /** live region 控制器的最小协作边界。 */
 export interface JWordUiLiveRegionController {
-  announce(message: string, options?: { readonly force?: boolean }): void
+  announce(message: string, options?: {
+    readonly force?: boolean
+    readonly priority?: 'polite' | 'assertive'
+    readonly source?: string
+    readonly event?: string
+  }): void
   destroy(): void
 }
 
@@ -477,7 +844,9 @@ export interface JWordUiTextMirrorController {
 }
 
 /** controller 与 assistive 层的内部协作参数。 */
-export interface CreateToolbarControllerOptions extends CreateJWordUiOptions {
+export interface CreateToolbarControllerOptions extends Omit<CreateJWordUiOptions, 'toolbarHost'> {
+  /** toolbar 挂载宿主。 */
+  readonly toolbarHost: HTMLElement
   readonly assistive: {
     readonly liveRegion: JWordUiLiveRegionController | null
     readonly textMirror: JWordUiTextMirrorController | null
@@ -496,6 +865,22 @@ export interface JWordToolbarElements {
   readonly host: HTMLElement
   /** 内建工具控件映射。 */
   readonly controls: Partial<Record<JWordToolbarToolId, JWordToolbarControlElement>>
+  /** 插件工具按钮映射，key 形如 plugin:插件名:工具名。 */
+  readonly pluginControls: Readonly<Record<string, HTMLButtonElement>>
+}
+
+/** 状态栏暴露给宿主和浏览器测试的节点。 */
+export interface JWordStatusBarElements {
+  /** 状态栏挂载宿主。 */
+  readonly host: HTMLElement
+  /** 状态栏根节点。 */
+  readonly root: HTMLElement
+  /** 左侧状态区。 */
+  readonly left: HTMLElement
+  /** 右侧视图控制区。 */
+  readonly right: HTMLElement
+  /** 状态栏 item 控件映射。 */
+  readonly controls: Partial<Record<JWordStatusBarItemId, HTMLElement>>
 }
 
 /** 图片 panel 暴露给宿主和浏览器测试的节点。 */
@@ -650,6 +1035,10 @@ export interface JWordRevisionPanelElements {
   readonly host: HTMLElement
   /** 面板根节点。 */
   readonly root: HTMLElement
+  /** 面板标题节点。 */
+  readonly title: HTMLElement
+  /** 关闭按钮。 */
+  readonly closeButton: HTMLButtonElement
   /** 修订列表节点。 */
   readonly list: HTMLElement
   /** 空状态节点。 */
@@ -686,12 +1075,20 @@ export interface JWordFindReplacePanelElements {
 export interface JWordHeadingOutlinePanelElements {
   /** 目录面板宿主。 */
   readonly host: HTMLElement
+  /** 面板根节点。 */
+  readonly root: HTMLElement
+  /** 面板标题节点。 */
+  readonly title: HTMLElement
+  /** 关闭按钮。 */
+  readonly closeButton: HTMLButtonElement
   /** 目录项列表节点。 */
   readonly list: HTMLElement
 }
 
 /** createJWordUi 返回的完整 DOM 句柄。 */
 export interface JWordUiElements extends JWordToolbarElements {
+  /** 底部状态栏；未启用时为 null。 */
+  readonly statusBar: JWordStatusBarElements | null
   /** Gate 4 第一版图片 panel；未启用时为 null。 */
   readonly mediaPanel: JWordMediaPanelElements | null
   /** Gate 4 Iteration 2 表格 panel；未启用时为 null。 */
@@ -716,6 +1113,18 @@ export interface JWordUiElements extends JWordToolbarElements {
 export interface JWordUiInstance {
   /** 供宿主或测试读取的 DOM 句柄。 */
   readonly elements: JWordUiElements
+  /** 动态切换 UI 主题，不销毁 editor。 */
+  setTheme(theme: JWordUiThemeOptions): void
+  /** 动态切换 UI 内建语言；首批只支持中文和英文。 */
+  setLocale(locale: JWordStatusBarLocale, messages?: JWordUiI18nDictionary): void
+  /** 显示或替换当前编辑器实例顶部的 Toast。 */
+  toast(options: JWordToastOptions): void
+  /** 设置编辑器实例级页面水印。 */
+  setWatermark(options: JWordWatermarkOptions): void
+  /** 清除用户设置的页面水印，不清除版权保护水印。 */
+  clearWatermark(): void
+  /** 读取当前用户页面水印配置。 */
+  getWatermark(): JWordWatermarkOptions | null
   /** 在宿主外部更新 editor 状态后手动刷新 UI。 */
   refresh(): void
   /** 销毁 toolbar 订阅与 DOM。 */

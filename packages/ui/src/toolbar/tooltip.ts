@@ -3,38 +3,64 @@
  * 边界：只创建 tooltip DOM，不处理按钮命令或 editor 状态同步。
  * 协作模块：toolbar dom 为每个可交互控件调用这里生成包裹层。
  * 性能/安全约束：tooltip 使用纯 DOM + CSS，可在不引入额外定时器的前提下工作。
- * Specs：docs/superpowers/plans/2026-05-17-jword-ui-sdk-gate4-integration.md#23-新增视觉与交互约束。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 /** tooltip 包裹层返回值。 */
 export interface ToolbarTooltipParts {
   readonly anchor: HTMLSpanElement
   readonly tooltip: HTMLSpanElement
+  readonly destroy: () => void
 }
+
+let toolbarTooltipIdSeed = 0
 
 /** 把控件包装成自带 tooltip 的锚点。 */
 export function wrapWithTooltip(control: HTMLElement, text: string): ToolbarTooltipParts {
-  const anchor = document.createElement('span')
-  const tooltip = document.createElement('span')
+  const ownerDocument = control.ownerDocument
+  const anchor = ownerDocument.createElement('span')
+  const tooltip = ownerDocument.createElement('span')
+  const signalController = new (ownerDocument.defaultView?.AbortController ?? AbortController)()
+  const tooltipId = `jw-toolbar-tooltip-${toolbarTooltipIdSeed}`
+
+  toolbarTooltipIdSeed += 1
 
   anchor.className = 'jw-toolbar__tooltip-anchor'
   anchor.setAttribute('data-jword-tooltip-visible', 'false')
+  tooltip.id = tooltipId
   tooltip.className = 'jw-toolbar__tooltip'
   tooltip.setAttribute('role', 'tooltip')
   tooltip.textContent = text
+  control.setAttribute('aria-describedby', tooltipId)
+  for (const surface of control.querySelectorAll<HTMLElement>('[data-jword-tooltip-surface="true"]')) {
+    surface.setAttribute('aria-describedby', tooltipId)
+  }
+  for (const focusable of control.querySelectorAll<HTMLElement>('button, select, input, textarea, [tabindex]')) {
+    focusable.setAttribute('aria-describedby', tooltipId)
+  }
   anchor.append(control, tooltip)
-  bindToolbarTooltipVisibility(anchor)
+  bindToolbarTooltipVisibility(anchor, signalController.signal)
 
   return {
     anchor,
-    tooltip
+    tooltip,
+    destroy: () => {
+      signalController.abort()
+      control.removeAttribute('aria-describedby')
+      for (const surface of control.querySelectorAll<HTMLElement>('[data-jword-tooltip-surface="true"]')) {
+        surface.removeAttribute('aria-describedby')
+      }
+      for (const focusable of control.querySelectorAll<HTMLElement>('button, select, input, textarea, [tabindex]')) {
+        focusable.removeAttribute('aria-describedby')
+      }
+    }
   }
 }
 
 /**
  * 只在鼠标/焦点停留在工具本体时显示 tooltip；点击后立即隐藏，直到指针离开当前工具。
  */
-function bindToolbarTooltipVisibility(anchor: HTMLElement): void {
+function bindToolbarTooltipVisibility(anchor: HTMLElement, signal: AbortSignal): void {
   const dismiss = () => {
     hideToolbarTooltip(anchor)
     anchor.setAttribute('data-jword-tooltip-dismissed', 'true')
@@ -73,18 +99,18 @@ function bindToolbarTooltipVisibility(anchor: HTMLElement): void {
 
   anchor.addEventListener('mouseover', (event) => {
     maybeShow(event.target)
-  })
+  }, { signal })
   anchor.addEventListener('focusin', (event) => {
     maybeShow(event.target)
-  })
+  }, { signal })
   anchor.addEventListener('mouseout', (event) => {
     reset(event.relatedTarget)
-  })
+  }, { signal })
   anchor.addEventListener('focusout', (event) => {
     reset(event.relatedTarget)
-  })
-  anchor.addEventListener('mousedown', dismiss)
-  anchor.addEventListener('click', dismiss)
+  }, { signal })
+  anchor.addEventListener('mousedown', dismiss, { signal })
+  anchor.addEventListener('click', dismiss, { signal })
 }
 
 /**

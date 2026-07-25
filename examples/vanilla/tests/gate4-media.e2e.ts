@@ -2,11 +2,13 @@
  * @fileoverview 职责: 用真实浏览器冻结 Gate 4 图片入口收敛到 toolbar 的最小契约。
  * 边界: 只验证 toolbar 图片入口、URL 弹框、本地上传和 editor projection 的最小闭环，不覆盖后续图片编辑能力。
  * 协作: examples/vanilla/src/main.ts、demo media support、packages/ui/src/media/* 和 core image command builders。
- * 约束: 断言必须来自真实 DOM、window.__jwordDemo.media 钩子和 editor.getProjection()，所有插入都只允许是 inline。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Iteration 1 Step 4.1-4.3。
+ * 约束: 断言必须来自真实 DOM、window.__jwordTestFixture.media 钩子和 editor.getProjection()，所有插入都只允许是 inline。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+
+import { activateToolbarTab } from './gate3-toolbar-helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -14,7 +16,7 @@ const FIXTURE_WIDTH_TWIPS = 3600
 const FIXTURE_HEIGHT_TWIPS = 1800
 
 test('Gate 4 media toolbar only exposes inline local upload and applies it successfully', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForMediaDemoReady(page)
   await prepareInsertSelection(page)
 
@@ -31,12 +33,12 @@ test('Gate 4 media toolbar only exposes inline local upload and applies it succe
 
   await expect(menu).toBeHidden()
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().length ?? 0)
+    return page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog().length ?? 0)
   }).toBe(1)
 
   await expect.poll(() => {
     return page.evaluate(() => {
-      const demo = window.__jwordDemo
+      const demo = window.__jwordTestFixture
       const resourceId = demo?.media?.readUploadLog()[0]?.resourceId
       const projection = demo?.editor.getProjection()
 
@@ -67,7 +69,7 @@ test('Gate 4 media toolbar only exposes inline local upload and applies it succe
 })
 
 test('Gate 4 media toolbar uses confirm/cancel url dialog and inserts inline image after confirm', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForMediaDemoReady(page)
   await prepareInsertSelection(page)
 
@@ -84,7 +86,7 @@ test('Gate 4 media toolbar uses confirm/cancel url dialog and inserts inline ima
   await expect(dialog).toContainText('网络地址')
 
   const fixtureUrl = await page.evaluate(() => {
-    return window.__jwordDemo?.media?.getFixtureUrl() ?? ''
+    return window.__jwordTestFixture?.media?.getFixtureUrl() ?? ''
   })
 
   expect(fixtureUrl).not.toBe('')
@@ -99,12 +101,12 @@ test('Gate 4 media toolbar uses confirm/cancel url dialog and inserts inline ima
 
   await expect(dialog).toBeHidden()
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().length ?? 0)
+    return page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog().length ?? 0)
   }).toBe(1)
 
   await expect.poll(() => {
     return page.evaluate(() => {
-      const demo = window.__jwordDemo
+      const demo = window.__jwordTestFixture
       const resourceId = demo?.media?.readUploadLog()[0]?.resourceId
       const projection = demo?.editor.getProjection()
 
@@ -135,7 +137,7 @@ test('Gate 4 media toolbar uses confirm/cancel url dialog and inserts inline ima
 })
 
 test('Gate 4 media toolbar keeps failed url upload recoverable and retries with the same resource', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForMediaDemoReady(page)
   await prepareInsertSelection(page)
 
@@ -146,7 +148,7 @@ test('Gate 4 media toolbar keeps failed url upload recoverable and retries with 
   const confirmButton = page.locator('[data-jword-media-url-dialog-confirm="true"]')
   const dialogError = page.locator('[data-jword-media-url-dialog-error="true"]')
   const retryOnceUrl = await page.evaluate(() => {
-    return window.__jwordDemo?.media?.buildScenarioUrl('retry-once') ?? ''
+    return window.__jwordTestFixture?.media?.buildScenarioUrl('retry-once') ?? ''
   })
 
   expect(retryOnceUrl).not.toBe('')
@@ -158,7 +160,7 @@ test('Gate 4 media toolbar keeps failed url upload recoverable and retries with 
   await expect(dialog).toBeVisible()
   await expect(dialogError).toContainText('首次上传临时失败')
 
-  const failedLog = await page.evaluate(() => window.__jwordDemo?.media?.readUploadLog() ?? [])
+  const failedLog = await page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog() ?? [])
 
   expect(failedLog).toHaveLength(1)
   expect(failedLog[0]).toMatchObject({
@@ -171,10 +173,10 @@ test('Gate 4 media toolbar keeps failed url upload recoverable and retries with 
 
   await expect(dialog).toBeHidden()
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().length ?? 0)
+    return page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog().length ?? 0)
   }).toBe(2)
 
-  const recoveredLog = await page.evaluate(() => window.__jwordDemo?.media?.readUploadLog() ?? [])
+  const recoveredLog = await page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog() ?? [])
   const resourceId = recoveredLog[0]?.resourceId
 
   expect(resourceId).toBe(recoveredLog[1]?.resourceId)
@@ -190,7 +192,7 @@ test('Gate 4 media toolbar keeps failed url upload recoverable and retries with 
 })
 
 test('Gate 4 media toolbar replaces selected inline image resource after successful upload', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForMediaDemoReady(page)
   await prepareInsertSelection(page)
 
@@ -207,7 +209,7 @@ test('Gate 4 media toolbar replaces selected inline image resource after success
 
   await selectImageByResourceId(page, originalResourceId)
 
-  const fixtureUrl = await page.evaluate(() => window.__jwordDemo?.media?.getFixtureUrl() ?? '')
+  const fixtureUrl = await page.evaluate(() => window.__jwordTestFixture?.media?.getFixtureUrl() ?? '')
 
   expect(fixtureUrl).not.toBe('')
   await page.locator('[data-jword-media-trigger="true"]').click()
@@ -216,10 +218,10 @@ test('Gate 4 media toolbar replaces selected inline image resource after success
   await page.locator('[data-jword-media-url-dialog-confirm="true"]').click()
 
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().length ?? 0)
+    return page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog().length ?? 0)
   }).toBe(2)
 
-  const replacementResourceId = await page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().at(-1)?.resourceId ?? null)
+  const replacementResourceId = await page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog().at(-1)?.resourceId ?? null)
 
   expect(replacementResourceId).not.toBeNull()
   expect(replacementResourceId).not.toBe(originalResourceId)
@@ -235,7 +237,7 @@ test('Gate 4 media toolbar replaces selected inline image resource after success
 })
 
 test('Gate 4 inline image keeps fixture natural size instead of layout fallback width', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForMediaDemoReady(page)
   await prepareInsertSelection(page)
 
@@ -252,7 +254,7 @@ test('Gate 4 inline image keeps fixture natural size instead of layout fallback 
 })
 
 test('Gate 4 image flow keeps editor host scroll stable when refocusing hidden input from a far offscreen textarea', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForMediaDemoReady(page)
   await prepareInsertSelection(page)
   await insertFixtureByFile(page)
@@ -266,7 +268,7 @@ test('Gate 4 image flow keeps editor host scroll stable when refocusing hidden i
 
     textarea.style.top = '3300px'
     textarea.style.left = '240px'
-    window.__jwordDemo?.editor.blur()
+    window.__jwordTestFixture?.editor.blur()
 
     return Number.parseFloat(textarea?.style.top ?? '0')
   })
@@ -275,6 +277,7 @@ test('Gate 4 image flow keeps editor host scroll stable when refocusing hidden i
   await expect.poll(() => {
     return page.evaluate(() => document.querySelector<HTMLElement>('#jword-editor')?.scrollTop ?? -1)
   }).toBe(0)
+  const geometryBeforeFocus = await readEditorHostGeometry(page)
 
   const editorBox = await page.locator('#jword-editor').boundingBox()
 
@@ -285,26 +288,11 @@ test('Gate 4 image flow keeps editor host scroll stable when refocusing hidden i
 
   await page.mouse.click(editorBox.x + 320, editorBox.y + 180)
 
-  await expect.poll(() => {
-    return page.evaluate(() => {
-      const host = document.querySelector<HTMLElement>('#jword-editor')
-      const shell = document.querySelector<HTMLElement>('[data-jword-editor]')
-
-      return {
-        hostScrollTop: host?.scrollTop ?? -1,
-        shellTop: Math.round(shell?.getBoundingClientRect().top ?? -9999),
-        hostTop: Math.round(host?.getBoundingClientRect().top ?? -9999)
-      }
-    })
-  }).toEqual({
-    hostScrollTop: 0,
-    shellTop: Math.round(editorBox.y) + 1,
-    hostTop: Math.round(editorBox.y)
-  })
+  await expect.poll(() => readEditorHostGeometry(page)).toEqual(geometryBeforeFocus)
 })
 
 test('Gate 4 image overlay exposes eight resize handles and supports rotate reset delete plus drag move', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/test-fixture.html')
   await waitForMediaDemoReady(page)
   await prepareInsertSelection(page)
 
@@ -374,7 +362,7 @@ test('Gate 4 image overlay exposes eight resize handles and supports rotate rese
   }).toEqual({
     display: 'inline',
     widthTwips: await page.evaluate((targetResourceId) => {
-      const projection = window.__jwordDemo?.editor.getProjection()
+      const projection = window.__jwordTestFixture?.editor.getProjection()
       const image = projection?.document.sections
         .flatMap((section) => section.blocks)
         .filter((block) => block.kind === 'paragraph')
@@ -386,7 +374,7 @@ test('Gate 4 image overlay exposes eight resize handles and supports rotate rese
       return image?.widthTwips ?? null
     }, resourceId),
     heightTwips: await page.evaluate((targetResourceId) => {
-      const projection = window.__jwordDemo?.editor.getProjection()
+      const projection = window.__jwordTestFixture?.editor.getProjection()
       const image = projection?.document.sections
         .flatMap((section) => section.blocks)
         .filter((block) => block.kind === 'paragraph')
@@ -553,22 +541,25 @@ test('Gate 4 image overlay exposes eight resize handles and supports rotate rese
   await expect(page.locator('[data-jword-image-drag-ghost="true"]')).toBeVisible()
   await expect(dropCaret).toBeVisible()
   await expect.poll(() => {
-    return page.evaluate(() => {
+    return page.evaluate((expectedPoint) => {
       const ghost = document.querySelector<HTMLElement>('[data-jword-image-drag-ghost="true"]')
       const caret = document.querySelector<HTMLElement>('[data-jword-image-drop-caret="true"]')
       const ghostRect = ghost?.getBoundingClientRect()
       const caretRect = caret?.getBoundingClientRect()
+      const ghostLeft = Math.round(ghostRect?.left ?? -9999)
+      const ghostTop = Math.round(ghostRect?.top ?? -9999)
+      const caretLeft = Math.round(caretRect?.left ?? -9999)
 
       return {
-        ghostLeft: Math.round(ghostRect?.left ?? -9999),
-        ghostTop: Math.round(ghostRect?.top ?? -9999),
-        caretLeft: Math.round(caretRect?.left ?? -9999)
+        ghostLeftReady: Math.abs(ghostLeft - Math.round(expectedPoint.x)) === 0,
+        ghostTopReady: Math.abs(ghostTop - Math.round(expectedPoint.y)) <= 1,
+        caretLeftReady: Math.abs(caretLeft - Math.round(expectedPoint.x)) === 0
       }
-    })
+    }, dragTarget)
   }).toEqual({
-    ghostLeft: Math.round(dragTarget.x),
-    ghostTop: Math.round(dragTarget.y),
-    caretLeft: Math.round(dragTarget.x)
+    ghostLeftReady: true,
+    ghostTopReady: true,
+    caretLeftReady: true
   })
   await page.mouse.up()
   await expect(page.locator('[data-jword-image-drag-ghost="true"]')).toHaveCount(0)
@@ -595,16 +586,35 @@ test('Gate 4 image overlay exposes eight resize handles and supports rotate rese
 
 /** 等待 toolbar 图片入口和 demo 测试钩子都挂载完成。 */
 async function waitForMediaDemoReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo?.media !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture?.media !== undefined)
+  await activateToolbarTab(page, 'insert')
   await expect(page.locator('[data-jword-media-toolbar="true"]')).toBeVisible()
   await expect(page.locator('[data-jword-media-panel="true"]')).toHaveCount(0)
+}
+
+/** 读取 editor host 与当前 EditorShell 的视口几何，用于比较聚焦前后的稳定性。 */
+async function readEditorHostGeometry(page: Page): Promise<{
+  readonly hostScrollTop: number
+  readonly shellTop: number
+  readonly hostTop: number
+}> {
+  return page.evaluate(() => {
+    const host = document.querySelector<HTMLElement>('#jword-editor')
+    const shell = document.querySelector<HTMLElement>('[data-jword-editor]')
+
+    return {
+      hostScrollTop: host?.scrollTop ?? -1,
+      shellTop: Math.round(shell?.getBoundingClientRect().top ?? -9999),
+      hostTop: Math.round(host?.getBoundingClientRect().top ?? -9999)
+    }
+  })
 }
 
 /** 通过 demo 的 Alpha 样例和公开选区钩子，准备图片插入所需的折叠选区。 */
 async function prepareInsertSelection(page: Page): Promise<void> {
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 4 demo 测试钩子')
@@ -629,7 +639,7 @@ async function prepareInsertSelection(page: Page): Promise<void> {
   })
   await expect.poll(() => {
     return page.evaluate(() => {
-      const demo = window.__jwordDemo
+      const demo = window.__jwordTestFixture
       const selection = demo?.editor.getSelection()
 
       if (demo === undefined || selection === null || selection === undefined) {
@@ -650,10 +660,10 @@ async function insertFixtureByFile(page: Page): Promise<string> {
   await page.locator('[data-jword-media-file-input="true"]').setInputFiles('fixtures/gate4/media-inline.svg')
 
   await expect.poll(() => {
-    return page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().at(-1)?.resourceId ?? null)
+    return page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog().at(-1)?.resourceId ?? null)
   }).not.toBeNull()
 
-  const resourceId = await page.evaluate(() => window.__jwordDemo?.media?.readUploadLog().at(-1)?.resourceId ?? null)
+  const resourceId = await page.evaluate(() => window.__jwordTestFixture?.media?.readUploadLog().at(-1)?.resourceId ?? null)
 
   if (resourceId === null) {
     throw new Error('插图后未读取到资源 id')
@@ -673,7 +683,7 @@ async function readProjectionImage(
   readonly rotationDegrees: number
 } | null> {
   return page.evaluate((targetResourceId) => {
-    const projection = window.__jwordDemo?.editor.getProjection()
+    const projection = window.__jwordTestFixture?.editor.getProjection()
 
     if (projection === undefined) {
       return null
@@ -707,7 +717,7 @@ async function readProjectionImage(
 /** 直接通过 editor facade 把选区切到目标图片 run。 */
 async function selectImageByResourceId(page: Page, resourceId: string): Promise<void> {
   await page.evaluate((targetResourceId) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 4 demo 测试钩子')

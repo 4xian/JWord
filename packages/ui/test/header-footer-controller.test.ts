@@ -5,7 +5,7 @@
  * 边界：只覆盖 UI controller 到 core transaction 的接线，不测试分页渲染或复杂页眉编辑器。
  * 协作模块：页眉页脚控制器、核心分节命令构造器与编辑器门面。
  * 约束：通过稳定 data selector 交互，不读取 controller 私有状态。
- * Specs：docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Step 4.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 
 import { createEditor } from '@4xian/jword-core'

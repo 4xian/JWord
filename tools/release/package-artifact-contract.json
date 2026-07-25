@@ -1,0 +1,1115 @@
+{
+  "schemaVersion": 1,
+  "environmentRuntimeMap": {
+    "node": "node",
+    "browser": "vite-browser",
+    "dedicated-worker": "dedicated-worker",
+    "types": "types",
+    "image-node": "image-node"
+  },
+  "registryPolicy": {
+    "mode": "read-only-loopback",
+    "host": "127.0.0.1",
+    "scope": "@4xian",
+    "allowedMethods": [
+      "GET",
+      "HEAD"
+    ],
+    "npmLockEvidence": [
+      "resolved",
+      "integrity"
+    ],
+    "pnpmV9LockEvidence": [
+      "integrity",
+      "registry-config",
+      "registry-transcript"
+    ],
+    "runtimePortEvidence": [
+      "registry-config",
+      "registry-transcript",
+      "metadata-response"
+    ]
+  },
+  "professionalEditing": {
+    "status": "not-present",
+    "deferredTo": "Phase-4A"
+  },
+  "nonRuntimeWorkspaces": [
+    {
+      "path": "/",
+      "artifactPolicy": "forbidden"
+    },
+    {
+      "path": "examples/*",
+      "artifactPolicy": "forbidden"
+    },
+    {
+      "path": "fixtures/",
+      "artifactPolicy": "forbidden"
+    },
+    {
+      "path": "benchmarks/",
+      "artifactPolicy": "forbidden"
+    },
+    {
+      "path": "tools/*",
+      "artifactPolicy": "forbidden"
+    }
+  ],
+  "packages": [
+    {
+      "name": "@4xian/jword-collab",
+      "workspacePath": "packages/collab",
+      "classification": "collaboration",
+      "delivery": "npm-restricted",
+      "registryIntent": "restricted",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "restricted",
+      "files": [
+        "dist",
+        "README.md"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        },
+        {
+          "subpath": "./experimental",
+          "target": {
+            "types": "./dist/experimental.d.ts",
+            "import": "./dist/experimental.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core"
+        ],
+        "firstPartyPeers": [
+          "@4xian/jword-license"
+        ],
+        "external": {
+          "@hocuspocus/provider": "4.0.0",
+          "y-protocols": "1.0.7",
+          "yjs": "13.6.30"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-collab-server",
+      "workspacePath": "packages/collab-server",
+      "classification": "docker-only",
+      "delivery": "docker-image-internal",
+      "registryIntent": "not-published",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "restricted",
+      "files": [
+        "dist",
+        "README.md"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "image-node",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-persistence"
+        ],
+        "firstPartyPeers": [
+          "@4xian/jword-license"
+        ],
+        "external": {
+          "@hocuspocus/server": "4.0.0",
+          "y-protocols": "1.0.7",
+          "yjs": "13.6.30"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-core",
+      "workspacePath": "packages/core",
+      "classification": "base",
+      "delivery": "npm-public",
+      "registryIntent": "public",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "public",
+      "files": [
+        "dist"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [],
+        "firstPartyPeers": [],
+        "external": {
+          "yjs": "13.6.30"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-devtools",
+      "workspacePath": "packages/devtools",
+      "classification": "base",
+      "delivery": "npm-public",
+      "registryIntent": "public",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "public",
+      "files": [
+        "dist"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core"
+        ],
+        "firstPartyPeers": [],
+        "external": {},
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-docx",
+      "workspacePath": "packages/docx",
+      "classification": "formats",
+      "delivery": "npm-restricted",
+      "registryIntent": "restricted",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "restricted",
+      "files": [
+        "dist"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        },
+        {
+          "subpath": "./worker",
+          "target": {
+            "types": "./dist/worker.d.ts",
+            "import": "./dist/worker.js"
+          },
+          "environments": [
+            "browser",
+            "dedicated-worker",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core"
+        ],
+        "firstPartyPeers": [
+          "@4xian/jword-license"
+        ],
+        "external": {
+          "jszip": "3.10.1"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-license",
+      "workspacePath": "packages/license",
+      "classification": "license",
+      "delivery": "npm-restricted",
+      "registryIntent": "restricted",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "restricted",
+      "files": [
+        "dist",
+        "README.md"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "dedicated-worker",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [],
+        "firstPartyPeers": [],
+        "external": {
+          "@noble/curves": "2.2.0"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-native",
+      "workspacePath": "packages/native",
+      "classification": "base",
+      "delivery": "npm-public",
+      "registryIntent": "public",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "public",
+      "files": [
+        "dist",
+        "fixtures",
+        "README.md"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [
+        "fixtures/registry.json"
+      ],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        },
+        {
+          "subpath": "./worker",
+          "target": {
+            "types": "./dist/worker.d.ts",
+            "import": "./dist/worker.js"
+          },
+          "environments": [
+            "browser",
+            "dedicated-worker",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core"
+        ],
+        "firstPartyPeers": [],
+        "external": {
+          "@zip.js/zip.js": "2.8.31",
+          "jszip": "3.10.1"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-pdf",
+      "workspacePath": "packages/pdf",
+      "classification": "formats",
+      "delivery": "npm-restricted",
+      "registryIntent": "restricted",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "restricted",
+      "files": [
+        "dist"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        },
+        {
+          "subpath": "./worker",
+          "target": {
+            "types": "./dist/worker.d.ts",
+            "import": "./dist/worker.js"
+          },
+          "environments": [
+            "browser",
+            "dedicated-worker",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core"
+        ],
+        "firstPartyPeers": [
+          "@4xian/jword-license"
+        ],
+        "external": {
+          "fontkit": "2.0.4",
+          "pdf-lib": "1.17.1",
+          "pdfjs-dist": "4.10.38"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-persistence",
+      "workspacePath": "packages/persistence",
+      "classification": "collaboration",
+      "delivery": "npm-restricted",
+      "registryIntent": "restricted",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "restricted",
+      "files": [
+        "dist",
+        "README.md"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core"
+        ],
+        "firstPartyPeers": [],
+        "external": {
+          "y-indexeddb": "9.0.12",
+          "yjs": "13.6.30"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-react",
+      "workspacePath": "packages/react",
+      "classification": "base",
+      "delivery": "npm-public",
+      "registryIntent": "public",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "public",
+      "files": [
+        "dist"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core",
+          "@4xian/jword-ui"
+        ],
+        "firstPartyPeers": [],
+        "external": {},
+        "externalPeers": {
+          "react": "19.2.7",
+          "react-dom": "19.2.7"
+        }
+      }
+    },
+    {
+      "name": "@4xian/jword-ui",
+      "workspacePath": "packages/ui",
+      "classification": "base",
+      "delivery": "npm-public",
+      "registryIntent": "public",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "public",
+      "files": [
+        "dist"
+      ],
+      "sideEffects": [
+        "./dist/styles/toolbar.css"
+      ],
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        },
+        {
+          "subpath": "./styles.css",
+          "target": "./dist/styles/toolbar.css",
+          "environments": [
+            "browser"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core"
+        ],
+        "firstPartyPeers": [],
+        "external": {
+          "dompurify": "3.4.2"
+        },
+        "externalPeers": {}
+      }
+    },
+    {
+      "name": "@4xian/jword-vue",
+      "workspacePath": "packages/vue",
+      "classification": "base",
+      "delivery": "npm-public",
+      "registryIntent": "public",
+      "version": "0.0.0",
+      "private": true,
+      "sourceAccess": "public",
+      "files": [
+        "dist"
+      ],
+      "sideEffects": false,
+      "fixtureAllowlist": [],
+      "exports": [
+        {
+          "subpath": ".",
+          "target": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+          },
+          "environments": [
+            "node",
+            "browser",
+            "types"
+          ]
+        }
+      ],
+      "dependencyPolicy": {
+        "firstParty": [
+          "@4xian/jword-core",
+          "@4xian/jword-ui"
+        ],
+        "firstPartyPeers": [],
+        "external": {},
+        "externalPeers": {
+          "vue": "3.5.39"
+        }
+      }
+    }
+  ],
+  "journeys": [
+    {
+      "id": "node-exports-types",
+      "runtimes": [
+        "node",
+        "types"
+      ],
+      "requestedPackages": [
+        "@4xian/jword-collab",
+        "@4xian/jword-core",
+        "@4xian/jword-devtools",
+        "@4xian/jword-docx",
+        "@4xian/jword-license",
+        "@4xian/jword-native",
+        "@4xian/jword-pdf",
+        "@4xian/jword-persistence",
+        "@4xian/jword-react",
+        "@4xian/jword-ui",
+        "@4xian/jword-vue"
+      ],
+      "firstPartyClosure": [],
+      "targets": [
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": "./experimental",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": "./experimental",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-core",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-core",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-devtools",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-devtools",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-docx",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-docx",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-docx",
+          "subpath": "./worker",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-license",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-license",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-native",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-native",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-native",
+          "subpath": "./worker",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-pdf",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-pdf",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-pdf",
+          "subpath": "./worker",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-persistence",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-persistence",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-react",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-react",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-ui",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-ui",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-vue",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-vue",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        }
+      ]
+    },
+    {
+      "id": "vanilla-editorshell-css",
+      "runtimes": [
+        "vite-browser"
+      ],
+      "requestedPackages": [
+        "@4xian/jword-core",
+        "@4xian/jword-devtools",
+        "@4xian/jword-ui"
+      ],
+      "firstPartyClosure": [],
+      "targets": [
+        {
+          "package": "@4xian/jword-core",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-ui",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-ui",
+          "subpath": "./styles.css",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-devtools",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        }
+      ]
+    },
+    {
+      "id": "react-wrapper",
+      "runtimes": [
+        "vite-browser"
+      ],
+      "requestedPackages": [
+        "@4xian/jword-react"
+      ],
+      "firstPartyClosure": [
+        "@4xian/jword-core",
+        "@4xian/jword-ui"
+      ],
+      "targets": [
+        {
+          "package": "@4xian/jword-react",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        }
+      ]
+    },
+    {
+      "id": "vue-wrapper",
+      "runtimes": [
+        "vite-browser"
+      ],
+      "requestedPackages": [
+        "@4xian/jword-vue"
+      ],
+      "firstPartyClosure": [
+        "@4xian/jword-core",
+        "@4xian/jword-ui"
+      ],
+      "targets": [
+        {
+          "package": "@4xian/jword-vue",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        }
+      ]
+    },
+    {
+      "id": "module-workers",
+      "runtimes": [
+        "vite-browser",
+        "dedicated-worker"
+      ],
+      "requestedPackages": [
+        "@4xian/jword-docx",
+        "@4xian/jword-native",
+        "@4xian/jword-pdf"
+      ],
+      "firstPartyClosure": [
+        "@4xian/jword-core",
+        "@4xian/jword-license"
+      ],
+      "targets": [
+        {
+          "package": "@4xian/jword-native",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-native",
+          "subpath": "./worker",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-native",
+          "subpath": "./worker",
+          "environment": "dedicated-worker",
+          "runtime": "dedicated-worker"
+        },
+        {
+          "package": "@4xian/jword-docx",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-docx",
+          "subpath": "./worker",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-docx",
+          "subpath": "./worker",
+          "environment": "dedicated-worker",
+          "runtime": "dedicated-worker"
+        },
+        {
+          "package": "@4xian/jword-pdf",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-pdf",
+          "subpath": "./worker",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-pdf",
+          "subpath": "./worker",
+          "environment": "dedicated-worker",
+          "runtime": "dedicated-worker"
+        }
+      ]
+    },
+    {
+      "id": "license-runtime-identity",
+      "runtimes": [
+        "node",
+        "vite-browser",
+        "dedicated-worker",
+        "types"
+      ],
+      "requestedPackages": [
+        "@4xian/jword-collab",
+        "@4xian/jword-license",
+        "@4xian/jword-persistence"
+      ],
+      "firstPartyClosure": [
+        "@4xian/jword-core"
+      ],
+      "targets": [
+        {
+          "package": "@4xian/jword-license",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-license",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-license",
+          "subpath": ".",
+          "environment": "dedicated-worker",
+          "runtime": "dedicated-worker"
+        },
+        {
+          "package": "@4xian/jword-license",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-persistence",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-persistence",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-persistence",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": ".",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": ".",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": "./experimental",
+          "environment": "node",
+          "runtime": "node"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": "./experimental",
+          "environment": "browser",
+          "runtime": "vite-browser"
+        },
+        {
+          "package": "@4xian/jword-collab",
+          "subpath": "./experimental",
+          "environment": "types",
+          "runtime": "types"
+        }
+      ]
+    },
+    {
+      "id": "collab-server-image-node",
+      "runtimes": [
+        "image-node",
+        "types"
+      ],
+      "requestedPackages": [
+        "@4xian/jword-collab-server"
+      ],
+      "firstPartyClosure": [
+        "@4xian/jword-core",
+        "@4xian/jword-license",
+        "@4xian/jword-persistence"
+      ],
+      "targets": [
+        {
+          "package": "@4xian/jword-collab-server",
+          "subpath": ".",
+          "environment": "image-node",
+          "runtime": "image-node"
+        },
+        {
+          "package": "@4xian/jword-collab-server",
+          "subpath": ".",
+          "environment": "types",
+          "runtime": "types"
+        }
+      ]
+    }
+  ],
+  "sizeBudgets": [
+    {
+      "id": "core-entry-js",
+      "source": "tarball:@4xian/jword-core/dist/index.js",
+      "limitBytes": 650000
+    },
+    {
+      "id": "native-registry",
+      "source": "tarball:@4xian/jword-native/fixtures/registry.json",
+      "sourceSha256": "db07de6b0a63f4d34cec1ad5bbc0f9ba61bbab66a6a7379160c225b1a8a48caa",
+      "limitBytes": 1093
+    },
+    {
+      "id": "vanilla-first-screen/npm/chromium",
+      "source": "consumer:bundles/vanilla-editorshell-css--npm--vite-browser--chromium/first-screen",
+      "limitBytes": 900000
+    },
+    {
+      "id": "vanilla-first-screen/npm/firefox",
+      "source": "consumer:bundles/vanilla-editorshell-css--npm--vite-browser--firefox/first-screen",
+      "limitBytes": 900000
+    },
+    {
+      "id": "vanilla-first-screen/npm/webkit",
+      "source": "consumer:bundles/vanilla-editorshell-css--npm--vite-browser--webkit/first-screen",
+      "limitBytes": 900000
+    },
+    {
+      "id": "vanilla-first-screen/pnpm/chromium",
+      "source": "consumer:bundles/vanilla-editorshell-css--pnpm--vite-browser--chromium/first-screen",
+      "limitBytes": 900000
+    },
+    {
+      "id": "vanilla-first-screen/pnpm/firefox",
+      "source": "consumer:bundles/vanilla-editorshell-css--pnpm--vite-browser--firefox/first-screen",
+      "limitBytes": 900000
+    },
+    {
+      "id": "vanilla-first-screen/pnpm/webkit",
+      "source": "consumer:bundles/vanilla-editorshell-css--pnpm--vite-browser--webkit/first-screen",
+      "limitBytes": 900000
+    }
+  ]
+}

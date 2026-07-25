@@ -1,9 +1,9 @@
 /**
  * @fileoverview 职责: 用真实浏览器 canvas 像素补齐 Gate 3 输入阶段的最小视觉证据，覆盖选区高亮与光标渲染。
  * 边界: 不生成跨平台截图基线，不声称等同 Windows 原生 IME 视觉验收。
- * 协作: `window.__jwordDemo`、隐藏输入框测试钩子、Alpha 样例和 canvas renderer。
+ * 协作: `window.__jwordTestFixture`、隐藏输入框测试钩子、Alpha 样例和 canvas renderer。
  * 约束: 证据必须来自真实 canvas 像素与公开 facade 的 caret/selection 几何，避免退化成纯 DOM 断言。
- * Specs: docs/superpowers/plans/2026-05-11-jword-canonical-implementation.md Gate 3 Step 3.12、3.13。
+ * 实现说明：本文件按当前源码职责实现，不依赖旧实施计划或需求文档。
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -18,7 +18,7 @@ interface Gate3VisualProbe {
 }
 
 test('Gate 3 Alpha paints selection highlight and caret on the real page canvas', async ({ page }) => {
-  await page.goto('/?fixture=gate2')
+  await page.goto('/test-fixture.html?fixture=gate2')
   await waitForGate3AlphaReady(page)
 
   const selectionProbe = await selectSampleAndReadVisualProbe(page)
@@ -46,7 +46,7 @@ test('Gate 3 Alpha paints selection highlight and caret on the real page canvas'
 })
 
 async function waitForGate3AlphaReady(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__jwordDemo !== undefined)
+  await page.waitForFunction(() => window.__jwordTestFixture !== undefined)
   await expect(page.locator('[data-jword-hidden-textarea]')).toHaveCount(1)
   await page.getByRole('button', { name: '加载 Alpha 样例' }).click()
   await expect(page.locator('[data-jword-canvas-container]')).toHaveAttribute('data-jword-page-count', '1')
@@ -60,10 +60,10 @@ async function selectSampleAndReadVisualProbe(page: Page): Promise<Gate3VisualPr
   return readCurrentVisualProbe(page)
 }
 
-/** 点击页尾光标位置，并读取真实 canvas 视觉探针。 */
+/** 通过公开 selection facade 折叠到首段页尾，并读取真实 canvas 视觉探针。 */
 async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3VisualProbe> {
-  const point = await page.evaluate(() => {
-    const demo = window.__jwordDemo
+  const target = await page.evaluate(() => {
+    const demo = window.__jwordTestFixture
 
     if (demo === undefined) {
       throw new Error('缺少 Gate 3 demo 测试钩子')
@@ -71,42 +71,36 @@ async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3Vis
 
     const firstBlock = demo.editor.getProjection().document.sections[0]?.blocks[0]
     const firstRun = firstBlock?.kind === 'paragraph' ? firstBlock.runs[0] : undefined
+
+    if (firstBlock?.kind !== 'paragraph' || firstRun === undefined) {
+      throw new Error('缺少 Gate 3 Alpha 首段文本')
+    }
+
     const runText = firstRun?.inlines.map((inline) => inline.kind === 'text' ? inline.text : '').join('') ?? ''
     const graphemeIndex = Array.from(runText).length
 
-    const anchor = demo.editor.createTextAnchor({
-      sectionId: 'section-1',
-      blockId: 'paragraph-1',
-      runId: 'run-1',
-      graphemeIndex
+    demo.selectTextRange({
+      sectionId: demo.editor.getProjection().document.sections[0]!.id,
+      blockId: firstBlock.id,
+      runId: firstRun.id,
+      anchorGraphemeIndex: graphemeIndex,
+      focusGraphemeIndex: graphemeIndex
     })
-
-    const caretRect = demo.editor.getCaretRect(anchor)
-    const pageBox = demo.editor.getLayout().pages[caretRect?.pageIndex ?? 0]
-    const canvas = document.querySelector<HTMLCanvasElement>(`[data-jword-page="${caretRect?.pageIndex ?? 0}"] .jw-editor__page-canvas`)
-    const canvasRect = canvas?.getBoundingClientRect()
-
-    if (caretRect === undefined || pageBox === undefined || canvasRect === undefined) {
-      throw new Error('无法读取 Gate 3 visual caret 点击坐标')
-    }
+    demo.editor.focus()
 
     return {
-      clientX: canvasRect.left + ((caretRect.x - pageBox.x + 1) * canvasRect.width) / pageBox.width,
-      clientY: canvasRect.top + ((caretRect.y - pageBox.y + caretRect.height / 2) * canvasRect.height) / pageBox.height,
-      sectionId: 'section-1',
-      blockId: 'paragraph-1',
-      runId: 'run-1',
+      sectionId: demo.editor.getProjection().document.sections[0]!.id,
+      blockId: firstBlock.id,
+      runId: firstRun.id,
       graphemeIndex
     }
   })
 
-  await page.mouse.click(point.clientX, point.clientY)
-
   await expect.poll(() => hasCollapsedSelectionAt(page, {
-    sectionId: point.sectionId,
-    blockId: point.blockId,
-    runId: point.runId,
-    graphemeIndex: point.graphemeIndex
+    sectionId: target.sectionId,
+    blockId: target.blockId,
+    runId: target.runId,
+    graphemeIndex: target.graphemeIndex
   })).toBe(true)
 
   await expect.poll(async () => {
@@ -121,7 +115,7 @@ async function collapseSelectionAndReadVisualProbe(page: Page): Promise<Gate3Vis
 /** 判断当前选区是否落在同一个 run 内且非折叠。 */
 async function hasSingleRunSelection(page: Page): Promise<boolean> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection() ?? null
     const anchorPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.anchor)
     const focusPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.focus)
@@ -146,7 +140,7 @@ async function hasCollapsedSelectionAt(
   }>
 ): Promise<boolean> {
   return page.evaluate((input) => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const selection = demo?.editor.getSelection() ?? null
     const anchorPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.anchor)
     const focusPosition = selection === null ? undefined : demo?.editor.resolveTextPosition(selection.focus)
@@ -167,7 +161,7 @@ async function hasCollapsedSelectionAt(
 /** 读取当前真实 canvas 上的文字、选区与光标像素。 */
 async function readCurrentVisualProbe(page: Page): Promise<Gate3VisualProbe> {
   return page.evaluate(() => {
-    const demo = window.__jwordDemo
+    const demo = window.__jwordTestFixture
     const pageBox = demo?.editor.getLayout().pages[0]
     const pageIndex = pageBox?.pageIndex ?? 0
     const selection = demo?.editor.getSelection() ?? null
