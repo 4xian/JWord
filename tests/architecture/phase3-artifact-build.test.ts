@@ -3,7 +3,7 @@
  *
  * 职责：锁定 Phase 3 制品构建、清单、校验和、绑定与比较契约。
  * 边界：只在仓库外的合成 Git 包夹具运行，不构建或打包当前 JWord 工作树。
- * 协作模块：制品工具、构建器、扫描器、比较器与四个发布兼容入口。
+ * 协作模块：制品工具、构建器、扫描器与比较器。
  * 性能/安全约束：夹具必须位于系统临时目录，任何失败都不得修改或清理当前仓库。
  * 实现说明：生产契约通过合成夹具的公开命令行接缝验证。
  */
@@ -65,13 +65,6 @@ interface BuilderFixture {
   readonly trackedFile: string
 }
 
-interface ReleaseInventoryFixture {
-  readonly root: string
-  readonly manifestPath: string
-  readonly commandLog: string
-  readonly environment: Record<string, string | undefined>
-}
-
 interface ArtifactIdentityFixture {
   readonly schemaVersion: number
   readonly gitSha: string
@@ -97,7 +90,6 @@ function runArtifactBuildSuite(): void {
   it('fails closed for staged, unstaged, and non-ignored untracked input', verifyDirtyRepositoryInputs, 60_000)
   it('fails closed when source, build, pack, or direct commands dirty the repository', verifyDirtyCommandCheckpoints, 120_000)
   it('builds and compares a bound synthetic artifact set outside the repository', verifySyntheticArtifactLifecycle, 120_000)
-  it('routes all four release entrypoints through one read-only synthetic inventory', verifyReleaseInventoryEntrypoints, 60_000)
 }
 
 describe('Phase 3 artifact build contract', runArtifactBuildSuite)
@@ -555,40 +547,6 @@ function verifySyntheticArtifactLifecycle(): void {
   }
 }
 
-/** 校验四个兼容入口只读同一 synthetic artifact manifest 且不调用 pack。 */
-function verifyReleaseInventoryEntrypoints(): void {
-  const fixture = createReleaseInventoryFixture()
-  const scripts = [
-    'tools/release/check-native-pack.mjs',
-    'tools/release/check-gate5-commercial-pack.mjs',
-    'tools/release/check-gate6-commercial-pack.mjs',
-    'tools/release/gate7-release-dry-run.mjs'
-  ]
-
-  try {
-    for (const script of scripts) {
-      const result = spawnSync(process.execPath, [
-        join(REPO_ROOT, script),
-        '--artifact-manifest',
-        fixture.manifestPath
-      ], {
-        cwd: REPO_ROOT,
-        encoding: 'utf8',
-        env: {
-          ...fixture.environment,
-          JWORD_PHASE3_ARTIFACT_MANIFEST: fixture.manifestPath
-        }
-      })
-
-      assertCommandPassed(result, script)
-      expect(JSON.parse(result.stdout)).toMatchObject({ status: 'ok', mode: 'artifact', packCommands: 0 })
-    }
-    expect(existsSync(fixture.commandLog) ? readFileSync(fixture.commandLog, 'utf8') : '').toBe('')
-  } finally {
-    rmSync(fixture.root, { recursive: true, force: true })
-  }
-}
-
 /** 构造测试使用的固定 package inventory。 */
 function createPackageInventory(
   name: string,
@@ -733,129 +691,6 @@ function createBuilderFixture(id: string): BuilderFixture {
       JWORD_PHASE3_REAL_NPM: execFileSync('which', ['npm'], { encoding: 'utf8' }).trim()
     }
   }
-}
-
-/** 创建覆盖十二个 contract package 的只读 scanner inventory fixture。 */
-function createReleaseInventoryFixture(): ReleaseInventoryFixture {
-  const root = mkdtempSync(join(tmpdir(), 'jword-phase3-release-inventory-'))
-  const binDirectory = join(root, 'bin')
-  const commandLog = join(root, 'commands.log')
-  const contract = JSON.parse(readFileSync(join(REPO_ROOT, 'tools/release/package-artifact-contract.json'), 'utf8'))
-  const packages = []
-
-  mkdirSync(binDirectory)
-  for (const command of ['npm', 'pnpm']) {
-    const commandPath = join(binDirectory, command)
-
-    writeFileSync(commandPath, '#!/bin/sh\nprintf \'%s %s\\n\' "$0" "$*" >> "$JWORD_PHASE3_PACK_COMMAND_LOG"\nexit 97\n')
-    chmodSync(commandPath, 0o755)
-  }
-  writeFileSync(commandLog, '')
-
-  for (const packageContract of contract.packages) {
-    const id = packageContract.name.slice('@4xian/jword-'.length)
-    const caseRoot = join(root, `package-${id}`)
-    const packageRoot = join(caseRoot, 'package')
-    const tarballFile = `${id}.tgz`
-    const tarballPath = join(root, tarballFile)
-
-    writeFixtureFile(packageRoot, 'package.json', JSON.stringify(createScannerPackedManifest(packageContract)))
-    for (const exportEntry of packageContract.exports) {
-      const targets = typeof exportEntry.target === 'string'
-        ? [exportEntry.target]
-        : [exportEntry.target.types, exportEntry.target.import]
-
-      for (const target of targets) {
-        writeFixtureFile(packageRoot, target.replace(/^\.\//u, ''), 'export {}\n')
-      }
-    }
-    if (packageContract.files.includes('README.md')) {
-      writeFixtureFile(packageRoot, 'README.md', '# Synthetic package\n')
-    }
-    for (const fixturePath of packageContract.fixtureAllowlist) {
-      writeFixtureFile(packageRoot, fixturePath, readFileSync(join(REPO_ROOT, packageContract.workspacePath, fixturePath)))
-    }
-
-    const tarResult = spawnSync('tar', ['-czf', tarballPath, '-C', caseRoot, 'package'], {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...process.env, COPYFILE_DISABLE: '1' }
-    })
-
-    assertCommandPassed(tarResult, `create ${id} tarball`)
-    packages.push({ name: packageContract.name, tarballFile })
-  }
-
-  const manifestPath = join(root, 'artifact-manifest.json')
-
-  writeFileSync(manifestPath, JSON.stringify({ packages }))
-  return {
-    root,
-    manifestPath,
-    commandLog,
-    environment: {
-      ...process.env,
-      PATH: `${binDirectory}${delimiter}${process.env.PATH ?? ''}`,
-      JWORD_PHASE3_PACK_COMMAND_LOG: commandLog
-    }
-  }
-}
-
-/** 从机器 contract 创建 scanner 期望的 synthetic packed manifest。 */
-function createScannerPackedManifest(packageContract: {
-  readonly name: string
-  readonly version: string
-  readonly private: boolean
-  readonly sourceAccess: string
-  readonly files: readonly string[]
-  readonly exports: readonly { readonly subpath: string, readonly target: unknown }[]
-  readonly sideEffects: false | readonly string[]
-  readonly dependencyPolicy: {
-    readonly firstParty: readonly string[]
-    readonly firstPartyPeers: readonly string[]
-    readonly external: Readonly<Record<string, string>>
-    readonly externalPeers: Readonly<Record<string, string>>
-  }
-}): Readonly<Record<string, unknown>> {
-  const exports = Object.fromEntries(packageContract.exports.map(function readExportEntry(entry) {
-    return [entry.subpath, entry.target]
-  }))
-
-  return {
-    name: packageContract.name,
-    version: packageContract.version,
-    private: packageContract.private,
-    type: 'module',
-    publishConfig: { access: packageContract.sourceAccess },
-    files: packageContract.files,
-    exports,
-    sideEffects: packageContract.sideEffects,
-    dependencies: createScannerDependencies(
-      packageContract.dependencyPolicy.firstParty,
-      packageContract.dependencyPolicy.external,
-      packageContract.version
-    ),
-    peerDependencies: createScannerDependencies(
-      packageContract.dependencyPolicy.firstPartyPeers,
-      packageContract.dependencyPolicy.externalPeers,
-      packageContract.version
-    )
-  }
-}
-
-/** 生成 scanner 期望的 ASCII 排序 dependency map。 */
-function createScannerDependencies(
-  firstParty: readonly string[],
-  external: Readonly<Record<string, string>>,
-  version: string
-): Readonly<Record<string, string>> {
-  const dependencies = { ...external }
-
-  for (const name of firstParty) {
-    dependencies[name] = version
-  }
-
-  return Object.fromEntries(Object.entries(dependencies).sort())
 }
 
 /** 写入 fixture command wrappers，用实际 npm pack 和可注入污染的 fake pnpm。 */

@@ -1,18 +1,18 @@
 # 统一整改路线 Phase 3：发布 artifact 与第三方消费基线计划
 
-> 文档状态：`Implementation Ready / final evidence pending`（clean SHA `ec99f6b5cf457010a1a3a7af2994e0a00484bddf`对应run `30102749949`的source、run-a、consumer与reproducibility已通过。六项Vanilla limit已按用户选择的方案2冻结为`900000`，继续统计入口JS、CSS和Vite `modulepreload`，未修改packages首屏行为；九文件snapshot `5c49ee3889a2b55c29dc0fd90a03e12ab636b1978cbdd80c986b4240e21688b0` combined review已取得Standards `PASS / 0 finding`、Spec `PASS / 0 finding`，两类virtual-store插层伪造、独立重复父节点不同完整child map取并集、合法循环空回边误拒及此前finding均已按public seam关闭。当前四个相关architecture文件`26/26`、真实customer/server evidence重读`85/9`与`17/0`、`pnpm lint`、`pnpm typecheck`、`pnpm test:types`及四类whitespace检查均通过；尚未形成可关单的`artifactSetId`/`finalVerificationSha256`，形成新clean SHA、commit、push及远端six-handoff final pipeline仍需新授权，该pipeline关闭前不得进入B5、JWL1或后续Phase）
+> 文档状态：`Implementation Ready / final evidence pending`。关单后只读复核提出的1000行文件预算、20个漏登文件及中文注释问题均已完成本地整改和验证，但拆分后的新测试文件不在旧 PR workflow run `30149318359` 绑定的 clean SHA `4a98af38d26c1a613c6b8cb95fbd33e1c976b253` 中；该run及其两个最终ID只作为拆分前历史证据，不再满足当前B4/B5关单条件。必须把当前B4 remediation形成新clean SHA并重跑完整six-handoff和final verifier，取得新ID后才能恢复唯一权威ledger与七文档引用并重新关单。真实publish、法律、registry/2FA、signed provenance、正式changeset/version/dist-tag与`LIC-107B2`最低浏览器人工认证仍保持阻断或`Deferred`，不进入JWL1、Node 24升级或后续Phase。
 >
 > 调查日期：2026-07-21
 >
 > 实施顺序唯一来源：[09-remediation-roadmap.md](09-remediation-roadmap.md)。本文件规划并记录统一路线 Phase 3；不执行真实 publish，也不进入 OEM Phase 3。
 >
-> 当前计划复审：原始计划第26轮冻结稿 SHA-256 `f9b4a5e0b6bc3793495d1509f97fad334a3370e80014ff9b5e3bc6db2d72a6bc`、B4检查点1冻结稿 SHA-256 `a70c6e3f2e90ec6a83c6531263cbc5b6c2e8e460cf2f5842bc9dfd087f3cbfca`、首轮Core scope修订冻结稿 SHA-256 `cc3ff0ea8bd2d16ace0c5c370c150e4d8926fdec4a92c02eae7d6e4cd0a31c26`与第二轮Core scope修订冻结稿 SHA-256 `eebdd94aa952d69eb0e68a34435381aa8ac94ba4d9382990a3664f53447d5c0d`均已取得Standards、Spec `PASS / 0 finding`。第二轮批准的严格等价快路径已关闭原OOM及两个Node 20同步分段超时，完整direct Vitest和本地扩大门禁均已转绿；远端失败前最后批准快照为1086行、SHA-256 `f19dca0569b8d39c2c6af9c8ea5346aa4854269a6cd987f23ebed156b1fb2a18`，Standards、Spec均为`PASS / 0 finding`。builder失败诊断范围冻结稿为1096行、SHA-256 `fd4f1407c6eabbb0993ed95149a029f4edbb038600416e309dff920e178c98fb`，Standards、Spec均为`PASS / 0 finding`；上一轮implementation/evidence回写冻结稿为1101行、SHA-256 `c3061188cfdfd5728038838ca8adaf83804740b5ec13ffb8a56023e63020c1`，Standards、Spec均为`PASS / 0 finding`。本次worker争用范围修订冻结稿为1112行、SHA-256 `b8f584589cbde10baf26cfb88ddbc2b4794c12f04984932d9d9ddd136c091b47`，Standards、Spec均为`PASS / 0 finding`；implementation/evidence回写冻结稿为1117行、SHA-256 `088ca8ed9c8b9118febecaa6725c2b43450804497a39c9587f1d6de48a9b9836`，Standards、Spec均为`PASS / 0 finding`。最新clean SHA远端pipeline暴露的旧JWL1调用方继续留在OEM Phase 4；B4 Phase 3专属gate、Vanilla本地closure与Gate 3多组配对指标现已完成，单reviewer combined复核的Standards、Spec均为`PASS / 0 finding`，按用户决定该简单review状态回写不重复确认。只有形成并推送新clean SHA、远端final pipeline通过且evidence复审通过后，才可进入B5。
+> 当前计划复审：原始计划第26轮冻结稿 SHA-256 `f9b4a5e0b6bc3793495d1509f97fad334a3370e80014ff9b5e3bc6db2d72a6bc`、B4检查点1冻结稿 SHA-256 `a70c6e3f2e90ec6a83c6531263cbc5b6c2e8e460cf2f5842bc9dfd087f3cbfca`、首轮Core scope修订冻结稿 SHA-256 `cc3ff0ea8bd2d16ace0c5c370c150e4d8926fdec4a92c02eae7d6e4cd0a31c26`与第二轮Core scope修订冻结稿 SHA-256 `eebdd94aa952d69eb0e68a34435381aa8ac94ba4d9382990a3664f53447d5c0d`均已取得Standards、Spec `PASS / 0 finding`。第二轮批准的严格等价快路径已关闭原OOM及两个Node 20同步分段超时，完整direct Vitest和本地扩大门禁均已转绿；远端失败前最后批准快照为1086行、SHA-256 `f19dca0569b8d39c2c6af9c8ea5346aa4854269a6cd987f23ebed156b1fb2a18`，Standards、Spec均为`PASS / 0 finding`。builder失败诊断范围冻结稿为1096行、SHA-256 `fd4f1407c6eabbb0993ed95149a029f4edbb038600416e309dff920e178c98fb`，Standards、Spec均为`PASS / 0 finding`；上一轮implementation/evidence回写冻结稿为1101行、SHA-256 `c3061188cfdfd5728038838ca8adaf83804740b5ec13ffb8a56023e63020c1`，Standards、Spec均为`PASS / 0 finding`。本次worker争用范围修订冻结稿为1112行、SHA-256 `b8f584589cbde10baf26cfb88ddbc2b4794c12f04984932d9d9ddd136c091b47`，Standards、Spec均为`PASS / 0 finding`；implementation/evidence回写冻结稿为1117行、SHA-256 `088ca8ed9c8b9118febecaa6725c2b43450804497a39c9587f1d6de48a9b9836`，Standards、Spec均为`PASS / 0 finding`。旧JWL1调用方继续留在OEM Phase 4；拆分前run `30149318359`已完成当时的six-handoff，但当前B4 remediation改变了批准测试集合，必须以新clean SHA重新取得同SHA远端证据，B5继续hard stop。
 >
 > 本轮B4门禁修订遵循“每个Phase只实施本Phase事项”：保留根`pnpm test:e2e`与`pnpm bench`为全仓回归入口且不修改其集合；Phase 3新增独立`pnpm test:e2e:phase3`与`pnpm bench:phase3`，只运行不依赖待迁移JWL1调用方的既有Vanilla回归及Gate 2/Gate 4.5/输入热路径benchmark。DOCX、PDF与Collaboration旧JWL1 happy path继续由OEM Phase 4 `LIC-400`至`LIC-404`迁移并在对应阶段恢复为全仓blocking，不得通过测试trust、临时token、忽略失败或修改后续阶段测试/benchmark绕过。
 
 ## 1. 当前结论
 
-Phase 2A、2B、2C 已全部 `Closed`，统一路线的下一边界是 Phase 3。Phase 3 的目标是形成一次 canonical run-a 构建/打包、可校验且可由多个 gate 共同消费的 artifact set，并证明普通空项目只依赖本地 tarball 和公开 package 入口，不依赖 workspace alias、仓库源码或每个 smoke 临时重打的另一批产物。除 run-a 外只允许一个隔离的 run-b 用于 bit-for-bit 可复现性比较；run-b原始bytes必须留给final verifier重算，但不得进入consumer、audit、size、SBOM、provenance或发布输入。路线图明确要求在 clean SHA 上绑定 lockfile/artifact hash，覆盖 Vanilla、React、Vue、CSS、Worker、EditorShell，并在同一 SHA 和 artifact 上完成发布门禁；真实 publish 仍禁用（`docs/current-implementation/reviews/current-full-review/09-remediation-roadmap.md:141-160`、`docs/current-implementation/reviews/current-full-review/10-verification-plan.md:336-350`）。
+Phase 2A、2B、2C 已全部 `Closed`；Phase 3 的本地实现与关单remediation已完成，但当前状态重新打开为`Implementation Ready / final evidence pending`。Phase 3 的目标是形成一次 canonical run-a 构建/打包、可校验且可由多个 gate 共同消费的 artifact set，并证明普通空项目只依赖本地 tarball 和公开 package 入口，不依赖 workspace alias、仓库源码或每个 smoke 临时重打的另一批产物。除 run-a 外只允许一个隔离的 run-b 用于 bit-for-bit 可复现性比较；run-b原始bytes必须留给final verifier重算，但不得进入consumer、audit、size、SBOM、provenance或发布输入。路线图明确要求在 clean SHA 上绑定lockfile/artifact hash，覆盖Vanilla、React、Vue、CSS、Worker、EditorShell，并在同一SHA和artifact上完成发布门禁；拆分测试进入新clean SHA且完整pipeline通过前，不得再次标记B4、B5或Phase 3关单，真实publish仍禁用（`docs/current-implementation/reviews/current-full-review/09-remediation-roadmap.md:141-160`、`docs/current-implementation/reviews/current-full-review/10-verification-plan.md:336-350`）。
 
 当前仓库已有 dry-run、Gate 5/6/7 third-party smoke、License runtime/identity smoke 和商业包扫描，但还不是统一 Phase 3 基线：
 
@@ -261,9 +261,16 @@ reproducibility期望集合恰好等于run-a manifest的12个package name。comp
 | `tools/release/generate-phase3-sbom.mjs` | B4 | 生成 SPDX 2.3 JSON |
 | `tools/release/generate-phase3-provenance.mjs` | B4 | 生成未签 SLSA v1 provenance predicate |
 | `tools/release/rehearse-phase3-rollback.mjs` | B4 | 离线 channel pointer promote/rollback 状态机 |
+| `fixtures/release/release-policy.json` | B4 | 只供离线门禁使用的synthetic版本、registry分层、2FA、provenance、dist-tag与rollback策略fixture；不代表真实法律、版本或registry批准 |
 | `fixtures/release/rollback-state.json` | B4 | 不进入 package 的离线 rollback fixture |
 | `tests/architecture/phase3-release-gates.test.ts` | B4 | CI/release script 安全与结构化 evidence 回归 |
 | `tests/architecture/phase3-release-gates-assembly-install.test.ts` | B4 | 通过公开assembly seam锁定安装子进程运行期间loopback registry仍可响应，并覆盖low/moderate audit与未物化optional节点 |
+| `tests/architecture/phase3-release-inventory-entrypoints.test.ts` | B4 closure remediation | 从达到1000行的artifact-build测试中按职责拆出4个legacy release入口共用只读synthetic inventory且零pack的公开CLI回归；不修改生产实现或既有断言 |
+| `examples/vanilla/tests/gate2.visual.ts-snapshots/gate2-remediation-justify-table-baseline-visual-chromium-linux.png` | B4 Vanilla closure | Linux Chromium下Gate 2当前生产分页、两端对齐与表格视觉基线 |
+| `examples/vanilla/tests/gate4.visual.ts-snapshots/gate4-desktop-feature-baseline-visual-chromium-linux.png` | B4 Vanilla closure | Linux Chromium下Gate 4桌面功能当前生产视觉基线 |
+| `examples/vanilla/tests/gate4.visual.ts-snapshots/gate4-long-table-baseline-visual-chromium-linux.png` | B4 Vanilla closure | Linux Chromium下Gate 4长表格当前生产视觉基线 |
+| `examples/vanilla/tests/gate4.visual.ts-snapshots/gate4-media-failure-baseline-visual-chromium-linux.png` | B4 Vanilla closure | Linux Chromium下Gate 4媒体失败对话框当前生产视觉基线 |
+| `examples/vanilla/tests/gate4.visual.ts-snapshots/gate4-narrow-viewport-baseline-visual-chromium-linux.png` | B4 Vanilla closure | Linux Chromium下Gate 4窄屏当前生产视觉基线 |
 
 ### 7.2 修改文件
 
@@ -313,6 +320,7 @@ reproducibility期望集合恰好等于run-a manifest的12个package name。comp
 | `examples/vanilla/tests/gate3-toolbar-helpers.ts` | B4 Vanilla closure | 提供专业toolbar tab与内建page preset共享测试辅助，不新增生产入口 |
 | `examples/vanilla/tests/gate3-toolbar-paragraph.e2e.ts` | B4 Vanilla closure | 按当前内建page preset与专业toolbar tab验证段落/页面行为 |
 | `examples/vanilla/tests/gate3.perf.e2e.ts` | B4 Vanilla closure | 消费共享53页Gate 2测试契约，阈值保持不变 |
+| `examples/vanilla/tests/gate3.visual.ts` | B4 Vanilla closure | 通过公开selection facade稳定折叠到真实首段页尾并读取canvas视觉探针，避免依赖像素点击命中 |
 | `examples/vanilla/tests/gate4-a11y.e2e.ts` | B4 Vanilla closure | 在真实tab显隐语义下验证table/comment/find控件与a11y |
 | `examples/vanilla/tests/gate4-comments-link.e2e.ts` | B4 Vanilla closure | 切换真实insert tab，并保留链接overlay toggle public seam |
 | `examples/vanilla/tests/gate4-header-footer.e2e.ts` | B4 Vanilla closure | 切换真实page tab后验证header/footer行为 |
@@ -320,10 +328,23 @@ reproducibility期望集合恰好等于run-a manifest的12个package name。comp
 | `examples/vanilla/tests/gate4-readonly.e2e.ts` | B4 Vanilla closure | 使用当前fixture路由、toolbar selector与tab显隐验证readonly契约 |
 | `examples/vanilla/tests/gate4-structure-find.e2e.ts` | B4 Vanilla closure | 使用当前outline sidebar与tools tab验证目录、查找替换 |
 | `examples/vanilla/tests/gate4-table.e2e.ts` | B4 Vanilla closure | 使用真实table/home tab，并按viewport上限验证dialog宽度 |
+| `examples/vanilla/tests/gate4.perf.e2e.ts` | B4 Vanilla closure | 将overlay composite改为30组raw/frame-baseline/incremental配对p95并保持原700ms增量阈值；只扩大测试总预算以容纳固定采样 |
+| `examples/vanilla/tests/gate4.visual.ts` | B4 Vanilla closure | 在调用当前生产工具栏入口前显式激活home/insert/table/page/tools真实tab，保持原视觉场景与断言 |
 | `examples/vanilla/tests/gate7-plugin-error.e2e.ts` | B4 Vanilla closure | 插件错误后通过共享内建page preset辅助验证UI仍可操作 |
 | `examples/vanilla/tests/phase4-memory.perf.e2e.ts` | B4 Vanilla closure | 仅同步其在Phase 3 perf集合中消费的共享53页长文契约 |
+| `examples/vanilla/tests/gate2.visual.ts-snapshots/gate2-remediation-justify-table-baseline-visual-chromium-darwin.png` | B4 Vanilla closure | Darwin Chromium下Gate 2当前生产分页、两端对齐与表格视觉基线 |
+| `examples/vanilla/tests/gate4.visual.ts-snapshots/gate4-desktop-feature-baseline-visual-chromium-darwin.png` | B4 Vanilla closure | Darwin Chromium下Gate 4桌面功能当前生产视觉基线 |
+| `examples/vanilla/tests/gate4.visual.ts-snapshots/gate4-long-table-baseline-visual-chromium-darwin.png` | B4 Vanilla closure | Darwin Chromium下Gate 4长表格当前生产视觉基线 |
+| `examples/vanilla/tests/gate4.visual.ts-snapshots/gate4-media-failure-baseline-visual-chromium-darwin.png` | B4 Vanilla closure | Darwin Chromium下Gate 4媒体失败对话框当前生产视觉基线 |
+| `examples/vanilla/tests/gate4.visual.ts-snapshots/gate4-narrow-viewport-baseline-visual-chromium-darwin.png` | B4 Vanilla closure | Darwin Chromium下Gate 4窄屏当前生产视觉基线 |
+| `packages/core/src/editor/rendering.ts` | B4 cross-runner perf closure | 每轮page wrapper同步只读取一次canvas container宽度和left，再复用于全部页面设备像素对齐；不改变布局API或对齐公式 |
+| `packages/ui/src/find-replace/controller.ts` | B4 cross-runner perf closure | 使用当前refresh已读取的layout直接计算查找结果selection rect，避免每项结果重复触发editor layout读取 |
 | `packages/ui/src/link/controller.ts` | B4 Vanilla closure | 将链接anchor overlay视为内部交互，避免pointerdown关闭后click重新打开 |
 | `packages/ui/src/selection-actions/controller.ts` | B4 Vanilla closure | 冻结浮动工具栏时与正常渲染统一使用`overlayHost`坐标系 |
+| `packages/ui/src/status-bar/controller.ts` | B4 cross-runner perf closure | 按projection对象身份复用最近一次文档统计，selection/layout刷新不重复遍历未变文档 |
+| `packages/ui/src/status-bar/state.ts` | B4 cross-runner perf closure | 以WeakMap缓存不可变block统计并增量汇总复用block，保持词数、字符数和段落数公开语义 |
+| `packages/ui/test/create-ui-heading-outline.test.ts` | B4 cross-runner perf closure | 在既有完整createJWordUi harness中锁定destroy会清理状态栏完整性定时器，并让harness显式销毁UI |
+| `packages/ui/test/status-bar-state.test.ts` | B4 cross-runner perf closure | 锁定新projection复用未变block时只重算替换block且统计结果不变 |
 | `docs/current-implementation/reviews/current-full-review/README.md` | B5 | 登记 15 号计划/实施证据与下一阶段边界 |
 | `docs/current-implementation/reviews/current-full-review/01-current-conclusion.md` | B5 | artifact finding 状态和仍被外部门禁阻断的声明 |
 | `docs/current-implementation/reviews/current-full-review/07-oem-and-system-mapping.md` | B5 | Phase 3 internal completion，不混淆 OEM Phase 3/Phase 6A |
@@ -712,7 +733,7 @@ consumer/audit/reproducibility/final jobs都禁止生成或重新pack run-a。ru
 **最小实现**
 
 - 按实际证据回写，不复制计划命令为“已通过”；记录每条命令、exit、artifactSetId、finalVerificationSha256、artifact/evidence路径和未执行项。
-- 只有本文件新增独占标题行`### Phase 3 authoritative ledger`，并写恰好一个由独占行`<!-- PHASE3_LEDGER_START -->`和`<!-- PHASE3_LEDGER_END -->`包围的ledger块；块内恰好五行：`phase3Status: Completed for internal progression`、非空`artifactSetId: <sha256>`、非空`finalVerificationSha256: <sha256>`、`realPublish: blocked`、`manualGates: Deferred`。其余七份文档不得复制这些字段，只各写恰好一个固定引用marker：`<!-- PHASE3_LEDGER_REF: docs/current-implementation/reviews/current-full-review/15-phase3-artifact-and-third-party-consumption-plan.md -->`，并使用固定可读链接标签`Phase 3 authoritative ledger`：current-full-review内六份文档链接`15-phase3-artifact-and-third-party-consumption-plan.md#phase-3-authoritative-ledger`，`release-metadata-audit.md`链接`reviews/current-full-review/15-phase3-artifact-and-third-party-consumption-plan.md#phase-3-authoritative-ledger`。这样artifactSetId和finalVerificationSha256只有一个机器可读真源。
+- 只有本文件新增独占标题行`### Phase 3 authoritative ledger`，并写恰好一个由独占行`<!-- PHASE3_LEDGER_START -->`和`<!-- PHASE3_LEDGER_END -->`包围的ledger块；块内恰好五行：`phase3Status` 为 `Completed for internal progression`、非空 `artifactSetId` SHA-256、非空 `finalVerificationSha256` SHA-256、`realPublish` 为 `blocked`、`manualGates` 为 `Deferred`。其余七份文档不得复制这些字段，只各写恰好一个固定引用marker：`<!-- PHASE3_LEDGER_REF: docs/current-implementation/reviews/current-full-review/15-phase3-artifact-and-third-party-consumption-plan.md -->`，并使用固定可读链接标签`Phase 3 authoritative ledger`：current-full-review内六份文档链接`15-phase3-artifact-and-third-party-consumption-plan.md#phase-3-authoritative-ledger`，`release-metadata-audit.md`链接`reviews/current-full-review/15-phase3-artifact-and-third-party-consumption-plan.md#phase-3-authoritative-ledger`。这样artifactSetId和finalVerificationSha256只有一个机器可读真源。
 - B0-B5各自状态改为 Closed；Phase 3改为 `Completed for internal progression`；public/commercial release继续blocked。
 - 独立 Standards/Spec reviewer检查最终 patch；发现finding只在批准文件内最小修订并复跑相关focused gate，直到双方 `PASS / 0 finding`。
 
@@ -1229,7 +1250,14 @@ package contract、clean worktree、build/pack、inventory/hash、tarball/source
 - 九文件snapshot `4a601b3dd8c67343bb68324bc77d040b3f5c60e2ab994276d0b44d7046ae5b3d`复审为Standards `PASS / 0 finding`、Spec `1 finding`：路径预检虽已要求`.pnpm/<entry>`后立即为`node_modules`，但name校验只检查整个路径尾部，因此`.pnpm/<entry>/node_modules/forged/node_modules/<name>`仍可把两段校验分别满足后绕过。嵌套插层反例通过同一公开`validateAssemblyDependencyEvidence()` seam稳定让assembly文件变为`1 failed / 2 passed`；最小实现让共享virtual-store helper接收package name并一次校验`.pnpm/<entry>/node_modules/<name>`占据连续且完整的package-root尾部，scoped package按`node_modules/@scope/name`处理，原先分离的末尾name检查随之删除。同一文件恢复`3/3`，四个相关architecture文件为`26/26`，真实customer/server evidence重读为`85/9`与`17/0`并通过，`pnpm lint`、`pnpm typecheck`、`pnpm test:types`均通过。当前等待新的九文件exact diff combined review。
 - 九文件snapshot `5c49ee3889a2b55c29dc0fd90a03e12ab636b1978cbdd80c986b4240e21688b0`最终combined review为Standards `PASS / 0 finding`、Spec `PASS / 0 finding`，审查前后HEAD、九文件scope与combined SHA均未漂移，`packages/*`无差异。独立reviewer以公开路径probe确认两类forged路径均拒绝，unscoped、scoped、长base identity叠加peer-context及未物化optional合法路径均接受；循环probe确认空回边接受，非空回边及独立重复父节点不同完整child map均拒绝。三个`.mjs`语法检查、tracked/cached及两个新增文件whitespace检查均无诊断。按用户决定，随后仅回写`Implementation Ready / final evidence pending`状态，不为该简单状态修改重复双轴确认。
 
-### 13.2 B5文档链
+#### P3-B4 拆分前six-handoff历史证据（2026-07-25）
+
+- 修复提交 `4a98af38d26c1a613c6b8cb95fbd33e1c976b253` 的 PR workflow run `30149318359` 绑定 PR head SHA `4a98af38d26c1a613c6b8cb95fbd33e1c976b253`；最终 run-a/final record 的 `gitSha`（merge ref）为 `0ce875bb5af7a93a4cd1e84ad812973d6de67eb5`。`source-gates`、`artifact-build`、`artifact-consumers`、`artifact-reproducibility`、`artifact-audit`、`artifact-final` 六个 job 全部 `success`，没有依赖跳过或 partial handoff；但该run不含随后拆出的`phase3-release-inventory-entrypoints.test.ts`，只保留为历史证据。
+- Linux/x64、Node `20.19.0` 容器内的 final verifier 通过；下载远端 final record 后以 `--check-record` 重验通过，重新生成的 `final-verification.json` 与远端 artifact 字节一致。远端 final record 的 authoritative `artifactSetId` 为 `79f65bd6aaf6a8a41495efc6ef5c803ae0e1a933782beeee0fdec22973720caa`，`finalVerificationSha256` 为 `6a9c8bc97719622a967d3c749e00138064ffb26b1dda267edde29a5cb8abdaea`；证据复核目录为 `/tmp/jword-phase3-final.dsz0hl`。
+- 本地复核保持与真实 `packages/*` 一致：关单复核拆分前Phase 3 architecture为`57`个文件、`231`项测试；按职责拆出release inventory入口回归后为`58`个文件、`231`项测试，均全通过。focused release-gates为`13/13`，`pnpm lint`、`pnpm typecheck`、`pnpm test:types`均通过；`LIC-107B2`继续为`Deferred/not-run`，未执行真实publish、registry/2FA、legal、JWL1迁移或Node 24升级。
+- 按第13.3节规则，该run曾关闭当时的B0-B4；当前B4因拆分测试未进入同一clean SHA而重新打开，旧ID不得继续作为authoritative ledger，B5、JWL1或后续Phase均不得提前进入。
+
+### 13.2 B5文档链（等待新B4证据后重新关单）
 
 - 前七个文件各加入一次第8节冻结的`PHASE3_LEDGER_REF` marker和可读链接，不复制ledger块、artifactSetId或finalVerificationSha256；本文件是这些值的唯一真源。
 - `docs/current-implementation/reviews/current-full-review/README.md`：加入15号和Phase 3最终evidence入口。
@@ -1240,6 +1268,16 @@ package contract、clean worktree、build/pack、inventory/hash、tarball/source
 - `docs/current-implementation/reviews/current-full-review/10-verification-plan.md`：追加真实clean SHA、lock hash、commands/results、manual not-run和authoritative ledger链接，不复制两个最终ID。
 - `docs/current-implementation/release-metadata-audit.md`：旧2026-07-07 snapshot改为最新canonical artifact证据入口；真实publish清单保留，不复制两个最终ID。
 - 本文件：B0-B5最终ledger、review、artifactSetId、finalVerificationSha256和状态。
+
+#### P3-B5 文档关单证据（2026-07-25）
+
+- B5 修改严格限于第7.2节批准的八份文档；前七份各写入一个固定 `PHASE3_LEDGER_REF` marker 与可读链接，没有复制 ledger 块或两个最终字段。第二轮 follow-up review 通过后，八份文档统一为 B5 `Closed`、Phase 3 `Completed for internal progression`；09 号路线图已从 Phase 5 移除在 Phase 2C 关闭的 `CORE-05`，Phase 4 顺序未改变。
+- 10 号验证计划记录 final record 的 clean `gitSha`、lockfile SHA-256、Linux/x64、Node/npm/pnpm 环境、七条 source/test 命令 exit 0 与全部 manual/外部门禁未执行状态；release metadata audit 保留真实 publish 清单，并把 2026-07-07 source-mode 结果明确为历史 snapshot。
+- 保存的 six-handoff 根目录位于 `/tmp/jword-phase3-final.dsz0hl`。在 exact merge checkout `/tmp/jword-phase3-merge.IN3RuN`（`0ce875bb5af7a93a4cd1e84ad812973d6de67eb5`）中，以 Linux/amd64、Node `20.19.0`、pnpm `9.14.2` 容器重跑 final verifier `--check-record` 为 exit 0，并返回同一 `artifactSetId`；B5 ledger 只读 gate 为 exit 0，确认七个固定引用、final record raw SHA-256 与 Phase 5 `CORE-05` 清理。最终 scope 仍恰好为批准的八文档，staged 与 `packages/*` 差异为空，`git diff --check`、`git diff --cached --check` 均通过；`.playwright-cli/` 与 `node-compile-cache/` 保持用户原有未跟踪内容。B5 未重新 build、pack、install、audit、consumer 或 direct Vitest。
+- 八文档初审 snapshot SHA-256 为 `d9edebfeaedb1158b793ed8899797338123b29b63e342b42fa1a5a7e2c7d64c0`：Standards 为 `PASS / 0 finding`，Spec 为 `REQUEST CHANGES / 2 findings`。两项 blocker 分别是本文件在最终复审证据落账前提前关闭 B5/Phase 3，以及 10 号验证计划没有记录 direct Vitest 的精确命令和对应 evidence 路径。首轮 remediation 只在 10 号补入 `pnpm exec vitest run --passWithNoTests` 与三份保存 evidence 路径，并在本文件记录初审、修复及暂缓关单。
+- 首轮 follow-up snapshot SHA-256 为 `4b3354f28a494d1a7d04ff0db670aa72ec3a1ba57180b234a5c8bc7929862e7f`：Standards 为 `PASS / 0 finding`，Spec 为 `REQUEST CHANGES / 1 finding`；15 号已保持 `In Progress`，但 README、01、07、08、09 仍提前宣称 B5/Phase 3 已关单，形成状态矛盾。第二轮 remediation 只在批准的八文档内统一暂记 B0-B4 `Closed`、B5/Phase 3 `In Progress`，release metadata audit 同步注明 B5 文档关单待复审；第二轮 follow-up review 尚待执行。
+- 第二轮 follow-up snapshot SHA-256 为 `c915705d5d950dae066dde6f3999a7308bf0d82dba100cb70eb9a96eef826c14`：Standards、Spec 均为 `PASS / 0 finding`，审查前后 HEAD、八文档 scope 与该 snapshot 均未漂移。按用户确认的简单状态回写规则，本轮仅将 B5 标为 `Closed`、Phase 3 标为 `Completed for internal progression`，不重复双轴复审。
+- 关单后只读复核新增两个blocker：Standards指出`tests/architecture/phase3-artifact-build.test.ts`达到1000行，违反第7.3节“达到1000行前拆分”；Spec指出implementation base到当前HEAD的完整差异中有20个文件未列入第7.1/7.2节。remediation先把3个Vanilla测试、10份Darwin/Linux视觉snapshot、`fixtures/release/release-policy.json`、4个Core/UI实现文件和2个UI测试逐项补入批准表，并新增`tests/architecture/phase3-release-inventory-entrypoints.test.ts`拆分批准项；随后只移动“四个legacy release入口共用只读inventory且零pack”测试及其synthetic fixture，不修改生产代码、断言或测试数量。拆分前原文件为1000行且1 file / 7 tests通过；拆分后原文件835行、新文件210行，定向2 files / 7 tests与完整architecture 58 files / 231 tests全通过，`pnpm typecheck`、`pnpm test:types`、`pnpm lint`、两个目标文件ESLint、中文注释检查及两类diff check均通过。第7节限定核对确认20个漏登文件和新拆分文件各恰好登记一次。冻结三文件补丁为548行、SHA-256 `8d6a5227a04747961e68b6a23739508b0c4f434507cf19c6b453e9ddae7b7869`；独立combined review为Spec `PASS / 0 finding`、Standards `REQUEST CHANGES / 1 finding`，唯一问题是新测试内命名回调缺少前置中文注释。按用户确认的简单修改规则补入该注释后不重复双轴复审；同一2 files / 7 tests、两个目标文件ESLint、`pnpm lint:comments`及两类diff check全部通过，新文件最终为211行。后续Spec复核确认上述本地问题均已修复，但新增P1证据finding：拆分文件不在run `30149318359`绑定的clean SHA中，因此必须重跑新clean SHA的完整six-handoff与final verifier，本轮仍未关单。
 
 ### 13.3 状态更新规则
 
@@ -1271,5 +1309,9 @@ package contract、clean worktree、build/pack、inventory/hash、tarball/source
 - [x] 2026-07-24 run `30068439502`两个attempt均证实WebKit 60秒预算已关闭原六项阻断，并稳定暴露四项runner-sensitive perf超线；第13.1节公开perf seam诊断、四项严格等价优化、用户批准的Gate 3配对帧基线指标、本地完整Phase 3 E2E验证和临时文件清理均已完成，等待新clean SHA远端six-handoff并继续保持B5 hard stop。
 - [x] 2026-07-24 run `30085965418`证明Gate 4配对指标通过，并把唯一明确blocker收敛为缺失Linux visual snapshot及旧测试seam；当前已按`packages/*`真实toolbar/selection行为修正，Darwin/Linux visual均8/8且静态门禁通过，等待新clean SHA远端six-handoff验证。
 - [x] 2026-07-24 run `30102749949`及本地真实反馈环已关闭assembly同步阻塞、pnpm low/moderate audit exit误判、未物化optional、跨job路径、依赖身份替换、额外direct、repo lock误作assembly allowlist、缺失assembly普通父子边、peer-context物理路径错配、重复snapshot匹配、跨peer optional标记错配、普通/optional集合重叠、父edge peer-context丢失、独立重复物理父节点的冲突覆盖与不同子集合并集、合法循环空回边误拒、virtual-store package-root前后两类插层伪造路径、长base identity及其peer-context组合哈希路径误拒等B4问题；用户选择的方案2已把六项Vanilla预算冻结为`900000`，真实值保持`859055`且继续统计入口JS、CSS与Vite `modulepreload`，未修改`packages/*`。当前四个相关architecture文件为`26/26`，真实customer/server evidence重读为`85/9`与`17/0`，`pnpm lint`、`pnpm typecheck`、`pnpm test:types`均通过；九文件snapshot `5c49ee3889a2b55c29dc0fd90a03e12ab636b1978cbdd80c986b4240e21688b0`最终combined review为Standards、Spec `PASS / 0 finding`，状态回写为`Implementation Ready / final evidence pending`，尚未进入B5、JWL1、Node 24升级或后续Phase。
+- [x] 2026-07-25 run `30149318359` 的六个 B4 handoff job 对拆分前SHA全部通过；该run现只作为历史证据，不覆盖后续测试拆分。
+- [ ] B5八文档曾按旧run完成单一ledger/七引用回写，但因B4 remediation不在同一clean SHA而重新打开；取得新six-handoff与final verifier证据后才能更新唯一ledger并恢复`Completed for internal progression`。
+- [x] 关单后两项复核finding的remediation已完成：文件预算已通过职责拆分恢复，20个漏登文件及新拆分文件已逐项登记；独立combined review的Spec为`PASS / 0 finding`，Standards唯一中文注释finding按简单修改规则关闭，同一反馈环与静态门禁复跑通过。
+- [ ] 当前B4 remediation必须形成新clean SHA并完成六个handoff、保存record重验和本地final verifier；随后只在本文件填写新`artifactSetId`/`finalVerificationSha256`，其余七文档保持单一引用并复核状态一致性。
 
-原始计划编制轮在双轴复审和whitespace/scope检查通过后停止；当前B4 gate修订、Vanilla完整本地closure、WebKit 60秒专属预算、四项perf等价优化、Gate 3跨runner指标重设计、assembly/audit/list修复及本地验证均已按`packages/*`真实实现完成。用户已选择Vanilla size方案2，九文件snapshot `5c49ee3889a2b55c29dc0fd90a03e12ab636b1978cbdd80c986b4240e21688b0`最终combined review已取得Standards、Spec `PASS / 0 finding`，当前状态为`Implementation Ready / final evidence pending`并在此停止。形成新clean SHA、commit、push和重跑远端six-handoff final pipeline仍需新授权；该pipeline和final verifier关闭前不得进入JWL1迁移或B5。
+原始计划编制轮在双轴复审和whitespace/scope检查通过后停止；当前B4 gate修订、Vanilla完整本地closure、WebKit 60秒专属预算、四项perf等价优化、Gate 3跨runner指标重设计、assembly/audit/list修复及关单后本地remediation均已按`packages/*`真实实现。当前状态为`Implementation Ready / final evidence pending`：必须让拆分测试和第7节scope进入新clean SHA并完成完整six-handoff、final verifier与B5重新关单，才能恢复15号计划的`Completed for internal progression`。`LIC-107B2`仍为`Deferred/not-run`，JWL1迁移、Node 24升级、真实publish和后续Phase不属于本轮。
